@@ -1,8 +1,11 @@
 "use client";
 
+"use client";
+
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 import { useEffect, useMemo, useState } from "react";
 import {
+  addDoc,
   collection,
   doc,
   onSnapshot,
@@ -202,15 +205,32 @@ export default function UsersPage() {
 
   async function handleSaveRole(userId: string) {
     if (!isAdmin) return;
+
     if (auth.currentUser?.uid === userId) {
       alert("You cannot change your own role.");
       return;
     }
 
+    const targetUser = users.find((u) => u.id === userId);
+    if (!targetUser) {
+      alert("User not found.");
+      return;
+    }
+
+    const currentRole = (targetUser.role ?? "staff") as UserRole;
     const nextRole = editedRoles[userId];
 
     if (!nextRole) {
       alert("Please choose a valid role.");
+      return;
+    }
+
+    if (currentRole === "admin" && nextRole !== "admin" && adminUsers <= 1) {
+      alert("You cannot remove the last admin.");
+      return;
+    }
+
+    if (currentRole === nextRole) {
       return;
     }
 
@@ -220,6 +240,16 @@ export default function UsersPage() {
       await updateDoc(doc(db, "users", userId), {
         role: nextRole,
         updatedAt: serverTimestamp(),
+      });
+
+      await addDoc(collection(db, "role_changes"), {
+        changedByUid: auth.currentUser?.uid ?? "",
+        changedByEmail: auth.currentUser?.email ?? "",
+        targetUserId: userId,
+        targetUserEmail: targetUser.email ?? "",
+        oldRole: currentRole,
+        newRole: nextRole,
+        timestamp: serverTimestamp(),
       });
     } catch (err) {
       console.error("Error updating role:", err);

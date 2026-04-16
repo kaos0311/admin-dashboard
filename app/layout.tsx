@@ -1,22 +1,19 @@
-import "./globals.css";
 import type { Metadata } from "next";
-import AuthGuard from "./components/AuthGuard";
+import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Advanced Home Medical Admin",
-  description: "Admin dashboard",
+  title: "Admin Dashboard",
+  description: "Advanced Home Medical Admin Dashboard",
 };
 
 export default function RootLayout({
   children,
-}: Readonly<{
+}: {
   children: React.ReactNode;
-}>) {
+}) {
   return (
     <html lang="en">
-      <body>
-        <AuthGuard>{children}</AuthGuard>
-      </body>
+      <body>{children}</body>
     </html>
   );
 }

@@ -4,7 +4,6 @@ import { useEffect, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged, type User } from "firebase/auth";
 import { auth } from "@/lib/firebase";
-import { ensureUserProfile } from "@/lib/ensureUserProfile";
 
 type AuthGuardProps = {
   children: ReactNode;
@@ -18,57 +17,46 @@ export default function AuthGuard({ children }: AuthGuardProps) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    let cancelled = false;
-
-    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
-      try {
-        if (!firebaseUser) {
-          if (!cancelled) {
-            setUser(null);
-            setLoading(false);
-
-            if (pathname !== "/") {
-              router.push("/");
-            }
-          }
-          return;
-        }
-
-        await ensureUserProfile({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-        });
-
-        if (!cancelled) {
-          setUser(firebaseUser);
-          setLoading(false);
-        }
-      } catch (error) {
-        console.error("Auth guard profile setup error:", error);
-
-        if (!cancelled) {
-          setUser(firebaseUser ?? null);
-          setLoading(false);
-        }
-      }
+    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
+      setUser(firebaseUser);
+      setLoading(false);
     });
 
-    return () => {
-      cancelled = true;
-      unsubscribe();
-    };
-  }, [router, pathname]);
+    return () => unsubscribe();
+  }, []);
+
+  useEffect(() => {
+    if (loading) return;
+
+    // Not signed in and trying to access protected pages
+    if (!user && pathname !== "/login") {
+      router.replace("/login");
+      return;
+    }
+
+    // Signed in and trying to access login page
+    if (user && pathname === "/login") {
+      router.replace("/");
+    }
+  }, [user, loading, pathname, router]);
 
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-black text-white">
-        Loading...
+        Checking session...
       </div>
     );
   }
 
-  if (!user) return null;
+  // Block protected pages if not signed in
+  if (!user && pathname !== "/login") {
+    return null;
+  }
+
+  // Block login page if already signed in
+  if (user && pathname === "/login") {
+    return null;
+  }
 
   return <>{children}</>;
 }

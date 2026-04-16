@@ -4,6 +4,7 @@ import { useState } from "react";
 import { signInWithEmailAndPassword } from "firebase/auth";
 import { useRouter } from "next/navigation";
 import { auth } from "@/lib/firebase";
+import { ensureUserProfile } from "@/lib/ensureUserProfile";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -18,10 +19,37 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      await signInWithEmailAndPassword(auth, email.trim(), password);
-      router.replace("/");
+      const userCredential = await signInWithEmailAndPassword(
+        auth,
+        email.trim(),
+        password
+      );
+
+      await ensureUserProfile(userCredential.user);
+
+      router.replace("/dashboard");
     } catch (err: any) {
-      setError(err?.message || "Login failed.");
+      console.error("LOGIN ERROR:", err);
+
+      switch (err?.code) {
+        case "auth/invalid-credential":
+          setError("Invalid email or password.");
+          break;
+        case "auth/invalid-email":
+          setError("That email address is not valid.");
+          break;
+        case "auth/user-disabled":
+          setError("This account has been disabled.");
+          break;
+        case "auth/too-many-requests":
+          setError("Too many failed attempts. Try again in a little while.");
+          break;
+        case "auth/network-request-failed":
+          setError("Network error. Check your internet connection and try again.");
+          break;
+        default:
+          setError(err?.message || "Login failed.");
+      }
     } finally {
       setLoading(false);
     }
@@ -44,6 +72,7 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 outline-none"
               placeholder="you@example.com"
+              autoComplete="email"
             />
           </div>
 
@@ -55,6 +84,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 outline-none"
               placeholder="Password"
+              autoComplete="current-password"
             />
           </div>
 
