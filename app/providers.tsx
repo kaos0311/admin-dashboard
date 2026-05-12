@@ -24,22 +24,11 @@ export default function Providers({
         toastOptions={{
           duration: 4000,
 
-          style: {
-            borderRadius: "16px",
-            border: "1px solid rgba(255,255,255,0.08)",
-            background: "rgba(11, 18, 32, 0.96)",
-            color: "#f9fafb",
-            padding: "12px 14px",
-            fontSize: "14px",
-            backdropFilter: "blur(14px)",
-            WebkitBackdropFilter: "blur(14px)",
-            boxShadow:
-              "0 10px 30px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.04)",
-            maxWidth: "420px",
-          },
+          className: "custom-toast",
 
           success: {
             duration: 2500,
+            className: "custom-toast custom-toast-success",
 
             iconTheme: {
               primary: "#22c55e",
@@ -49,6 +38,7 @@ export default function Providers({
 
           error: {
             duration: 5000,
+            className: "custom-toast custom-toast-error",
 
             iconTheme: {
               primary: "#ef4444",
@@ -58,6 +48,7 @@ export default function Providers({
 
           loading: {
             duration: Infinity,
+            className: "custom-toast custom-toast-loading",
           },
         }}
       />

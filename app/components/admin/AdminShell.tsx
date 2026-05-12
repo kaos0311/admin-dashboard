@@ -3,6 +3,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -10,12 +11,9 @@ import {
 import AdminSidebar from "@/app/components/admin/AdminSidebar";
 import AdminTopbar from "@/app/components/admin/AdminTopbar";
 
-export default function AdminShell({
-  children,
-}: {
-  children: ReactNode;
-}) {
+export default function AdminShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const previousBodyOverflow = useRef<string>("");
 
   const openSidebar = useCallback(() => {
     setSidebarOpen(true);
@@ -28,6 +26,9 @@ export default function AdminShell({
   useEffect(() => {
     if (!sidebarOpen) return;
 
+    previousBodyOverflow.current = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
     function handleKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") {
         closeSidebar();
@@ -35,16 +36,15 @@ export default function AdminShell({
     }
 
     document.addEventListener("keydown", handleKeyDown);
-    document.body.style.overflow = "hidden";
 
     return () => {
       document.removeEventListener("keydown", handleKeyDown);
-      document.body.style.overflow = "";
+      document.body.style.overflow = previousBodyOverflow.current;
     };
   }, [sidebarOpen, closeSidebar]);
 
   return (
-    <div className="min-h-screen bg-[#07090d] text-white">
+    <div className="min-h-screen bg-[#07090d] text-white antialiased">
       <a
         href="#admin-main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-black focus:outline-none focus:ring-2 focus:ring-white/40"

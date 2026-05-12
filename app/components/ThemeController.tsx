@@ -6,64 +6,72 @@ import { useAppSettings } from "@/app/hooks/useAppSettings";
 
 type ThemeMode = "light" | "dark" | "system";
 
-function applyTheme(theme: ThemeMode) {
+function setThemeAttribute(theme: Exclude<ThemeMode, "system">) {
   const root = document.documentElement;
 
-  if (theme === "system") {
-    root.removeAttribute("data-theme");
-    return;
+  if (root.getAttribute("data-theme") !== theme) {
+    root.setAttribute("data-theme", theme);
   }
+}
 
-  root.setAttribute("data-theme", theme);
+function clearThemeAttribute() {
+  document.documentElement.removeAttribute("data-theme");
+}
+
+function getSystemTheme(): "light" | "dark" {
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
 }
 
 export default function ThemeController() {
   const { settings } = useAppSettings(true);
 
   useEffect(() => {
-    const theme =
+    if (typeof window === "undefined") return;
+
+    const selectedTheme: ThemeMode =
       settings?.defaultTheme ?? "dark";
-
-    applyTheme(theme as ThemeMode);
-
-    if (theme !== "system") {
-      return;
-    }
 
     const mediaQuery = window.matchMedia(
       "(prefers-color-scheme: dark)"
     );
 
-    const handleSystemThemeChange = () => {
-      document.documentElement.removeAttribute(
-        "data-theme"
-      );
+    const applyResolvedTheme = () => {
+      if (selectedTheme === "system") {
+        setThemeAttribute(getSystemTheme());
+        return;
+      }
+
+      setThemeAttribute(selectedTheme);
+    };
+
+    applyResolvedTheme();
+
+    if (selectedTheme !== "system") {
+      return;
+    }
+
+    const handleThemeChange = () => {
+      applyResolvedTheme();
     };
 
     if (typeof mediaQuery.addEventListener === "function") {
-      mediaQuery.addEventListener(
-        "change",
-        handleSystemThemeChange
-      );
+      mediaQuery.addEventListener("change", handleThemeChange);
     } else {
-      mediaQuery.addListener(
-        handleSystemThemeChange
-      );
+      mediaQuery.addListener(handleThemeChange);
     }
 
     return () => {
       if (
-        typeof mediaQuery.removeEventListener ===
-        "function"
+        typeof mediaQuery.removeEventListener === "function"
       ) {
         mediaQuery.removeEventListener(
           "change",
-          handleSystemThemeChange
+          handleThemeChange
         );
       } else {
-        mediaQuery.removeListener(
-          handleSystemThemeChange
-        );
+        mediaQuery.removeListener(handleThemeChange);
       }
     };
   }, [settings?.defaultTheme]);

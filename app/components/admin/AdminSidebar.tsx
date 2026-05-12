@@ -33,6 +33,7 @@ type NavItem = {
   icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
   roles?: UserRole[];
   badge?: string | number;
+  exact?: boolean;
 };
 
 type AdminSidebarProps = {
@@ -41,24 +42,123 @@ type AdminSidebarProps = {
   userRole?: UserRole;
 };
 
-const navItems: NavItem[] = [
-  { id: "dashboard", label: "Dashboard", href: "/dashboard", icon: Home, section: "core" },
-  { id: "products", label: "Products", href: "/products", icon: Package, section: "core" },
-  { id: "inventory", label: "Inventory", href: "/inventory", icon: Boxes, section: "core" },
-  { id: "orders", label: "Orders", href: "/orders", icon: ClipboardList, section: "core" },
-  { id: "rentals", label: "Rentals", href: "/rentals", icon: Repeat, section: "core" },
-  { id: "users", label: "Users", href: "/users", icon: Users, section: "core", roles: ["admin"] },
+const NAV_ITEMS: NavItem[] = [
+  {
+    id: "dashboard",
+    label: "Dashboard",
+    href: "/dashboard",
+    icon: Home,
+    section: "core",
+    exact: true,
+  },
+  {
+    id: "products",
+    label: "Products",
+    href: "/products",
+    icon: Package,
+    section: "core",
+  },
+  {
+    id: "inventory",
+    label: "Inventory",
+    href: "/inventory",
+    icon: Boxes,
+    section: "core",
+  },
+  {
+    id: "orders",
+    label: "Orders",
+    href: "/orders",
+    icon: ClipboardList,
+    section: "core",
+  },
+  {
+    id: "rentals",
+    label: "Rentals",
+    href: "/rentals",
+    icon: Repeat,
+    section: "core",
+  },
+  {
+    id: "users",
+    label: "Users",
+    href: "/users",
+    icon: Users,
+    section: "core",
+    roles: ["admin"],
+  },
 
-  { id: "reports", label: "Reports", href: "/reports", icon: FileBarChart2, section: "reports" },
-  { id: "reports-upload", label: "Upload & Index", href: "/reports/upload", icon: UploadCloud, section: "reports" },
-  { id: "reports-patients", label: "Patients", href: "/reports/patients", icon: UserSquare2, section: "reports" },
-  { id: "reports-hospice", label: "Hospice Care", href: "/reports/hospice", icon: HeartPulse, section: "reports" },
-  { id: "wip", label: "WIP", href: "/wip", icon: Hammer, section: "reports" },
-  { id: "insurance", label: "Insurance", href: "/insurance", icon: FileText, section: "reports" },
+  {
+    id: "reports",
+    label: "Reports",
+    href: "/reports",
+    icon: FileBarChart2,
+    section: "reports",
+    exact: true,
+  },
+  {
+    id: "reports-upload",
+    label: "Upload & Index",
+    href: "/reports/upload",
+    icon: UploadCloud,
+    section: "reports",
+  },
+  {
+    id: "reports-patients",
+    label: "Patients",
+    href: "/reports/patients",
+    icon: UserSquare2,
+    section: "reports",
+  },
+  {
+    id: "reports-hospice",
+    label: "Hospice Care",
+    href: "/reports/hospice",
+    icon: HeartPulse,
+    section: "reports",
+  },
+  {
+    id: "reports-wip",
+    label: "WIP",
+    href: "/reports/wip",
+    icon: Hammer,
+    section: "reports",
+  },
+  {
+    id: "reports-insurance",
+    label: "Insurance",
+    href: "/reports/insurance",
+    icon: FileText,
+    section: "reports",
+  },
 
-  { id: "audit-logs", label: "Audit Logs", href: "/audit-logs", icon: Shield, section: "system", roles: ["admin"] },
-  { id: "settings", label: "Settings", href: "/settings", icon: Settings, section: "system", roles: ["admin"] },
+  {
+    id: "audit-logs",
+    label: "Audit Logs",
+    href: "/audit-logs",
+    icon: Shield,
+    section: "system",
+    roles: ["admin"],
+  },
+  {
+    id: "settings",
+    label: "Settings",
+    href: "/settings",
+    icon: Settings,
+    section: "system",
+    roles: ["admin"],
+  },
 ];
+
+function isActivePath(pathname: string | null, item: NavItem) {
+  if (!pathname) return false;
+
+  if (item.exact) {
+    return pathname === item.href;
+  }
+
+  return pathname === item.href || pathname.startsWith(`${item.href}/`);
+}
 
 export default function AdminSidebar({
   mobileOpen = false,
@@ -74,7 +174,11 @@ export default function AdminSidebar({
         aria-label="Primary navigation"
         className="hidden w-64 shrink-0 border-r border-white/10 bg-neutral-950 text-white lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex"
       >
-        <SidebarInner pathname={pathname} userRole={userRole} navKeyPrefix="desktop" />
+        <SidebarInner
+          pathname={pathname}
+          userRole={userRole}
+          navKeyPrefix="desktop"
+        />
       </aside>
 
       {mobileOpen ? (
@@ -89,12 +193,16 @@ export default function AdminSidebar({
 
           <aside
             aria-label="Mobile navigation"
-            className="absolute inset-y-0 left-0 w-64 border-r border-white/10 bg-neutral-950 text-white shadow-2xl"
+            className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-white/10 bg-neutral-950 text-white shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
               <div>
-                <div className="text-sm font-semibold tracking-wide">Navigation</div>
-                <div className="text-xs text-neutral-500">Advanced Home Medical</div>
+                <div className="text-sm font-semibold tracking-wide">
+                  Navigation
+                </div>
+                <div className="text-xs text-neutral-500">
+                  Advanced Home Medical
+                </div>
               </div>
 
               <button
@@ -132,20 +240,20 @@ function SidebarInner({
   navKeyPrefix: string;
   onNavigate?: () => void;
 }) {
-  const visibleItems = useMemo(() => {
-    return navItems
-      .filter((item) => !item.roles || item.roles.includes(userRole))
-      .map((item) => ({
-        ...item,
-        isActive: pathname === item.href || pathname?.startsWith(`${item.href}/`),
-      }));
-  }, [pathname, userRole]);
+  const groupedItems = useMemo(() => {
+    const visibleItems = NAV_ITEMS.filter(
+      (item) => !item.roles || item.roles.includes(userRole)
+    ).map((item) => ({
+      ...item,
+      isActive: isActivePath(pathname, item),
+    }));
 
-  const groupedItems = {
-    core: visibleItems.filter((item) => item.section === "core"),
-    reports: visibleItems.filter((item) => item.section === "reports"),
-    system: visibleItems.filter((item) => item.section === "system"),
-  };
+    return {
+      core: visibleItems.filter((item) => item.section === "core"),
+      reports: visibleItems.filter((item) => item.section === "reports"),
+      system: visibleItems.filter((item) => item.section === "system"),
+    };
+  }, [pathname, userRole]);
 
   return (
     <div className="flex h-full w-full flex-col p-3">
@@ -153,7 +261,11 @@ function SidebarInner({
         <div className="text-xs uppercase tracking-[0.24em] text-neutral-500">
           Advanced Home Medical
         </div>
-        <div className="mt-2 text-xl font-bold leading-tight">Admin Dashboard</div>
+
+        <div className="mt-2 text-xl font-bold leading-tight">
+          Admin Dashboard
+        </div>
+
         <div className="mt-2 text-sm leading-5 text-neutral-400">
           Operations, reports, insurance, hospice, inventory, and rentals.
         </div>
@@ -163,17 +275,32 @@ function SidebarInner({
         aria-label="Admin sections"
         className="custom-sidebar-scroll flex flex-1 flex-col overflow-y-auto pr-1"
       >
-        {groupedItems.core.length > 0 && (
-          <SidebarSection title="Operations" items={groupedItems.core} navKeyPrefix={navKeyPrefix} onNavigate={onNavigate} />
-        )}
+        {groupedItems.core.length > 0 ? (
+          <SidebarSection
+            title="Operations"
+            items={groupedItems.core}
+            navKeyPrefix={navKeyPrefix}
+            onNavigate={onNavigate}
+          />
+        ) : null}
 
-        {groupedItems.reports.length > 0 && (
-          <SidebarSection title="Reports & Analytics" items={groupedItems.reports} navKeyPrefix={navKeyPrefix} onNavigate={onNavigate} />
-        )}
+        {groupedItems.reports.length > 0 ? (
+          <SidebarSection
+            title="Reports & Analytics"
+            items={groupedItems.reports}
+            navKeyPrefix={navKeyPrefix}
+            onNavigate={onNavigate}
+          />
+        ) : null}
 
-        {groupedItems.system.length > 0 && (
-          <SidebarSection title="Administration" items={groupedItems.system} navKeyPrefix={navKeyPrefix} onNavigate={onNavigate} />
-        )}
+        {groupedItems.system.length > 0 ? (
+          <SidebarSection
+            title="Administration"
+            items={groupedItems.system}
+            navKeyPrefix={navKeyPrefix}
+            onNavigate={onNavigate}
+          />
+        ) : null}
       </nav>
 
       <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-300">
@@ -195,7 +322,7 @@ function SidebarSection({
   onNavigate?: () => void;
 }) {
   return (
-    <div className="mb-5">
+    <section className="mb-5" aria-label={title}>
       <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-500">
         {title}
       </div>
@@ -211,18 +338,20 @@ function SidebarSection({
               prefetch={false}
               onClick={onNavigate}
               aria-current={item.isActive ? "page" : undefined}
-              className={`group relative flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium transition-all duration-200 ${
+              className={[
+                "group relative flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium transition-all duration-200",
                 item.isActive
                   ? "border-white/20 bg-white/15 text-white shadow-md shadow-black/20"
-                  : "border-white/5 bg-black/20 text-neutral-300 hover:border-white/20 hover:bg-white/10 hover:text-white"
-              }`}
+                  : "border-white/5 bg-black/20 text-neutral-300 hover:border-white/20 hover:bg-white/10 hover:text-white",
+              ].join(" ")}
             >
               <span
-                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all duration-200 ${
+                className={[
+                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all duration-200",
                   item.isActive
                     ? "border-white/20 bg-white/15 text-white"
-                    : "border-white/10 bg-white/5 text-neutral-400 group-hover:border-white/20 group-hover:bg-white/10 group-hover:text-white"
-                }`}
+                    : "border-white/10 bg-white/5 text-neutral-400 group-hover:border-white/20 group-hover:bg-white/10 group-hover:text-white",
+                ].join(" ")}
               >
                 <Icon className="h-5 w-5" aria-hidden />
               </span>
@@ -234,14 +363,20 @@ function SidebarSection({
                   {item.badge}
                 </span>
               ) : item.isActive ? (
-                <span className="h-2 w-2 rounded-full bg-white" />
+                <span
+                  aria-hidden
+                  className="h-2 w-2 rounded-full bg-white"
+                />
               ) : (
-                <span className="h-2 w-2 rounded-full bg-transparent transition group-hover:bg-white/40" />
+                <span
+                  aria-hidden
+                  className="h-2 w-2 rounded-full bg-transparent transition group-hover:bg-white/40"
+                />
               )}
             </Link>
           );
         })}
       </div>
-    </div>
+    </section>
   );
 }

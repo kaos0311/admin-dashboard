@@ -1,6 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import {
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+} from "react";
 import {
   collection,
   getDocs,
@@ -28,7 +34,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { db, auth } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 import {
   createDashboardUser,
@@ -194,7 +200,8 @@ export default function UsersPage() {
   >("all");
 
   const [showCreateForm, setShowCreateForm] = useState(false);
-  const [createForm, setCreateForm] = useState<CreateFormState>(emptyCreateForm);
+  const [createForm, setCreateForm] =
+    useState<CreateFormState>(emptyCreateForm);
   const [creatingUser, setCreatingUser] = useState(false);
 
   const [busyUid, setBusyUid] = useState<string | null>(null);
@@ -250,7 +257,7 @@ export default function UsersPage() {
         });
       },
       (error: unknown) => {
-        console.error("Users snapshot error:", error);
+        console.error("USERS SNAPSHOT ERROR:", error);
         toast.error(getErrorMessage(error, "Failed to sync users."));
 
         unstable_batchedUpdates(() => {
@@ -288,7 +295,7 @@ export default function UsersPage() {
         setHasMore(snapshot.docs.length === PAGE_SIZE);
       });
     } catch (error: unknown) {
-      console.error("Load more users error:", error);
+      console.error("LOAD MORE USERS ERROR:", error);
       toast.error(getErrorMessage(error, "Failed to load more users."));
     } finally {
       setLoadingMore(false);
@@ -344,6 +351,10 @@ export default function UsersPage() {
     };
   }, [users]);
 
+  function resetCreateForm() {
+    setCreateForm(emptyCreateForm);
+  }
+
   async function handleCreateUser() {
     const email = createForm.email.trim();
     const password = createForm.password;
@@ -371,10 +382,10 @@ export default function UsersPage() {
       });
 
       toast.success("User created.");
-      setCreateForm(emptyCreateForm);
+      resetCreateForm();
       setShowCreateForm(false);
     } catch (error: unknown) {
-      console.error("Create user error:", error);
+      console.error("CREATE USER ERROR:", error);
       toast.error(getErrorMessage(error, "Failed to create user."));
     } finally {
       setCreatingUser(false);
@@ -412,7 +423,7 @@ export default function UsersPage() {
       toast.success("Role updated.");
     } catch (error: unknown) {
       setUsers(previousUsers);
-      console.error("Update role error:", error);
+      console.error("UPDATE ROLE ERROR:", error);
       toast.error(getErrorMessage(error, "Failed to update role."));
     } finally {
       setBusyUid(null);
@@ -454,7 +465,7 @@ export default function UsersPage() {
       }
     } catch (error: unknown) {
       setUsers(previousUsers);
-      console.error("Toggle active error:", error);
+      console.error("TOGGLE ACTIVE ERROR:", error);
       toast.error(getErrorMessage(error, `Failed to ${actionText} user.`));
     } finally {
       setBusyUid(null);
@@ -485,7 +496,7 @@ export default function UsersPage() {
       toast.success("User deleted.");
     } catch (error: unknown) {
       setUsers(previousUsers);
-      console.error("Delete user error:", error);
+      console.error("DELETE USER ERROR:", error);
       toast.error(getErrorMessage(error, "Failed to delete user."));
     } finally {
       setBusyUid(null);
@@ -494,146 +505,141 @@ export default function UsersPage() {
 
   if (authLoading) {
     return (
-      <div className="min-h-screen bg-black p-6 text-white">
-        <div className="max-w-7xl">
-          <div className="flex items-center gap-3 text-zinc-300">
+      <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6 xl:px-8">
+        <div className="w-full max-w-none">
+          <div className="flex items-center gap-3 rounded-3xl border border-white/10 bg-zinc-950 p-6 text-zinc-300">
             <Loader2 className="h-5 w-5 animate-spin" />
             <span>Loading access...</span>
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   if (!isAdmin) {
     return (
-      <div className="min-h-screen bg-black p-6 text-white">
-        <div className="max-w-7xl">
-          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-6">
+      <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6 xl:px-8">
+        <div className="w-full max-w-none">
+          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-6 shadow-2xl shadow-black/30">
             <h1 className="text-2xl font-semibold">Admin access required</h1>
             <p className="mt-2 text-sm text-zinc-300">
               You do not have permission to manage users.
             </p>
           </div>
         </div>
-      </div>
+      </main>
     );
   }
 
   return (
-    <div className="min-h-screen bg-black p-6 text-white">
-      <div className="max-w-7xl">
-        <div className="mb-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-          <div>
-            <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight">
-              <Users className="h-8 w-8" />
-              Users
-            </h1>
-            <p className="mt-2 text-sm text-zinc-400">
-              Manage accounts, roles, access, and account status.
-            </p>
+    <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6 xl:px-8">
+      <div className="w-full max-w-none space-y-6">
+        <section className="rounded-3xl border border-white/10 bg-zinc-950 p-6 shadow-2xl shadow-black/30">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h1 className="flex items-center gap-3 text-3xl font-semibold tracking-tight">
+                <Users className="h-8 w-8" />
+                Users
+              </h1>
+              <p className="mt-2 text-sm text-zinc-400">
+                Manage accounts, roles, access, and account status.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              title={
+                showCreateForm ? "Close create user form" : "Open create user form"
+              }
+              aria-label={
+                showCreateForm ? "Close create user form" : "Open create user form"
+              }
+              onClick={() => setShowCreateForm((previous) => !previous)}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-medium transition hover:bg-white/15"
+            >
+              <Plus className="h-4 w-4" />
+              {showCreateForm ? "Close Create User" : "Create User"}
+            </button>
           </div>
+        </section>
 
-          <button
-            type="button"
-            aria-label={showCreateForm ? "Close create user form" : "Open create user form"}
-            onClick={() => setShowCreateForm((previous) => !previous)}
-            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-medium transition hover:bg-white/15"
-          >
-            <Plus className="h-4 w-4" />
-            {showCreateForm ? "Close Create User" : "Create User"}
-          </button>
-        </div>
-
-        <div className="mb-6 grid gap-4 md:grid-cols-5">
+        <section className="grid gap-4 md:grid-cols-5">
           <Stat label="Total" value={stats.total} />
           <Stat label="Admins" value={stats.admins} />
           <Stat label="Staff" value={stats.staff} />
           <Stat label="Active" value={stats.active} />
           <Stat label="Disabled" value={stats.disabled} />
-        </div>
+        </section>
 
         {showCreateForm ? (
-          <div className="mb-6 rounded-3xl border border-white/10 bg-zinc-950 p-6">
+          <section className="rounded-3xl border border-white/10 bg-zinc-950 p-6 shadow-2xl shadow-black/30">
             <div className="mb-4 flex items-center gap-2">
               <UserPlus className="h-5 w-5" />
               <h2 className="text-xl font-semibold">Create User</h2>
             </div>
 
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <FormField label="Display Name" id="create-display-name">
-                <input
-                  id="create-display-name"
-                  type="text"
-                  value={createForm.displayName}
-                  onChange={(event) =>
-                    setCreateForm((previous) => ({
-                      ...previous,
-                      displayName: event.target.value,
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm outline-none transition focus:border-white/30"
-                  placeholder="Jane Smith"
-                  autoComplete="name"
-                />
-              </FormField>
+              <TextInput
+                label="Display Name"
+                value={createForm.displayName}
+                onChange={(value) =>
+                  setCreateForm((previous) => ({
+                    ...previous,
+                    displayName: value,
+                  }))
+                }
+                placeholder="Jane Smith"
+                autoComplete="name"
+              />
 
-              <FormField label="Email" id="create-email">
-                <input
-                  id="create-email"
-                  type="email"
-                  value={createForm.email}
-                  onChange={(event) =>
-                    setCreateForm((previous) => ({
-                      ...previous,
-                      email: event.target.value,
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm outline-none transition focus:border-white/30"
-                  placeholder="jane@example.com"
-                  autoComplete="email"
-                />
-              </FormField>
+              <TextInput
+                label="Email"
+                type="email"
+                value={createForm.email}
+                onChange={(value) =>
+                  setCreateForm((previous) => ({
+                    ...previous,
+                    email: value,
+                  }))
+                }
+                placeholder="jane@example.com"
+                autoComplete="email"
+              />
 
-              <FormField label="Password" id="create-password">
-                <input
-                  id="create-password"
-                  type="password"
-                  value={createForm.password}
-                  onChange={(event) =>
-                    setCreateForm((previous) => ({
-                      ...previous,
-                      password: event.target.value,
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm outline-none transition focus:border-white/30"
-                  placeholder="Minimum 6 characters"
-                  autoComplete="new-password"
-                />
-              </FormField>
+              <TextInput
+                label="Password"
+                type="password"
+                value={createForm.password}
+                onChange={(value) =>
+                  setCreateForm((previous) => ({
+                    ...previous,
+                    password: value,
+                  }))
+                }
+                placeholder="Minimum 6 characters"
+                autoComplete="new-password"
+              />
 
-              <FormField label="Role" id="create-role">
-                <select
-  id="create-role"
-  title="Select user role"
-                  value={createForm.role}
-                  onChange={(event) =>
-                    setCreateForm((previous) => ({
-                      ...previous,
-                      role: event.target.value as UserRole,
-                    }))
-                  }
-                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm outline-none transition focus:border-white/30"
-                >
-                  <option value="staff">staff</option>
-                  <option value="admin">admin</option>
-                </select>
-              </FormField>
+              <SelectInput
+                label="Role"
+                value={createForm.role}
+                onChange={(value) =>
+                  setCreateForm((previous) => ({
+                    ...previous,
+                    role: value as UserRole,
+                  }))
+                }
+                options={[
+                  { value: "staff", label: "staff" },
+                  { value: "admin", label: "admin" },
+                ]}
+              />
             </div>
 
             <div className="mt-5 flex flex-wrap gap-3">
               <button
                 type="button"
+                title="Create dashboard user"
                 aria-label="Create dashboard user"
                 onClick={() => void handleCreateUser()}
                 disabled={creatingUser}
@@ -649,9 +655,10 @@ export default function UsersPage() {
 
               <button
                 type="button"
+                title="Cancel creating user"
                 aria-label="Cancel creating user"
                 onClick={() => {
-                  setCreateForm(emptyCreateForm);
+                  resetCreateForm();
                   setShowCreateForm(false);
                 }}
                 className="rounded-2xl border border-white/10 px-5 py-3 text-sm font-medium transition hover:bg-white/10"
@@ -659,10 +666,10 @@ export default function UsersPage() {
                 Cancel
               </button>
             </div>
-          </div>
+          </section>
         ) : null}
 
-        <div className="mb-6 rounded-3xl border border-white/10 bg-zinc-950 p-5">
+        <section className="rounded-3xl border border-white/10 bg-zinc-950 p-5 shadow-2xl shadow-black/30">
           <div className="grid gap-4 lg:grid-cols-4">
             <div className="lg:col-span-2">
               <label
@@ -674,55 +681,48 @@ export default function UsersPage() {
 
               <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black px-4 py-3">
                 <Search className="h-4 w-4 text-zinc-500" />
+
                 <input
                   id="user-search"
                   type="text"
                   value={searchInput}
-                  onChange={(event) => setSearchInput(event.target.value)}
+                  title="Search users"
+                  aria-label="Search users"
                   placeholder="Search by email, name, phone, or UID"
+                  onChange={(event) => setSearchInput(event.target.value)}
                   className="w-full bg-transparent text-sm outline-none placeholder:text-zinc-500"
                   autoComplete="off"
                 />
               </div>
             </div>
 
-            <FormField label="Role" id="role-filter">
-              <select
-  id="role-filter"
-  title="Filter users by role"
-                value={roleFilter}
-                onChange={(event) =>
-                  setRoleFilter(event.target.value as "all" | UserRole)
-                }
-                className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm outline-none"
-              >
-                <option value="all">All roles</option>
-                <option value="admin">Admin</option>
-                <option value="staff">Staff</option>
-              </select>
-            </FormField>
+            <SelectInput
+              label="Role"
+              value={roleFilter}
+              onChange={(value) => setRoleFilter(value as "all" | UserRole)}
+              options={[
+                { value: "all", label: "All roles" },
+                { value: "admin", label: "Admin" },
+                { value: "staff", label: "Staff" },
+              ]}
+            />
 
-            <FormField label="Status" id="status-filter">
-              <select
-  id="status-filter"
-  title="Filter users by account status"
-                value={statusFilter}
-                onChange={(event) =>
-                  setStatusFilter(
-                    event.target.value as "all" | "active" | "disabled"
-                  )
-                }
-                className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm outline-none"
-              >
-                <option value="all">All statuses</option>
-                <option value="active">Active</option>
-                <option value="disabled">Disabled</option>
-              </select>
-            </FormField>
+            <SelectInput
+              label="Status"
+              value={statusFilter}
+              onChange={(value) =>
+                setStatusFilter(value as "all" | "active" | "disabled")
+              }
+              options={[
+                { value: "all", label: "All statuses" },
+                { value: "active", label: "Active" },
+                { value: "disabled", label: "Disabled" },
+              ]}
+            />
           </div>
-        </div>
+        </section>
 
-        <div className="overflow-hidden rounded-3xl border border-white/10 bg-zinc-950">
+        <section className="overflow-hidden rounded-3xl border border-white/10 bg-zinc-950 shadow-2xl shadow-black/30">
           <div className="sticky top-0 z-10 border-b border-white/10 bg-zinc-950/95 px-5 py-4 backdrop-blur">
             <h2 className="text-lg font-semibold">User Directory</h2>
             <p className="mt-1 text-sm text-zinc-400">
@@ -748,9 +748,9 @@ export default function UsersPage() {
                 const userLabel = user.email || user.uid;
 
                 return (
-                  <div
+                  <article
                     key={user.uid}
-                    className="grid gap-4 px-5 py-5 xl:grid-cols-[2fr_1fr_1fr_1.2fr]"
+                    className="grid gap-4 px-5 py-5 hover:bg-white/[0.03] xl:grid-cols-[2fr_1fr_1fr_1.2fr]"
                   >
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
@@ -815,6 +815,8 @@ export default function UsersPage() {
 
                         <select
                           id={`role-${user.uid}`}
+                          title={`Change role for ${userLabel}`}
+                          aria-label={`Change role for ${userLabel}`}
                           value={user.role}
                           disabled={isBusy || isSelf}
                           onChange={(event) =>
@@ -823,7 +825,7 @@ export default function UsersPage() {
                               event.target.value as UserRole
                             )
                           }
-                          className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm outline-none disabled:opacity-60"
+                          className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm outline-none transition focus:border-white/30 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <option value="staff">staff</option>
                           <option value="admin">admin</option>
@@ -903,14 +905,14 @@ export default function UsersPage() {
                         <button
                           type="button"
                           aria-label={`Delete ${userLabel}`}
-                          disabled={isBusy || isSelf}
-                          onClick={() => void handleDeleteUser(user)}
-                          className="inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-300 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
                           title={
                             isSelf
                               ? "You cannot delete your own account."
                               : "Delete user"
                           }
+                          disabled={isBusy || isSelf}
+                          onClick={() => void handleDeleteUser(user)}
+                          className="inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-300 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           <Trash2 className="h-4 w-4" />
                           Delete
@@ -924,7 +926,7 @@ export default function UsersPage() {
                         </p>
                       ) : null}
                     </div>
-                  </div>
+                  </article>
                 );
               })}
             </div>
@@ -934,6 +936,7 @@ export default function UsersPage() {
             <div className="border-t border-white/10 px-5 py-5">
               <button
                 type="button"
+                title="Load more users"
                 aria-label="Load more users"
                 disabled={loadingMore}
                 onClick={() => void loadMoreUsers()}
@@ -948,41 +951,97 @@ export default function UsersPage() {
               </button>
             </div>
           ) : null}
-        </div>
+        </section>
 
-        <div className="mt-6 flex items-center gap-2 text-xs text-zinc-500">
+        <div className="flex items-center gap-2 text-xs text-zinc-500">
           <RefreshCw className="h-3.5 w-3.5" />
           Role changes may require the affected user to sign out and back in.
         </div>
       </div>
+    </main>
+  );
+}
+
+function TextInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+  placeholder,
+  autoComplete,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  placeholder?: string;
+  autoComplete?: string;
+}) {
+  const inputId = useId();
+
+  return (
+    <div>
+      <label htmlFor={inputId} className="mb-2 block text-sm text-zinc-400">
+        {label}
+      </label>
+
+      <input
+        id={inputId}
+        type={type}
+        value={value}
+        title={label}
+        aria-label={label}
+        placeholder={placeholder || label}
+        autoComplete={autoComplete}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm outline-none placeholder:text-zinc-500 transition focus:border-white/30"
+      />
     </div>
   );
 }
 
-function FormField({
+function SelectInput({
   label,
-  id,
-  children,
+  value,
+  onChange,
+  options,
 }: {
   label: string;
-  id: string;
-  children: ReactNode;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
 }) {
+  const selectId = useId();
+
   return (
     <div>
-      <label htmlFor={id} className="mb-2 block text-sm text-zinc-400">
+      <label htmlFor={selectId} className="mb-2 block text-sm text-zinc-400">
         {label}
       </label>
-      {children}
+
+      <select
+        id={selectId}
+        title={label}
+        aria-label={label}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm outline-none transition focus:border-white/30"
+      >
+        {options.map((option) => (
+          <option key={`${selectId}-${option.value}`} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
 
 function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-zinc-950 p-5">
+    <div className="rounded-3xl border border-white/10 bg-zinc-950 p-5 shadow-xl shadow-black/20">
       <p className="text-xs uppercase tracking-wide text-zinc-400">{label}</p>
-      <p className="mt-2 text-3xl font-semibold">{value}</p>
+      <p className="mt-2 text-3xl font-semibold">{value.toLocaleString()}</p>
     </div>
   );
 }
