@@ -1,5 +1,5 @@
 "use client";
-
+import Image from "next/image";
 import Link from "next/link";
 import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { getFunctions, httpsCallable } from "firebase/functions";
@@ -27,7 +27,6 @@ import {
   X,
 } from "lucide-react";
 
-import ReportUploadCard from "@/app/components/reports/ReportUploadCard";
 import HipaaSafetyModal from "./HipaaSafetyModal";
 import type {
   BirthdayAnalytics,
@@ -43,9 +42,35 @@ import {
   privateOrderLabel,
   safeNumber,
 } from "./dashboard-utils";
+<div className="flex flex-col gap-4">
+  <Image
+    src="/images/ahm-logo.webp"
+    alt="Advanced Home Medical"
+    width={420}
+    height={120}
+    priority
+    className="h-auto w-full max-w-[420px] object-contain"
+  />
 
+  <div>
+    <h1 className="text-3xl font-bold">Command Center</h1>
+
+    <p className="mt-1 max-w-3xl text-sm text-zinc-400">
+      Orders, rentals, inventory, reports, WIPs, stock movement,
+      birthdays, and safety checks in one control room.
+    </p>
+  </div>
+</div>
 const BUSINESS_CONFIRM_TEXT = "ADVANCED HOME MEDICAL";
 const STERILIZE_CONFIRM_TEXT = "STERILIZE";
+
+type WipEmployeeSummary = {
+  employee: string;
+  total: number;
+  open: number;
+  completed: number;
+  oldestDays: number;
+};
 
 export default function DashboardPage() {
   const {
@@ -108,7 +133,7 @@ export default function DashboardPage() {
       lowStockItems,
       activeOrdersList,
       activeRentalsList: rentals.filter((rental) => rental.status === "Active"),
-      wipEmployeeSummaries: wipEmployees,
+      wipEmployeeSummaries: wipEmployees as WipEmployeeSummary[],
       birthdayActionCount: birthdays.todayCount || birthdays.today.length,
       birthdaySevenDayCount:
         birthdays.next7DaysCount || birthdays.next7Days.length,
@@ -183,9 +208,7 @@ export default function DashboardPage() {
       console.error("Clean database failed.", cleanError);
 
       const message =
-        cleanError instanceof Error
-          ? cleanError.message
-          : "Database clean failed.";
+        cleanError instanceof Error ? cleanError.message : "Database clean failed.";
 
       setCleanResult(message);
     } finally {
@@ -198,13 +221,7 @@ export default function DashboardPage() {
     includeBusinessData,
     refreshDashboard,
   ]);
-    type WipEmployeeSummary = {
-  employee: string;
-  total: number;
-  open: number;
-  completed: number;
-  oldestDays: number;
-};
+
   return (
     <main className="min-h-screen space-y-6 bg-black text-white">
       <div className="rounded-3xl border border-white/10 bg-gradient-to-br from-[#101827] to-black p-6 shadow-2xl shadow-black/30">
@@ -279,44 +296,23 @@ export default function DashboardPage() {
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-[#0b1220] p-6">
-        <div className="mb-5">
-          <h2 className="text-lg font-semibold">Quick Report Uploads</h2>
-          <p className="mt-1 text-sm text-zinc-500">
-            Fast-path uploads for the core Brightree reports. Each upload is
-            locked to the correct report pipeline.
-          </p>
-        </div>
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Master Upload Center</h2>
 
-        <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-3">
-          <ReportUploadCard
-            reportType="patients"
-            title="Upload Patient Report"
-            description="Builds patient profiles, demographics, birthday analytics, and patient indexes."
-          />
+            <p className="mt-1 max-w-3xl text-sm text-zinc-500">
+              Upload all Brightree CSV/PDF reports from one command center. No
+              more scattered upload widgets hiding all over the app like bad
+              plumbing.
+            </p>
+          </div>
 
-          <ReportUploadCard
-            reportType="delivery"
-            title="Upload Delivery Tickets"
-            description="Feeds delivery tickets, purchases, items, inventory movement, and patient equipment history."
-          />
-
-          <ReportUploadCard
-            reportType="wip"
-            title="Upload Work In Progress Report"
-            description="Updates WIP queues, employee ownership, unresolved work, and WIP analytics."
-          />
-
-          <ReportUploadCard
-            reportType="insurance"
-            title="Upload Insurance Report"
-            description="Updates insurance queues, payer records, and patient insurance views."
-          />
-
-          <ReportUploadCard
-            reportType="hospice"
-            title="Upload Hospice Report"
-            description="Updates hospice patients, living/deceased status, nurse records, and hospice indexes."
-          />
+          <Link
+            href="/reports/upload"
+            className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+          >
+            Open Master Upload Center
+          </Link>
         </div>
       </section>
 
@@ -684,10 +680,7 @@ export default function DashboardPage() {
         so the dashboard does not scan large imported report collections.
       </div>
 
-      <HipaaSafetyModal
-        open={hipaaOpen}
-        onClose={() => setHipaaOpen(false)}
-      />
+      <HipaaSafetyModal open={hipaaOpen} onClose={() => setHipaaOpen(false)} />
 
       {cleanOpen ? (
         <CleanDatabaseDialog
@@ -815,19 +808,13 @@ function BirthdayRow({
         <div className="min-w-0">
           <p
             className={
-              urgent
-                ? "font-semibold text-emerald-100"
-                : "font-medium text-zinc-100"
+              urgent ? "font-semibold text-emerald-100" : "font-medium text-zinc-100"
             }
           >
             {birthday.fullName}
           </p>
 
-          <p
-            className={
-              urgent ? "text-xs text-emerald-100/80" : "text-xs text-zinc-500"
-            }
-          >
+          <p className={urgent ? "text-xs text-emerald-100/80" : "text-xs text-zinc-500"}>
             {turningText}
             {birthday.primaryInsurance ? ` · ${birthday.primaryInsurance}` : ""}
           </p>
@@ -853,10 +840,7 @@ function BirthdayRow({
 
 function InventoryRiskPanel({ items }: { items: ProductRow[] }) {
   return (
-    <Panel
-      title="Inventory Risk"
-      icon={<Package className="h-5 w-5" aria-hidden="true" />}
-    >
+    <Panel title="Inventory Risk" icon={<Package className="h-5 w-5" aria-hidden="true" />}>
       {items.length === 0 ? (
         <p className="text-sm text-zinc-500">No low-stock items loaded.</p>
       ) : (
@@ -931,10 +915,7 @@ function CleanDatabaseDialog({
               Admin destructive action
             </div>
 
-            <h2
-              id="clean-database-title"
-              className="text-2xl font-bold text-red-100"
-            >
+            <h2 id="clean-database-title" className="text-2xl font-bold text-red-100">
               Sterilize Database
             </h2>
 
@@ -994,9 +975,7 @@ function CleanDatabaseDialog({
                 <input
                   type="checkbox"
                   checked={includeBusinessData}
-                  onChange={(event) =>
-                    setIncludeBusinessData(event.target.checked)
-                  }
+                  onChange={(event) => setIncludeBusinessData(event.target.checked)}
                   disabled={cleaning}
                   className="mt-1 h-4 w-4"
                 />
@@ -1015,9 +994,7 @@ function CleanDatabaseDialog({
                 <input
                   type="checkbox"
                   checked={deleteUploadedFiles}
-                  onChange={(event) =>
-                    setDeleteUploadedFiles(event.target.checked)
-                  }
+                  onChange={(event) => setDeleteUploadedFiles(event.target.checked)}
                   disabled={cleaning}
                   className="mt-1 h-4 w-4"
                 />
@@ -1026,8 +1003,7 @@ function CleanDatabaseDialog({
                     Also delete uploaded files
                   </span>
                   <span className="block text-xs text-zinc-500">
-                    Deletes uploaded import files if supported by your Cloud
-                    Function.
+                    Deletes uploaded import files if supported by your Cloud Function.
                   </span>
                 </span>
               </label>
@@ -1079,10 +1055,7 @@ function CleanDatabaseDialog({
                 >
                   {cleaning ? (
                     <>
-                      <Loader2
-                        className="h-4 w-4 animate-spin"
-                        aria-hidden="true"
-                      />
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                       Cleaning...
                     </>
                   ) : (
@@ -1139,9 +1112,7 @@ function MetricCard({
   return (
     <article
       className={`rounded-3xl border p-5 ${
-        warn
-          ? "border-amber-500/20 bg-amber-500/10"
-          : "border-white/10 bg-[#0b1220]"
+        warn ? "border-amber-500/20 bg-amber-500/10" : "border-white/10 bg-[#0b1220]"
       }`}
     >
       <div className="flex items-center justify-between gap-4">

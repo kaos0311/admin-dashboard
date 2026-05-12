@@ -126,7 +126,7 @@ type ProductForm = Omit<
   warrantyMonths: string;
 };
 
-const PAGE_SIZE = 75;
+const PAGE_SIZE = 100;
 const BATCH_SIZE = 400;
 
 const initialForm: ProductForm = {
@@ -171,7 +171,9 @@ function toSafeString(value: unknown): string {
 
 function toSafeNumber(value: unknown): number {
   if (value === "" || value == null) return 0;
+
   const parsed = Number(String(value).replace(/[$,]/g, "").trim());
+
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -194,6 +196,7 @@ function buildSearchKeywords(values: string[]): string[] {
 function normalizeStatus(value: unknown): ProductStatus {
   if (value === "inactive") return "inactive";
   if (value === "discontinued") return "discontinued";
+
   return "active";
 }
 
@@ -260,7 +263,9 @@ function productRiskScore(product: Product): number {
   if (!product.sku && !product.upc && !product.manufacturerItemId) score += 15;
   if (product.recallFlagged) score += 30;
   if (product.requiresSerialTracking && !product.isSerialized) score += 20;
-  if (product.productType === "rental" && product.defaultRentalRate <= 0) score += 10;
+  if (product.productType === "rental" && product.defaultRentalRate <= 0) {
+    score += 10;
+  }
   if (product.basePrice <= 0 && product.productType !== "service") score += 10;
 
   return Math.min(score, 100);
@@ -271,13 +276,17 @@ function qualityWarnings(product: Product): string[] {
 
   if (!product.category) warnings.push("Missing category");
   if (!product.hcpcs) warnings.push("Missing HCPCS");
+
   if (!product.sku && !product.upc && !product.manufacturerItemId) {
     warnings.push("Missing item identifier");
   }
+
   if (product.recallFlagged) warnings.push("Recall flagged");
+
   if (product.requiresSerialTracking && !product.isSerialized) {
     warnings.push("Serial tracking mismatch");
   }
+
   if (product.productType === "rental" && product.defaultRentalRate <= 0) {
     warnings.push("Missing rental rate");
   }
@@ -290,7 +299,10 @@ function uniqueOptions(products: Product[], key: keyof Product): string[] {
     new Set(
       products
         .map((product) => product[key])
-        .filter((value): value is string => typeof value === "string" && value.length > 0)
+        .filter(
+          (value): value is string =>
+            typeof value === "string" && value.length > 0
+        )
     )
   ).sort((a, b) => a.localeCompare(b));
 }
@@ -299,6 +311,8 @@ export default function ProductsPage() {
   const { loading: authLoading, isAdmin, isStaff, user } = useAuthRole();
 
   const mountedRef = useRef(false);
+  const lastDocRef = useRef<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const hasMoreRef = useRef(true);
 
   const [products, setProducts] = useState<Product[]>([]);
   const [lastDoc, setLastDoc] =
@@ -336,25 +350,35 @@ export default function ProductsPage() {
         return;
       }
 
+      const currentLastDoc = lastDocRef.current;
+      const currentHasMore = hasMoreRef.current;
+
       if (mode === "reset") {
         setLoadingProducts(true);
         setLastDoc(null);
+        lastDocRef.current = null;
         setHasMore(true);
+        hasMoreRef.current = true;
       } else {
-        if (!lastDoc || !hasMore) return;
+        if (!currentLastDoc || !currentHasMore) return;
+
         setLoadingMore(true);
       }
 
       try {
         const productsQuery =
-          mode === "more" && lastDoc
+          mode === "more" && currentLastDoc
             ? query(
                 collection(db, "products"),
                 orderBy("name", "asc"),
-                startAfter(lastDoc),
+                startAfter(currentLastDoc),
                 limit(PAGE_SIZE)
               )
-            : query(collection(db, "products"), orderBy("name", "asc"), limit(PAGE_SIZE));
+            : query(
+                collection(db, "products"),
+                orderBy("name", "asc"),
+                limit(PAGE_SIZE)
+              );
 
         const snapshot = await getDocs(productsQuery);
 
@@ -376,8 +400,14 @@ export default function ProductsPage() {
           return next;
         });
 
-        setLastDoc(snapshot.docs[snapshot.docs.length - 1] ?? null);
-        setHasMore(snapshot.docs.length === PAGE_SIZE);
+        const nextLastDoc = snapshot.docs[snapshot.docs.length - 1] ?? null;
+        const nextHasMore = snapshot.docs.length === PAGE_SIZE;
+
+        setLastDoc(nextLastDoc);
+        lastDocRef.current = nextLastDoc;
+
+        setHasMore(nextHasMore);
+        hasMoreRef.current = nextHasMore;
       } catch (error) {
         console.error("LOAD PRODUCTS ERROR:", error);
         toast.error("Products could not be loaded. Check Firestore rules/indexes.");
@@ -388,7 +418,7 @@ export default function ProductsPage() {
         }
       }
     },
-    [canRead, hasMore, lastDoc]
+    [canRead]
   );
 
   useEffect(() => {
@@ -413,6 +443,7 @@ export default function ProductsPage() {
   }, [authLoading, canRead, loadProducts]);
 
   const categories = useMemo(() => uniqueOptions(products, "category"), [products]);
+
   const manufacturers = useMemo(
     () => uniqueOptions(products, "manufacturer"),
     [products]
@@ -509,7 +540,10 @@ export default function ProductsPage() {
   ]);
 
   const stats = useMemo(() => {
-    const missingInfo = products.filter((product) => qualityWarnings(product).length > 0);
+    const missingInfo = products.filter(
+      (product) => qualityWarnings(product).length > 0
+    );
+
     const highRisk = products.filter((product) => productRiskScore(product) >= 50);
 
     return {
@@ -531,12 +565,15 @@ export default function ProductsPage() {
     if (!form.name.trim()) warnings.push("Product name is required.");
     if (!form.category.trim()) warnings.push("Category is required.");
     if (!form.hcpcs.trim()) warnings.push("HCPCS is missing.");
+
     if (!form.sku.trim() && !form.upc.trim() && !form.manufacturerItemId.trim()) {
       warnings.push("At least one item identifier is recommended.");
     }
+
     if (form.productType === "rental" && toSafeNumber(form.defaultRentalRate) <= 0) {
       warnings.push("Rental items should have a default rental rate.");
     }
+
     if (form.requiresSerialTracking && !form.isSerialized) {
       warnings.push("Serial tracking requires Serialized item enabled.");
     }
@@ -576,7 +613,9 @@ export default function ProductsPage() {
     const visibleIds = filteredProducts.map((product) => product.id);
 
     if (allVisibleSelected) {
-      setSelectedIds((current) => current.filter((id) => !visibleIds.includes(id)));
+      setSelectedIds((current) =>
+        current.filter((id) => !visibleIds.includes(id))
+      );
       return;
     }
 
@@ -656,6 +695,7 @@ export default function ProductsPage() {
       });
 
       toast.success("Product archived.");
+
       setProducts((current) => current.filter((p) => p.id !== product.id));
       setSelectedIds((current) => current.filter((id) => id !== product.id));
 
@@ -780,6 +820,7 @@ export default function ProductsPage() {
 
   function handleScanDetected(code: string) {
     const clean = normalizeBarcode(code);
+
     setForm((prev) => ({ ...prev, upc: clean }));
     setSearch(clean);
     toast.success("UPC captured.");
@@ -947,7 +988,7 @@ export default function ProductsPage() {
 
   return (
     <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6">
-      <div className="max-w-7xl space-y-6">
+      <div className="mx-auto w-full max-w-[1900px] space-y-6">
         <section className="rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
@@ -972,7 +1013,7 @@ export default function ProductsPage() {
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {loadingProducts ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : (
                   <RefreshCcw className="h-4 w-4" aria-hidden="true" />
                 )}
@@ -986,9 +1027,9 @@ export default function ProductsPage() {
                 className="inline-flex items-center justify-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {purging ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                 )}
                 Purge Loaded
               </button>
@@ -996,7 +1037,7 @@ export default function ProductsPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
           <StatCard label="Loaded Products" value={stats.total} icon="box" />
           <StatCard label="Active" value={stats.active} icon="box" />
           <StatCard label="Rental Items" value={stats.rental} icon="money" />
@@ -1011,23 +1052,23 @@ export default function ProductsPage() {
           <section className="rounded-3xl border border-amber-500/20 bg-amber-500/10 p-5 text-amber-200">
             <div className="flex items-start gap-3">
               <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+
               <div>
                 <h2 className="font-semibold">Catalog cleanup needed</h2>
                 <p className="mt-1 text-sm text-amber-100/80">
                   {stats.highRisk.toLocaleString()} loaded product record
-                  {stats.highRisk === 1 ? "" : "s"} have high-risk catalog issues.
-                  Missing identifiers, HCPCS gaps, recall flags, and serial mismatches
-                  are how databases become haunted houses with billing codes.
+                  {stats.highRisk === 1 ? "" : "s"} have high-risk catalog
+                  issues.
                 </p>
               </div>
             </div>
           </section>
         ) : null}
 
-        <section className="grid gap-6 xl:grid-cols-[430px_minmax(0,1fr)]">
+        <section className="grid gap-6 2xl:grid-cols-[380px_minmax(0,1fr)]">
           <form
             onSubmit={handleSubmit}
-            className="rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30"
+            className="rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30 2xl:sticky 2xl:top-6 2xl:max-h-[calc(100vh-3rem)] 2xl:overflow-y-auto"
           >
             <div className="mb-5 flex items-center gap-3">
               <div className="rounded-2xl bg-white/10 p-3">
@@ -1072,7 +1113,7 @@ export default function ProductsPage() {
                 required
               />
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-1">
                 <TextInput
                   id="brand"
                   label="Brand"
@@ -1088,7 +1129,7 @@ export default function ProductsPage() {
                 />
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-1">
                 <TextInput
                   id="category"
                   label="Category"
@@ -1157,7 +1198,7 @@ export default function ProductsPage() {
                 }
               />
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-1">
                 <TextInput
                   id="sku"
                   label="SKU / Item ID"
@@ -1203,7 +1244,7 @@ export default function ProductsPage() {
                 </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-1">
                 <TextInput
                   id="base-price"
                   label="Base Price"
@@ -1236,15 +1277,15 @@ export default function ProductsPage() {
               >
                 Advanced Catalog Fields
                 {showAdvanced ? (
-                  <ChevronUp className="h-4 w-4" />
+                  <ChevronUp className="h-4 w-4" aria-hidden="true" />
                 ) : (
-                  <ChevronDown className="h-4 w-4" />
+                  <ChevronDown className="h-4 w-4" aria-hidden="true" />
                 )}
               </button>
 
               {showAdvanced ? (
                 <div className="space-y-4 rounded-3xl border border-white/10 bg-black/40 p-4">
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-1">
                     <TextInput
                       id="primary-vendor"
                       label="Primary Vendor"
@@ -1272,12 +1313,14 @@ export default function ProductsPage() {
                     ))}
                   </datalist>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-1">
                     <TextInput
                       id="ndc"
                       label="NDC"
                       value={form.ndc}
-                      onChange={(value) => setForm((prev) => ({ ...prev, ndc: value }))}
+                      onChange={(value) =>
+                        setForm((prev) => ({ ...prev, ndc: value }))
+                      }
                     />
 
                     <TextInput
@@ -1290,7 +1333,7 @@ export default function ProductsPage() {
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-1">
                     <TextInput
                       id="purchase-price"
                       label="Default Purchase Price"
@@ -1318,7 +1361,7 @@ export default function ProductsPage() {
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-1">
                     <TextInput
                       id="reorder-level"
                       label="Reorder Level"
@@ -1340,7 +1383,7 @@ export default function ProductsPage() {
                     />
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
+                  <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-1">
                     <TextInput
                       id="weight"
                       label="Weight"
@@ -1378,7 +1421,7 @@ export default function ProductsPage() {
                     }
                   />
 
-                  <div className="grid gap-3 md:grid-cols-2">
+                  <div className="grid gap-3 md:grid-cols-2 2xl:grid-cols-1">
                     <CheckboxInput
                       label="Rental item"
                       checked={form.isRentalItem}
@@ -1472,9 +1515,9 @@ export default function ProductsPage() {
                   className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                   ) : (
-                    <Save className="h-4 w-4" />
+                    <Save className="h-4 w-4" aria-hidden="true" />
                   )}
                   Save Product
                 </button>
@@ -1490,8 +1533,8 @@ export default function ProductsPage() {
             </div>
           </form>
 
-          <section className="rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30">
-            <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+          <section className="min-w-0 rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30">
+            <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <h2 className="text-xl font-bold">Product Catalog</h2>
                 <p className="text-sm text-neutral-400">
@@ -1509,7 +1552,7 @@ export default function ProductsPage() {
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  className="w-full rounded-2xl border border-white/10 bg-black py-3 pl-10 pr-10 text-sm text-white outline-none focus:border-white/30 lg:w-80"
+                  className="w-full rounded-2xl border border-white/10 bg-black py-3 pl-10 pr-10 text-sm text-white outline-none focus:border-white/30 xl:w-[420px]"
                   placeholder="Search name, SKU, UPC, HCPCS..."
                   aria-label="Search products"
                 />
@@ -1521,7 +1564,7 @@ export default function ProductsPage() {
                     className="absolute right-3 top-3.5 text-neutral-500 hover:text-white"
                     aria-label="Clear search"
                   >
-                    <X className="h-4 w-4" />
+                    <X className="h-4 w-4" aria-hidden="true" />
                   </button>
                 ) : null}
               </div>
@@ -1533,7 +1576,7 @@ export default function ProductsPage() {
                 Adaptive Filters
               </div>
 
-              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
                 <MiniSelect
                   label="Status"
                   value={statusFilter}
@@ -1640,7 +1683,7 @@ export default function ProductsPage() {
                 disabled={filteredProducts.length === 0}
                 className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <CheckSquare className="h-4 w-4" />
+                <CheckSquare className="h-4 w-4" aria-hidden="true" />
                 {allVisibleSelected ? "Unselect Visible" : "Select Visible"}
               </button>
 
@@ -1651,9 +1694,9 @@ export default function ProductsPage() {
                 className="inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-300 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {deleting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 ) : (
-                  <Trash2 className="h-4 w-4" />
+                  <Trash2 className="h-4 w-4" aria-hidden="true" />
                 )}
                 Archive Selected
               </button>
@@ -1665,7 +1708,7 @@ export default function ProductsPage() {
 
             {loadingProducts || authLoading ? (
               <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black p-4 text-neutral-300">
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                 Loading products...
               </div>
             ) : filteredProducts.length === 0 ? (
@@ -1674,21 +1717,23 @@ export default function ProductsPage() {
               </div>
             ) : (
               <>
-                <div className="hidden overflow-x-auto rounded-2xl border border-white/10 xl:block">
-                  <table className="w-full min-w-[1180px] text-left text-sm">
-                    <thead className="bg-white/5 text-neutral-400">
+                <div className="hidden max-h-[72vh] overflow-auto rounded-2xl border border-white/10 xl:block">
+                  <table className="w-full min-w-[1550px] text-left text-sm">
+                    <thead className="sticky top-0 z-20 border-b border-white/10 bg-neutral-900 text-neutral-300 shadow-lg shadow-black/40">
                       <tr>
-                        <th className="px-4 py-3">Select</th>
-                        <th className="px-4 py-3">Product</th>
-                        <th className="px-4 py-3">SKU</th>
-                        <th className="px-4 py-3">UPC</th>
-                        <th className="px-4 py-3">HCPCS</th>
-                        <th className="px-4 py-3">Manufacturer</th>
-                        <th className="px-4 py-3">Price</th>
-                        <th className="px-4 py-3">Flags</th>
-                        <th className="px-4 py-3">Risk</th>
-                        <th className="px-4 py-3">Status</th>
-                        <th className="px-4 py-3 text-right">Actions</th>
+                        <th className="w-[80px] px-4 py-3">Select</th>
+                        <th className="min-w-[320px] px-4 py-3">Product</th>
+                        <th className="min-w-[140px] px-4 py-3">SKU</th>
+                        <th className="min-w-[150px] px-4 py-3">UPC</th>
+                        <th className="min-w-[120px] px-4 py-3">HCPCS</th>
+                        <th className="min-w-[180px] px-4 py-3">Manufacturer</th>
+                        <th className="min-w-[110px] px-4 py-3">Price</th>
+                        <th className="min-w-[260px] px-4 py-3">Flags</th>
+                        <th className="min-w-[130px] px-4 py-3">Risk</th>
+                        <th className="min-w-[130px] px-4 py-3">Status</th>
+                        <th className="sticky right-0 min-w-[120px] bg-neutral-900 px-4 py-3 text-right shadow-[-12px_0_18px_rgba(0,0,0,0.45)]">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
 
@@ -1728,9 +1773,9 @@ export default function ProductsPage() {
                     className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-semibold transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {loadingMore ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
                     ) : (
-                      <ChevronDown className="h-4 w-4" />
+                      <ChevronDown className="h-4 w-4" aria-hidden="true" />
                     )}
                     {hasMore ? "Load More" : "All Loaded"}
                   </button>
@@ -1766,13 +1811,13 @@ function ProductTableRow({
   const risk = productRiskScore(product);
 
   return (
-    <tr className="border-t border-white/10 align-top">
+    <tr className="border-t border-white/10 align-top transition hover:bg-white/[0.03]">
       <td className="px-4 py-3">
         <input
           type="checkbox"
           checked={selected}
           onChange={onSelect}
-          aria-label={`Select ${product.name}`}
+          aria-label={`Select ${product.name || "product"}`}
         />
       </td>
 
@@ -1780,12 +1825,11 @@ function ProductTableRow({
         <div className="flex gap-3">
           <ProductThumb product={product} />
 
-          <div>
+          <div className="min-w-0">
             <div className="font-semibold">{product.name || "Unnamed product"}</div>
             <div className="text-xs text-neutral-500">
-              {[product.brand, product.model, product.category]
-                .filter(Boolean)
-                .join(" • ") || "No category"}
+              {[product.brand, product.model, product.category].filter(Boolean).join(" • ") ||
+                "No category"}
             </div>
           </div>
         </div>
@@ -1794,12 +1838,8 @@ function ProductTableRow({
       <td className="px-4 py-3 text-neutral-300">{product.sku || "-"}</td>
       <td className="px-4 py-3 text-neutral-300">{product.upc || "-"}</td>
       <td className="px-4 py-3 text-neutral-300">{product.hcpcs || "-"}</td>
-      <td className="px-4 py-3 text-neutral-300">
-        {product.manufacturer || "-"}
-      </td>
-      <td className="px-4 py-3 text-neutral-300">
-        ${product.basePrice.toFixed(2)}
-      </td>
+      <td className="px-4 py-3 text-neutral-300">{product.manufacturer || "-"}</td>
+      <td className="px-4 py-3 text-neutral-300">${product.basePrice.toFixed(2)}</td>
 
       <td className="px-4 py-3">
         <ProductFlags product={product} />
@@ -1813,16 +1853,16 @@ function ProductTableRow({
         <StatusBadge status={product.status} />
       </td>
 
-      <td className="px-4 py-3">
+      <td className="sticky right-0 bg-neutral-950 px-4 py-3 shadow-[-12px_0_18px_rgba(0,0,0,0.45)]">
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onEdit}
             className="rounded-xl border border-white/10 bg-white/10 p-2 transition hover:bg-white/15"
             title="Edit product"
-            aria-label={`Edit ${product.name}`}
+            aria-label={`Edit ${product.name || "product"}`}
           >
-            <Pencil className="h-4 w-4" />
+            <Pencil className="h-4 w-4" aria-hidden="true" />
           </button>
 
           <button
@@ -1830,9 +1870,9 @@ function ProductTableRow({
             onClick={onArchive}
             className="rounded-xl border border-red-500/20 bg-red-500/10 p-2 text-red-300 transition hover:bg-red-500/20"
             title="Archive product"
-            aria-label={`Archive ${product.name}`}
+            aria-label={`Archive ${product.name || "product"}`}
           >
-            <Trash2 className="h-4 w-4" />
+            <Trash2 className="h-4 w-4" aria-hidden="true" />
           </button>
         </div>
       </td>
@@ -1860,7 +1900,7 @@ function ProductMobileCard({
           type="checkbox"
           checked={selected}
           onChange={onSelect}
-          aria-label={`Select ${product.name}`}
+          aria-label={`Select ${product.name || "product"}`}
           className="mt-1"
         />
 
@@ -1868,10 +1908,10 @@ function ProductMobileCard({
 
         <div className="min-w-0 flex-1">
           <div className="font-semibold">{product.name || "Unnamed product"}</div>
+
           <div className="text-xs text-neutral-500">
-            {[product.brand, product.model, product.category]
-              .filter(Boolean)
-              .join(" • ") || "No category"}
+            {[product.brand, product.model, product.category].filter(Boolean).join(" • ") ||
+              "No category"}
           </div>
 
           <div className="mt-3 grid gap-2 text-xs text-neutral-300">
@@ -1894,7 +1934,7 @@ function ProductMobileCard({
               onClick={onEdit}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-sm transition hover:bg-white/15"
             >
-              <Pencil className="h-4 w-4" />
+              <Pencil className="h-4 w-4" aria-hidden="true" />
               Edit
             </button>
 
@@ -1903,7 +1943,7 @@ function ProductMobileCard({
               onClick={onArchive}
               className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-red-500/20 bg-red-500/10 px-3 py-2 text-sm text-red-300 transition hover:bg-red-500/20"
             >
-              <Trash2 className="h-4 w-4" />
+              <Trash2 className="h-4 w-4" aria-hidden="true" />
               Archive
             </button>
           </div>
@@ -1919,7 +1959,7 @@ function ProductThumb({ product }: { product: Product }) {
   if (!src) {
     return (
       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/5 text-neutral-500">
-        <ImageIcon className="h-5 w-5" />
+        <ImageIcon className="h-5 w-5" aria-hidden="true" />
       </div>
     );
   }
@@ -1957,7 +1997,9 @@ function ProductFlags({ product }: { product: Product }) {
         <span
           key={flag}
           className={
-            flag === "Recall" || flag.includes("Missing") || flag.includes("mismatch")
+            flag === "Recall" ||
+            flag.includes("Missing") ||
+            flag.includes("mismatch")
               ? "rounded-full border border-amber-500/20 bg-amber-500/10 px-2 py-1 text-xs text-amber-300"
               : "rounded-full border border-white/10 bg-white/10 px-2 py-1 text-xs text-neutral-300"
           }

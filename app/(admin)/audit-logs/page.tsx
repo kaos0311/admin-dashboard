@@ -25,6 +25,7 @@ import {
   AlertTriangle,
   Ban,
   Database,
+  Download,
   FileText,
   Filter,
   Loader2,
@@ -45,10 +46,20 @@ import { useAuthRole } from "@/app/hooks/useAuthRole";
 const AUDIT_PAGE_SIZE = 500;
 
 type AuditSeverity = "info" | "warning" | "critical";
+type DateFilter = "all" | "today" | "7d" | "30d";
+type AuditCategory =
+  | "user"
+  | "role"
+  | "report"
+  | "database"
+  | "security"
+  | "settings"
+  | "unknown";
 
 type AuditLogRow = {
   id: string;
   action: string;
+  category: AuditCategory;
   severity: AuditSeverity;
   riskScore: number;
   actorUid: string | null;
@@ -63,8 +74,6 @@ type AuditLogRow = {
   searchableText: string;
 };
 
-type DateFilter = "all" | "today" | "7d" | "30d";
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -77,14 +86,22 @@ function safeJson(value: unknown): string {
   }
 }
 
-function readString(data: DocumentData, key: string): string | null {
-  return typeof data[key] === "string" && data[key].trim()
-    ? data[key]
-    : null;
+function readString(data: DocumentData, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = data[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+
+  return null;
 }
 
-function readTimestamp(data: DocumentData, key: string): Timestamp | null {
-  return data[key] instanceof Timestamp ? data[key] : null;
+function readTimestamp(data: DocumentData, keys: string[]): Timestamp | null {
+  for (const key of keys) {
+    const value = data[key];
+    if (value instanceof Timestamp) return value;
+  }
+
+  return null;
 }
 
 function formatTimestamp(value: Timestamp | null): string {
@@ -101,27 +118,44 @@ function humanAction(action: string): string {
   return action.replaceAll("_", " ");
 }
 
-function getSeverity(action: string, details: Record<string, unknown>): AuditSeverity {
+function getCategory(action: string, details: Record<string, unknown>): AuditCategory {
+  const text = `${action} ${safeJson(details)}`.toLowerCase();
+
+  if (text.includes("role") || text.includes("claim")) return "role";
+  if (text.includes("user") || text.includes("account")) return "user";
+  if (text.includes("report") || text.includes("import")) return "report";
+  if (text.includes("database") || text.includes("clean") || text.includes("purge")) return "database";
+  if (text.includes("security") || text.includes("permission") || text.includes("denied") || text.includes("failed")) return "security";
+  if (text.includes("settings") || text.includes("config")) return "settings";
+
+  return "unknown";
+}
+
+function getSeverity(
+  action: string,
+  category: AuditCategory,
+  details: Record<string, unknown>
+): AuditSeverity {
   const text = `${action} ${safeJson(details)}`.toLowerCase();
 
   if (
+    category === "security" ||
+    category === "database" ||
     text.includes("delete") ||
     text.includes("deleted") ||
     text.includes("clean") ||
     text.includes("purge") ||
+    text.includes("failed") ||
     text.includes("permission") ||
-    text.includes("admin_removed") ||
-    text.includes("database_clean") ||
-    text.includes("security") ||
-    text.includes("failed")
+    text.includes("denied")
   ) {
     return "critical";
   }
 
   if (
+    category === "role" ||
     text.includes("disable") ||
     text.includes("disabled") ||
-    text.includes("role") ||
     text.includes("updated") ||
     text.includes("archive") ||
     text.includes("cancel")
@@ -134,35 +168,31 @@ function getSeverity(action: string, details: Record<string, unknown>): AuditSev
 
 function getRiskScore(
   action: string,
+  category: AuditCategory,
   severity: AuditSeverity,
   details: Record<string, unknown>
 ): number {
   const text = `${action} ${safeJson(details)}`.toLowerCase();
 
-  let score = severity === "critical" ? 75 : severity === "warning" ? 45 : 15;
+  let score = severity === "critical" ? 70 : severity === "warning" ? 40 : 15;
 
-  if (text.includes("delete") || text.includes("purge")) score += 20;
-  if (text.includes("role") || text.includes("permission")) score += 15;
+  if (category === "database") score += 20;
+  if (category === "security") score += 15;
+  if (category === "role") score += 15;
+  if (text.includes("delete") || text.includes("purge")) score += 15;
   if (text.includes("admin")) score += 10;
   if (text.includes("failed") || text.includes("error")) score += 10;
-  if (text.includes("database")) score += 10;
 
   return Math.min(score, 100);
 }
 
-function buildSearchableText(log: {
-  action: string;
-  actorEmail: string | null;
-  targetEmail: string | null;
-  actorUid: string | null;
-  targetUid: string | null;
-  ipAddress: string | null;
-  userAgent: string | null;
-  details: Record<string, unknown>;
-}) {
+function buildSearchableText(log: Omit<AuditLogRow, "searchableText">) {
   return [
+    log.id,
     log.action,
     humanAction(log.action),
+    log.category,
+    log.severity,
     log.actorEmail ?? "",
     log.targetEmail ?? "",
     log.actorUid ?? "",
@@ -175,29 +205,35 @@ function buildSearchableText(log: {
     .toLowerCase();
 }
 
-function mapAuditDoc(
-  docSnap: QueryDocumentSnapshot<DocumentData>
-): AuditLogRow {
+function mapAuditDoc(docSnap: QueryDocumentSnapshot<DocumentData>): AuditLogRow {
   const data = docSnap.data();
 
-  const action = readString(data, "action") ?? "unknown";
+  const action = readString(data, ["action", "event", "type", "name"]) ?? "unknown";
   const details = isRecord(data.details) ? data.details : {};
-  const createdAt = readTimestamp(data, "createdAt");
 
-  const actorUid = readString(data, "actorUid");
-  const actorEmail = readString(data, "actorEmail");
-  const targetUid = readString(data, "targetUid");
-  const targetEmail = readString(data, "targetEmail");
-  const ipAddress = readString(data, "ipAddress");
-  const userAgent = readString(data, "userAgent");
+  const createdAt = readTimestamp(data, [
+    "createdAt",
+    "timestamp",
+    "at",
+    "updatedAt",
+  ]);
 
-  const severity = getSeverity(action, details);
+  const actorUid = readString(data, ["actorUid", "actorId", "uid", "userUid"]);
+  const actorEmail = readString(data, ["actorEmail", "email", "userEmail"]);
+  const targetUid = readString(data, ["targetUid", "targetId"]);
+  const targetEmail = readString(data, ["targetEmail", "targetUserEmail"]);
+  const ipAddress = readString(data, ["ipAddress", "ip"]);
+  const userAgent = readString(data, ["userAgent", "device"]);
 
-  return {
+  const category = getCategory(action, details);
+  const severity = getSeverity(action, category, details);
+
+  const baseLog: Omit<AuditLogRow, "searchableText"> = {
     id: docSnap.id,
     action,
+    category,
     severity,
-    riskScore: getRiskScore(action, severity, details),
+    riskScore: getRiskScore(action, category, severity, details),
     actorUid,
     actorEmail,
     targetUid,
@@ -207,62 +243,12 @@ function mapAuditDoc(
     details,
     createdAt,
     createdAtMs: createdAt ? createdAt.toMillis() : 0,
-    searchableText: buildSearchableText({
-      action,
-      actorEmail,
-      targetEmail,
-      actorUid,
-      targetUid,
-      ipAddress,
-      userAgent,
-      details,
-    }),
   };
-}
 
-function severityClass(severity: AuditSeverity) {
-  switch (severity) {
-    case "critical":
-      return "border-red-500/20 bg-red-500/10 text-red-300";
-    case "warning":
-      return "border-amber-500/20 bg-amber-500/10 text-amber-300";
-    default:
-      return "border-sky-500/20 bg-sky-500/10 text-sky-300";
-  }
-}
-
-function actionIcon(action: string) {
-  const className = "h-4 w-4";
-
-  if (action.includes("created")) {
-    return <UserPlus className={className} aria-hidden={true} />;
-  }
-
-  if (action.includes("role")) {
-    return <UserCog className={className} aria-hidden={true} />;
-  }
-
-  if (action.includes("disabled")) {
-    return <UserMinus className={className} aria-hidden={true} />;
-  }
-
-  if (action.includes("deleted") || action.includes("clean")) {
-    return <Trash2 className={className} aria-hidden={true} />;
-  }
-
-  if (action.includes("settings")) {
-    return <Settings className={className} aria-hidden={true} />;
-  }
-
-  if (action.includes("database") || action.includes("report")) {
-    return <Database className={className} aria-hidden={true} />;
-  }
-
-  if (action.includes("denied") || action.includes("failed")) {
-    return <Ban className={className} aria-hidden={true} />;
-  }
-
-  return <FileText className={className} aria-hidden={true} />;
+  return {
+    ...baseLog,
+    searchableText: buildSearchableText(baseLog),
+  };
 }
 
 function matchesDateFilter(log: AuditLogRow, filter: DateFilter): boolean {
@@ -286,6 +272,75 @@ function matchesDateFilter(log: AuditLogRow, filter: DateFilter): boolean {
   return log.createdAtMs >= now - days * 24 * 60 * 60 * 1000;
 }
 
+function severityClass(severity: AuditSeverity) {
+  switch (severity) {
+    case "critical":
+      return "border-red-500/20 bg-red-500/10 text-red-300";
+    case "warning":
+      return "border-amber-500/20 bg-amber-500/10 text-amber-300";
+    default:
+      return "border-sky-500/20 bg-sky-500/10 text-sky-300";
+  }
+}
+
+function riskBarClass(score: number) {
+  if (score >= 70) return "w-full bg-red-400";
+  if (score >= 60) return "w-3/5 bg-amber-300";
+  if (score >= 40) return "w-2/5 bg-amber-300";
+  if (score >= 20) return "w-1/5 bg-sky-300";
+  return "w-[10%] bg-zinc-400";
+}
+
+function actionIcon(action: string) {
+  const className = "h-4 w-4";
+
+  if (action.includes("created")) return <UserPlus className={className} aria-hidden />;
+  if (action.includes("role")) return <UserCog className={className} aria-hidden />;
+  if (action.includes("disabled")) return <UserMinus className={className} aria-hidden />;
+  if (action.includes("deleted") || action.includes("clean")) return <Trash2 className={className} aria-hidden />;
+  if (action.includes("settings")) return <Settings className={className} aria-hidden />;
+  if (action.includes("database") || action.includes("report")) return <Database className={className} aria-hidden />;
+  if (action.includes("denied") || action.includes("failed")) return <Ban className={className} aria-hidden />;
+
+  return <FileText className={className} aria-hidden />;
+}
+
+function exportCsv(logs: AuditLogRow[]) {
+  const rows = logs.map((log) => ({
+    id: log.id,
+    action: log.action,
+    category: log.category,
+    severity: log.severity,
+    riskScore: log.riskScore,
+    actor: log.actorEmail ?? log.actorUid ?? "",
+    target: log.targetEmail ?? log.targetUid ?? "",
+    createdAt: formatTimestamp(log.createdAt),
+  }));
+
+  const headers = Object.keys(rows[0] ?? {});
+  const csv = [
+    headers.join(","),
+    ...rows.map((row) =>
+      headers
+        .map((header) => {
+          const value = String(row[header as keyof typeof row] ?? "");
+          return `"${value.replaceAll('"', '""')}"`;
+        })
+        .join(",")
+    ),
+  ].join("\n");
+
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  link.href = url;
+  link.download = `audit-logs-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+
+  URL.revokeObjectURL(url);
+}
+
 export default function AuditLogsPage() {
   const { loading: authLoading, isAdmin } = useAuthRole();
 
@@ -297,9 +352,8 @@ export default function AuditLogsPage() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [search, setSearch] = useState("");
-  const [severityFilter, setSeverityFilter] = useState<AuditSeverity | "all">(
-    "all"
-  );
+  const [severityFilter, setSeverityFilter] = useState<AuditSeverity | "all">("all");
+  const [categoryFilter, setCategoryFilter] = useState<AuditCategory | "all">("all");
   const [actionFilter, setActionFilter] = useState("all");
   const [dateFilter, setDateFilter] = useState<DateFilter>("all");
   const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
@@ -322,19 +376,16 @@ export default function AuditLogsPage() {
         const nextLogs = snapshot.docs.map(mapAuditDoc);
 
         setLogs(nextLogs);
-
-        setSelectedLogId((current) => {
-          if (current && nextLogs.some((log) => log.id === current)) {
-            return current;
-          }
-
-          return nextLogs[0]?.id ?? null;
-        });
+        setSelectedLogId((current) =>
+          current && nextLogs.some((log) => log.id === current)
+            ? current
+            : nextLogs[0]?.id ?? null
+        );
 
         setLoading(false);
         setRefreshing(false);
       },
-      (error) => {
+      (error: unknown) => {
         console.error("AUDIT LOGS SNAPSHOT ERROR:", error);
 
         if (!mountedRef.current) return;
@@ -346,20 +397,13 @@ export default function AuditLogsPage() {
     );
 
     unsubscribeRef.current = unsubscribe;
-
-    return unsubscribe;
   }, []);
 
   useEffect(() => {
     mountedRef.current = true;
 
-    if (!authLoading && isAdmin) {
-      loadRealtimeLogs();
-    }
-
-    if (!authLoading && !isAdmin) {
-      setLoading(false);
-    }
+    if (!authLoading && isAdmin) loadRealtimeLogs();
+    if (!authLoading && !isAdmin) setLoading(false);
 
     return () => {
       mountedRef.current = false;
@@ -368,47 +412,39 @@ export default function AuditLogsPage() {
     };
   }, [authLoading, isAdmin, loadRealtimeLogs]);
 
-  const actionOptions = useMemo(() => {
-    return Array.from(new Set(logs.map((log) => log.action))).sort();
-  }, [logs]);
+  const actionOptions = useMemo(
+    () => Array.from(new Set(logs.map((log) => log.action))).sort(),
+    [logs]
+  );
 
   const filteredLogs = useMemo(() => {
     const term = search.trim().toLowerCase();
 
     return logs.filter((log) => {
-      const matchesSearch = !term || log.searchableText.includes(term);
-      const matchesSeverity =
-        severityFilter === "all" || log.severity === severityFilter;
-      const matchesAction =
-        actionFilter === "all" || log.action === actionFilter;
-      const matchesDate = matchesDateFilter(log, dateFilter);
-
-      return matchesSearch && matchesSeverity && matchesAction && matchesDate;
+      return (
+        (!term || log.searchableText.includes(term)) &&
+        (severityFilter === "all" || log.severity === severityFilter) &&
+        (categoryFilter === "all" || log.category === categoryFilter) &&
+        (actionFilter === "all" || log.action === actionFilter) &&
+        matchesDateFilter(log, dateFilter)
+      );
     });
-  }, [logs, search, severityFilter, actionFilter, dateFilter]);
+  }, [logs, search, severityFilter, categoryFilter, actionFilter, dateFilter]);
 
   const selectedLog = useMemo(() => {
     if (!filteredLogs.length) return null;
-
-    return (
-      filteredLogs.find((log) => log.id === selectedLogId) ?? filteredLogs[0]
-    );
+    return filteredLogs.find((log) => log.id === selectedLogId) ?? filteredLogs[0];
   }, [filteredLogs, selectedLogId]);
 
   const stats = useMemo(() => {
-    const critical = logs.filter((log) => log.severity === "critical").length;
-    const warning = logs.filter((log) => log.severity === "warning").length;
-    const info = logs.filter((log) => log.severity === "info").length;
-    const highRisk = logs.filter((log) => log.riskScore >= 70).length;
-
     return {
-      critical,
-      warning,
-      info,
-      highRisk,
-      uniqueActions: actionOptions.length,
+      total: logs.length,
+      critical: logs.filter((log) => log.severity === "critical").length,
+      warning: logs.filter((log) => log.severity === "warning").length,
+      highRisk: logs.filter((log) => log.riskScore >= 70).length,
+      uniqueActors: new Set(logs.map((log) => log.actorEmail ?? log.actorUid ?? "Unknown")).size,
     };
-  }, [logs, actionOptions.length]);
+  }, [logs]);
 
   const topActors = useMemo(() => {
     const actorMap = new Map<string, number>();
@@ -426,6 +462,7 @@ export default function AuditLogsPage() {
   function resetFilters() {
     setSearch("");
     setSeverityFilter("all");
+    setCategoryFilter("all");
     setActionFilter("all");
     setDateFilter("all");
   }
@@ -434,7 +471,7 @@ export default function AuditLogsPage() {
     return (
       <main className="min-h-screen bg-black p-6 text-white">
         <div className="flex items-center gap-2 text-zinc-400">
-          <Loader2 className="h-4 w-4 animate-spin" aria-hidden={true} />
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           Loading audit feed...
         </div>
       </main>
@@ -454,63 +491,64 @@ export default function AuditLogsPage() {
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
           <h1 className="flex items-center gap-2 text-3xl font-bold">
-            <Shield className="h-7 w-7" aria-hidden={true} />
+            <Shield className="h-7 w-7" aria-hidden />
             Audit Command Center
           </h1>
-
           <p className="mt-1 text-sm text-zinc-500">
-            Realtime security, database, user, report, and admin activity.
+            Smarter realtime tracking for user, role, database, report, and security events.
           </p>
         </div>
 
-        <button
-          type="button"
-          aria-label="Refresh audit logs"
-          title="Refresh audit logs"
-          onClick={() => {
-            loadRealtimeLogs();
-            toast.success("Audit feed refreshed.");
-          }}
-          disabled={refreshing}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-white/10"
-        >
-          <RefreshCw
-            className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-            aria-hidden={true}
-          />
-          Refresh
-        </button>
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => exportCsv(filteredLogs)}
+            disabled={!filteredLogs.length}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Download className="h-4 w-4" aria-hidden />
+            Export CSV
+          </button>
+
+          <button
+            type="button"
+            aria-label="Refresh audit logs"
+            title="Refresh audit logs"
+            onClick={() => {
+              loadRealtimeLogs();
+              toast.success("Audit feed refreshed.");
+            }}
+            disabled={refreshing}
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-zinc-950 px-4 py-3 text-sm transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} aria-hidden />
+            Refresh
+          </button>
+        </div>
       </div>
 
       <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-        <SummaryCard label="Loaded Logs" value={logs.length} />
+        <SummaryCard label="Loaded Logs" value={stats.total} />
         <SummaryCard label="High Risk" value={stats.highRisk} critical />
         <SummaryCard label="Critical" value={stats.critical} critical />
         <SummaryCard label="Warnings" value={stats.warning} />
-        <SummaryCard label="Action Types" value={stats.uniqueActions} />
+        <SummaryCard label="Unique Actors" value={stats.uniqueActors} />
       </section>
 
       <section className="rounded-3xl border border-white/10 bg-zinc-950 p-4">
         <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
           <div className="flex-1">
-            <label
-              htmlFor="audit-log-search"
-              className="mb-2 block text-xs uppercase tracking-[0.15em] text-zinc-500"
-            >
+            <label htmlFor="audit-log-search" className="mb-2 block text-xs uppercase tracking-[0.15em] text-zinc-500">
               Search
             </label>
 
             <div className="relative">
-              <Search
-                className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
-                aria-hidden={true}
-              />
-
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" aria-hidden />
               <input
                 id="audit-log-search"
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search actor, target, action, UID, IP, or details..."
+                placeholder="Search actor, target, action, UID, IP, category, or details..."
                 autoComplete="off"
                 spellCheck={false}
                 className="w-full rounded-2xl border border-white/10 bg-black/40 py-3 pl-11 pr-4 text-sm outline-none transition focus:border-white/20 focus:ring-2 focus:ring-white/10"
@@ -522,14 +560,29 @@ export default function AuditLogsPage() {
             id="severity-filter"
             label="Severity"
             value={severityFilter}
-            onChange={(value) =>
-              setSeverityFilter(value as AuditSeverity | "all")
-            }
+            onChange={(value) => setSeverityFilter(value as AuditSeverity | "all")}
             options={[
               { label: "All severities", value: "all" },
               { label: "Critical", value: "critical" },
               { label: "Warning", value: "warning" },
               { label: "Info", value: "info" },
+            ]}
+          />
+
+          <SelectField
+            id="category-filter"
+            label="Category"
+            value={categoryFilter}
+            onChange={(value) => setCategoryFilter(value as AuditCategory | "all")}
+            options={[
+              { label: "All categories", value: "all" },
+              { label: "User", value: "user" },
+              { label: "Role", value: "role" },
+              { label: "Report", value: "report" },
+              { label: "Database", value: "database" },
+              { label: "Security", value: "security" },
+              { label: "Settings", value: "settings" },
+              { label: "Unknown", value: "unknown" },
             ]}
           />
 
@@ -553,7 +606,7 @@ export default function AuditLogsPage() {
             value={dateFilter}
             onChange={(value) => setDateFilter(value as DateFilter)}
             options={[
-              { label: "All time loaded", value: "all" },
+              { label: "All loaded", value: "all" },
               { label: "Today", value: "today" },
               { label: "Last 7 days", value: "7d" },
               { label: "Last 30 days", value: "30d" },
@@ -563,9 +616,9 @@ export default function AuditLogsPage() {
           <button
             type="button"
             onClick={resetFilters}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm transition hover:bg-white/5 focus:outline-none focus:ring-2 focus:ring-white/10"
+            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-sm transition hover:bg-white/5"
           >
-            <X className="h-4 w-4" aria-hidden={true} />
+            <X className="h-4 w-4" aria-hidden />
             Reset
           </button>
         </div>
@@ -575,9 +628,8 @@ export default function AuditLogsPage() {
         <section className="rounded-3xl border border-white/10 bg-zinc-950">
           <div className="border-b border-white/10 p-4">
             <div className="flex items-center gap-2 text-sm text-zinc-400">
-              <Filter className="h-4 w-4" aria-hidden={true} />
-              Showing {filteredLogs.length.toLocaleString()} of{" "}
-              {logs.length.toLocaleString()}
+              <Filter className="h-4 w-4" aria-hidden />
+              Showing {filteredLogs.length.toLocaleString()} of {logs.length.toLocaleString()}
             </div>
           </div>
 
@@ -586,37 +638,25 @@ export default function AuditLogsPage() {
               <div className="space-y-2">
                 {filteredLogs.map((log) => {
                   const selected = selectedLog?.id === log.id;
-                  const label = `View audit log ${humanAction(log.action)}`;
 
                   return (
                     <button
                       key={log.id}
                       type="button"
-                      aria-label={label}
-                      title={label}
                       onClick={() => setSelectedLogId(log.id)}
                       className={`w-full rounded-2xl border p-4 text-left transition focus:outline-none focus:ring-2 focus:ring-white/10 ${
-                        selected
-                          ? "border-white/20 bg-white/10"
-                          : "border-white/10 hover:bg-white/5"
+                        selected ? "border-white/20 bg-white/10" : "border-white/10 hover:bg-white/5"
                       }`}
                     >
                       <div className="flex items-center justify-between gap-3">
                         <div className="flex min-w-0 items-center gap-2">
-                          <span aria-hidden={true} className="flex-shrink-0">
-                            {actionIcon(log.action)}
-                          </span>
-
+                          {actionIcon(log.action)}
                           <span className="truncate text-sm font-medium capitalize">
                             {humanAction(log.action)}
                           </span>
                         </div>
 
-                        <span
-                          className={`rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.15em] ${severityClass(
-                            log.severity
-                          )}`}
-                        >
+                        <span className={`rounded-full border px-2 py-1 text-[10px] uppercase tracking-[0.15em] ${severityClass(log.severity)}`}>
                           {log.severity}
                         </span>
                       </div>
@@ -633,11 +673,12 @@ export default function AuditLogsPage() {
                         Target: {log.targetEmail ?? log.targetUid ?? "—"}
                       </div>
 
+                      <div className="mt-2 text-[10px] uppercase tracking-[0.15em] text-zinc-600">
+                        {log.category}
+                      </div>
+
                       <div className="mt-3 h-2 overflow-hidden rounded-full bg-black/50">
-                        <div
-                          className="h-full rounded-full bg-white/50"
-                          style={{ width: `${log.riskScore}%` }}
-                        />
+                        <div className={`h-full rounded-full ${riskBarClass(log.riskScore)}`} />
                       </div>
 
                       <div className="mt-1 text-[10px] uppercase tracking-[0.15em] text-zinc-600">
@@ -663,17 +704,12 @@ export default function AuditLogsPage() {
                   <h2 className="text-xl font-semibold capitalize">
                     {humanAction(selectedLog.action)}
                   </h2>
-
                   <p className="mt-1 text-sm text-zinc-500">
                     {formatTimestamp(selectedLog.createdAt)}
                   </p>
                 </div>
 
-                <span
-                  className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.15em] ${severityClass(
-                    selectedLog.severity
-                  )}`}
-                >
+                <span className={`rounded-full border px-3 py-1 text-xs uppercase tracking-[0.15em] ${severityClass(selectedLog.severity)}`}>
                   {selectedLog.severity}
                 </span>
               </div>
@@ -681,36 +717,23 @@ export default function AuditLogsPage() {
               {selectedLog.riskScore >= 70 && (
                 <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-200">
                   <div className="flex items-center gap-2 font-medium">
-                    <AlertTriangle className="h-4 w-4" aria-hidden={true} />
+                    <AlertTriangle className="h-4 w-4" aria-hidden />
                     High-risk audit event
                   </div>
-
                   <p className="mt-1 text-xs text-red-200/80">
-                    This event may involve delete, permission, role, database, or
-                    failure activity. In other words, pay attention before the
-                    database starts smoking.
+                    Delete, database, security, permission, or failure activity detected. Translation: this is where the gremlin usually lives.
                   </p>
                 </div>
               )}
 
               <div className="grid gap-4 md:grid-cols-2">
-                <InfoCard
-                  title="Actor"
-                  value={selectedLog.actorEmail ?? selectedLog.actorUid ?? "—"}
-                />
-                <InfoCard
-                  title="Target"
-                  value={
-                    selectedLog.targetEmail ?? selectedLog.targetUid ?? "—"
-                  }
-                />
-                <InfoCard title="Actor UID" value={selectedLog.actorUid ?? "—"} />
-                <InfoCard
-                  title="Target UID"
-                  value={selectedLog.targetUid ?? "—"}
-                />
-                <InfoCard title="IP Address" value={selectedLog.ipAddress ?? "—"} />
+                <InfoCard title="Category" value={selectedLog.category} />
                 <InfoCard title="Risk Score" value={`${selectedLog.riskScore}/100`} />
+                <InfoCard title="Actor" value={selectedLog.actorEmail ?? selectedLog.actorUid ?? "—"} />
+                <InfoCard title="Target" value={selectedLog.targetEmail ?? selectedLog.targetUid ?? "—"} />
+                <InfoCard title="Actor UID" value={selectedLog.actorUid ?? "—"} />
+                <InfoCard title="Target UID" value={selectedLog.targetUid ?? "—"} />
+                <InfoCard title="IP Address" value={selectedLog.ipAddress ?? "—"} />
               </div>
 
               <InfoCard title="Device / User Agent" value={selectedLog.userAgent ?? "—"} />
@@ -719,7 +742,6 @@ export default function AuditLogsPage() {
                 <p className="text-xs uppercase tracking-[0.15em] text-zinc-500">
                   Details
                 </p>
-
                 <pre className="mt-3 max-h-[500px] overflow-auto whitespace-pre-wrap text-xs text-zinc-200">
                   {safeJson(selectedLog.details)}
                 </pre>
@@ -738,10 +760,7 @@ export default function AuditLogsPage() {
           <div className="mt-4 space-y-3">
             {topActors.length ? (
               topActors.map(([actor, count]) => (
-                <div
-                  key={actor}
-                  className="rounded-2xl border border-white/10 bg-black/40 p-3"
-                >
+                <div key={actor} className="rounded-2xl border border-white/10 bg-black/40 p-3">
                   <p className="break-words text-sm text-white">{actor}</p>
                   <p className="mt-1 text-xs text-zinc-500">
                     {count.toLocaleString()} event{count === 1 ? "" : "s"}
@@ -768,17 +787,10 @@ function SummaryCard({
   critical?: boolean;
 }) {
   return (
-    <div
-      className={`rounded-3xl border p-5 ${
-        critical
-          ? "border-red-500/20 bg-red-500/10"
-          : "border-white/10 bg-zinc-950"
-      }`}
-    >
+    <div className={`rounded-3xl border p-5 ${critical ? "border-red-500/20 bg-red-500/10" : "border-white/10 bg-zinc-950"}`}>
       <p className="text-xs uppercase tracking-[0.18em] text-zinc-500">
         {label}
       </p>
-
       <p className="mt-3 text-3xl font-bold">{value.toLocaleString()}</p>
     </div>
   );
@@ -790,7 +802,6 @@ function InfoCard({ title, value }: { title: string; value: string }) {
       <p className="text-xs uppercase tracking-[0.15em] text-zinc-500">
         {title}
       </p>
-
       <p className="mt-2 break-words text-sm text-white">{value}</p>
     </div>
   );
@@ -811,10 +822,7 @@ function SelectField({
 }) {
   return (
     <div className="min-w-[180px]">
-      <label
-        htmlFor={id}
-        className="mb-2 block text-xs uppercase tracking-[0.15em] text-zinc-500"
-      >
+      <label htmlFor={id} className="mb-2 block text-xs uppercase tracking-[0.15em] text-zinc-500">
         {label}
       </label>
 

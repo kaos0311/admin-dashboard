@@ -1,11 +1,6 @@
 "use client";
 
-import {
-  useEffect,
-  useMemo,
-  type ComponentType,
-} from "react";
-
+import { useMemo, type ComponentType } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -27,6 +22,7 @@ import {
   X,
 } from "lucide-react";
 
+type UserRole = "admin" | "staff";
 type NavSection = "core" | "reports" | "system";
 
 type NavItem = {
@@ -34,156 +30,51 @@ type NavItem = {
   label: string;
   href: string;
   section: NavSection;
-  icon: ComponentType<{
-    className?: string;
-    "aria-hidden"?: boolean;
-  }>;
-};
-
-type ComputedNavItem = NavItem & {
-  isActive: boolean;
+  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
+  roles?: UserRole[];
+  badge?: string | number;
 };
 
 type AdminSidebarProps = {
   mobileOpen?: boolean;
   onClose?: () => void;
+  userRole?: UserRole;
 };
 
-const SIDEBAR_WIDTH_CLASS = "w-64";
-
 const navItems: NavItem[] = [
-  {
-    id: "dashboard",
-    label: "Dashboard",
-    href: "/dashboard",
-    icon: Home,
-    section: "core",
-  },
-  {
-    id: "products",
-    label: "Products",
-    href: "/products",
-    icon: Package,
-    section: "core",
-  },
-  {
-    id: "inventory",
-    label: "Inventory",
-    href: "/inventory",
-    icon: Boxes,
-    section: "core",
-  },
-  {
-    id: "orders",
-    label: "Orders",
-    href: "/orders",
-    icon: ClipboardList,
-    section: "core",
-  },
-  {
-    id: "rentals",
-    label: "Rentals",
-    href: "/rentals",
-    icon: Repeat,
-    section: "core",
-  },
-  {
-    id: "users",
-    label: "Users",
-    href: "/users",
-    icon: Users,
-    section: "core",
-  },
+  { id: "dashboard", label: "Dashboard", href: "/dashboard", icon: Home, section: "core" },
+  { id: "products", label: "Products", href: "/products", icon: Package, section: "core" },
+  { id: "inventory", label: "Inventory", href: "/inventory", icon: Boxes, section: "core" },
+  { id: "orders", label: "Orders", href: "/orders", icon: ClipboardList, section: "core" },
+  { id: "rentals", label: "Rentals", href: "/rentals", icon: Repeat, section: "core" },
+  { id: "users", label: "Users", href: "/users", icon: Users, section: "core", roles: ["admin"] },
 
-  {
-    id: "reports",
-    label: "Reports",
-    href: "/reports",
-    icon: FileBarChart2,
-    section: "reports",
-  },
-  {
-    id: "reports-upload",
-    label: "Upload & Index",
-    href: "/reports/upload",
-    icon: UploadCloud,
-    section: "reports",
-  },
-  {
-    id: "reports-patients",
-    label: "Patients",
-    href: "/reports/patients",
-    icon: UserSquare2,
-    section: "reports",
-  },
-  {
-    id: "reports-hospice",
-    label: "Hospice Care",
-    href: "/reports/hospice",
-    icon: HeartPulse,
-    section: "reports",
-  },
-  {
-    id: "wip",
-    label: "WIP",
-    href: "/wip",
-    icon: Hammer,
-    section: "reports",
-  },
-  {
-    id: "insurance",
-    label: "Insurance",
-    href: "/insurance",
-    icon: FileText,
-    section: "reports",
-  },
+  { id: "reports", label: "Reports", href: "/reports", icon: FileBarChart2, section: "reports" },
+  { id: "reports-upload", label: "Upload & Index", href: "/reports/upload", icon: UploadCloud, section: "reports" },
+  { id: "reports-patients", label: "Patients", href: "/reports/patients", icon: UserSquare2, section: "reports" },
+  { id: "reports-hospice", label: "Hospice Care", href: "/reports/hospice", icon: HeartPulse, section: "reports" },
+  { id: "wip", label: "WIP", href: "/wip", icon: Hammer, section: "reports" },
+  { id: "insurance", label: "Insurance", href: "/insurance", icon: FileText, section: "reports" },
 
-  {
-    id: "audit-logs",
-    label: "Audit Logs",
-    href: "/audit-logs",
-    icon: Shield,
-    section: "system",
-  },
-  {
-    id: "settings",
-    label: "Settings",
-    href: "/settings",
-    icon: Settings,
-    section: "system",
-  },
+  { id: "audit-logs", label: "Audit Logs", href: "/audit-logs", icon: Shield, section: "system", roles: ["admin"] },
+  { id: "settings", label: "Settings", href: "/settings", icon: Settings, section: "system", roles: ["admin"] },
 ];
 
 export default function AdminSidebar({
   mobileOpen = false,
   onClose,
+  userRole = "admin",
 }: AdminSidebarProps) {
   const pathname = usePathname();
-
-  useEffect(() => {
-    if (!mobileOpen) return;
-
-    const handleEscape = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        onClose?.();
-      }
-    };
-
-    window.addEventListener("keydown", handleEscape);
-
-    return () => {
-      window.removeEventListener("keydown", handleEscape);
-    };
-  }, [mobileOpen, onClose]);
 
   return (
     <>
       <aside
         id="admin-sidebar"
         aria-label="Primary navigation"
-        className={`hidden ${SIDEBAR_WIDTH_CLASS} shrink-0 border-r border-white/10 bg-neutral-950 text-white lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex`}
+        className="hidden w-64 shrink-0 border-r border-white/10 bg-neutral-950 text-white lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex"
       >
-        <SidebarInner pathname={pathname} navKeyPrefix="desktop" />
+        <SidebarInner pathname={pathname} userRole={userRole} navKeyPrefix="desktop" />
       </aside>
 
       {mobileOpen ? (
@@ -198,17 +89,12 @@ export default function AdminSidebar({
 
           <aside
             aria-label="Mobile navigation"
-            className={`absolute inset-y-0 left-0 ${SIDEBAR_WIDTH_CLASS} border-r border-white/10 bg-neutral-950 text-white shadow-2xl`}
+            className="absolute inset-y-0 left-0 w-64 border-r border-white/10 bg-neutral-950 text-white shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
               <div>
-                <div className="text-sm font-semibold tracking-wide">
-                  Navigation
-                </div>
-
-                <div className="text-xs text-neutral-500">
-                  Advanced Home Medical
-                </div>
+                <div className="text-sm font-semibold tracking-wide">Navigation</div>
+                <div className="text-xs text-neutral-500">Advanced Home Medical</div>
               </div>
 
               <button
@@ -218,12 +104,13 @@ export default function AdminSidebar({
                 aria-label="Close sidebar"
                 className="rounded-xl border border-white/10 bg-white/5 p-2 text-white transition hover:border-white/20 hover:bg-white/10"
               >
-                <X className="h-5 w-5" aria-hidden={true} />
+                <X className="h-5 w-5" aria-hidden />
               </button>
             </div>
 
             <SidebarInner
               pathname={pathname}
+              userRole={userRole}
               navKeyPrefix="mobile"
               onNavigate={onClose}
             />
@@ -236,38 +123,29 @@ export default function AdminSidebar({
 
 function SidebarInner({
   pathname,
+  userRole,
   navKeyPrefix,
   onNavigate,
 }: {
   pathname: string | null;
+  userRole: UserRole;
   navKeyPrefix: string;
   onNavigate?: () => void;
 }) {
-  const computedItems: ComputedNavItem[] = useMemo(() => {
-    return navItems.map((item) => {
-      const isActive = Boolean(
-        pathname === item.href ||
-          pathname?.startsWith(`${item.href}/`)
-      );
-
-      return {
+  const visibleItems = useMemo(() => {
+    return navItems
+      .filter((item) => !item.roles || item.roles.includes(userRole))
+      .map((item) => ({
         ...item,
-        isActive,
-      };
-    });
-  }, [pathname]);
+        isActive: pathname === item.href || pathname?.startsWith(`${item.href}/`),
+      }));
+  }, [pathname, userRole]);
 
-  const groupedItems = useMemo(() => {
-    return {
-      core: computedItems.filter((item) => item.section === "core"),
-      reports: computedItems.filter(
-        (item) => item.section === "reports"
-      ),
-      system: computedItems.filter(
-        (item) => item.section === "system"
-      ),
-    };
-  }, [computedItems]);
+  const groupedItems = {
+    core: visibleItems.filter((item) => item.section === "core"),
+    reports: visibleItems.filter((item) => item.section === "reports"),
+    system: visibleItems.filter((item) => item.section === "system"),
+  };
 
   return (
     <div className="flex h-full w-full flex-col p-3">
@@ -275,11 +153,7 @@ function SidebarInner({
         <div className="text-xs uppercase tracking-[0.24em] text-neutral-500">
           Advanced Home Medical
         </div>
-
-        <div className="mt-2 text-xl font-bold leading-tight">
-          Admin Dashboard
-        </div>
-
+        <div className="mt-2 text-xl font-bold leading-tight">Admin Dashboard</div>
         <div className="mt-2 text-sm leading-5 text-neutral-400">
           Operations, reports, insurance, hospice, inventory, and rentals.
         </div>
@@ -289,61 +163,22 @@ function SidebarInner({
         aria-label="Admin sections"
         className="custom-sidebar-scroll flex flex-1 flex-col overflow-y-auto pr-1"
       >
-        <SidebarSection
-          title="Operations"
-          items={groupedItems.core}
-          navKeyPrefix={navKeyPrefix}
-          onNavigate={onNavigate}
-        />
+        {groupedItems.core.length > 0 && (
+          <SidebarSection title="Operations" items={groupedItems.core} navKeyPrefix={navKeyPrefix} onNavigate={onNavigate} />
+        )}
 
-        <SidebarSection
-          title="Reports & Analytics"
-          items={groupedItems.reports}
-          navKeyPrefix={navKeyPrefix}
-          onNavigate={onNavigate}
-        />
+        {groupedItems.reports.length > 0 && (
+          <SidebarSection title="Reports & Analytics" items={groupedItems.reports} navKeyPrefix={navKeyPrefix} onNavigate={onNavigate} />
+        )}
 
-        <SidebarSection
-          title="Administration"
-          items={groupedItems.system}
-          navKeyPrefix={navKeyPrefix}
-          onNavigate={onNavigate}
-        />
+        {groupedItems.system.length > 0 && (
+          <SidebarSection title="Administration" items={groupedItems.system} navKeyPrefix={navKeyPrefix} onNavigate={onNavigate} />
+        )}
       </nav>
 
-      <div className="mt-3 rounded-2xl border border-white/10 bg-black/40 px-4 py-3 text-xs text-neutral-500">
-        Inventory now has its own dedicated management layer.
+      <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-300">
+        Database Health: Active
       </div>
-
-      <style jsx>{`
-        .custom-sidebar-scroll {
-          scrollbar-width: thin;
-          scrollbar-color: rgba(255, 255, 255, 0.24) transparent;
-        }
-
-        .custom-sidebar-scroll::-webkit-scrollbar {
-          width: 8px;
-        }
-
-        .custom-sidebar-scroll::-webkit-scrollbar-track {
-          background: transparent;
-        }
-
-        .custom-sidebar-scroll::-webkit-scrollbar-thumb {
-          background: rgba(255, 255, 255, 0.18);
-          border-radius: 999px;
-        }
-
-        .custom-sidebar-scroll::-webkit-scrollbar-thumb:hover {
-          background: rgba(255, 255, 255, 0.32);
-        }
-
-        @media (prefers-reduced-motion: reduce) {
-          * {
-            transition: none !important;
-          }
-        }
-      `}</style>
     </div>
   );
 }
@@ -355,7 +190,7 @@ function SidebarSection({
   onNavigate,
 }: {
   title: string;
-  items: ComputedNavItem[];
+  items: Array<NavItem & { isActive: boolean }>;
   navKeyPrefix: string;
   onNavigate?: () => void;
 }) {
@@ -376,7 +211,7 @@ function SidebarSection({
               prefetch={false}
               onClick={onNavigate}
               aria-current={item.isActive ? "page" : undefined}
-              className={`group relative flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium transition-all duration-200 ease-out ${
+              className={`group relative flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium transition-all duration-200 ${
                 item.isActive
                   ? "border-white/20 bg-white/15 text-white shadow-md shadow-black/20"
                   : "border-white/5 bg-black/20 text-neutral-300 hover:border-white/20 hover:bg-white/10 hover:text-white"
@@ -389,14 +224,16 @@ function SidebarSection({
                     : "border-white/10 bg-white/5 text-neutral-400 group-hover:border-white/20 group-hover:bg-white/10 group-hover:text-white"
                 }`}
               >
-                <Icon className="h-5 w-5" aria-hidden={true} />
+                <Icon className="h-5 w-5" aria-hidden />
               </span>
 
-              <span className="min-w-0 flex-1 truncate">
-                {item.label}
-              </span>
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
 
-              {item.isActive ? (
+              {item.badge ? (
+                <span className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-300">
+                  {item.badge}
+                </span>
+              ) : item.isActive ? (
                 <span className="h-2 w-2 rounded-full bg-white" />
               ) : (
                 <span className="h-2 w-2 rounded-full bg-transparent transition group-hover:bg-white/40" />

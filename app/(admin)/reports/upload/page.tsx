@@ -1,7 +1,15 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useSearchParams } from "next/navigation";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type DragEvent,
+  type ReactNode,
+} from "react";
 import {
   Activity,
   AlertTriangle,
@@ -13,6 +21,7 @@ import {
   HeartPulse,
   Loader2,
   RefreshCcw,
+  Search,
   Trash2,
   Upload,
   Users,
@@ -56,6 +65,8 @@ type UploadStep =
   | "complete"
   | "failed";
 
+type QueueFilter = "all" | "ready" | "active" | "complete" | "failed";
+
 type TimestampLike = {
   toDate?: () => Date;
 } | null;
@@ -98,6 +109,17 @@ type RecentImportJob = {
   updatedAt: TimestampLike;
 };
 
+type ReportOptionLike = {
+  value: ReportType;
+  label: string;
+  category?: string;
+};
+
+type GroupedReportOption = {
+  category: string;
+  options: ReportOptionLike[];
+};
+
 const EMPTY_STATS: PatientIndexStats = {
   patients: 0,
   hospicePatients: 0,
@@ -129,8 +151,10 @@ function cleanFileName(name: string): string {
 
 function getFileExtension(fileName: string): "csv" | "pdf" | null {
   const lower = fileName.toLowerCase();
+
   if (lower.endsWith(".csv")) return "csv";
   if (lower.endsWith(".pdf")) return "pdf";
+
   return null;
 }
 
@@ -184,7 +208,9 @@ function formatTimestamp(value: TimestampLike): string {
   }
 }
 
-function readPatientIndexStats(data: DocumentData | undefined): PatientIndexStats {
+function readPatientIndexStats(
+  data: DocumentData | undefined
+): PatientIndexStats {
   if (!data) return EMPTY_STATS;
 
   return {
@@ -218,34 +244,128 @@ function normalizeRecentJob(id: string, data: DocumentData): RecentImportJob {
 
 function getStepLabel(step: UploadStep): string {
   if (step === "idle") return "Ready";
-  if (step === "creating_job") return "Creating job";
+  if (step === "creating_job") return "Creating Job";
   if (step === "uploading_cloud") return "Uploading";
   if (step === "marking_uploaded") return "Verifying";
   if (step === "queued") return "Queued";
   if (step === "complete") return "Complete";
+
   return "Failed";
 }
 
 function validateFile(file: File): string {
   const extension = getFileExtension(file.name);
 
-  if (!extension) {
-    return "Only CSV and PDF files are supported.";
-  }
+  if (!extension) return "Only CSV and PDF files are supported.";
 
   if (file.size > MAX_FILE_SIZE_BYTES) {
-    return `File is too large. Max allowed is ${formatBytes(MAX_FILE_SIZE_BYTES)}.`;
+    return `File is too large. Max allowed is ${formatBytes(
+      MAX_FILE_SIZE_BYTES
+    )}.`;
   }
 
   return "";
 }
 
+function fileSignature(file: File): string {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function isActiveStep(step: UploadStep): boolean {
+  return ["creating_job", "uploading_cloud", "marking_uploaded", "queued"].includes(
+    step
+  );
+}
+
+function isReportType(value: string | null): value is ReportType {
+  if (!value) return false;
+
+  return REPORT_TYPES.some((option) => {
+    const maybeOption = option as unknown as {
+      value?: string;
+      type?: string;
+      id?: string;
+    };
+
+    return (
+      maybeOption.value === value ||
+      maybeOption.type === value ||
+      maybeOption.id === value
+    );
+  });
+}
+
+function normalizeGroupedReportOptions(): GroupedReportOption[] {
+  const grouped = groupReportOptions(REPORT_TYPES) as unknown;
+
+  if (Array.isArray(grouped)) {
+    return grouped.map((group) => {
+      const maybeGroup = group as {
+        category?: unknown;
+        options?: unknown;
+      };
+
+      return {
+        category:
+          typeof maybeGroup.category === "string"
+            ? maybeGroup.category
+            : "Reports",
+        options: Array.isArray(maybeGroup.options)
+          ? (maybeGroup.options as ReportOptionLike[])
+          : [],
+      };
+    });
+  }
+
+  if (typeof grouped === "object" && grouped !== null) {
+    return Object.entries(grouped as Record<string, unknown>).map(
+      ([category, options]) => ({
+        category,
+        options: Array.isArray(options) ? (options as ReportOptionLike[]) : [],
+      })
+    );
+  }
+
+  return [
+    {
+      category: "Reports",
+      options: REPORT_TYPES.map((option) => {
+        const raw = option as unknown as {
+          value?: ReportType;
+          type?: ReportType;
+          id?: ReportType;
+          label?: string;
+          title?: string;
+          category?: string;
+        };
+
+        const value =
+          raw.value ?? raw.type ?? raw.id ?? DEFAULT_REPORT_TYPE;
+
+        return {
+          value,
+          label: raw.label ?? raw.title ?? String(value),
+          category: raw.category ?? "Reports",
+        };
+      }),
+    },
+  ];
+}
+
 export default function UploadReportPage() {
-  const [defaultReportType, setDefaultReportType] =
-    useState<ReportType>(DEFAULT_REPORT_TYPE);
+  const searchParams = useSearchParams();
+  const requestedType = searchParams.get("type");
+
+  const [defaultReportType, setDefaultReportType] = useState<ReportType>(() =>
+    isReportType(requestedType) ? requestedType : DEFAULT_REPORT_TYPE
+  );
+
   const [queue, setQueue] = useState<QueuedUpload[]>([]);
   const [uploading, setUploading] = useState(false);
   const [batchMessage, setBatchMessage] = useState("");
+  const [queueSearch, setQueueSearch] = useState("");
+  const [queueFilter, setQueueFilter] = useState<QueueFilter>("all");
+  const [dragActive, setDragActive] = useState(false);
 
   const [statsLoading, setStatsLoading] = useState(true);
   const [analyticsMissing, setAnalyticsMissing] = useState(false);
@@ -256,19 +376,32 @@ export default function UploadReportPage() {
 
   const uploadLockRef = useRef(false);
 
-  const groupedOptions = useMemo(() => groupReportOptions(REPORT_TYPES), []);
+  const groupedOptions = useMemo<GroupedReportOption[]>(() => {
+    return normalizeGroupedReportOptions();
+  }, []);
+
   const defaultSelectedOption = getReportOption(defaultReportType);
+
+  useEffect(() => {
+    if (!isReportType(requestedType)) return;
+
+    setDefaultReportType(requestedType);
+
+    setQueue((current) =>
+      current.map((item) =>
+        item.step === "idle" || item.step === "failed"
+          ? { ...item, reportType: requestedType }
+          : item
+      )
+    );
+  }, [requestedType]);
 
   const batchStats = useMemo(() => {
     const totalBytes = queue.reduce((sum, item) => sum + item.file.size, 0);
     const completed = queue.filter((item) => item.step === "complete").length;
     const failed = queue.filter((item) => item.step === "failed").length;
     const ready = queue.filter((item) => item.step === "idle").length;
-    const active = queue.filter((item) =>
-      ["creating_job", "uploading_cloud", "marking_uploaded", "queued"].includes(
-        item.step
-      )
-    ).length;
+    const active = queue.filter((item) => isActiveStep(item.step)).length;
 
     const averageProgress =
       queue.length === 0
@@ -284,8 +417,50 @@ export default function UploadReportPage() {
       ready,
       active,
       averageProgress,
+      hasUploadable: ready > 0 || failed > 0,
     };
   }, [queue]);
+
+  const filteredQueue = useMemo(() => {
+    const search = queueSearch.trim().toLowerCase();
+
+    return queue.filter((item) => {
+      const option = getReportOption(item.reportType);
+
+      const matchesSearch =
+        !search ||
+        item.file.name.toLowerCase().includes(search) ||
+        item.reportType.toLowerCase().includes(search) ||
+        (option?.label ?? "").toLowerCase().includes(search);
+
+      const matchesFilter =
+        queueFilter === "all" ||
+        (queueFilter === "ready" && item.step === "idle") ||
+        (queueFilter === "active" && isActiveStep(item.step)) ||
+        (queueFilter === "complete" && item.step === "complete") ||
+        (queueFilter === "failed" && item.step === "failed");
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [queue, queueFilter, queueSearch]);
+
+  const recentJobHealth = useMemo(() => {
+    const failed = recentJobs.filter((job) => {
+      const combined = `${job.status} ${job.processingStatus}`.toLowerCase();
+      return combined.includes("failed") || combined.includes("error");
+    }).length;
+
+    const processing = recentJobs.filter((job) => {
+      const combined = `${job.status} ${job.processingStatus}`.toLowerCase();
+      return (
+        combined.includes("queue") ||
+        combined.includes("processing") ||
+        combined.includes("waiting")
+      );
+    }).length;
+
+    return { failed, processing };
+  }, [recentJobs]);
 
   useEffect(() => {
     const refDoc = doc(db, "analytics", "patientIndex");
@@ -348,10 +523,14 @@ export default function UploadReportPage() {
     );
   }
 
-  function handleAddFiles(files: FileList | null) {
-    if (!files?.length) return;
-
+  function addFiles(files: FileList | File[]) {
     const incoming = Array.from(files);
+    if (!incoming.length) return;
+
+    const existingSignatures = new Set(
+      queue.map((item) => fileSignature(item.file))
+    );
+
     const remainingSlots = Math.max(MAX_FILES_PER_BATCH - queue.length, 0);
 
     if (remainingSlots <= 0) {
@@ -361,8 +540,14 @@ export default function UploadReportPage() {
 
     const accepted: QueuedUpload[] = [];
     const rejected: string[] = [];
+    let duplicates = 0;
 
     for (const file of incoming.slice(0, remainingSlots)) {
+      if (existingSignatures.has(fileSignature(file))) {
+        duplicates += 1;
+        continue;
+      }
+
       const validationError = validateFile(file);
 
       if (validationError) {
@@ -381,24 +566,76 @@ export default function UploadReportPage() {
         downloadURL: "",
         error: "",
       });
+
+      existingSignatures.add(fileSignature(file));
     }
 
     if (accepted.length) {
       setQueue((current) => [...current, ...accepted]);
-      toast.success(`${accepted.length} file${accepted.length === 1 ? "" : "s"} added.`);
+      toast.success(
+        `${accepted.length} file${accepted.length === 1 ? "" : "s"} added.`
+      );
+    }
+
+    if (duplicates) {
+      toast.error(
+        `${duplicates} duplicate file${duplicates === 1 ? "" : "s"} skipped.`
+      );
     }
 
     if (rejected.length) {
-      toast.error(`${rejected.length} file${rejected.length === 1 ? "" : "s"} rejected.`);
+      toast.error(
+        `${rejected.length} file${rejected.length === 1 ? "" : "s"} rejected.`
+      );
       console.warn("Rejected upload files:", rejected);
     }
+  }
 
-    const input = document.getElementById("report-file-input") as HTMLInputElement | null;
+  function handleAddFiles(files: FileList | null) {
+    if (!files?.length) return;
+
+    addFiles(files);
+
+    const input = document.getElementById(
+      "report-file-input"
+    ) as HTMLInputElement | null;
+
     if (input) input.value = "";
+  }
+
+  function handleDrop(event: DragEvent<HTMLLabelElement>) {
+    event.preventDefault();
+    setDragActive(false);
+
+    if (uploading) return;
+
+    addFiles(event.dataTransfer.files);
   }
 
   function clearCompleted() {
     setQueue((current) => current.filter((item) => item.step !== "complete"));
+  }
+
+  function clearFailed() {
+    setQueue((current) => current.filter((item) => item.step !== "failed"));
+  }
+
+  function retryFailed() {
+    setQueue((current) =>
+      current.map((item) =>
+        item.step === "failed"
+          ? {
+              ...item,
+              step: "idle",
+              progress: 0,
+              error: "",
+              jobId: "",
+              storagePath: "",
+              downloadURL: "",
+            }
+          : item
+      )
+    );
   }
 
   function resetQueue() {
@@ -406,13 +643,19 @@ export default function UploadReportPage() {
 
     setQueue([]);
     setBatchMessage("");
+    setQueueSearch("");
+    setQueueFilter("all");
 
-    const input = document.getElementById("report-file-input") as HTMLInputElement | null;
+    const input = document.getElementById(
+      "report-file-input"
+    ) as HTMLInputElement | null;
+
     if (input) input.value = "";
   }
 
   function removeQueuedFile(localId: string) {
     if (uploading) return;
+
     setQueue((current) => current.filter((item) => item.localId !== localId));
   }
 
@@ -431,9 +674,7 @@ export default function UploadReportPage() {
   async function uploadOne(item: QueuedUpload) {
     const user = auth.currentUser;
 
-    if (!user) {
-      throw new Error("You must be logged in before uploading.");
-    }
+    if (!user) throw new Error("You must be logged in before uploading.");
 
     const fileExtension = getFileExtension(item.file.name);
 
@@ -517,7 +758,9 @@ export default function UploadReportPage() {
         (snapshot) => {
           const percent =
             snapshot.totalBytes > 0
-              ? Math.round((snapshot.bytesTransferred / snapshot.totalBytes) * 100)
+              ? Math.round(
+                  (snapshot.bytesTransferred / snapshot.totalBytes) * 100
+                )
               : 0;
 
           updateQueueItem(item.localId, {
@@ -637,7 +880,7 @@ export default function UploadReportPage() {
 
   return (
     <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6">
-      <div className="max-w-7xl space-y-6">
+      <div className="mx-auto max-w-[1800px] space-y-6">
         <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-neutral-950 via-neutral-950 to-blue-950/30 p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-start gap-3">
@@ -651,8 +894,8 @@ export default function UploadReportPage() {
                 </h1>
 
                 <p className="mt-2 max-w-3xl text-sm text-neutral-400">
-                  Upload one or many CSV/PDF reports, assign report types per file,
-                  verify Firebase Storage, and queue Cloud Function processing.
+                  Upload CSV/PDF reports, classify them, verify cloud storage,
+                  and queue Cloud Function processing from one place.
                 </p>
 
                 <p className="mt-2 text-xs text-neutral-500">
@@ -681,7 +924,9 @@ export default function UploadReportPage() {
           <StatCard
             icon={<HeartPulse className="h-5 w-5" aria-hidden="true" />}
             label="Hospice Patients"
-            value={statsLoading ? "Loading" : stats.hospicePatients.toLocaleString()}
+            value={
+              statsLoading ? "Loading" : stats.hospicePatients.toLocaleString()
+            }
             helper="Hospice tracked"
             tone="rose"
           />
@@ -703,88 +948,56 @@ export default function UploadReportPage() {
           />
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <StatCard
-            icon={<CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
-            label="Completed WIPs"
-            value={statsLoading ? "Loading" : stats.wipCompleted.toLocaleString()}
-            helper="Closed WIP records"
-            tone="emerald"
-          />
-
-          <StatCard
-            icon={<Activity className="h-5 w-5" aria-hidden="true" />}
-            label="Living Hospice"
-            value={statsLoading ? "Loading" : stats.hospiceLiving.toLocaleString()}
-            helper="Living hospice patients"
-            tone="emerald"
-          />
-
-          <StatCard
-            icon={<HeartPulse className="h-5 w-5" aria-hidden="true" />}
-            label="Deceased Hospice"
-            value={statsLoading ? "Loading" : stats.hospiceDeceased.toLocaleString()}
-            helper="Deceased hospice patients"
-            tone="rose"
-          />
-        </section>
-
         {analyticsMissing ? (
           <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 text-sm text-amber-100">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+              <AlertTriangle
+                className="mt-0.5 h-5 w-5 shrink-0"
+                aria-hidden="true"
+              />
               <div>
-                <div className="font-semibold">analytics/patientIndex is missing.</div>
+                <div className="font-semibold">
+                  analytics/patientIndex is missing
+                </div>
                 <p className="mt-1 text-amber-100/80">
-                  Upload and process a report, or run your rebuild/backfill function.
-                  This page will update automatically once the analytics document exists.
+                  Uploads will still queue, but analytics cards may stay empty
+                  until your indexing function builds this document.
                 </p>
               </div>
             </div>
           </section>
         ) : null}
 
-        {batchMessage ? (
-          <section className="flex items-start justify-between gap-3 rounded-2xl border border-white/10 bg-white/10 p-4 text-sm text-neutral-200">
-            <p>{batchMessage}</p>
-            <button
-              type="button"
-              onClick={() => setBatchMessage("")}
-              className="rounded-lg p-1 text-neutral-400 hover:bg-white/10 hover:text-white"
-              aria-label="Dismiss batch message"
-              title="Dismiss batch message"
-            >
-              <XCircle className="h-4 w-4" aria-hidden="true" />
-            </button>
-          </section>
-        ) : null}
-
-        <section className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_420px]">
           <div className="rounded-3xl border border-white/10 bg-neutral-950 p-6">
-            <div className="grid gap-5">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
+                <h2 className="text-lg font-semibold">Upload Files</h2>
+                <p className="mt-1 text-sm text-neutral-400">
+                  Choose the report type, drop files, and upload the batch.
+                </p>
+              </div>
+
+              <div className="w-full md:w-80">
                 <label
                   htmlFor="default-report-type"
-                  className="mb-2 block text-sm text-neutral-300"
+                  className="mb-2 block text-xs font-semibold uppercase tracking-wide text-neutral-500"
                 >
                   Default Report Type
                 </label>
 
                 <select
                   id="default-report-type"
-                  name="defaultReportType"
-                  title="Default report type"
-                  aria-label="Default report type"
                   value={defaultReportType}
+                  disabled={uploading}
                   onChange={(event) =>
                     setReportTypeForAll(event.target.value as ReportType)
                   }
-                  disabled={uploading}
-                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-blue-400"
                 >
-                  {Object.entries(groupedOptions).map(([category, options]) => (
-                    <optgroup key={category} label={category}>
-                      {options.map((option) => (
+                  {groupedOptions.map((group) => (
+                    <optgroup key={group.category} label={group.category}>
+                      {group.options.map((option) => (
                         <option key={option.value} value={option.value}>
                           {option.label}
                         </option>
@@ -792,370 +1005,356 @@ export default function UploadReportPage() {
                     </optgroup>
                   ))}
                 </select>
+              </div>
+            </div>
 
-                <p className="mt-2 text-sm text-neutral-500">
-                  {defaultSelectedOption?.patientImpact
-                    ? "This default type can update indexed patient-related collections after cloud processing."
-                    : "This default type will be stored as an import job and processed by your cloud pipeline."}
-                </p>
+            <label
+              htmlFor="report-file-input"
+              onDragOver={(event) => {
+                event.preventDefault();
+                setDragActive(true);
+              }}
+              onDragLeave={() => setDragActive(false)}
+              onDrop={handleDrop}
+              className={`mt-6 flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed p-10 text-center transition ${
+                dragActive
+                  ? "border-blue-400 bg-blue-500/10"
+                  : "border-white/10 bg-black/30 hover:bg-white/[0.04]"
+              }`}
+            >
+              <Cloud className="h-10 w-10 text-blue-300" aria-hidden="true" />
+
+              <div className="mt-4 text-lg font-semibold">
+                Drop CSV/PDF files here
               </div>
 
-              <div>
-                <label
-                  htmlFor="report-file-input"
-                  className="mb-2 block text-sm text-neutral-300"
-                >
-                  Add CSV/PDF Files
-                </label>
+              <p className="mt-2 max-w-xl text-sm text-neutral-400">
+                Files upload to Firebase Storage, create import job records,
+                and wait for Cloud Function processing.
+              </p>
 
+              <p className="mt-2 text-xs text-neutral-500">
+                Max {MAX_FILES_PER_BATCH} files per batch · Max{" "}
+                {formatBytes(MAX_FILE_SIZE_BYTES)} per file
+              </p>
+
+              <input
+                id="report-file-input"
+                type="file"
+                multiple
+                accept=".csv,.pdf,text/csv,application/pdf"
+                disabled={uploading}
+                onChange={(event) => handleAddFiles(event.target.files)}
+                className="sr-only"
+              />
+            </label>
+
+            <div className="mt-5 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => void handleUploadBatch()}
+                disabled={uploading || !batchStats.hasUploadable}
+                className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {uploading ? (
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                ) : (
+                  <Upload className="h-4 w-4" aria-hidden="true" />
+                )}
+                {uploading ? "Uploading..." : "Upload Batch"}
+              </button>
+
+              <button
+                type="button"
+                onClick={retryFailed}
+                disabled={uploading || batchStats.failed === 0}
+                className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Retry Failed
+              </button>
+
+              <button
+                type="button"
+                onClick={clearCompleted}
+                disabled={uploading || batchStats.completed === 0}
+                className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Clear Complete
+              </button>
+
+              <button
+                type="button"
+                onClick={clearFailed}
+                disabled={uploading || batchStats.failed === 0}
+                className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Clear Failed
+              </button>
+
+              <button
+                type="button"
+                onClick={resetQueue}
+                disabled={uploading || queue.length === 0}
+                className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Reset Queue
+              </button>
+            </div>
+
+            {batchMessage ? (
+              <div className="mt-4 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-neutral-300">
+                {batchMessage}
+              </div>
+            ) : null}
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-neutral-950 p-6">
+            <h2 className="text-lg font-semibold">Batch Health</h2>
+
+            <div className="mt-4 grid gap-3">
+              <MiniStat label="Queued Files" value={queue.length} />
+              <MiniStat label="Ready" value={batchStats.ready} />
+              <MiniStat label="Active" value={batchStats.active} />
+              <MiniStat label="Complete" value={batchStats.completed} />
+              <MiniStat label="Failed" value={batchStats.failed} />
+              <MiniStat label="Total Size" value={formatBytes(batchStats.totalBytes)} />
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/40 p-4">
+              <div className="flex items-center justify-between text-xs text-neutral-400">
+                <span>Average Progress</span>
+                <span>{batchStats.averageProgress}%</span>
+              </div>
+
+              <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-blue-500 transition-all"
+                  style={{ width: `${batchStats.averageProgress}%` }}
+                />
+              </div>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/40 p-4">
+              <div className="text-sm font-medium">
+                Selected Default Report
+              </div>
+              <p className="mt-1 text-sm text-neutral-400">
+                {defaultSelectedOption?.label ?? defaultReportType}
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-white/10 bg-neutral-950 p-6">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Upload Queue</h2>
+              <p className="mt-1 text-sm text-neutral-400">
+                Review report types before uploading. Do not trust file names.
+                Humans named them.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <label className="relative block">
+                <span className="sr-only">Search queued files</span>
+                <Search
+                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500"
+                  aria-hidden="true"
+                />
                 <input
-                  id="report-file-input"
-                  name="reportFiles"
-                  title="Upload CSV or PDF reports"
-                  aria-label="Upload CSV or PDF reports"
-                  type="file"
-                  multiple
-                  accept=".csv,text/csv,.pdf,application/pdf"
-                  disabled={uploading}
-                  onChange={(event) => handleAddFiles(event.target.files)}
-                  className="block w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white file:mr-4 file:rounded-xl file:border-0 file:bg-white/10 file:px-4 file:py-2 file:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                  value={queueSearch}
+                  onChange={(event) => setQueueSearch(event.target.value)}
+                  placeholder="Search queue..."
+                  className="w-full rounded-2xl border border-white/10 bg-black py-3 pl-10 pr-4 text-sm text-white outline-none transition focus:border-blue-400 sm:w-72"
                 />
+              </label>
 
-                <p className="mt-2 text-xs text-neutral-500">
-                  Batch limit: {MAX_FILES_PER_BATCH} files. Max file size:{" "}
-                  {formatBytes(MAX_FILE_SIZE_BYTES)}.
-                </p>
-              </div>
-
-              <div className="grid gap-3 md:grid-cols-4">
-                <MiniStat label="Queued" value={queue.length.toLocaleString()} />
-                <MiniStat label="Ready" value={batchStats.ready.toLocaleString()} />
-                <MiniStat label="Complete" value={batchStats.completed.toLocaleString()} />
-                <MiniStat label="Failed" value={batchStats.failed.toLocaleString()} />
-              </div>
-
-              <div className="rounded-2xl border border-white/10 bg-black/40 p-4 text-sm text-neutral-300">
-                <InfoLine
-                  label="Default report"
-                  value={defaultSelectedOption?.label ?? "-"}
-                />
-                <InfoLine
-                  label="Default category"
-                  value={defaultSelectedOption?.category ?? "-"}
-                />
-                <InfoLine label="Total batch size" value={formatBytes(batchStats.totalBytes)} />
-                <InfoLine label="Active uploads" value={batchStats.active.toLocaleString()} />
-                <InfoLine label="Average progress" value={`${batchStats.averageProgress}%`} />
-              </div>
-
-              {queue.length ? (
-                <div className="rounded-2xl border border-white/10 bg-black/30">
-                  <div className="flex flex-col gap-3 border-b border-white/10 p-4 md:flex-row md:items-center md:justify-between">
-                    <div>
-                      <h2 className="font-semibold">Upload Queue</h2>
-                      <p className="text-sm text-neutral-500">
-                        Assign report types per file before upload.
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={clearCompleted}
-                        disabled={uploading || batchStats.completed === 0}
-                        className="rounded-xl border border-white/10 bg-white/10 px-3 py-2 text-xs text-neutral-200 transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Clear Completed
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={resetQueue}
-                        disabled={uploading}
-                        className="rounded-xl border border-red-400/20 bg-red-500/10 px-3 py-2 text-xs text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        Clear Queue
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className="divide-y divide-white/10">
-                    {queue.map((item) => (
-                      <QueuedFileRow
-                        key={item.localId}
-                        item={item}
-                        groupedOptions={groupedOptions}
-                        disabled={uploading || item.step === "complete"}
-                        onChangeReportType={(reportType) =>
-                          updateQueueItem(item.localId, { reportType })
-                        }
-                        onRemove={() => removeQueuedFile(item.localId)}
-                      />
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div className="rounded-2xl border border-white/10 bg-black/30 p-5 text-sm text-neutral-500">
-                  No files queued. Add one or more CSV/PDF files above.
-                </div>
-              )}
-
-              {queue.length ? (
-                <div className="rounded-2xl border border-white/10 bg-black/40 p-4">
-                  <div className="mb-2 flex items-center justify-between text-sm text-neutral-300">
-                    <span>Batch Progress</span>
-                    <span>{batchStats.averageProgress}%</span>
-                  </div>
-
-                  <div className="h-3 overflow-hidden rounded-full bg-white/10">
-                    <div
-                      className="h-full rounded-full bg-white transition-all"
-                      style={{ width: `${batchStats.averageProgress}%` }}
-                    />
-                  </div>
-                </div>
-              ) : null}
-
-              <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => void handleUploadBatch()}
-                  disabled={uploading || !queue.length || batchStats.ready === 0}
-                  className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-medium text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              <label>
+                <span className="sr-only">Filter upload queue</span>
+                <select
+                  value={queueFilter}
+                  onChange={(event) =>
+                    setQueueFilter(event.target.value as QueueFilter)
+                  }
+                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-blue-400 sm:w-44"
                 >
-                  {uploading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-                      Uploading Batch...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4" aria-hidden="true" />
-                      Upload Ready Files
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={resetQueue}
-                  disabled={uploading || queue.length === 0}
-                  className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm transition hover:bg-white/20 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <RefreshCcw className="h-4 w-4" aria-hidden="true" />
-                  Reset
-                </button>
-              </div>
+                  <option value="all">All</option>
+                  <option value="ready">Ready</option>
+                  <option value="active">Active</option>
+                  <option value="complete">Complete</option>
+                  <option value="failed">Failed</option>
+                </select>
+              </label>
             </div>
           </div>
 
-          <aside className="space-y-6">
-            <div className="rounded-3xl border border-white/10 bg-neutral-950 p-6">
-              <h2 className="text-lg font-semibold">Upload Pipeline</h2>
-
-              <div className="mt-5 space-y-3">
-                <StepRow
-                  label="Create import job in Firestore"
-                  active={batchStats.active > 0}
-                  done={batchStats.completed > 0}
-                />
-
-                <StepRow
-                  label="Upload raw file to Firebase Storage"
-                  active={uploading}
-                  done={batchStats.completed > 0}
-                />
-
-                <StepRow
-                  label="Verify cloud upload URL and storage path"
-                  active={uploading}
-                  done={batchStats.completed > 0}
-                />
-
-                <StepRow
-                  label="Queue Cloud Function processing"
-                  active={uploading}
-                  done={batchStats.completed > 0}
-                />
-
-                <StepRow
-                  label="Batch complete"
-                  active={false}
-                  done={queue.length > 0 && batchStats.completed === queue.length}
-                />
+          <div className="mt-5 space-y-3">
+            {filteredQueue.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-black/30 p-6 text-center text-sm text-neutral-500">
+                No files in this view.
               </div>
+            ) : (
+              filteredQueue.map((item) => {
+                const option = getReportOption(item.reportType);
+                const active = isActiveStep(item.step);
 
-              <div className="mt-6 rounded-2xl border border-blue-400/20 bg-blue-500/10 p-4 text-sm text-blue-100/80">
-                <div className="mb-2 flex items-center gap-2 font-medium text-blue-100">
-                  <Cloud className="h-4 w-4" aria-hidden="true" />
-                  Cloud-First Storage
-                </div>
-                Files go to Firebase Storage. Firestore stores metadata.
-                Cloud Functions parse and index after upload.
-              </div>
+                return (
+                  <div
+                    key={item.localId}
+                    className="rounded-2xl border border-white/10 bg-black/30 p-4"
+                  >
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <FileText
+                            className="h-4 w-4 text-blue-300"
+                            aria-hidden="true"
+                          />
 
-              <div className="mt-4 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 p-4 text-sm text-emerald-100/80">
-                <div className="mb-2 flex items-center gap-2 font-medium text-emerald-100">
-                  <Database className="h-4 w-4" aria-hidden="true" />
-                  Analytics Source
-                </div>
-                Counts come from{" "}
-                <code className="rounded bg-black/30 px-1">
-                  analytics/patientIndex
-                </code>
-                .
-              </div>
-            </div>
+                          <p className="truncate font-medium">{item.file.name}</p>
 
-            <div className="rounded-3xl border border-white/10 bg-neutral-950 p-6">
-              <h2 className="text-lg font-semibold">Recent Import Jobs</h2>
+                          <span className="rounded-full border border-white/10 px-2 py-1 text-xs text-neutral-400">
+                            {formatBytes(item.file.size)}
+                          </span>
 
-              <div className="mt-4 space-y-3">
-                {recentJobsLoading ? (
-                  <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-neutral-500">
-                    Loading recent jobs...
-                  </div>
-                ) : recentJobs.length ? (
-                  recentJobs.map((job) => (
-                    <div
-                      key={job.id}
-                      className="rounded-2xl border border-white/10 bg-black/30 p-4"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="line-clamp-1 text-sm font-semibold text-white">
-                            {job.originalFileName || "Unnamed file"}
-                          </p>
-                          <p className="mt-1 text-xs text-neutral-500">
-                            {job.reportLabel || job.reportType || "Unknown report"}
-                          </p>
+                          <StatusBadge step={item.step} />
                         </div>
 
-                        <JobStatusBadge status={job.status} />
+                        <p className="mt-1 text-xs text-neutral-500">
+                          {item.jobId ? `Job: ${item.jobId}` : "No job created yet"}
+                        </p>
+
+                        {item.error ? (
+                          <p className="mt-2 text-sm text-red-300">{item.error}</p>
+                        ) : null}
                       </div>
 
-                      <div className="mt-3 text-xs text-neutral-500">
-                        <div>Processing: {job.processingStatus || "—"}</div>
-                        <div>Uploaded by: {job.uploadedByEmail || "—"}</div>
-                        <div>Created: {formatTimestamp(job.createdAt)}</div>
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <label>
+                          <span className="sr-only">
+                            Report type for {item.file.name}
+                          </span>
+                          <select
+                            value={item.reportType}
+                            disabled={uploading || active || item.step === "complete"}
+                            onChange={(event) =>
+                              updateQueueItem(item.localId, {
+                                reportType: event.target.value as ReportType,
+                              })
+                            }
+                            className="w-full rounded-2xl border border-white/10 bg-black px-4 py-2 text-sm text-white outline-none transition focus:border-blue-400 sm:w-64"
+                          >
+                            {groupedOptions.map((group) => (
+                              <optgroup key={group.category} label={group.category}>
+                                {group.options.map((reportOption) => (
+                                  <option
+                                    key={reportOption.value}
+                                    value={reportOption.value}
+                                  >
+                                    {reportOption.label}
+                                  </option>
+                                ))}
+                              </optgroup>
+                            ))}
+                          </select>
+                        </label>
+
+                        <button
+                          type="button"
+                          onClick={() => removeQueuedFile(item.localId)}
+                          disabled={uploading || active}
+                          className="inline-flex items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10 p-2 text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                          aria-label={`Remove ${item.file.name}`}
+                        >
+                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                        </button>
                       </div>
                     </div>
-                  ))
-                ) : (
-                  <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-neutral-500">
-                    No recent import jobs found.
+
+                    <div className="mt-3">
+                      <div className="flex justify-between text-xs text-neutral-500">
+                        <span>{option?.label ?? item.reportType}</span>
+                        <span>{item.progress}%</span>
+                      </div>
+
+                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
+                        <div
+                          className="h-full rounded-full bg-blue-500 transition-all"
+                          style={{ width: `${item.progress}%` }}
+                        />
+                      </div>
+                    </div>
                   </div>
-                )}
-              </div>
+                );
+              })
+            )}
+          </div>
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-[420px_minmax(0,1fr)]">
+          <div className="rounded-3xl border border-white/10 bg-neutral-950 p-6">
+            <h2 className="text-lg font-semibold">Recent Import Health</h2>
+
+            <div className="mt-4 grid gap-3">
+              <MiniStat label="Recent Jobs" value={recentJobs.length} />
+              <MiniStat label="Processing" value={recentJobHealth.processing} />
+              <MiniStat label="Failed" value={recentJobHealth.failed} />
             </div>
-          </aside>
+          </div>
+
+          <div className="rounded-3xl border border-white/10 bg-neutral-950 p-6">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">Recent Import Jobs</h2>
+                <p className="mt-1 text-sm text-neutral-400">
+                  Last 10 jobs from Firestore importJobs.
+                </p>
+              </div>
+
+              <RefreshCcw className="h-5 w-5 text-neutral-500" aria-hidden="true" />
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {recentJobsLoading ? (
+                <div className="flex items-center gap-2 text-sm text-neutral-400">
+                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  Loading recent jobs...
+                </div>
+              ) : recentJobs.length === 0 ? (
+                <p className="text-sm text-neutral-500">No recent jobs found.</p>
+              ) : (
+                recentJobs.map((job) => (
+                  <div
+                    key={job.id}
+                    className="rounded-2xl border border-white/10 bg-black/30 p-4"
+                  >
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="font-medium">
+                        {job.reportLabel || job.reportType || "Unknown report"}
+                      </p>
+
+                      <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-neutral-300">
+                        {job.processingStatus || job.status || "unknown"}
+                      </span>
+                    </div>
+
+                    <p className="mt-1 text-sm text-neutral-400">
+                      {job.originalFileName || "Unnamed file"}
+                    </p>
+
+                    <p className="mt-1 text-xs text-neutral-500">
+                      Uploaded by {job.uploadedByEmail || "unknown"} ·{" "}
+                      {formatTimestamp(job.createdAt)}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </section>
       </div>
     </main>
-  );
-}
-
-function QueuedFileRow({
-  item,
-  groupedOptions,
-  disabled,
-  onChangeReportType,
-  onRemove,
-}: {
-  item: QueuedUpload;
-  groupedOptions: ReturnType<typeof groupReportOptions>;
-  disabled: boolean;
-  onChangeReportType: (reportType: ReportType) => void;
-  onRemove: () => void;
-}) {
-  const selectedOption = getReportOption(item.reportType);
-
-  return (
-    <div className="grid gap-4 p-4 lg:grid-cols-[1.2fr_0.9fr_0.7fr_auto] lg:items-center">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2">
-          <FileText className="h-4 w-4 text-neutral-500" aria-hidden="true" />
-          <p className="truncate font-medium text-white">{item.file.name}</p>
-          <StepBadge step={item.step} />
-        </div>
-
-        <p className="mt-1 text-xs text-neutral-500">
-          {formatBytes(item.file.size)}
-          {item.jobId ? ` • Job ${item.jobId}` : ""}
-        </p>
-
-        {item.error ? (
-          <p className="mt-2 text-xs text-red-300">{item.error}</p>
-        ) : null}
-
-        {item.storagePath ? (
-          <p className="mt-2 break-all text-xs text-neutral-600">
-            {item.storagePath}
-          </p>
-        ) : null}
-      </div>
-
-      <label>
-        <span className="mb-2 block text-xs text-neutral-400">Report Type</span>
-        <select
-          title={`Report type for ${item.file.name}`}
-          aria-label={`Report type for ${item.file.name}`}
-          value={item.reportType}
-          onChange={(event) => onChangeReportType(event.target.value as ReportType)}
-          disabled={disabled}
-          className="w-full rounded-xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none disabled:cursor-not-allowed disabled:opacity-60"
-        >
-          {Object.entries(groupedOptions).map(([category, options]) => (
-            <optgroup key={category} label={category}>
-              {options.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label}
-                </option>
-              ))}
-            </optgroup>
-          ))}
-        </select>
-
-        <p className="mt-1 text-xs text-neutral-600">
-          {selectedOption?.category ?? "Uncategorized"}
-        </p>
-      </label>
-
-      <div>
-        <div className="mb-2 flex items-center justify-between text-xs text-neutral-400">
-          <span>{getStepLabel(item.step)}</span>
-          <span>{item.progress}%</span>
-        </div>
-        <div className="h-2 overflow-hidden rounded-full bg-white/10">
-          <div
-            className="h-full rounded-full bg-white transition-all"
-            style={{ width: `${item.progress}%` }}
-          />
-        </div>
-
-        {item.downloadURL ? (
-          <a
-            href={item.downloadURL}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-2 inline-flex text-xs text-emerald-300 hover:text-emerald-200"
-          >
-            Open cloud file
-          </a>
-        ) : null}
-      </div>
-
-      <button
-        type="button"
-        onClick={onRemove}
-        disabled={disabled}
-        className="inline-flex items-center justify-center rounded-xl border border-red-400/20 bg-red-500/10 p-3 text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-        aria-label={`Remove ${item.file.name}`}
-        title={`Remove ${item.file.name}`}
-      >
-        <Trash2 className="h-4 w-4" aria-hidden="true" />
-      </button>
-    </div>
   );
 }
 
@@ -1170,122 +1369,75 @@ function StatCard({
   label: string;
   value: string;
   helper: string;
-  tone?: "neutral" | "amber" | "emerald" | "rose" | "blue";
+  tone?: "neutral" | "blue" | "amber" | "rose" | "emerald";
 }) {
   const toneClass =
-    tone === "amber"
-      ? "border-amber-400/20 bg-amber-500/10 text-amber-200"
-      : tone === "emerald"
-        ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
+    tone === "blue"
+      ? "border-blue-400/20 bg-blue-500/10 text-blue-200"
+      : tone === "amber"
+        ? "border-amber-400/20 bg-amber-500/10 text-amber-200"
         : tone === "rose"
-          ? "border-red-400/20 bg-red-500/10 text-red-200"
-          : tone === "blue"
-            ? "border-blue-400/20 bg-blue-500/10 text-blue-200"
-            : "border-white/10 bg-neutral-950 text-white";
+          ? "border-rose-400/20 bg-rose-500/10 text-rose-200"
+          : tone === "emerald"
+            ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
+            : "border-white/10 bg-white/5 text-neutral-200";
 
   return (
     <div className={`rounded-3xl border p-5 ${toneClass}`}>
       <div className="flex items-center justify-between gap-3">
+        <div>
+          <p className="text-sm opacity-80">{label}</p>
+          <p className="mt-2 text-2xl font-bold">{value}</p>
+        </div>
+
         <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
           {icon}
         </div>
-
-        {value === "Loading" ? (
-          <Loader2 className="h-5 w-5 animate-spin text-neutral-400" />
-        ) : null}
       </div>
 
-      <div className="mt-4 text-xs uppercase tracking-[0.2em] text-neutral-400">
-        {label}
-      </div>
-
-      <div className="mt-2 text-3xl font-semibold">{value}</div>
-
-      <div className="mt-2 text-sm text-neutral-500">{helper}</div>
+      <p className="mt-3 text-xs opacity-70">{helper}</p>
     </div>
   );
 }
 
-function MiniStat({ label, value }: { label: string; value: string }) {
+function MiniStat({ label, value }: { label: string; value: string | number }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/30 p-4">
-      <p className="text-xs text-neutral-500">{label}</p>
-      <p className="mt-1 text-xl font-semibold text-white">{value}</p>
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/30 p-4">
+      <span className="text-sm text-neutral-400">{label}</span>
+      <span className="font-semibold text-white">{value}</span>
     </div>
   );
 }
 
-function InfoLine({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="mt-1 break-words first:mt-0">
-      <span className="text-neutral-500">{label}:</span> {value}
-    </div>
-  );
-}
+function StatusBadge({ step }: { step: UploadStep }) {
+  const label = getStepLabel(step);
 
-function StepRow({
-  label,
-  active,
-  done,
-}: {
-  label: string;
-  active: boolean;
-  done: boolean;
-}) {
-  return (
-    <div
-      className={[
-        "flex items-center gap-3 rounded-2xl border p-3 text-sm",
-        done
-          ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-          : active
-            ? "border-blue-400/20 bg-blue-500/10 text-blue-200"
-            : "border-white/10 bg-black/30 text-neutral-400",
-      ].join(" ")}
-    >
-      {done ? (
-        <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-      ) : active ? (
-        <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
-      ) : (
-        <div className="h-4 w-4 rounded-full border border-white/20" />
-      )}
-
-      {label}
-    </div>
-  );
-}
-
-function StepBadge({ step }: { step: UploadStep }) {
-  const styles =
+  const className =
     step === "complete"
       ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
       : step === "failed"
         ? "border-red-400/20 bg-red-500/10 text-red-200"
-        : step === "idle"
-          ? "border-white/10 bg-white/10 text-neutral-300"
-          : "border-blue-400/20 bg-blue-500/10 text-blue-200";
+        : isActiveStep(step)
+          ? "border-blue-400/20 bg-blue-500/10 text-blue-200"
+          : "border-white/10 bg-white/5 text-neutral-300";
+
+  const icon =
+    step === "complete" ? (
+      <CheckCircle2 className="h-3.5 w-3.5" aria-hidden="true" />
+    ) : step === "failed" ? (
+      <XCircle className="h-3.5 w-3.5" aria-hidden="true" />
+    ) : isActiveStep(step) ? (
+      <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden="true" />
+    ) : (
+      <Database className="h-3.5 w-3.5" aria-hidden="true" />
+    );
 
   return (
-    <span className={`rounded-full border px-2.5 py-1 text-xs ${styles}`}>
-      {getStepLabel(step)}
-    </span>
-  );
-}
-
-function JobStatusBadge({ status }: { status: string }) {
-  const normalized = status.toLowerCase();
-
-  const styles =
-    normalized === "uploaded" || normalized === "complete"
-      ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
-      : normalized.includes("error") || normalized.includes("failed")
-        ? "border-red-400/20 bg-red-500/10 text-red-200"
-        : "border-blue-400/20 bg-blue-500/10 text-blue-200";
-
-  return (
-    <span className={`rounded-full border px-2.5 py-1 text-xs ${styles}`}>
-      {status || "unknown"}
+    <span
+      className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-xs ${className}`}
+    >
+      {icon}
+      {label}
     </span>
   );
 }

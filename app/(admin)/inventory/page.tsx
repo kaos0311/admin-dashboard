@@ -1,6 +1,13 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useId,
+  useMemo,
+  useState,
+} from "react";
 import {
   addDoc,
   collection,
@@ -38,6 +45,7 @@ import { db } from "@/lib/firebase";
 import { smartMergeInventory } from "@/lib/inventory/smartMergeInventory";
 
 const INVENTORY_LIMIT = 750;
+const FIRESTORE_BATCH_LIMIT = 450;
 
 type InventoryStatus =
   | "available"
@@ -75,22 +83,18 @@ type InventoryItem = {
   unitCost: number;
   totalValue: number;
   status: InventoryStatus;
-
   manufacturer: string;
   manufacturerItemId: string;
   modelNumber: string;
-
   warrantyProvider: string;
   warrantyStartDate: string;
   warrantyEndDate: string;
   warrantyNotes: string;
-
   purchaseDate: string;
   usefulLifeMonths: number;
   lifecycleStatus: LifecycleStatus;
   nextServiceDate: string;
   lifecycleNotes: string;
-
   notes: string;
 };
 
@@ -112,22 +116,18 @@ type InventoryForm = {
   reorderLevel: string;
   unitCost: string;
   status: InventoryStatus;
-
   manufacturer: string;
   manufacturerItemId: string;
   modelNumber: string;
-
   warrantyProvider: string;
   warrantyStartDate: string;
   warrantyEndDate: string;
   warrantyNotes: string;
-
   purchaseDate: string;
   usefulLifeMonths: string;
   lifecycleStatus: LifecycleStatus;
   nextServiceDate: string;
   lifecycleNotes: string;
-
   notes: string;
 };
 
@@ -149,22 +149,18 @@ const initialForm: InventoryForm = {
   reorderLevel: "0",
   unitCost: "0",
   status: "available",
-
   manufacturer: "",
   manufacturerItemId: "",
   modelNumber: "",
-
   warrantyProvider: "",
   warrantyStartDate: "",
   warrantyEndDate: "",
   warrantyNotes: "",
-
   purchaseDate: "",
   usefulLifeMonths: "60",
   lifecycleStatus: "active",
   nextServiceDate: "",
   lifecycleNotes: "",
-
   notes: "",
 };
 
@@ -184,8 +180,18 @@ function normalizeSearchText(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
 }
 
-function todayInputValue(): string {
-  return new Date().toISOString().slice(0, 10);
+function humanize(value: string): string {
+  return value.replaceAll("_", " ");
+}
+
+function chunkArray<T>(items: T[], size: number): T[][] {
+  const chunks: T[][] = [];
+
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+
+  return chunks;
 }
 
 function normalizeInventoryItem(
@@ -196,10 +202,12 @@ function normalizeInventoryItem(
   const committed = toSafeNumber(data.committed);
   const onRent = toSafeNumber(data.onRent);
   const onOrder = toSafeNumber(data.onOrder);
+
   const available =
     data.available == null
       ? quantityOnHand - committed - onRent
       : toSafeNumber(data.available);
+
   const unitCost = toSafeNumber(data.unitCost);
 
   const rawStatus = toSafeString(data.status);
@@ -243,22 +251,18 @@ function normalizeInventoryItem(
         ? quantityOnHand * unitCost
         : toSafeNumber(data.totalValue),
     status,
-
     manufacturer: toSafeString(data.manufacturer),
     manufacturerItemId: toSafeString(data.manufacturerItemId),
     modelNumber: toSafeString(data.modelNumber),
-
     warrantyProvider: toSafeString(data.warrantyProvider),
     warrantyStartDate: toSafeString(data.warrantyStartDate),
     warrantyEndDate: toSafeString(data.warrantyEndDate),
     warrantyNotes: toSafeString(data.warrantyNotes),
-
     purchaseDate: toSafeString(data.purchaseDate),
     usefulLifeMonths: toSafeNumber(data.usefulLifeMonths),
     lifecycleStatus,
     nextServiceDate: toSafeString(data.nextServiceDate),
     lifecycleNotes: toSafeString(data.lifecycleNotes),
-
     notes: toSafeString(data.notes),
   };
 }
@@ -349,7 +353,7 @@ export default function InventoryPage() {
         setItems(rows);
         setLoading(false);
       },
-      (error) => {
+      (error: unknown) => {
         console.error("LOAD INVENTORY ERROR:", error);
         setLoading(false);
         toast.error("Inventory could not be loaded.");
@@ -364,6 +368,7 @@ export default function InventoryPage() {
 
     return items.filter((item) => {
       if (statusFilter !== "all" && item.status !== statusFilter) return false;
+
       if (
         lifecycleFilter !== "all" &&
         item.lifecycleStatus !== lifecycleFilter
@@ -397,6 +402,11 @@ export default function InventoryPage() {
       return haystack.includes(term);
     });
   }, [items, search, statusFilter, lifecycleFilter]);
+
+  const selectedVisibleCount = useMemo(() => {
+    const visibleSet = new Set(filteredItems.map((item) => item.id));
+    return selectedIds.filter((id) => visibleSet.has(id)).length;
+  }, [filteredItems, selectedIds]);
 
   const summary = useMemo(() => {
     return {
@@ -455,24 +465,22 @@ export default function InventoryPage() {
       reorderLevel: String(item.reorderLevel),
       unitCost: String(item.unitCost),
       status: item.status,
-
       manufacturer: item.manufacturer,
       manufacturerItemId: item.manufacturerItemId,
       modelNumber: item.modelNumber,
-
       warrantyProvider: item.warrantyProvider,
       warrantyStartDate: item.warrantyStartDate,
       warrantyEndDate: item.warrantyEndDate,
       warrantyNotes: item.warrantyNotes,
-
       purchaseDate: item.purchaseDate,
       usefulLifeMonths: String(item.usefulLifeMonths || 60),
       lifecycleStatus: item.lifecycleStatus,
       nextServiceDate: item.nextServiceDate,
       lifecycleNotes: item.lifecycleNotes,
-
       notes: item.notes,
     });
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function logMovement(args: {
@@ -507,6 +515,7 @@ export default function InventoryPage() {
     const onOrder = toSafeNumber(form.onOrder);
     const reorderLevel = toSafeNumber(form.reorderLevel);
     const unitCost = toSafeNumber(form.unitCost);
+    const usefulLifeMonths = toSafeNumber(form.usefulLifeMonths);
     const available = quantityOnHand - committed - onRent;
     const totalValue = quantityOnHand * unitCost;
 
@@ -526,7 +535,8 @@ export default function InventoryPage() {
       onRent < 0 ||
       onOrder < 0 ||
       reorderLevel < 0 ||
-      unitCost < 0
+      unitCost < 0 ||
+      usefulLifeMonths < 0
     ) {
       toast.error("Numbers cannot be negative.");
       return;
@@ -555,22 +565,18 @@ export default function InventoryPage() {
       unitCost,
       totalValue,
       status: form.status,
-
       manufacturer: form.manufacturer.trim(),
       manufacturerItemId: form.manufacturerItemId.trim(),
       modelNumber: form.modelNumber.trim(),
-
       warrantyProvider: form.warrantyProvider.trim(),
       warrantyStartDate: form.warrantyStartDate,
       warrantyEndDate: form.warrantyEndDate,
       warrantyNotes: form.warrantyNotes.trim(),
-
       purchaseDate: form.purchaseDate,
-      usefulLifeMonths: toSafeNumber(form.usefulLifeMonths),
+      usefulLifeMonths,
       lifecycleStatus: form.lifecycleStatus,
       nextServiceDate: form.nextServiceDate,
       lifecycleNotes: form.lifecycleNotes.trim(),
-
       notes: form.notes.trim(),
     };
 
@@ -638,7 +644,7 @@ export default function InventoryPage() {
       }
 
       resetForm();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error("SAVE INVENTORY ERROR:", error);
       toast.error("Inventory could not be saved.");
     } finally {
@@ -647,7 +653,10 @@ export default function InventoryPage() {
   }
 
   async function handleDelete(item: InventoryItem) {
-    if (!canWrite) return toast.error("You do not have permission.");
+    if (!canWrite) {
+      toast.error("You do not have permission.");
+      return;
+    }
 
     if (!window.confirm(`Delete "${item.name}"?`)) return;
 
@@ -668,13 +677,17 @@ export default function InventoryPage() {
 
       setSelectedIds((prev) => prev.filter((id) => id !== item.id));
       toast.success("Inventory deleted.");
-    } catch {
+    } catch (error: unknown) {
+      console.error("DELETE INVENTORY ERROR:", error);
       toast.error("Delete failed.");
     }
   }
 
   async function handleDiscontinue(item: InventoryItem) {
-    if (!canWrite) return toast.error("You do not have permission.");
+    if (!canWrite) {
+      toast.error("You do not have permission.");
+      return;
+    }
 
     try {
       await updateDoc(doc(db, "inventory", item.id), {
@@ -696,53 +709,80 @@ export default function InventoryPage() {
       });
 
       toast.success("Item discontinued.");
-    } catch {
+    } catch (error: unknown) {
+      console.error("DISCONTINUE INVENTORY ERROR:", error);
       toast.error("Could not discontinue item.");
     }
   }
 
   async function handleBatchDelete() {
-    if (!canWrite) return toast.error("You do not have permission.");
-    if (!selectedIds.length) return toast.error("Select items first.");
+    if (!canWrite) {
+      toast.error("You do not have permission.");
+      return;
+    }
+
+    if (!selectedIds.length) {
+      toast.error("Select items first.");
+      return;
+    }
 
     if (!window.confirm(`Delete ${selectedIds.length} selected item(s)?`)) {
       return;
     }
 
     try {
-      const batch = writeBatch(db);
+      const chunks = chunkArray(selectedIds, FIRESTORE_BATCH_LIMIT);
 
-      selectedIds.forEach((id) => {
-        batch.delete(doc(db, "inventory", id));
-      });
+      for (const chunk of chunks) {
+        const batch = writeBatch(db);
 
-      await batch.commit();
+        chunk.forEach((id) => {
+          batch.delete(doc(db, "inventory", id));
+        });
+
+        await batch.commit();
+      }
+
       setSelectedIds([]);
       toast.success("Selected items deleted.");
-    } catch {
+    } catch (error: unknown) {
+      console.error("BATCH DELETE INVENTORY ERROR:", error);
       toast.error("Batch delete failed.");
     }
   }
 
   async function handleBatchDiscontinue() {
-    if (!canWrite) return toast.error("You do not have permission.");
-    if (!selectedIds.length) return toast.error("Select items first.");
+    if (!canWrite) {
+      toast.error("You do not have permission.");
+      return;
+    }
+
+    if (!selectedIds.length) {
+      toast.error("Select items first.");
+      return;
+    }
 
     try {
-      const batch = writeBatch(db);
+      const chunks = chunkArray(selectedIds, FIRESTORE_BATCH_LIMIT);
 
-      selectedIds.forEach((id) => {
-        batch.update(doc(db, "inventory", id), {
-          status: "discontinued",
-          lifecycleStatus: "retired",
-          updatedAt: serverTimestamp(),
+      for (const chunk of chunks) {
+        const batch = writeBatch(db);
+
+        chunk.forEach((id) => {
+          batch.update(doc(db, "inventory", id), {
+            status: "discontinued",
+            lifecycleStatus: "retired",
+            updatedAt: serverTimestamp(),
+          });
         });
-      });
 
-      await batch.commit();
+        await batch.commit();
+      }
+
       setSelectedIds([]);
       toast.success("Selected items discontinued.");
-    } catch {
+    } catch (error: unknown) {
+      console.error("BATCH DISCONTINUE INVENTORY ERROR:", error);
       toast.error("Batch discontinue failed.");
     }
   }
@@ -755,20 +795,34 @@ export default function InventoryPage() {
 
   function toggleSelectAll() {
     const visibleIds = filteredItems.map((item) => item.id);
-    const allSelected = visibleIds.every((id) => selectedIds.includes(id));
 
-    setSelectedIds(allSelected ? [] : visibleIds);
+    if (!visibleIds.length) {
+      setSelectedIds([]);
+      return;
+    }
+
+    const allVisibleSelected = visibleIds.every((id) =>
+      selectedIds.includes(id)
+    );
+
+    if (allVisibleSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !visibleIds.includes(id)));
+      return;
+    }
+
+    setSelectedIds((prev) => Array.from(new Set([...prev, ...visibleIds])));
   }
 
   return (
-    <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6">
-      <div className="max-w-7xl">
-        <section className="rounded-3xl border border-white/10 bg-neutral-950 p-6">
+    <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6 xl:px-8">
+      <div className="w-full max-w-none space-y-6">
+        <section className="rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30">
           <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
             <div className="flex items-center gap-3">
               <div className="rounded-2xl bg-white/10 p-3">
                 <Boxes className="h-6 w-6" />
               </div>
+
               <div>
                 <h1 className="text-2xl font-bold">Inventory</h1>
                 <p className="text-sm text-neutral-400">
@@ -802,10 +856,10 @@ export default function InventoryPage() {
           <StatCard label="Value" value={`$${summary.totalValue.toFixed(2)}`} />
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[460px_minmax(0,1fr)]">
+        <section className="grid gap-6 2xl:grid-cols-[520px_minmax(0,1fr)]">
           <form
             onSubmit={handleSubmit}
-            className="rounded-3xl border border-white/10 bg-neutral-950 p-6"
+            className="rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30"
           >
             <div className="mb-5 flex items-center gap-3">
               <div className="rounded-2xl bg-white/10 p-3">
@@ -815,6 +869,7 @@ export default function InventoryPage() {
                   <PackagePlus className="h-5 w-5" />
                 )}
               </div>
+
               <div>
                 <h2 className="text-xl font-bold">
                   {form.id ? "Edit Item" : "Add Item"}
@@ -830,39 +885,44 @@ export default function InventoryPage() {
                 <TextInput
                   label="Item Name"
                   value={form.name}
-                  onChange={(v) => updateForm("name", v)}
+                  onChange={(value) => updateForm("name", value)}
                   required
                 />
+
                 <TextInput
                   label="Category"
                   value={form.category}
-                  onChange={(v) => updateForm("category", v)}
+                  onChange={(value) => updateForm("category", value)}
                   required
                 />
+
                 <div className="grid gap-3 md:grid-cols-2">
                   <TextInput
                     label="SKU"
                     value={form.sku}
-                    onChange={(v) => updateForm("sku", v)}
+                    onChange={(value) => updateForm("sku", value)}
                   />
+
                   <ScanInput
                     label="Barcode"
                     value={form.barcode}
-                    onChange={(v) => updateForm("barcode", v)}
+                    onChange={(value) => updateForm("barcode", value)}
                     onScan={() => openScanner("barcode")}
                   />
                 </div>
+
                 <div className="grid gap-3 md:grid-cols-2">
                   <ScanInput
                     label="Serial"
                     value={form.serial}
-                    onChange={(v) => updateForm("serial", v)}
+                    onChange={(value) => updateForm("serial", value)}
                     onScan={() => openScanner("serial")}
                   />
+
                   <ScanInput
                     label="Lot Number"
                     value={form.lotNumber}
-                    onChange={(v) => updateForm("lotNumber", v)}
+                    onChange={(value) => updateForm("lotNumber", value)}
                     onScan={() => openScanner("lotNumber")}
                   />
                 </div>
@@ -872,18 +932,22 @@ export default function InventoryPage() {
                 <TextInput
                   label="Manufacturer"
                   value={form.manufacturer}
-                  onChange={(v) => updateForm("manufacturer", v)}
+                  onChange={(value) => updateForm("manufacturer", value)}
                 />
+
                 <div className="grid gap-3 md:grid-cols-2">
                   <TextInput
                     label="Manufacturer Item ID"
                     value={form.manufacturerItemId}
-                    onChange={(v) => updateForm("manufacturerItemId", v)}
+                    onChange={(value) =>
+                      updateForm("manufacturerItemId", value)
+                    }
                   />
+
                   <TextInput
                     label="Model Number"
                     value={form.modelNumber}
-                    onChange={(v) => updateForm("modelNumber", v)}
+                    onChange={(value) => updateForm("modelNumber", value)}
                   />
                 </div>
               </FieldGroup>
@@ -893,46 +957,59 @@ export default function InventoryPage() {
                   <TextInput
                     label="Location"
                     value={form.locationName}
-                    onChange={(v) => updateForm("locationName", v)}
+                    onChange={(value) => updateForm("locationName", value)}
                   />
+
                   <TextInput
                     label="Bin / Shelf"
                     value={form.binLocation}
-                    onChange={(v) => updateForm("binLocation", v)}
+                    onChange={(value) => updateForm("binLocation", value)}
                   />
                 </div>
+
                 <div className="grid gap-3 md:grid-cols-2">
                   <TextInput
                     label="Quantity"
                     type="number"
                     value={form.quantityOnHand}
-                    onChange={(v) => updateForm("quantityOnHand", v)}
+                    onChange={(value) => updateForm("quantityOnHand", value)}
                   />
+
                   <TextInput
                     label="Unit Cost"
                     type="number"
                     value={form.unitCost}
-                    onChange={(v) => updateForm("unitCost", v)}
+                    onChange={(value) => updateForm("unitCost", value)}
                   />
                 </div>
-                <div className="grid gap-3 md:grid-cols-3">
+
+                <div className="grid gap-3 md:grid-cols-4">
                   <TextInput
                     label="Committed"
                     type="number"
                     value={form.committed}
-                    onChange={(v) => updateForm("committed", v)}
+                    onChange={(value) => updateForm("committed", value)}
                   />
+
                   <TextInput
                     label="On Rent"
                     type="number"
                     value={form.onRent}
-                    onChange={(v) => updateForm("onRent", v)}
+                    onChange={(value) => updateForm("onRent", value)}
                   />
+
+                  <TextInput
+                    label="On Order"
+                    type="number"
+                    value={form.onOrder}
+                    onChange={(value) => updateForm("onOrder", value)}
+                  />
+
                   <TextInput
                     label="Reorder"
                     type="number"
                     value={form.reorderLevel}
-                    onChange={(v) => updateForm("reorderLevel", v)}
+                    onChange={(value) => updateForm("reorderLevel", value)}
                   />
                 </div>
               </FieldGroup>
@@ -941,26 +1018,29 @@ export default function InventoryPage() {
                 <TextInput
                   label="Warranty Provider"
                   value={form.warrantyProvider}
-                  onChange={(v) => updateForm("warrantyProvider", v)}
+                  onChange={(value) => updateForm("warrantyProvider", value)}
                 />
+
                 <div className="grid gap-3 md:grid-cols-2">
                   <TextInput
                     label="Warranty Start"
                     type="date"
                     value={form.warrantyStartDate}
-                    onChange={(v) => updateForm("warrantyStartDate", v)}
+                    onChange={(value) => updateForm("warrantyStartDate", value)}
                   />
+
                   <TextInput
                     label="Warranty End"
                     type="date"
                     value={form.warrantyEndDate}
-                    onChange={(v) => updateForm("warrantyEndDate", v)}
+                    onChange={(value) => updateForm("warrantyEndDate", value)}
                   />
                 </div>
+
                 <Textarea
                   label="Warranty Notes"
                   value={form.warrantyNotes}
-                  onChange={(v) => updateForm("warrantyNotes", v)}
+                  onChange={(value) => updateForm("warrantyNotes", value)}
                 />
               </FieldGroup>
 
@@ -970,21 +1050,23 @@ export default function InventoryPage() {
                     label="Purchase Date"
                     type="date"
                     value={form.purchaseDate}
-                    onChange={(v) => updateForm("purchaseDate", v)}
+                    onChange={(value) => updateForm("purchaseDate", value)}
                   />
+
                   <TextInput
                     label="Useful Life Months"
                     type="number"
                     value={form.usefulLifeMonths}
-                    onChange={(v) => updateForm("usefulLifeMonths", v)}
+                    onChange={(value) => updateForm("usefulLifeMonths", value)}
                   />
                 </div>
+
                 <div className="grid gap-3 md:grid-cols-2">
                   <SelectInput
                     label="Lifecycle Status"
                     value={form.lifecycleStatus}
-                    onChange={(v) =>
-                      updateForm("lifecycleStatus", v as LifecycleStatus)
+                    onChange={(value) =>
+                      updateForm("lifecycleStatus", value as LifecycleStatus)
                     }
                     options={[
                       "new",
@@ -994,24 +1076,28 @@ export default function InventoryPage() {
                       "retired",
                     ]}
                   />
+
                   <TextInput
                     label="Next Service Date"
                     type="date"
                     value={form.nextServiceDate}
-                    onChange={(v) => updateForm("nextServiceDate", v)}
+                    onChange={(value) => updateForm("nextServiceDate", value)}
                   />
                 </div>
+
                 <Textarea
                   label="Lifecycle Notes"
                   value={form.lifecycleNotes}
-                  onChange={(v) => updateForm("lifecycleNotes", v)}
+                  onChange={(value) => updateForm("lifecycleNotes", value)}
                 />
               </FieldGroup>
 
               <SelectInput
                 label="Inventory Status"
                 value={form.status}
-                onChange={(v) => updateForm("status", v as InventoryStatus)}
+                onChange={(value) =>
+                  updateForm("status", value as InventoryStatus)
+                }
                 options={[
                   "available",
                   "inactive",
@@ -1024,7 +1110,7 @@ export default function InventoryPage() {
               <Textarea
                 label="General Notes"
                 value={form.notes}
-                onChange={(v) => updateForm("notes", v)}
+                onChange={(value) => updateForm("notes", value)}
               />
 
               <div className="rounded-2xl border border-white/10 bg-black/50 p-4 text-sm text-neutral-300">
@@ -1050,7 +1136,7 @@ export default function InventoryPage() {
                 <button
                   type="submit"
                   disabled={saving || !canWrite}
-                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black hover:opacity-90 disabled:opacity-50"
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
                 >
                   {saving ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1071,7 +1157,7 @@ export default function InventoryPage() {
             </div>
           </form>
 
-          <section className="rounded-3xl border border-white/10 bg-neutral-950 p-6">
+          <section className="rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30">
             <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <h2 className="text-xl font-bold">Inventory Records</h2>
@@ -1083,20 +1169,27 @@ export default function InventoryPage() {
               <div className="flex flex-col gap-3 xl:flex-row">
                 <div className="relative">
                   <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-neutral-500" />
+
                   <input
                     value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-black py-3 pl-10 pr-4 text-sm text-white outline-none xl:w-80"
+                    title="Search inventory"
+                    aria-label="Search inventory"
                     placeholder="Search inventory..."
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-black py-3 pl-10 pr-4 text-sm text-white outline-none placeholder:text-neutral-600 focus:border-white/30 xl:w-80"
                   />
                 </div>
 
                 <select
+                  title="Filter by inventory status"
+                  aria-label="Filter by inventory status"
                   value={statusFilter}
-                  onChange={(e) =>
-                    setStatusFilter(e.target.value as "all" | InventoryStatus)
+                  onChange={(event) =>
+                    setStatusFilter(
+                      event.target.value as "all" | InventoryStatus
+                    )
                   }
-                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm"
+                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-white/30"
                 >
                   <option value="all">All statuses</option>
                   <option value="available">Available</option>
@@ -1107,13 +1200,15 @@ export default function InventoryPage() {
                 </select>
 
                 <select
+                  title="Filter by lifecycle status"
+                  aria-label="Filter by lifecycle status"
                   value={lifecycleFilter}
-                  onChange={(e) =>
+                  onChange={(event) =>
                     setLifecycleFilter(
-                      e.target.value as "all" | LifecycleStatus
+                      event.target.value as "all" | LifecycleStatus
                     )
                   }
-                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm"
+                  className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-white/30"
                 >
                   <option value="all">All lifecycle</option>
                   <option value="new">New</option>
@@ -1139,7 +1234,7 @@ export default function InventoryPage() {
                 type="button"
                 onClick={() => void handleBatchDiscontinue()}
                 disabled={!selectedIds.length}
-                className="rounded-2xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-2 text-sm text-yellow-200 disabled:opacity-40"
+                className="rounded-2xl border border-yellow-500/20 bg-yellow-500/10 px-4 py-2 text-sm text-yellow-200 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Discontinue Selected
               </button>
@@ -1148,13 +1243,16 @@ export default function InventoryPage() {
                 type="button"
                 onClick={() => void handleBatchDelete()}
                 disabled={!selectedIds.length}
-                className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-300 disabled:opacity-40"
+                className="rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm text-red-300 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Delete Selected
               </button>
 
               <span className="rounded-2xl border border-white/10 bg-black px-4 py-2 text-sm text-neutral-400">
                 Selected: {selectedIds.length}
+                {selectedVisibleCount !== selectedIds.length
+                  ? ` (${selectedVisibleCount} visible)`
+                  : ""}
               </span>
             </div>
 
@@ -1169,7 +1267,7 @@ export default function InventoryPage() {
               </div>
             ) : (
               <div className="overflow-x-auto rounded-2xl border border-white/10">
-                <table className="w-full min-w-[1450px] text-left text-sm">
+                <table className="w-full min-w-[1550px] text-left text-sm">
                   <thead className="bg-white/5 text-neutral-400">
                     <tr>
                       <th className="px-4 py-3">Select</th>
@@ -1187,14 +1285,15 @@ export default function InventoryPage() {
                     {filteredItems.map((item) => (
                       <tr
                         key={item.id}
-                        className="border-t border-white/10 align-top"
+                        className="border-t border-white/10 align-top hover:bg-white/[0.03]"
                       >
                         <td className="px-4 py-3">
                           <input
                             type="checkbox"
                             checked={selectedIds.includes(item.id)}
-                            onChange={() => toggleSelected(item.id)}
+                            title={`Select ${item.name}`}
                             aria-label={`Select ${item.name}`}
+                            onChange={() => toggleSelected(item.id)}
                           />
                         </td>
 
@@ -1227,6 +1326,7 @@ export default function InventoryPage() {
                           <div>On Hand: {item.quantityOnHand}</div>
                           <div>Available: {item.available}</div>
                           <div>On Rent: {item.onRent}</div>
+                          <div>On Order: {item.onOrder}</div>
                           <div>Value: ${item.totalValue.toFixed(2)}</div>
                         </td>
 
@@ -1247,9 +1347,9 @@ export default function InventoryPage() {
                         </td>
 
                         <td className="px-4 py-3 text-neutral-300">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 capitalize">
                             <CalendarClock className="h-4 w-4" />
-                            {item.lifecycleStatus}
+                            {humanize(item.lifecycleStatus)}
                           </div>
                           <div
                             className={`text-xs ${
@@ -1272,6 +1372,7 @@ export default function InventoryPage() {
                               onClick={() => handleEdit(item)}
                               className="rounded-xl border border-white/10 bg-white/10 p-2 hover:bg-white/15"
                               title="Edit"
+                              aria-label={`Edit ${item.name}`}
                             >
                               <Pencil className="h-4 w-4" />
                             </button>
@@ -1281,6 +1382,7 @@ export default function InventoryPage() {
                               onClick={() => void handleDiscontinue(item)}
                               className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-2 text-yellow-200 hover:bg-yellow-500/20"
                               title="Discontinue"
+                              aria-label={`Discontinue ${item.name}`}
                             >
                               <X className="h-4 w-4" />
                             </button>
@@ -1290,6 +1392,7 @@ export default function InventoryPage() {
                               onClick={() => void handleDelete(item)}
                               className="rounded-xl border border-red-500/20 bg-red-500/10 p-2 text-red-300 hover:bg-red-500/20"
                               title="Delete"
+                              aria-label={`Delete ${item.name}`}
                             >
                               <Trash2 className="h-4 w-4" />
                             </button>
@@ -1322,7 +1425,7 @@ function FieldGroup({
   children,
 }: {
   title: string;
-  children: React.ReactNode;
+  children: ReactNode;
 }) {
   return (
     <section className="space-y-3 rounded-2xl border border-white/10 bg-black/40 p-4">
@@ -1345,15 +1448,27 @@ function TextInput({
   type?: string;
   required?: boolean;
 }) {
+  const inputId = useId();
+
   return (
     <div>
-      <label className="mb-2 block text-sm text-neutral-300">{label}</label>
+      <label
+        htmlFor={inputId}
+        className="mb-2 block text-sm text-neutral-300"
+      >
+        {label}
+      </label>
+
       <input
+        id={inputId}
         type={type}
         value={value}
         required={required}
+        title={label}
+        aria-label={label}
+        placeholder={label}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-white/30"
+        className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none placeholder:text-neutral-600 focus:border-white/30"
       />
     </div>
   );
@@ -1370,15 +1485,28 @@ function ScanInput({
   onChange: (value: string) => void;
   onScan: () => void;
 }) {
+  const inputId = useId();
+
   return (
     <div>
-      <label className="mb-2 block text-sm text-neutral-300">{label}</label>
+      <label
+        htmlFor={inputId}
+        className="mb-2 block text-sm text-neutral-300"
+      >
+        {label}
+      </label>
+
       <div className="flex gap-2">
         <input
+          id={inputId}
           value={value}
+          title={label}
+          aria-label={label}
+          placeholder={label}
           onChange={(event) => onChange(event.target.value)}
-          className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-white/30"
+          className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none placeholder:text-neutral-600 focus:border-white/30"
         />
+
         <button
           type="button"
           onClick={onScan}
@@ -1404,17 +1532,28 @@ function SelectInput({
   onChange: (value: string) => void;
   options: string[];
 }) {
+  const selectId = useId();
+
   return (
     <div>
-      <label className="mb-2 block text-sm text-neutral-300">{label}</label>
+      <label
+        htmlFor={selectId}
+        className="mb-2 block text-sm text-neutral-300"
+      >
+        {label}
+      </label>
+
       <select
+        id={selectId}
+        title={label}
+        aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-white/30"
       >
         {options.map((option) => (
           <option key={option} value={option}>
-            {option.replaceAll("_", " ")}
+            {humanize(option)}
           </option>
         ))}
       </select>
@@ -1431,14 +1570,26 @@ function Textarea({
   value: string;
   onChange: (value: string) => void;
 }) {
+  const textareaId = useId();
+
   return (
     <div>
-      <label className="mb-2 block text-sm text-neutral-300">{label}</label>
+      <label
+        htmlFor={textareaId}
+        className="mb-2 block text-sm text-neutral-300"
+      >
+        {label}
+      </label>
+
       <textarea
+        id={textareaId}
         value={value}
         rows={3}
+        title={label}
+        aria-label={label}
+        placeholder={label}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none focus:border-white/30"
+        className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none placeholder:text-neutral-600 focus:border-white/30"
       />
     </div>
   );
@@ -1455,7 +1606,7 @@ function StatCard({
 }) {
   return (
     <div
-      className={`rounded-3xl border p-5 ${
+      className={`rounded-3xl border p-5 shadow-2xl shadow-black/20 ${
         warning
           ? "border-yellow-500/20 bg-yellow-500/10"
           : "border-white/10 bg-neutral-950"
@@ -1469,6 +1620,7 @@ function StatCard({
             <Boxes className="h-5 w-5" />
           )}
         </div>
+
         <div>
           <p className="text-sm text-neutral-400">{label}</p>
           <p className="text-2xl font-bold">
@@ -1483,7 +1635,7 @@ function StatCard({
 function StatusPill({ value }: { value: string }) {
   return (
     <span className="mt-2 inline-flex rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs capitalize text-neutral-200">
-      {value.replaceAll("_", " ")}
+      {humanize(value)}
     </span>
   );
 }

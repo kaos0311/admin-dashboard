@@ -1,6 +1,13 @@
 "use client";
 
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type FormEvent,
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   addDoc,
   collection,
@@ -185,9 +192,7 @@ function deriveRentalStatus(status: RentalStatus, endDate: string): RentalStatus
   const end = dateFromInput(endDate);
   const today = dateFromInput(todayInputValue());
 
-  if (end && today && end < today) {
-    return "Past Due";
-  }
+  if (end && today && end < today) return "Past Due";
 
   return "Active";
 }
@@ -245,6 +250,7 @@ function normalizeRental(id: string, data: Record<string, unknown>): Rental {
   const rentalStartDate = toSafeString(data.rentalStartDate);
   const rentalEndDate = toSafeString(data.rentalEndDate);
   const monthlyRate = toSafeNumber(data.monthlyRate);
+
   const monthsUsed =
     data.monthsUsed == null
       ? calculateMonthsUsed(rentalStartDate, rentalEndDate)
@@ -374,7 +380,8 @@ export default function RentalsPage() {
         setProducts(rows);
         setLoadingProducts(false);
       },
-      () => {
+      (error: unknown) => {
+        console.error("LOAD RENTAL PRODUCTS ERROR:", error);
         if (!mountedRef.current) return;
         setLoadingProducts(false);
         toast.error("Products could not be loaded.");
@@ -408,7 +415,8 @@ export default function RentalsPage() {
         setRentals(rows);
         setLoadingRentals(false);
       },
-      () => {
+      (error: unknown) => {
+        console.error("LOAD RENTALS ERROR:", error);
         if (!mountedRef.current) return;
         setLoadingRentals(false);
         toast.error("Rentals could not be loaded.");
@@ -443,10 +451,7 @@ export default function RentalsPage() {
         return false;
       }
 
-      if (
-        deliveryFilter !== "all" &&
-        rental.deliveryStatus !== deliveryFilter
-      ) {
+      if (deliveryFilter !== "all" && rental.deliveryStatus !== deliveryFilter) {
         return false;
       }
 
@@ -478,17 +483,26 @@ export default function RentalsPage() {
   }, [visibleRentals, search, statusFilter, deliveryFilter]);
 
   const stats = useMemo(() => {
-    const active = rentals.filter((r) => r.status === "Active").length;
-    const returned = rentals.filter((r) => r.status === "Returned").length;
-    const cancelled = rentals.filter((r) => r.status === "Cancelled").length;
-    const pastDue = rentals.filter((r) => r.status === "Past Due").length;
+    const active = rentals.filter((rental) => rental.status === "Active").length;
+    const returned = rentals.filter(
+      (rental) => rental.status === "Returned"
+    ).length;
+    const cancelled = rentals.filter(
+      (rental) => rental.status === "Cancelled"
+    ).length;
+    const pastDue = rentals.filter(
+      (rental) => rental.status === "Past Due"
+    ).length;
 
     const openCharges = rentals
-      .filter((r) => r.status === "Active" || r.status === "Past Due")
+      .filter(
+        (rental) =>
+          rental.status === "Active" || rental.status === "Past Due"
+      )
       .reduce((sum, rental) => sum + rental.totalCharges, 0);
 
     const totalCharges = rentals
-      .filter((r) => r.status !== "Deleted")
+      .filter((rental) => rental.status !== "Deleted")
       .reduce((sum, rental) => sum + rental.totalCharges, 0);
 
     return {
@@ -500,6 +514,13 @@ export default function RentalsPage() {
       totalCharges,
     };
   }, [rentals]);
+
+  function updateForm<K extends keyof RentalForm>(
+    key: K,
+    value: RentalForm[K]
+  ) {
+    setForm((prev) => ({ ...prev, [key]: value }));
+  }
 
   function resetForm() {
     setForm(initialForm);
@@ -564,6 +585,8 @@ export default function RentalsPage() {
       assignedTo: rental.assignedTo,
       notes: rental.notes,
     });
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function softDeleteRental(rental: Rental) {
@@ -592,7 +615,8 @@ export default function RentalsPage() {
       toast.success("Rental archived.");
 
       if (form.id === rental.id) resetForm();
-    } catch {
+    } catch (error: unknown) {
+      console.error("ARCHIVE RENTAL ERROR:", error);
       toast.error("Rental could not be archived.");
     }
   }
@@ -626,7 +650,8 @@ export default function RentalsPage() {
       });
 
       toast.success("Rental marked returned.");
-    } catch {
+    } catch (error: unknown) {
+      console.error("RETURN RENTAL ERROR:", error);
       toast.error("Rental could not be updated.");
     }
   }
@@ -759,11 +784,13 @@ export default function RentalsPage() {
           createdByUid: currentUser?.uid ?? "",
           createdByEmail: currentUser?.email ?? "",
         });
+
         toast.success("Rental added.");
       }
 
       resetForm();
-    } catch {
+    } catch (error: unknown) {
+      console.error("SAVE RENTAL ERROR:", error);
       toast.error("Rental could not be saved.");
     } finally {
       if (mountedRef.current) setSaving(false);
@@ -771,14 +798,15 @@ export default function RentalsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6">
-      <div className="max-w-7xl space-y-6">
+    <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6 xl:px-8">
+      <div className="w-full max-w-none space-y-6">
         <section className="rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex items-center gap-3">
               <div className="rounded-2xl bg-white/10 p-3">
                 <CalendarDays className="h-6 w-6" aria-hidden="true" />
               </div>
+
               <div>
                 <h1 className="text-2xl font-bold">Rentals</h1>
                 <p className="text-sm text-neutral-400">
@@ -808,7 +836,7 @@ export default function RentalsPage() {
           <StatCard label="Total Charges" value={money(stats.totalCharges)} />
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[460px_minmax(0,1fr)]">
+        <section className="grid gap-6 2xl:grid-cols-[520px_minmax(0,1fr)]">
           <form
             onSubmit={handleSubmit}
             className="rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30"
@@ -821,6 +849,7 @@ export default function RentalsPage() {
                   <Plus className="h-5 w-5" aria-hidden="true" />
                 )}
               </div>
+
               <div>
                 <h2 className="text-xl font-bold">
                   {form.id ? "Edit Rental" : "Add Rental"}
@@ -840,7 +869,9 @@ export default function RentalsPage() {
                   { value: "", label: "Manual / unlinked product" },
                   ...rentalProducts.map((product) => ({
                     value: product.id,
-                    label: `${product.name}${product.sku ? ` • ${product.sku}` : ""}`,
+                    label: `${product.name}${
+                      product.sku ? ` • ${product.sku}` : ""
+                    }`,
                   })),
                 ]}
               />
@@ -848,9 +879,7 @@ export default function RentalsPage() {
               <TextInput
                 label="Product Name"
                 value={form.productName}
-                onChange={(value) =>
-                  setForm((prev) => ({ ...prev, productName: value }))
-                }
+                onChange={(value) => updateForm("productName", value)}
                 required
               />
 
@@ -858,17 +887,13 @@ export default function RentalsPage() {
                 <TextInput
                   label="Category"
                   value={form.category}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, category: value }))
-                  }
+                  onChange={(value) => updateForm("category", value)}
                 />
 
                 <TextInput
                   label="SKU"
                   value={form.sku}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, sku: value }))
-                  }
+                  onChange={(value) => updateForm("sku", value)}
                 />
               </div>
 
@@ -876,43 +901,33 @@ export default function RentalsPage() {
                 <TextInput
                   label="Serial Number"
                   value={form.serialNumber}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, serialNumber: value }))
-                  }
+                  onChange={(value) => updateForm("serialNumber", value)}
                 />
 
                 <TextInput
                   label="Lot Number"
                   value={form.lotNumber}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, lotNumber: value }))
-                  }
+                  onChange={(value) => updateForm("lotNumber", value)}
                 />
               </div>
 
               <TextInput
                 label="Customer Name"
                 value={form.customerName}
-                onChange={(value) =>
-                  setForm((prev) => ({ ...prev, customerName: value }))
-                }
+                onChange={(value) => updateForm("customerName", value)}
               />
 
               <div className="grid gap-4 md:grid-cols-2">
                 <TextInput
                   label="Patient Name"
                   value={form.patientName}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, patientName: value }))
-                  }
+                  onChange={(value) => updateForm("patientName", value)}
                 />
 
                 <TextInput
                   label="Patient ID"
                   value={form.patientId}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, patientId: value }))
-                  }
+                  onChange={(value) => updateForm("patientId", value)}
                 />
               </div>
 
@@ -920,29 +935,20 @@ export default function RentalsPage() {
                 <TextInput
                   label="Payer Name"
                   value={form.payerName}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, payerName: value }))
-                  }
+                  onChange={(value) => updateForm("payerName", value)}
                 />
 
                 <TextInput
                   label="Insurance Type"
                   value={form.insuranceType}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, insuranceType: value }))
-                  }
+                  onChange={(value) => updateForm("insuranceType", value)}
                 />
               </div>
 
               <TextInput
                 label="Authorization Number"
                 value={form.authorizationNumber}
-                onChange={(value) =>
-                  setForm((prev) => ({
-                    ...prev,
-                    authorizationNumber: value,
-                  }))
-                }
+                onChange={(value) => updateForm("authorizationNumber", value)}
               />
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -950,9 +956,7 @@ export default function RentalsPage() {
                   label="Start Date"
                   type="date"
                   value={form.rentalStartDate}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, rentalStartDate: value }))
-                  }
+                  onChange={(value) => updateForm("rentalStartDate", value)}
                   required
                 />
 
@@ -960,9 +964,7 @@ export default function RentalsPage() {
                   label="End Date"
                   type="date"
                   value={form.rentalEndDate}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, rentalEndDate: value }))
-                  }
+                  onChange={(value) => updateForm("rentalEndDate", value)}
                 />
               </div>
 
@@ -971,19 +973,14 @@ export default function RentalsPage() {
                   label="Monthly Rate"
                   type="number"
                   value={form.monthlyRate}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, monthlyRate: value }))
-                  }
+                  onChange={(value) => updateForm("monthlyRate", value)}
                 />
 
                 <SelectField
                   label="Billing Cycle"
                   value={form.billingCycle}
                   onChange={(value) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      billingCycle: value as BillingCycle,
-                    }))
+                    updateForm("billingCycle", value as BillingCycle)
                   }
                   options={[
                     { value: "Monthly", label: "Monthly" },
@@ -998,10 +995,7 @@ export default function RentalsPage() {
                   label="Rental Status"
                   value={form.status}
                   onChange={(value) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      status: value as RentalStatus,
-                    }))
+                    updateForm("status", value as RentalStatus)
                   }
                   options={[
                     { value: "Active", label: "Active" },
@@ -1015,10 +1009,7 @@ export default function RentalsPage() {
                   label="Delivery Status"
                   value={form.deliveryStatus}
                   onChange={(value) =>
-                    setForm((prev) => ({
-                      ...prev,
-                      deliveryStatus: value as DeliveryStatus,
-                    }))
+                    updateForm("deliveryStatus", value as DeliveryStatus)
                   }
                   options={[
                     { value: "Not Scheduled", label: "Not Scheduled" },
@@ -1040,18 +1031,14 @@ export default function RentalsPage() {
                   label="Delivery Date"
                   type="date"
                   value={form.deliveryDate}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, deliveryDate: value }))
-                  }
+                  onChange={(value) => updateForm("deliveryDate", value)}
                 />
 
                 <TextInput
                   label="Pickup Date"
                   type="date"
                   value={form.pickupDate}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, pickupDate: value }))
-                  }
+                  onChange={(value) => updateForm("pickupDate", value)}
                 />
               </div>
 
@@ -1059,38 +1046,22 @@ export default function RentalsPage() {
                 <TextInput
                   label="Location / Bin"
                   value={form.location}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, location: value }))
-                  }
+                  onChange={(value) => updateForm("location", value)}
                 />
 
                 <TextInput
                   label="Assigned To"
                   value={form.assignedTo}
-                  onChange={(value) =>
-                    setForm((prev) => ({ ...prev, assignedTo: value }))
-                  }
+                  onChange={(value) => updateForm("assignedTo", value)}
                 />
               </div>
 
-              <div>
-                <label
-                  htmlFor="rental-notes"
-                  className="mb-2 block text-sm text-neutral-300"
-                >
-                  Notes
-                </label>
-                <textarea
-                  id="rental-notes"
-                  value={form.notes}
-                  onChange={(event) =>
-                    setForm((prev) => ({ ...prev, notes: event.target.value }))
-                  }
-                  rows={4}
-                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none transition focus:border-white/30"
-                  placeholder="Optional rental notes, delivery details, pickup notes, or billing context."
-                />
-              </div>
+              <Textarea
+                label="Notes"
+                value={form.notes}
+                onChange={(value) => updateForm("notes", value)}
+                placeholder="Optional rental notes, delivery details, pickup notes, or billing context."
+              />
 
               <div className="rounded-2xl border border-white/10 bg-black/50 p-4 text-sm text-neutral-300">
                 Rental time:{" "}
@@ -1141,19 +1112,18 @@ export default function RentalsPage() {
 
               <div className="flex flex-col gap-3 lg:flex-row">
                 <div className="relative">
-                  <label htmlFor="rental-search" className="sr-only">
-                    Search rentals
-                  </label>
                   <Search
                     className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-neutral-500"
                     aria-hidden="true"
                   />
+
                   <input
-                    id="rental-search"
                     value={search}
-                    onChange={(event) => setSearch(event.target.value)}
-                    className="w-full rounded-2xl border border-white/10 bg-black py-3 pl-10 pr-4 text-sm text-white outline-none transition focus:border-white/30 lg:w-72"
+                    title="Search rentals"
+                    aria-label="Search rentals"
                     placeholder="Search rentals..."
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-black py-3 pl-10 pr-4 text-sm text-white outline-none placeholder:text-neutral-600 transition focus:border-white/30 lg:w-72"
                   />
                 </div>
 
@@ -1202,6 +1172,8 @@ export default function RentalsPage() {
               <input
                 type="checkbox"
                 checked={showDeleted}
+                title="Show archived rental records"
+                aria-label="Show archived rental records"
                 onChange={(event) => setShowDeleted(event.target.checked)}
                 className="h-4 w-4 rounded border-white/20 bg-black"
               />
@@ -1220,7 +1192,7 @@ export default function RentalsPage() {
             ) : (
               <>
                 <div className="hidden overflow-x-auto rounded-2xl border border-white/10 xl:block">
-                  <table className="w-full min-w-[1250px] text-left text-sm">
+                  <table className="w-full min-w-[1450px] text-left text-sm">
                     <thead className="sticky top-0 z-10 bg-neutral-900 text-neutral-400">
                       <tr>
                         <th className="px-4 py-3">Product</th>
@@ -1281,7 +1253,7 @@ function RentalTableRow({
   onArchive: (rental: Rental) => void;
 }) {
   return (
-    <tr className="border-t border-white/10 align-top">
+    <tr className="border-t border-white/10 align-top hover:bg-white/[0.03]">
       <td className="px-4 py-3">
         <div className="font-semibold">{rental.productName}</div>
         <div className="text-xs text-neutral-500">
@@ -1439,6 +1411,8 @@ function RentalActions({
           type="button"
           onClick={() => void onReturn(rental)}
           className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 transition hover:bg-emerald-500/20"
+          title={`Return ${rental.productName}`}
+          aria-label={`Return ${rental.productName}`}
         >
           <CheckCircle2 className="h-4 w-4" />
           Return
@@ -1491,6 +1465,7 @@ function StatCard({
             <Package2 className="h-5 w-5" aria-hidden="true" />
           )}
         </div>
+
         <div>
           <p className="text-sm text-neutral-400">{label}</p>
           <p className="text-2xl font-bold">
@@ -1515,27 +1490,60 @@ function TextInput({
   type?: string;
   required?: boolean;
 }) {
-  const inputId = useMemo(
-    () =>
-      label
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, ""),
-    [label]
-  );
+  const inputId = useId();
 
   return (
     <div>
       <label htmlFor={inputId} className="mb-2 block text-sm text-neutral-300">
         {label}
       </label>
+
       <input
         id={inputId}
         type={type}
         value={value}
         required={required}
+        title={label}
+        aria-label={label}
+        placeholder={label}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none transition focus:border-white/30"
+        className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none placeholder:text-neutral-600 transition focus:border-white/30"
+      />
+    </div>
+  );
+}
+
+function Textarea({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  const textareaId = useId();
+
+  return (
+    <div>
+      <label
+        htmlFor={textareaId}
+        className="mb-2 block text-sm text-neutral-300"
+      >
+        {label}
+      </label>
+
+      <textarea
+        id={textareaId}
+        value={value}
+        rows={4}
+        title={label}
+        aria-label={label}
+        placeholder={placeholder || label}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none placeholder:text-neutral-600 transition focus:border-white/30"
       />
     </div>
   );
@@ -1554,33 +1562,29 @@ function SelectField({
   options: { value: string; label: string }[];
   srOnlyLabel?: boolean;
 }) {
-  const inputId = useMemo(
-    () =>
-      label
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/^-|-$/g, ""),
-    [label]
-  );
+  const selectId = useId();
 
   return (
     <div>
       <label
-        htmlFor={inputId}
+        htmlFor={selectId}
         className={
           srOnlyLabel ? "sr-only" : "mb-2 block text-sm text-neutral-300"
         }
       >
         {label}
       </label>
+
       <select
-        id={inputId}
+        id={selectId}
+        title={label}
+        aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
       >
         {options.map((option) => (
-          <option key={`${inputId}-${option.value}`} value={option.value}>
+          <option key={`${selectId}-${option.value}`} value={option.value}>
             {option.label}
           </option>
         ))}
