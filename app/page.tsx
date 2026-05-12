@@ -1,14 +1,6 @@
-"use client";
-
-import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { redirect } from "next/navigation";
 
 export default function HomePage() {
-  const router = useRouter();
-
-  useEffect(() => {
-    router.replace("/products"); // or /orders or dashboard
-  }, [router]);
-
-  return null;
+  // 🔥 Single entry point for your app
+  redirect("/dashboard");
 }

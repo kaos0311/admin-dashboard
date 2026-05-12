@@ -2,8 +2,286 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userPath() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function userExists() {
+      return signedIn() && exists(userPath());
+    }
+
+    function userData() {
+      return get(userPath()).data;
+    }
+
+    function tokenRole() {
+      return signedIn() && request.auth.token.role is string
+        ? request.auth.token.role
+        : "";
+    }
+
+    function docRole() {
+      return userExists() && userData().role is string
+        ? userData().role
+        : "";
+    }
+
+    function hasRole(role) {
+      return tokenRole() == role || docRole() == role;
+    }
+
+    function isAdmin() {
+      return hasRole("admin");
+    }
+
+    function isStaff() {
+      return hasRole("staff");
+    }
+
+    function isStaffOrAdmin() {
+      return isAdmin() || isStaff();
+    }
+
+    function isActive() {
+      return userExists() && userData().active == true;
+    }
+
+    function canAccessDashboard() {
+      return signedIn() && isActive() && isStaffOrAdmin();
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | USERS
+    |--------------------------------------------------------------------------
+    */
+
+    match /users/{uid} {
+      allow read: if canAccessDashboard() && (isAdmin() || isSelf(uid));
+
+      allow create: if isAdmin() || isSelf(uid);
+
+      allow update: if isAdmin() || isSelf(uid);
+
+      allow delete: if isAdmin();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SETTINGS
+    |--------------------------------------------------------------------------
+    */
+
+    match /settings/{docId} {
+      allow read: if canAccessDashboard();
+      allow create, update, delete: if isAdmin();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DASHBOARD / ANALYTICS
+    |--------------------------------------------------------------------------
+    */
+
+    match /analytics/{docId} {
+      allow read: if canAccessDashboard();
+      allow create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+
+      match /{subPath=**} {
+        allow read: if canAccessDashboard();
+        allow create, update: if canAccessDashboard();
+        allow delete: if isAdmin();
+      }
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | CORE ADMIN COLLECTIONS
+    |--------------------------------------------------------------------------
+    */
+
+    match /products/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /inventory/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /stockMovements/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /orders/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /orderArchives/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /rentals/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /rentalReminders/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | REPORT IMPORTS
+    |--------------------------------------------------------------------------
+    */
+
+    match /importedReports/{reportId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+
+      match /rows/{rowId} {
+        allow read, create, update: if canAccessDashboard();
+        allow delete: if isAdmin();
+      }
+
+      match /{subPath=**} {
+        allow read, create, update: if canAccessDashboard();
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /importJobs/{jobId} {
+      allow read, create: if canAccessDashboard();
+      allow update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | PATIENT INDEX / PATIENT PAGES
+    |--------------------------------------------------------------------------
+    */
+
+    match /patients/{patientId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+
+      match /{subPath=**} {
+        allow read, create, update: if canAccessDashboard();
+        allow delete: if isAdmin();
+      }
+    }
+
+    match /patientIndex/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /patientProfiles/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | HOSPICE
+    |--------------------------------------------------------------------------
+    */
+
+    match /hospicePatients/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /hospiceNurses/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /hospiceCare/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | WIP
+    |--------------------------------------------------------------------------
+    */
+
+    match /wip/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /wipPatients/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /workInProgress/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | INSURANCE
+    |--------------------------------------------------------------------------
+    */
+
+    match /insurance/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /insurancePatients/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /insuranceQueue/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | AUDIT LOGS
+    |--------------------------------------------------------------------------
+    */
+
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if canAccessDashboard();
+      allow update, delete: if false;
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | SAFE FALLBACK FOR ADMIN DASHBOARD COLLECTIONS
+    |--------------------------------------------------------------------------
+    */
+
     match /{document=**} {
-      allow read, write: if false;
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
     }
   }
 }

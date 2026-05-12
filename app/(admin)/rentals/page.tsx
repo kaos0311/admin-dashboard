@@ -1,696 +1,1590 @@
 "use client";
 
-import { useAuthRole } from "@/app/hooks/useAuthRole";
-import { useEffect, useMemo, useState } from "react";
+import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
+  addDoc,
   collection,
-  deleteDoc,
   doc,
+  limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
-  setDoc,
   updateDoc,
-  type Timestamp,
 } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
 import {
-  CalendarClock,
-  Plus,
-  Search,
-  Pencil,
-  Trash2,
-  X,
-  Loader2,
-  Box,
-  Clock3,
+  CalendarDays,
   CheckCircle2,
-  AlertTriangle,
+  DollarSign,
+  Loader2,
+  Package2,
+  Pencil,
+  Plus,
+  RefreshCcw,
+  Save,
+  Search,
+  Truck,
+  XCircle,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
-type RentalStatus = "Active" | "Due Soon" | "Returned" | "Overdue";
+import { useAuthRole } from "@/app/hooks/useAuthRole";
+import { auth, db } from "@/lib/firebase";
+
+const RENTALS_LIMIT = 500;
+const PRODUCTS_LIMIT = 750;
+
+type RentalStatus =
+  | "Active"
+  | "Returned"
+  | "Cancelled"
+  | "Past Due"
+  | "Deleted";
+
+type DeliveryStatus =
+  | "Not Scheduled"
+  | "Scheduled"
+  | "Delivered"
+  | "Pickup Scheduled"
+  | "Picked Up"
+  | "Cleaning"
+  | "Ready";
+
+type BillingCycle = "Monthly" | "Weekly" | "Daily";
+
+type ProductOption = {
+  id: string;
+  name: string;
+  category: string;
+  sku: string;
+  upc: string;
+  basePrice: number;
+  isRentalItem: boolean;
+  status: "active" | "inactive";
+};
 
 type Rental = {
   id: string;
+  productId: string;
+  productName: string;
+  category: string;
+  sku: string;
+  serialNumber: string;
+  lotNumber: string;
   customerName: string;
-  item: string;
+  patientName: string;
+  patientId: string;
+  payerName: string;
+  insuranceType: string;
+  authorizationNumber: string;
+  rentalStartDate: string;
+  rentalEndDate: string;
+  monthsUsed: number;
+  monthlyRate: number;
+  totalCharges: number;
+  billingCycle: BillingCycle;
   status: RentalStatus;
-  dueDate?: string;
-  notes?: string;
-  createdAt?: Timestamp | null;
-  updatedAt?: Timestamp | null;
-};
-
-type RentalFormData = {
-  customerName: string;
-  item: string;
-  status: RentalStatus;
-  dueDate: string;
+  deliveryStatus: DeliveryStatus;
+  deliveryDate: string;
+  pickupDate: string;
+  location: string;
+  assignedTo: string;
   notes: string;
 };
 
-const STATUS_OPTIONS: RentalStatus[] = [
-  "Active",
-  "Due Soon",
-  "Returned",
-  "Overdue",
-];
+type RentalForm = Omit<
+  Rental,
+  "monthsUsed" | "monthlyRate" | "totalCharges"
+> & {
+  monthlyRate: string;
+};
 
-const EMPTY_FORM: RentalFormData = {
+const initialForm: RentalForm = {
+  id: "",
+  productId: "",
+  productName: "",
+  category: "",
+  sku: "",
+  serialNumber: "",
+  lotNumber: "",
   customerName: "",
-  item: "",
+  patientName: "",
+  patientId: "",
+  payerName: "",
+  insuranceType: "",
+  authorizationNumber: "",
+  rentalStartDate: "",
+  rentalEndDate: "",
+  monthlyRate: "",
+  billingCycle: "Monthly",
   status: "Active",
-  dueDate: "",
+  deliveryStatus: "Not Scheduled",
+  deliveryDate: "",
+  pickupDate: "",
+  location: "",
+  assignedTo: "",
   notes: "",
 };
 
-function formatDate(timestamp?: Timestamp | null) {
-  if (!timestamp) return "—";
-
-  try {
-    return timestamp.toDate().toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-  } catch {
-    return "—";
-  }
+function toSafeString(value: unknown): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  return "";
 }
 
-function getStatusClasses(status: RentalStatus) {
+function toSafeNumber(value: unknown): number {
+  if (value === "" || value == null) return 0;
+  const parsed = Number(String(value).replace(/[$,]/g, "").trim());
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function normalizeSearchText(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function buildSearchTokens(value: string): string[] {
+  return Array.from(
+    new Set(normalizeSearchText(value).split(" ").filter(Boolean))
+  ).slice(0, 75);
+}
+
+function dateFromInput(value: string): Date | null {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function todayInputValue(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function calculateMonthsUsed(startValue: string, endValue: string): number {
+  const start = dateFromInput(startValue);
+  const end = dateFromInput(endValue) ?? new Date();
+
+  if (!start) return 0;
+  if (end < start) return 0;
+
+  const years = end.getFullYear() - start.getFullYear();
+  const months = end.getMonth() - start.getMonth();
+
+  let totalMonths = years * 12 + months;
+
+  if (end.getDate() >= start.getDate()) {
+    totalMonths += 1;
+  }
+
+  return Math.max(totalMonths, 1);
+}
+
+function deriveRentalStatus(status: RentalStatus, endDate: string): RentalStatus {
+  if (status === "Returned" || status === "Cancelled" || status === "Deleted") {
+    return status;
+  }
+
+  const end = dateFromInput(endDate);
+  const today = dateFromInput(todayInputValue());
+
+  if (end && today && end < today) {
+    return "Past Due";
+  }
+
+  return "Active";
+}
+
+function normalizeBillingCycle(value: unknown): BillingCycle {
+  if (value === "Weekly" || value === "Daily") return value;
+  return "Monthly";
+}
+
+function normalizeDeliveryStatus(value: unknown): DeliveryStatus {
+  if (
+    value === "Scheduled" ||
+    value === "Delivered" ||
+    value === "Pickup Scheduled" ||
+    value === "Picked Up" ||
+    value === "Cleaning" ||
+    value === "Ready"
+  ) {
+    return value;
+  }
+
+  return "Not Scheduled";
+}
+
+function normalizeRentalStatus(value: unknown): RentalStatus {
+  if (
+    value === "Returned" ||
+    value === "Cancelled" ||
+    value === "Past Due" ||
+    value === "Deleted"
+  ) {
+    return value;
+  }
+
+  return "Active";
+}
+
+function normalizeProduct(
+  id: string,
+  data: Record<string, unknown>
+): ProductOption {
+  return {
+    id,
+    name: toSafeString(data.name),
+    category: toSafeString(data.category),
+    sku: toSafeString(data.sku),
+    upc: toSafeString(data.upc),
+    basePrice: toSafeNumber(data.basePrice),
+    isRentalItem: Boolean(data.isRentalItem),
+    status: data.status === "inactive" ? "inactive" : "active",
+  };
+}
+
+function normalizeRental(id: string, data: Record<string, unknown>): Rental {
+  const rentalStartDate = toSafeString(data.rentalStartDate);
+  const rentalEndDate = toSafeString(data.rentalEndDate);
+  const monthlyRate = toSafeNumber(data.monthlyRate);
+  const monthsUsed =
+    data.monthsUsed == null
+      ? calculateMonthsUsed(rentalStartDate, rentalEndDate)
+      : toSafeNumber(data.monthsUsed);
+
+  const rawStatus = normalizeRentalStatus(data.status);
+  const status = deriveRentalStatus(rawStatus, rentalEndDate);
+
+  return {
+    id,
+    productId: toSafeString(data.productId),
+    productName: toSafeString(data.productName),
+    category: toSafeString(data.category),
+    sku: toSafeString(data.sku),
+    serialNumber: toSafeString(data.serialNumber),
+    lotNumber: toSafeString(data.lotNumber),
+    customerName: toSafeString(data.customerName),
+    patientName: toSafeString(data.patientName),
+    patientId: toSafeString(data.patientId),
+    payerName: toSafeString(data.payerName),
+    insuranceType: toSafeString(data.insuranceType),
+    authorizationNumber: toSafeString(data.authorizationNumber),
+    rentalStartDate,
+    rentalEndDate,
+    monthsUsed,
+    monthlyRate,
+    totalCharges:
+      data.totalCharges == null
+        ? monthlyRate * monthsUsed
+        : toSafeNumber(data.totalCharges),
+    billingCycle: normalizeBillingCycle(data.billingCycle),
+    status,
+    deliveryStatus: normalizeDeliveryStatus(data.deliveryStatus),
+    deliveryDate: toSafeString(data.deliveryDate),
+    pickupDate: toSafeString(data.pickupDate),
+    location: toSafeString(data.location),
+    assignedTo: toSafeString(data.assignedTo),
+    notes: toSafeString(data.notes),
+  };
+}
+
+function money(value: number): string {
+  return `$${value.toFixed(2)}`;
+}
+
+function statusClass(status: RentalStatus): string {
   switch (status) {
     case "Active":
-      return "bg-sky-500/15 text-sky-300 border border-sky-500/20";
-    case "Due Soon":
-      return "bg-amber-500/15 text-amber-300 border border-amber-500/20";
+      return "border-blue-500/20 bg-blue-500/10 text-blue-300";
     case "Returned":
-      return "bg-emerald-500/15 text-emerald-300 border border-emerald-500/20";
-    case "Overdue":
-      return "bg-rose-500/15 text-rose-300 border border-rose-500/20";
+      return "border-emerald-500/20 bg-emerald-500/10 text-emerald-300";
+    case "Past Due":
+      return "border-red-500/20 bg-red-500/10 text-red-300";
+    case "Cancelled":
+      return "border-neutral-500/20 bg-neutral-500/10 text-neutral-300";
+    case "Deleted":
+      return "border-zinc-500/20 bg-zinc-500/10 text-zinc-400";
     default:
-      return "bg-slate-500/15 text-slate-300 border border-slate-500/20";
+      return "border-white/10 bg-white/10 text-white";
   }
-}
-
-function StatCard({
-  title,
-  value,
-  subtitle,
-  icon,
-}: {
-  title: string;
-  value: string | number;
-  subtitle: string;
-  icon: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-[2rem] border border-white/10 bg-[#111827] p-5 shadow-sm">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <p className="text-sm text-slate-400">{title}</p>
-          <p className="mt-2 text-4xl font-semibold tracking-tight text-white">
-            {value}
-          </p>
-          <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
-        </div>
-
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-500 text-white shadow-sm">
-          {icon}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function SectionCard({
-  title,
-  subtitle,
-  children,
-}: {
-  title: string;
-  subtitle?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-[2rem] border border-white/10 bg-[#111827] shadow-sm">
-      <div className="border-b border-white/10 px-6 py-5">
-        <h2 className="text-xl font-semibold text-white">{title}</h2>
-        {subtitle ? (
-          <p className="mt-1 text-sm text-slate-400">{subtitle}</p>
-        ) : null}
-      </div>
-
-      <div className="p-6">{children}</div>
-    </div>
-  );
-}
-
-function RentalModal({
-  open,
-  mode,
-  formData,
-  setFormData,
-  onClose,
-  onSubmit,
-  saving,
-}: {
-  open: boolean;
-  mode: "add" | "edit";
-  formData: RentalFormData;
-  setFormData: React.Dispatch<React.SetStateAction<RentalFormData>>;
-  onClose: () => void;
-  onSubmit: () => void;
-  saving: boolean;
-}) {
-  if (!open) return null;
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-2xl rounded-[2rem] border border-white/10 bg-[#111827] p-6 shadow-2xl">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h3 className="text-2xl font-semibold text-white">
-              {mode === "add" ? "Add Rental" : "Edit Rental"}
-            </h3>
-            <p className="mt-1 text-sm text-slate-400">
-              Manage rental equipment and due dates.
-            </p>
-          </div>
-
-          <button
-            type="button"
-            onClick={onClose}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-white/10 bg-black/20 text-slate-400 transition hover:bg-white/10 hover:text-white"
-          >
-            <X className="h-5 w-5" />
-          </button>
-        </div>
-
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-300">
-              Customer Name
-            </label>
-            <input
-              value={formData.customerName}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  customerName: e.target.value,
-                }))
-              }
-              placeholder="Enter customer name"
-              className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-500"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-300">
-              Item
-            </label>
-            <input
-              value={formData.item}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  item: e.target.value,
-                }))
-              }
-              placeholder="Enter rental item"
-              className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-500"
-            />
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-300">
-              Status
-            </label>
-            <select
-              value={formData.status}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  status: e.target.value as RentalStatus,
-                }))
-              }
-              className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition focus:border-sky-500"
-            >
-              {STATUS_OPTIONS.map((status) => (
-                <option key={status} value={status} className="bg-[#111827]">
-                  {status}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          <div>
-            <label className="mb-2 block text-sm font-medium text-slate-300">
-              Due Date
-            </label>
-            <input
-              type="date"
-              value={formData.dueDate}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  dueDate: e.target.value,
-                }))
-              }
-              className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition focus:border-sky-500"
-            />
-          </div>
-
-          <div className="md:col-span-2">
-            <label className="mb-2 block text-sm font-medium text-slate-300">
-              Notes
-            </label>
-            <textarea
-              rows={4}
-              value={formData.notes}
-              onChange={(e) =>
-                setFormData((prev) => ({
-                  ...prev,
-                  notes: e.target.value,
-                }))
-              }
-              placeholder="Optional notes"
-              className="w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none transition placeholder:text-slate-500 focus:border-sky-500"
-            />
-          </div>
-        </div>
-
-        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-2xl border border-white/10 bg-black/20 px-5 py-3 text-sm font-medium text-slate-200 transition hover:bg-white/10"
-          >
-            Cancel
-          </button>
-
-          <button
-            type="button"
-            onClick={onSubmit}
-            disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-500 px-5 py-3 text-sm font-medium text-white transition hover:bg-sky-600 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
-            {mode === "add" ? "Create Rental" : "Save Changes"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
 }
 
 export default function RentalsPage() {
-  const { isAdmin, isStaff, loading: roleLoading } = useAuthRole();
+  const { loading: authLoading, isAdmin, isStaff } = useAuthRole();
 
+  const mountedRef = useRef(false);
+
+  const [products, setProducts] = useState<ProductOption[]>([]);
   const [rentals, setRentals] = useState<Rental[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
+  const [form, setForm] = useState<RentalForm>(initialForm);
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"All" | RentalStatus>("All");
+  const [statusFilter, setStatusFilter] = useState<"all" | RentalStatus>("all");
+  const [deliveryFilter, setDeliveryFilter] = useState<"all" | DeliveryStatus>(
+    "all"
+  );
+  const [showDeleted, setShowDeleted] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [loadingRentals, setLoadingRentals] = useState(true);
+  const [saving, setSaving] = useState(false);
 
-  const [modalOpen, setModalOpen] = useState(false);
-  const [modalMode, setModalMode] = useState<"add" | "edit">("add");
-  const [selectedRentalId, setSelectedRentalId] = useState<string | null>(null);
-  const [formData, setFormData] = useState<RentalFormData>(EMPTY_FORM);
+  const canRead = isAdmin || isStaff;
+  const canWrite = isAdmin || isStaff;
+  const loading = authLoading || loadingProducts || loadingRentals;
 
   useEffect(() => {
-    if (!auth.currentUser) {
-      setLoading(false);
-      setError("You must be signed in to view rentals.");
-      return;
-    }
-
-    const q = query(collection(db, "rentals"), orderBy("createdAt", "desc"));
-
-    const unsubscribe = onSnapshot(
-      q,
-      (snapshot) => {
-        const nextRentals: Rental[] = snapshot.docs.map((docSnap) => ({
-          id: docSnap.id,
-          ...(docSnap.data() as Omit<Rental, "id">),
-        }));
-
-        setRentals(nextRentals);
-        setError(null);
-        setLoading(false);
-      },
-      (err) => {
-        console.error("Error loading rentals:", err);
-        setError(err.message || "Failed to load rentals.");
-        setLoading(false);
-      }
-    );
+    mountedRef.current = true;
 
     return () => {
-      try {
-        unsubscribe();
-      } catch (err) {
-        console.warn("Rentals unsubscribe failed:", err);
-      }
+      mountedRef.current = false;
     };
   }, []);
 
-  const filteredRentals = useMemo(() => {
-    const term = search.trim().toLowerCase();
+  useEffect(() => {
+    if (authLoading) return;
 
-    return rentals.filter((rental) => {
-      const matchesSearch =
-        !term ||
-        rental.customerName?.toLowerCase().includes(term) ||
-        rental.item?.toLowerCase().includes(term) ||
-        rental.status?.toLowerCase().includes(term) ||
-        rental.notes?.toLowerCase().includes(term) ||
-        rental.id.toLowerCase().includes(term);
-
-      const matchesStatus =
-        statusFilter === "All" || rental.status === statusFilter;
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [rentals, search, statusFilter]);
-
-  const totalRentals = rentals.length;
-  const activeRentals = rentals.filter(
-    (r) => (r.status ?? "Active") === "Active"
-  ).length;
-  const dueSoonRentals = rentals.filter((r) => r.status === "Due Soon").length;
-  const overdueRentals = rentals.filter((r) => r.status === "Overdue").length;
-
-  function resetModal() {
-    setModalOpen(false);
-    setSelectedRentalId(null);
-    setFormData(EMPTY_FORM);
-  }
-
-  function openAddModal() {
-    if (!isAdmin) return;
-    setModalMode("add");
-    setSelectedRentalId(null);
-    setFormData(EMPTY_FORM);
-    setModalOpen(true);
-  }
-
-  function openEditModal(rental: Rental) {
-    if (!isStaff && !isAdmin) return;
-
-    setModalMode("edit");
-    setSelectedRentalId(rental.id);
-    setFormData({
-      customerName: rental.customerName ?? "",
-      item: rental.item ?? "",
-      status: rental.status ?? "Active",
-      dueDate: rental.dueDate ?? "",
-      notes: rental.notes ?? "",
-    });
-    setModalOpen(true);
-  }
-
-  async function handleSaveRental() {
-    if (!isStaff && !isAdmin) return;
-
-    const customerName = formData.customerName.trim();
-    const item = formData.item.trim();
-    const status = formData.status ?? "Active";
-    const dueDate = formData.dueDate ?? "";
-    const notes = formData.notes.trim();
-
-    if (!customerName || !item) {
-      alert("Please fill out customer name and item.");
+    if (!canRead) {
+      setProducts([]);
+      setRentals([]);
+      setLoadingProducts(false);
+      setLoadingRentals(false);
+      toast.error("You do not have permission to view rentals.");
       return;
     }
+
+    setLoadingProducts(true);
+
+    const productsQuery = query(
+      collection(db, "products"),
+      orderBy("name", "asc"),
+      limit(PRODUCTS_LIMIT)
+    );
+
+    const unsubscribe = onSnapshot(
+      productsQuery,
+      (snapshot) => {
+        if (!mountedRef.current) return;
+
+        const rows = snapshot.docs
+          .map((docSnap) =>
+            normalizeProduct(
+              docSnap.id,
+              docSnap.data() as Record<string, unknown>
+            )
+          )
+          .filter((product) => product.status === "active");
+
+        setProducts(rows);
+        setLoadingProducts(false);
+      },
+      () => {
+        if (!mountedRef.current) return;
+        setLoadingProducts(false);
+        toast.error("Products could not be loaded.");
+      }
+    );
+
+    return () => unsubscribe();
+  }, [authLoading, canRead]);
+
+  useEffect(() => {
+    if (authLoading) return;
+    if (!canRead) return;
+
+    setLoadingRentals(true);
+
+    const rentalsQuery = query(
+      collection(db, "rentals"),
+      orderBy("rentalStartDate", "desc"),
+      limit(RENTALS_LIMIT)
+    );
+
+    const unsubscribe = onSnapshot(
+      rentalsQuery,
+      (snapshot) => {
+        if (!mountedRef.current) return;
+
+        const rows = snapshot.docs.map((docSnap) =>
+          normalizeRental(docSnap.id, docSnap.data() as Record<string, unknown>)
+        );
+
+        setRentals(rows);
+        setLoadingRentals(false);
+      },
+      () => {
+        if (!mountedRef.current) return;
+        setLoadingRentals(false);
+        toast.error("Rentals could not be loaded.");
+      }
+    );
+
+    return () => unsubscribe();
+  }, [authLoading, canRead]);
+
+  const rentalProducts = useMemo(() => {
+    const flagged = products.filter((product) => product.isRentalItem);
+    return flagged.length ? flagged : products;
+  }, [products]);
+
+  const previewMonthsUsed = useMemo(() => {
+    return calculateMonthsUsed(form.rentalStartDate, form.rentalEndDate);
+  }, [form.rentalStartDate, form.rentalEndDate]);
+
+  const previewTotalCharges = useMemo(() => {
+    return previewMonthsUsed * toSafeNumber(form.monthlyRate);
+  }, [previewMonthsUsed, form.monthlyRate]);
+
+  const visibleRentals = useMemo(() => {
+    return rentals.filter((rental) => showDeleted || rental.status !== "Deleted");
+  }, [rentals, showDeleted]);
+
+  const filteredRentals = useMemo(() => {
+    const term = normalizeSearchText(search);
+
+    return visibleRentals.filter((rental) => {
+      if (statusFilter !== "all" && rental.status !== statusFilter) {
+        return false;
+      }
+
+      if (
+        deliveryFilter !== "all" &&
+        rental.deliveryStatus !== deliveryFilter
+      ) {
+        return false;
+      }
+
+      if (!term) return true;
+
+      const haystack = normalizeSearchText(
+        [
+          rental.productName,
+          rental.category,
+          rental.sku,
+          rental.serialNumber,
+          rental.lotNumber,
+          rental.customerName,
+          rental.patientName,
+          rental.patientId,
+          rental.payerName,
+          rental.insuranceType,
+          rental.authorizationNumber,
+          rental.status,
+          rental.deliveryStatus,
+          rental.location,
+          rental.assignedTo,
+          rental.notes,
+        ].join(" ")
+      );
+
+      return haystack.includes(term);
+    });
+  }, [visibleRentals, search, statusFilter, deliveryFilter]);
+
+  const stats = useMemo(() => {
+    const active = rentals.filter((r) => r.status === "Active").length;
+    const returned = rentals.filter((r) => r.status === "Returned").length;
+    const cancelled = rentals.filter((r) => r.status === "Cancelled").length;
+    const pastDue = rentals.filter((r) => r.status === "Past Due").length;
+
+    const openCharges = rentals
+      .filter((r) => r.status === "Active" || r.status === "Past Due")
+      .reduce((sum, rental) => sum + rental.totalCharges, 0);
+
+    const totalCharges = rentals
+      .filter((r) => r.status !== "Deleted")
+      .reduce((sum, rental) => sum + rental.totalCharges, 0);
+
+    return {
+      active,
+      returned,
+      cancelled,
+      pastDue,
+      openCharges,
+      totalCharges,
+    };
+  }, [rentals]);
+
+  function resetForm() {
+    setForm(initialForm);
+  }
+
+  function softRefresh() {
+    setSearch("");
+    setStatusFilter("all");
+    setDeliveryFilter("all");
+    resetForm();
+    toast.success("Rental view refreshed.");
+  }
+
+  function applyProduct(productId: string) {
+    const product = products.find((item) => item.id === productId);
+
+    if (!product) {
+      setForm((prev) => ({
+        ...prev,
+        productId: "",
+        productName: "",
+        category: "",
+        sku: "",
+      }));
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      productId: product.id,
+      productName: product.name,
+      category: product.category,
+      sku: product.sku,
+      monthlyRate: prev.monthlyRate || String(product.basePrice || ""),
+    }));
+  }
+
+  function handleEdit(rental: Rental) {
+    setForm({
+      id: rental.id,
+      productId: rental.productId,
+      productName: rental.productName,
+      category: rental.category,
+      sku: rental.sku,
+      serialNumber: rental.serialNumber,
+      lotNumber: rental.lotNumber,
+      customerName: rental.customerName,
+      patientName: rental.patientName,
+      patientId: rental.patientId,
+      payerName: rental.payerName,
+      insuranceType: rental.insuranceType,
+      authorizationNumber: rental.authorizationNumber,
+      rentalStartDate: rental.rentalStartDate,
+      rentalEndDate: rental.rentalEndDate,
+      monthlyRate: rental.monthlyRate ? String(rental.monthlyRate) : "",
+      billingCycle: rental.billingCycle,
+      status: rental.status,
+      deliveryStatus: rental.deliveryStatus,
+      deliveryDate: rental.deliveryDate,
+      pickupDate: rental.pickupDate,
+      location: rental.location,
+      assignedTo: rental.assignedTo,
+      notes: rental.notes,
+    });
+  }
+
+  async function softDeleteRental(rental: Rental) {
+    if (!canWrite) {
+      toast.error("You do not have permission to delete rentals.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Archive rental record for "${rental.productName}"? This keeps the record for audit history.`
+    );
+
+    if (!confirmed) return;
+
+    try {
+      const currentUser = auth.currentUser;
+
+      await updateDoc(doc(db, "rentals", rental.id), {
+        status: "Deleted",
+        deletedAt: serverTimestamp(),
+        deletedByUid: currentUser?.uid ?? "",
+        deletedByEmail: currentUser?.email ?? "",
+        updatedAt: serverTimestamp(),
+      });
+
+      toast.success("Rental archived.");
+
+      if (form.id === rental.id) resetForm();
+    } catch {
+      toast.error("Rental could not be archived.");
+    }
+  }
+
+  async function markReturned(rental: Rental) {
+    if (!canWrite) {
+      toast.error("You do not have permission to update rentals.");
+      return;
+    }
+
+    const endDate = todayInputValue();
+    const monthsUsed = calculateMonthsUsed(rental.rentalStartDate, endDate);
+    const totalCharges = monthsUsed * rental.monthlyRate;
+    const currentUser = auth.currentUser;
+
+    try {
+      await updateDoc(doc(db, "rentals", rental.id), {
+        rentalEndDate: endDate,
+        pickupDate: rental.pickupDate || endDate,
+        monthsUsed,
+        totalCharges,
+        status: "Returned",
+        deliveryStatus:
+          rental.deliveryStatus === "Picked Up"
+            ? "Picked Up"
+            : "Pickup Scheduled",
+        returnedAt: serverTimestamp(),
+        returnedByUid: currentUser?.uid ?? "",
+        returnedByEmail: currentUser?.email ?? "",
+        updatedAt: serverTimestamp(),
+      });
+
+      toast.success("Rental marked returned.");
+    } catch {
+      toast.error("Rental could not be updated.");
+    }
+  }
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!canWrite) {
+      toast.error("You do not have permission to save rentals.");
+      return;
+    }
+
+    const productId = form.productId.trim();
+    const productName = form.productName.trim();
+    const category = form.category.trim();
+    const sku = form.sku.trim();
+    const serialNumber = form.serialNumber.trim();
+    const lotNumber = form.lotNumber.trim();
+    const customerName = form.customerName.trim();
+    const patientName = form.patientName.trim();
+    const patientId = form.patientId.trim();
+    const payerName = form.payerName.trim();
+    const insuranceType = form.insuranceType.trim();
+    const authorizationNumber = form.authorizationNumber.trim();
+    const rentalStartDate = form.rentalStartDate.trim();
+    const rentalEndDate = form.rentalEndDate.trim();
+    const monthlyRate = toSafeNumber(form.monthlyRate);
+    const deliveryDate = form.deliveryDate.trim();
+    const pickupDate = form.pickupDate.trim();
+    const location = form.location.trim();
+    const assignedTo = form.assignedTo.trim();
+    const notes = form.notes.trim();
+
+    if (!productName) {
+      toast.error("Rental product is required.");
+      return;
+    }
+
+    if (!customerName && !patientName) {
+      toast.error("Customer or patient name is required.");
+      return;
+    }
+
+    if (!rentalStartDate) {
+      toast.error("Rental start date is required.");
+      return;
+    }
+
+    if (monthlyRate < 0) {
+      toast.error("Monthly rate cannot be negative.");
+      return;
+    }
+
+    const startDate = dateFromInput(rentalStartDate);
+    const endDate = dateFromInput(rentalEndDate);
+
+    if (startDate && endDate && endDate < startDate) {
+      toast.error("End date cannot be before start date.");
+      return;
+    }
+
+    const monthsUsed = calculateMonthsUsed(rentalStartDate, rentalEndDate);
+    const totalCharges = monthsUsed * monthlyRate;
+    const status = deriveRentalStatus(form.status, rentalEndDate);
+
+    const searchSource = [
+      productName,
+      category,
+      sku,
+      serialNumber,
+      lotNumber,
+      customerName,
+      patientName,
+      patientId,
+      payerName,
+      insuranceType,
+      authorizationNumber,
+      status,
+      form.deliveryStatus,
+      location,
+      assignedTo,
+      notes,
+    ].join(" ");
+
+    const currentUser = auth.currentUser;
 
     setSaving(true);
 
     try {
-      if (selectedRentalId) {
-        await updateDoc(doc(db, "rentals", selectedRentalId), {
-          customerName,
-          item,
-          status,
-          dueDate,
-          notes,
-          updatedAt: serverTimestamp(),
-        });
-      } else {
-        if (!isAdmin) {
-          alert("Only admins can create rentals.");
-          return;
-        }
+      const payload = {
+        productId,
+        productName,
+        category,
+        sku,
+        serialNumber,
+        lotNumber,
+        customerName,
+        patientName,
+        patientId,
+        payerName,
+        insuranceType,
+        authorizationNumber,
+        rentalStartDate,
+        rentalEndDate,
+        monthsUsed,
+        monthlyRate,
+        totalCharges,
+        billingCycle: form.billingCycle,
+        status,
+        deliveryStatus: form.deliveryStatus,
+        deliveryDate,
+        pickupDate,
+        location,
+        assignedTo,
+        notes,
+        searchText: normalizeSearchText(searchSource),
+        searchTokens: buildSearchTokens(searchSource),
+        updatedAt: serverTimestamp(),
+        updatedByUid: currentUser?.uid ?? "",
+        updatedByEmail: currentUser?.email ?? "",
+      };
 
-        const newRef = doc(collection(db, "rentals"));
-        await setDoc(newRef, {
-          customerName,
-          item,
-          status,
-          dueDate,
-          notes,
+      if (form.id) {
+        await updateDoc(doc(db, "rentals", form.id), payload);
+        toast.success("Rental updated.");
+      } else {
+        await addDoc(collection(db, "rentals"), {
+          ...payload,
           createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
+          createdByUid: currentUser?.uid ?? "",
+          createdByEmail: currentUser?.email ?? "",
         });
+        toast.success("Rental added.");
       }
 
-      resetModal();
-    } catch (err) {
-      console.error("Error saving rental:", err);
-      alert("Failed to save rental.");
+      resetForm();
+    } catch {
+      toast.error("Rental could not be saved.");
     } finally {
-      setSaving(false);
+      if (mountedRef.current) setSaving(false);
     }
-  }
-
-  async function removeRental(rentalId: string) {
-    if (!isAdmin) return;
-
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this rental?"
-    );
-    if (!confirmed) return;
-
-    try {
-      await deleteDoc(doc(db, "rentals", rentalId));
-    } catch (err) {
-      console.error("Error deleting rental:", err);
-      alert("Failed to delete rental.");
-    }
-  }
-
-  if (roleLoading) {
-    return (
-      <div className="space-y-6 p-6 text-white">
-        <div className="flex min-h-[200px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-black/20">
-          <div className="inline-flex items-center gap-3 rounded-2xl bg-black/20 px-4 py-3 text-sm text-slate-300 shadow-sm">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading permissions...
-          </div>
-        </div>
-      </div>
-    );
   }
 
   return (
-    <>
-      <div className="space-y-6 p-6 text-white">
+    <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6">
+      <div className="max-w-7xl space-y-6">
+        <section className="rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex items-center gap-3">
+              <div className="rounded-2xl bg-white/10 p-3">
+                <CalendarDays className="h-6 w-6" aria-hidden="true" />
+              </div>
+              <div>
+                <h1 className="text-2xl font-bold">Rentals</h1>
+                <p className="text-sm text-neutral-400">
+                  Track rental equipment, patients, billing, delivery, pickup,
+                  serial numbers, and return status.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={softRefresh}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold transition hover:bg-white/15"
+            >
+              <RefreshCcw className="h-4 w-4" aria-hidden="true" />
+              Refresh View
+            </button>
+          </div>
+        </section>
+
+        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+          <StatCard label="Active" value={stats.active} />
+          <StatCard label="Past Due" value={stats.pastDue} />
+          <StatCard label="Returned" value={stats.returned} />
+          <StatCard label="Cancelled" value={stats.cancelled} />
+          <StatCard label="Open Charges" value={money(stats.openCharges)} />
+          <StatCard label="Total Charges" value={money(stats.totalCharges)} />
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-[460px_minmax(0,1fr)]">
+          <form
+            onSubmit={handleSubmit}
+            className="rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30"
+          >
+            <div className="mb-5 flex items-center gap-3">
+              <div className="rounded-2xl bg-white/10 p-3">
+                {form.id ? (
+                  <Pencil className="h-5 w-5" aria-hidden="true" />
+                ) : (
+                  <Plus className="h-5 w-5" aria-hidden="true" />
+                )}
+              </div>
+              <div>
+                <h2 className="text-xl font-bold">
+                  {form.id ? "Edit Rental" : "Add Rental"}
+                </h2>
+                <p className="text-sm text-neutral-400">
+                  Charges update automatically from rental dates.
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <SelectField
+                label="Rental Product"
+                value={form.productId}
+                onChange={applyProduct}
+                options={[
+                  { value: "", label: "Manual / unlinked product" },
+                  ...rentalProducts.map((product) => ({
+                    value: product.id,
+                    label: `${product.name}${product.sku ? ` • ${product.sku}` : ""}`,
+                  })),
+                ]}
+              />
+
+              <TextInput
+                label="Product Name"
+                value={form.productName}
+                onChange={(value) =>
+                  setForm((prev) => ({ ...prev, productName: value }))
+                }
+                required
+              />
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <TextInput
+                  label="Category"
+                  value={form.category}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, category: value }))
+                  }
+                />
+
+                <TextInput
+                  label="SKU"
+                  value={form.sku}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, sku: value }))
+                  }
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <TextInput
+                  label="Serial Number"
+                  value={form.serialNumber}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, serialNumber: value }))
+                  }
+                />
+
+                <TextInput
+                  label="Lot Number"
+                  value={form.lotNumber}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, lotNumber: value }))
+                  }
+                />
+              </div>
+
+              <TextInput
+                label="Customer Name"
+                value={form.customerName}
+                onChange={(value) =>
+                  setForm((prev) => ({ ...prev, customerName: value }))
+                }
+              />
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <TextInput
+                  label="Patient Name"
+                  value={form.patientName}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, patientName: value }))
+                  }
+                />
+
+                <TextInput
+                  label="Patient ID"
+                  value={form.patientId}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, patientId: value }))
+                  }
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <TextInput
+                  label="Payer Name"
+                  value={form.payerName}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, payerName: value }))
+                  }
+                />
+
+                <TextInput
+                  label="Insurance Type"
+                  value={form.insuranceType}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, insuranceType: value }))
+                  }
+                />
+              </div>
+
+              <TextInput
+                label="Authorization Number"
+                value={form.authorizationNumber}
+                onChange={(value) =>
+                  setForm((prev) => ({
+                    ...prev,
+                    authorizationNumber: value,
+                  }))
+                }
+              />
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <TextInput
+                  label="Start Date"
+                  type="date"
+                  value={form.rentalStartDate}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, rentalStartDate: value }))
+                  }
+                  required
+                />
+
+                <TextInput
+                  label="End Date"
+                  type="date"
+                  value={form.rentalEndDate}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, rentalEndDate: value }))
+                  }
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <TextInput
+                  label="Monthly Rate"
+                  type="number"
+                  value={form.monthlyRate}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, monthlyRate: value }))
+                  }
+                />
+
+                <SelectField
+                  label="Billing Cycle"
+                  value={form.billingCycle}
+                  onChange={(value) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      billingCycle: value as BillingCycle,
+                    }))
+                  }
+                  options={[
+                    { value: "Monthly", label: "Monthly" },
+                    { value: "Weekly", label: "Weekly" },
+                    { value: "Daily", label: "Daily" },
+                  ]}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <SelectField
+                  label="Rental Status"
+                  value={form.status}
+                  onChange={(value) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      status: value as RentalStatus,
+                    }))
+                  }
+                  options={[
+                    { value: "Active", label: "Active" },
+                    { value: "Returned", label: "Returned" },
+                    { value: "Past Due", label: "Past Due" },
+                    { value: "Cancelled", label: "Cancelled" },
+                  ]}
+                />
+
+                <SelectField
+                  label="Delivery Status"
+                  value={form.deliveryStatus}
+                  onChange={(value) =>
+                    setForm((prev) => ({
+                      ...prev,
+                      deliveryStatus: value as DeliveryStatus,
+                    }))
+                  }
+                  options={[
+                    { value: "Not Scheduled", label: "Not Scheduled" },
+                    { value: "Scheduled", label: "Scheduled" },
+                    { value: "Delivered", label: "Delivered" },
+                    {
+                      value: "Pickup Scheduled",
+                      label: "Pickup Scheduled",
+                    },
+                    { value: "Picked Up", label: "Picked Up" },
+                    { value: "Cleaning", label: "Cleaning" },
+                    { value: "Ready", label: "Ready" },
+                  ]}
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <TextInput
+                  label="Delivery Date"
+                  type="date"
+                  value={form.deliveryDate}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, deliveryDate: value }))
+                  }
+                />
+
+                <TextInput
+                  label="Pickup Date"
+                  type="date"
+                  value={form.pickupDate}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, pickupDate: value }))
+                  }
+                />
+              </div>
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <TextInput
+                  label="Location / Bin"
+                  value={form.location}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, location: value }))
+                  }
+                />
+
+                <TextInput
+                  label="Assigned To"
+                  value={form.assignedTo}
+                  onChange={(value) =>
+                    setForm((prev) => ({ ...prev, assignedTo: value }))
+                  }
+                />
+              </div>
+
+              <div>
+                <label
+                  htmlFor="rental-notes"
+                  className="mb-2 block text-sm text-neutral-300"
+                >
+                  Notes
+                </label>
+                <textarea
+                  id="rental-notes"
+                  value={form.notes}
+                  onChange={(event) =>
+                    setForm((prev) => ({ ...prev, notes: event.target.value }))
+                  }
+                  rows={4}
+                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none transition focus:border-white/30"
+                  placeholder="Optional rental notes, delivery details, pickup notes, or billing context."
+                />
+              </div>
+
+              <div className="rounded-2xl border border-white/10 bg-black/50 p-4 text-sm text-neutral-300">
+                Rental time:{" "}
+                <span className="font-semibold text-white">
+                  {previewMonthsUsed.toLocaleString()} month
+                  {previewMonthsUsed === 1 ? "" : "s"}
+                </span>
+                . Total charges:{" "}
+                <span className="font-semibold text-white">
+                  {money(previewTotalCharges)}
+                </span>
+                .
+              </div>
+
+              <div className="flex gap-3">
+                <button
+                  type="submit"
+                  disabled={saving || !canWrite}
+                  className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {saving ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="h-4 w-4" />
+                  )}
+                  Save Rental
+                </button>
+
+                <button
+                  type="button"
+                  onClick={resetForm}
+                  className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm transition hover:bg-white/15"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+          </form>
+
+          <section className="rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/30">
+            <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
+              <div>
+                <h2 className="text-xl font-bold">Rental Records</h2>
+                <p className="text-sm text-neutral-400">
+                  {filteredRentals.length.toLocaleString()} visible records
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 lg:flex-row">
+                <div className="relative">
+                  <label htmlFor="rental-search" className="sr-only">
+                    Search rentals
+                  </label>
+                  <Search
+                    className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-neutral-500"
+                    aria-hidden="true"
+                  />
+                  <input
+                    id="rental-search"
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    className="w-full rounded-2xl border border-white/10 bg-black py-3 pl-10 pr-4 text-sm text-white outline-none transition focus:border-white/30 lg:w-72"
+                    placeholder="Search rentals..."
+                  />
+                </div>
+
+                <SelectField
+                  label="Filter by rental status"
+                  srOnlyLabel
+                  value={statusFilter}
+                  onChange={(value) =>
+                    setStatusFilter(value as "all" | RentalStatus)
+                  }
+                  options={[
+                    { value: "all", label: "All statuses" },
+                    { value: "Active", label: "Active" },
+                    { value: "Returned", label: "Returned" },
+                    { value: "Past Due", label: "Past Due" },
+                    { value: "Cancelled", label: "Cancelled" },
+                    { value: "Deleted", label: "Deleted" },
+                  ]}
+                />
+
+                <SelectField
+                  label="Filter by delivery status"
+                  srOnlyLabel
+                  value={deliveryFilter}
+                  onChange={(value) =>
+                    setDeliveryFilter(value as "all" | DeliveryStatus)
+                  }
+                  options={[
+                    { value: "all", label: "All delivery" },
+                    { value: "Not Scheduled", label: "Not Scheduled" },
+                    { value: "Scheduled", label: "Scheduled" },
+                    { value: "Delivered", label: "Delivered" },
+                    {
+                      value: "Pickup Scheduled",
+                      label: "Pickup Scheduled",
+                    },
+                    { value: "Picked Up", label: "Picked Up" },
+                    { value: "Cleaning", label: "Cleaning" },
+                    { value: "Ready", label: "Ready" },
+                  ]}
+                />
+              </div>
+            </div>
+
+            <label className="mb-4 flex items-center gap-2 text-sm text-neutral-300">
+              <input
+                type="checkbox"
+                checked={showDeleted}
+                onChange={(event) => setShowDeleted(event.target.checked)}
+                className="h-4 w-4 rounded border-white/20 bg-black"
+              />
+              Show archived rental records
+            </label>
+
+            {loading ? (
+              <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black p-4 text-neutral-300">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Loading rentals...
+              </div>
+            ) : filteredRentals.length === 0 ? (
+              <div className="rounded-2xl border border-white/10 bg-black p-6 text-center text-sm text-neutral-400">
+                No rental records match the current filters.
+              </div>
+            ) : (
+              <>
+                <div className="hidden overflow-x-auto rounded-2xl border border-white/10 xl:block">
+                  <table className="w-full min-w-[1250px] text-left text-sm">
+                    <thead className="sticky top-0 z-10 bg-neutral-900 text-neutral-400">
+                      <tr>
+                        <th className="px-4 py-3">Product</th>
+                        <th className="px-4 py-3">Customer / Patient</th>
+                        <th className="px-4 py-3">Billing</th>
+                        <th className="px-4 py-3">Dates</th>
+                        <th className="px-4 py-3 text-right">Months</th>
+                        <th className="px-4 py-3 text-right">Total</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3">Delivery</th>
+                        <th className="px-4 py-3 text-right">Actions</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {filteredRentals.map((rental) => (
+                        <RentalTableRow
+                          key={rental.id}
+                          rental={rental}
+                          onEdit={handleEdit}
+                          onReturn={markReturned}
+                          onArchive={softDeleteRental}
+                        />
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="grid gap-4 xl:hidden">
+                  {filteredRentals.map((rental) => (
+                    <RentalMobileCard
+                      key={rental.id}
+                      rental={rental}
+                      onEdit={handleEdit}
+                      onReturn={markReturned}
+                      onArchive={softDeleteRental}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
+          </section>
+        </section>
+      </div>
+    </main>
+  );
+}
+
+function RentalTableRow({
+  rental,
+  onEdit,
+  onReturn,
+  onArchive,
+}: {
+  rental: Rental;
+  onEdit: (rental: Rental) => void;
+  onReturn: (rental: Rental) => void;
+  onArchive: (rental: Rental) => void;
+}) {
+  return (
+    <tr className="border-t border-white/10 align-top">
+      <td className="px-4 py-3">
+        <div className="font-semibold">{rental.productName}</div>
+        <div className="text-xs text-neutral-500">
+          {rental.category || "No category"}
+          {rental.sku ? ` • ${rental.sku}` : ""}
+        </div>
+        <div className="text-xs text-neutral-500">
+          SN: {rental.serialNumber || "-"} • Lot: {rental.lotNumber || "-"}
+        </div>
+      </td>
+
+      <td className="px-4 py-3 text-neutral-300">
+        <div>{rental.customerName || "-"}</div>
+        <div className="text-xs text-neutral-500">
+          Patient: {rental.patientName || "-"}
+        </div>
+        <div className="text-xs text-neutral-500">
+          ID: {rental.patientId || "-"}
+        </div>
+      </td>
+
+      <td className="px-4 py-3 text-neutral-300">
+        <div>{rental.payerName || "-"}</div>
+        <div className="text-xs text-neutral-500">
+          {rental.insuranceType || "No insurance type"}
+        </div>
+        <div className="text-xs text-neutral-500">
+          Auth: {rental.authorizationNumber || "-"}
+        </div>
+      </td>
+
+      <td className="px-4 py-3 text-neutral-300">
+        <div>Start: {rental.rentalStartDate || "-"}</div>
+        <div>End: {rental.rentalEndDate || "Active"}</div>
+      </td>
+
+      <td className="px-4 py-3 text-right text-neutral-300">
+        {rental.monthsUsed.toLocaleString()}
+      </td>
+
+      <td className="px-4 py-3 text-right">
+        <div className="font-semibold">{money(rental.totalCharges)}</div>
+        <div className="text-xs text-neutral-500">
+          {money(rental.monthlyRate)} / {rental.billingCycle}
+        </div>
+      </td>
+
+      <td className="px-4 py-3">
+        <span
+          className={`rounded-full border px-3 py-1 text-xs ${statusClass(
+            rental.status
+          )}`}
+        >
+          {rental.status}
+        </span>
+      </td>
+
+      <td className="px-4 py-3 text-neutral-300">
+        <div>{rental.deliveryStatus}</div>
+        <div className="text-xs text-neutral-500">
+          Delivery: {rental.deliveryDate || "-"}
+        </div>
+        <div className="text-xs text-neutral-500">
+          Pickup: {rental.pickupDate || "-"}
+        </div>
+      </td>
+
+      <td className="px-4 py-3">
+        <RentalActions
+          rental={rental}
+          onEdit={onEdit}
+          onReturn={onReturn}
+          onArchive={onArchive}
+        />
+      </td>
+    </tr>
+  );
+}
+
+function RentalMobileCard({
+  rental,
+  onEdit,
+  onReturn,
+  onArchive,
+}: {
+  rental: Rental;
+  onEdit: (rental: Rental) => void;
+  onReturn: (rental: Rental) => void;
+  onArchive: (rental: Rental) => void;
+}) {
+  return (
+    <article className="rounded-2xl border border-white/10 bg-black p-4">
+      <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <h1 className="text-3xl font-semibold tracking-tight">Rentals</h1>
-          <p className="mt-2 text-sm text-slate-400">
-            Manage rental equipment, due dates, and returns from one clean
-            workspace.
+          <h3 className="font-semibold">{rental.productName}</h3>
+          <p className="text-xs text-neutral-500">
+            {rental.category || "No category"}
+            {rental.sku ? ` • ${rental.sku}` : ""}
           </p>
         </div>
 
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard
-            title="Rentals"
-            value={totalRentals}
-            subtitle="Total rental records"
-            icon={<CalendarClock className="h-5 w-5" />}
-          />
-          <StatCard
-            title="Active"
-            value={activeRentals}
-            subtitle="Currently out with customers"
-            icon={<Box className="h-5 w-5" />}
-          />
-          <StatCard
-            title="Due Soon"
-            value={dueSoonRentals}
-            subtitle="Needs attention soon"
-            icon={<Clock3 className="h-5 w-5" />}
-          />
-          <StatCard
-            title="Overdue"
-            value={overdueRentals}
-            subtitle="Past due date"
-            icon={<AlertTriangle className="h-5 w-5" />}
-          />
-        </div>
-
-        <SectionCard
-          title="All Rentals"
-          subtitle="Search, filter, and manage your rental records."
+        <span
+          className={`rounded-full border px-3 py-1 text-xs ${statusClass(
+            rental.status
+          )}`}
         >
-          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-            <div className="relative w-full max-w-xl">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-              <input
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                placeholder="Search by customer, item, status, notes, or ID"
-                className="w-full rounded-2xl border border-white/10 bg-black/20 py-3 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-sky-500"
-              />
-            </div>
-
-            <div className="flex flex-col gap-3 sm:flex-row">
-              <select
-                value={statusFilter}
-                onChange={(e) =>
-                  setStatusFilter(e.target.value as "All" | RentalStatus)
-                }
-                className="rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none transition focus:border-sky-500"
-              >
-                <option value="All" className="bg-[#111827]">
-                  All statuses
-                </option>
-                {STATUS_OPTIONS.map((status) => (
-                  <option
-                    key={status}
-                    value={status}
-                    className="bg-[#111827]"
-                  >
-                    {status}
-                  </option>
-                ))}
-              </select>
-
-              {isAdmin && (
-                <button
-                  type="button"
-                  onClick={openAddModal}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-sky-500 px-5 py-3 text-sm font-medium text-white transition hover:bg-sky-600"
-                >
-                  <Plus className="h-4 w-4" />
-                  Add Rental
-                </button>
-              )}
-            </div>
-          </div>
-
-          <div className="space-y-4">
-            {loading ? (
-              <div className="flex min-h-[200px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-black/20">
-                <div className="inline-flex items-center gap-3 rounded-2xl bg-black/20 px-4 py-3 text-sm text-slate-300 shadow-sm">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Loading rentals...
-                </div>
-              </div>
-            ) : error ? (
-              <div className="rounded-3xl border border-red-500/20 bg-red-500/10 p-6 text-sm text-red-300">
-                {error}
-              </div>
-            ) : filteredRentals.length === 0 ? (
-              <div className="flex min-h-[220px] flex-col items-center justify-center rounded-3xl border border-dashed border-white/10 bg-black/20 px-6 text-center">
-                <div className="flex h-14 w-14 items-center justify-center rounded-3xl bg-black/20 text-slate-400 shadow-sm">
-                  <CheckCircle2 className="h-6 w-6" />
-                </div>
-                <h3 className="mt-4 text-lg font-semibold text-white">
-                  No rentals found
-                </h3>
-                <p className="mt-2 max-w-md text-sm text-slate-400">
-                  Try adjusting your search or filters.
-                </p>
-              </div>
-            ) : (
-              filteredRentals.map((rental) => (
-                <div
-                  key={rental.id}
-                  className="rounded-3xl bg-black/20 p-5 transition hover:bg-white/[0.04]"
-                >
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                    <div className="min-w-0">
-                      <div className="flex flex-wrap items-center gap-3">
-                        <h3 className="text-lg font-semibold text-white">
-                          {rental.customerName}
-                        </h3>
-                        <span
-                          className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${getStatusClasses(
-                            rental.status ?? "Active"
-                          )}`}
-                        >
-                          {rental.status ?? "Active"}
-                        </span>
-                      </div>
-
-                      <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2 text-sm text-slate-400">
-                        <span>Item: {rental.item}</span>
-                        <span>Due: {rental.dueDate || "—"}</span>
-                        <span>Created: {formatDate(rental.createdAt)}</span>
-                      </div>
-
-                      <p className="mt-2 text-xs text-slate-500">
-                        ID: {rental.id}
-                      </p>
-
-                      {rental.notes ? (
-                        <p className="mt-3 max-w-3xl text-sm text-slate-300">
-                          {rental.notes}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="flex shrink-0 items-center gap-2">
-                      {(isStaff || isAdmin) && (
-                        <button
-                          type="button"
-                          onClick={() => openEditModal(rental)}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-black/20 text-slate-300 transition hover:bg-white/10 hover:text-white"
-                          aria-label={`Edit ${rental.item}`}
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </button>
-                      )}
-
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => removeRental(rental.id)}
-                          className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-rose-500/20 bg-rose-500/10 text-rose-300 transition hover:bg-rose-500/20"
-                          aria-label={`Delete ${rental.item}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      )}
-
-                      {!isStaff && !isAdmin && (
-                        <span className="text-sm text-slate-500">
-                          View only
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </SectionCard>
+          {rental.status}
+        </span>
       </div>
 
-      <RentalModal
-        open={modalOpen}
-        mode={modalMode}
-        formData={formData}
-        setFormData={setFormData}
-        onClose={resetModal}
-        onSubmit={handleSaveRental}
-        saving={saving}
+      <div className="grid gap-2 text-sm text-neutral-300">
+        <p>Customer: {rental.customerName || "-"}</p>
+        <p>Patient: {rental.patientName || "-"}</p>
+        <p>Serial: {rental.serialNumber || "-"}</p>
+        <p>
+          Dates: {rental.rentalStartDate || "-"} to{" "}
+          {rental.rentalEndDate || "Active"}
+        </p>
+        <p>
+          Total:{" "}
+          <span className="font-semibold text-white">
+            {money(rental.totalCharges)}
+          </span>
+        </p>
+        <p>Delivery: {rental.deliveryStatus}</p>
+      </div>
+
+      <div className="mt-4">
+        <RentalActions
+          rental={rental}
+          onEdit={onEdit}
+          onReturn={onReturn}
+          onArchive={onArchive}
+        />
+      </div>
+    </article>
+  );
+}
+
+function RentalActions({
+  rental,
+  onEdit,
+  onReturn,
+  onArchive,
+}: {
+  rental: Rental;
+  onEdit: (rental: Rental) => void;
+  onReturn: (rental: Rental) => void;
+  onArchive: (rental: Rental) => void;
+}) {
+  return (
+    <div className="flex justify-end gap-2">
+      {rental.status === "Active" || rental.status === "Past Due" ? (
+        <button
+          type="button"
+          onClick={() => void onReturn(rental)}
+          className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-300 transition hover:bg-emerald-500/20"
+        >
+          <CheckCircle2 className="h-4 w-4" />
+          Return
+        </button>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={() => onEdit(rental)}
+        className="rounded-xl border border-white/10 bg-white/10 p-2 transition hover:bg-white/15"
+        title="Edit rental"
+        aria-label={`Edit ${rental.productName}`}
+      >
+        <Pencil className="h-4 w-4" />
+      </button>
+
+      {rental.status !== "Deleted" ? (
+        <button
+          type="button"
+          onClick={() => void onArchive(rental)}
+          className="rounded-xl border border-red-500/20 bg-red-500/10 p-2 text-red-300 transition hover:bg-red-500/20"
+          title="Archive rental"
+          aria-label={`Archive ${rental.productName}`}
+        >
+          <XCircle className="h-4 w-4" />
+        </button>
+      ) : null}
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | number;
+}) {
+  const isMoney = label.toLowerCase().includes("charge");
+
+  return (
+    <div className="rounded-3xl border border-white/10 bg-neutral-950 p-5 shadow-xl shadow-black/20">
+      <div className="flex items-center gap-3">
+        <div className="rounded-2xl bg-white/10 p-3">
+          {isMoney ? (
+            <DollarSign className="h-5 w-5" aria-hidden="true" />
+          ) : label.toLowerCase().includes("active") ? (
+            <Truck className="h-5 w-5" aria-hidden="true" />
+          ) : (
+            <Package2 className="h-5 w-5" aria-hidden="true" />
+          )}
+        </div>
+        <div>
+          <p className="text-sm text-neutral-400">{label}</p>
+          <p className="text-2xl font-bold">
+            {typeof value === "number" ? value.toLocaleString() : value}
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TextInput({
+  label,
+  value,
+  onChange,
+  type = "text",
+  required = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  type?: string;
+  required?: boolean;
+}) {
+  const inputId = useMemo(
+    () =>
+      label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, ""),
+    [label]
+  );
+
+  return (
+    <div>
+      <label htmlFor={inputId} className="mb-2 block text-sm text-neutral-300">
+        {label}
+      </label>
+      <input
+        id={inputId}
+        type={type}
+        value={value}
+        required={required}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-white outline-none transition focus:border-white/30"
       />
-    </>
+    </div>
+  );
+}
+
+function SelectField({
+  label,
+  value,
+  onChange,
+  options,
+  srOnlyLabel = false,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  srOnlyLabel?: boolean;
+}) {
+  const inputId = useMemo(
+    () =>
+      label
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-|-$/g, ""),
+    [label]
+  );
+
+  return (
+    <div>
+      <label
+        htmlFor={inputId}
+        className={
+          srOnlyLabel ? "sr-only" : "mb-2 block text-sm text-neutral-300"
+        }
+      >
+        {label}
+      </label>
+      <select
+        id={inputId}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
+      >
+        {options.map((option) => (
+          <option key={`${inputId}-${option.value}`} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </div>
   );
 }
