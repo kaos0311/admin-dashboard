@@ -50,7 +50,7 @@ import {
   Section,
   StatusPill,
   TaskPriorityPill,
-} from "/patients/components/PatientUI";
+} from "./PatientUI";
 
 export function PatientDetail({
   selected,

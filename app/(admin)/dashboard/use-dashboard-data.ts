@@ -9,10 +9,11 @@ import {
   onSnapshot,
   orderBy,
   query,
-  Unsubscribe,
+  type Unsubscribe,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
+
 import type {
   BirthdayAnalytics,
   DashboardSummary,
@@ -23,6 +24,7 @@ import type {
   RentalRow,
   WipEmployeeSummary,
 } from "./dashboard-types";
+
 import {
   EMPTY_BIRTHDAYS,
   EMPTY_INVENTORY_ANALYTICS,
@@ -47,21 +49,48 @@ export type DashboardDataState = {
   summary: DashboardSummary;
   birthdays: BirthdayAnalytics;
   inventoryAnalytics: InventoryAnalytics;
+
   orders: OrderRow[];
   rentals: RentalRow[];
   products: ProductRow[];
   movements: MovementRow[];
   wipEmployees: WipEmployeeSummary[];
+
   loading: boolean;
   refreshing: boolean;
   error: string;
+
   refreshDashboard: () => Promise<void>;
 };
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  if (typeof error === "string") {
+    return error;
+  }
+
+  return "Unknown dashboard error.";
+}
+
+function withDocId<T extends Record<string, unknown>>(
+  id: string,
+  data: T
+): T & { id: string } {
+  return {
+    id,
+    ...data,
+  };
+}
+
 export function useDashboardData(): DashboardDataState {
   const [summary, setSummary] = useState<DashboardSummary>(EMPTY_SUMMARY);
+
   const [birthdays, setBirthdays] =
     useState<BirthdayAnalytics>(EMPTY_BIRTHDAYS);
+
   const [inventoryAnalytics, setInventoryAnalytics] =
     useState<InventoryAnalytics>(EMPTY_INVENTORY_ANALYTICS);
 
@@ -72,15 +101,18 @@ export function useDashboardData(): DashboardDataState {
   const [wipEmployees, setWipEmployees] = useState<WipEmployeeSummary[]>([]);
 
   const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
+  const [birthdaysLoaded, setBirthdaysLoaded] = useState(false);
+  const [inventoryLoaded, setInventoryLoaded] = useState(false);
   const [previewsLoaded, setPreviewsLoaded] = useState(false);
+
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState("");
 
   const refreshDashboard = useCallback(async () => {
-    try {
-      setRefreshing(true);
-      setError("");
+    setRefreshing(true);
+    setError("");
 
+    try {
       const [
         wipEmployeesSnap,
         ordersSnap,
@@ -131,33 +163,55 @@ export function useDashboardData(): DashboardDataState {
 
       setWipEmployees(
         wipEmployeesSnap.docs.map((docSnap) =>
-          normalizeWipEmployee(docSnap.data() as Record<string, unknown>)
+          normalizeWipEmployee(
+            withDocId(
+              docSnap.id,
+              docSnap.data() as Record<string, unknown>
+            )
+          )
         )
       );
 
       setOrders(
         ordersSnap.docs.map((docSnap) =>
-          normalizeOrder(docSnap.id, docSnap.data() as Record<string, unknown>)
+          normalizeOrder(
+            withDocId(
+              docSnap.id,
+              docSnap.data() as Record<string, unknown>
+            )
+          )
         )
       );
 
       setRentals(
         rentalsSnap.docs.map((docSnap) =>
-          normalizeRental(docSnap.id, docSnap.data() as Record<string, unknown>)
+          normalizeRental(
+            withDocId(
+              docSnap.id,
+              docSnap.data() as Record<string, unknown>
+            )
+          )
         )
       );
 
       setProducts(
         productsSnap.docs.map((docSnap) =>
-          normalizeProduct(docSnap.id, docSnap.data() as Record<string, unknown>)
+          normalizeProduct(
+            withDocId(
+              docSnap.id,
+              docSnap.data() as Record<string, unknown>
+            )
+          )
         )
       );
 
       setMovements(
         movementsSnap.docs.map((docSnap) =>
           normalizeMovement(
-            docSnap.id,
-            docSnap.data() as Record<string, unknown>
+            withDocId(
+              docSnap.id,
+              docSnap.data() as Record<string, unknown>
+            )
           )
         )
       );
@@ -165,9 +219,20 @@ export function useDashboardData(): DashboardDataState {
       setPreviewsLoaded(true);
     } catch (loadError) {
       console.warn("Dashboard preview data failed to load.", loadError);
+
+      setOrders([]);
+      setRentals([]);
+      setProducts([]);
+      setMovements([]);
+      setWipEmployees([]);
+
       setError(
-        "Dashboard preview data could not be loaded. Check permissions and indexes."
+        `Dashboard preview data could not be loaded. Check Firestore permissions, rules, and required indexes. ${getErrorMessage(
+          loadError
+        )}`
       );
+
+      setPreviewsLoaded(true);
     } finally {
       setRefreshing(false);
     }
@@ -176,8 +241,6 @@ export function useDashboardData(): DashboardDataState {
   useEffect(() => {
     const unsubscribes: Unsubscribe[] = [];
 
-    const markAnalyticsLoaded = () => setAnalyticsLoaded(true);
-
     unsubscribes.push(
       onSnapshot(
         doc(db, "analytics", "dashboard"),
@@ -185,19 +248,24 @@ export function useDashboardData(): DashboardDataState {
           setSummary(
             snap.exists()
               ? normalizeDashboardSummary(
-                  snap.data() as Record<string, unknown>
+                  snap.data() as Partial<DashboardSummary>
                 )
               : EMPTY_SUMMARY
           );
 
-          markAnalyticsLoaded();
+          setAnalyticsLoaded(true);
         },
         (snapshotError) => {
           console.warn("analytics/dashboard listener failed.", snapshotError);
+
+          setSummary(EMPTY_SUMMARY);
+          setAnalyticsLoaded(true);
+
           setError(
-            "Dashboard analytics could not be loaded. Check Firestore rules for analytics/dashboard."
+            `Dashboard analytics could not be loaded. Check Firestore rules for analytics/dashboard. ${getErrorMessage(
+              snapshotError
+            )}`
           );
-          markAnalyticsLoaded();
         }
       )
     );
@@ -209,13 +277,18 @@ export function useDashboardData(): DashboardDataState {
           setBirthdays(
             snap.exists()
               ? normalizeBirthdayAnalytics(
-                  snap.data() as Record<string, unknown>
+                  snap.data() as Partial<BirthdayAnalytics>
                 )
               : EMPTY_BIRTHDAYS
           );
+
+          setBirthdaysLoaded(true);
         },
         (snapshotError) => {
           console.warn("analytics/birthdays listener failed.", snapshotError);
+
+          setBirthdays(EMPTY_BIRTHDAYS);
+          setBirthdaysLoaded(true);
         }
       )
     );
@@ -227,13 +300,18 @@ export function useDashboardData(): DashboardDataState {
           setInventoryAnalytics(
             snap.exists()
               ? normalizeInventoryAnalytics(
-                  snap.data() as Record<string, unknown>
+                  snap.data() as Partial<InventoryAnalytics>
                 )
               : EMPTY_INVENTORY_ANALYTICS
           );
+
+          setInventoryLoaded(true);
         },
         (snapshotError) => {
           console.warn("analytics/inventory listener failed.", snapshotError);
+
+          setInventoryAnalytics(EMPTY_INVENTORY_ANALYTICS);
+          setInventoryLoaded(true);
         }
       )
     );
@@ -245,23 +323,35 @@ export function useDashboardData(): DashboardDataState {
     };
   }, [refreshDashboard]);
 
-  const loading = useMemo(
-    () => !analyticsLoaded || !previewsLoaded,
-    [analyticsLoaded, previewsLoaded]
-  );
+  const loading = useMemo(() => {
+    return (
+      !analyticsLoaded ||
+      !birthdaysLoaded ||
+      !inventoryLoaded ||
+      !previewsLoaded
+    );
+  }, [
+    analyticsLoaded,
+    birthdaysLoaded,
+    inventoryLoaded,
+    previewsLoaded,
+  ]);
 
   return {
     summary,
     birthdays,
     inventoryAnalytics,
+
     orders,
     rentals,
     products,
     movements,
     wipEmployees,
+
     loading,
     refreshing,
     error,
+
     refreshDashboard,
   };
 }

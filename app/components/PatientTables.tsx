@@ -3,8 +3,11 @@
 import type {
   CurrentEquipmentItem,
   RecentPurchaseItem,
-} from "../lib/patientTypes";
-import { formatDate, formatMoney } from "../lib/patientUtils";
+} from "../(admin)/reports/patients/lib/patientTypes";
+import {
+  formatDate,
+  formatMoney,
+} from "../(admin)/reports/patients/lib/patientUtils";
 
 export function EquipmentTable({ items }: { items: CurrentEquipmentItem[] }) {
   if (!items.length) {

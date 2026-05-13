@@ -1,13 +1,11 @@
-import type {
+import {
   BirthdayAnalytics,
-  BirthdayItem,
-  CleanDatabaseResult,
-  DashboardInventoryAnalytics,
-  DashboardMovement,
-  DashboardOrder,
-  DashboardRental,
   DashboardSummary,
+  InventoryAnalytics,
+  MovementRow,
+  OrderRow,
   ProductRow,
+  RentalRow,
   WipEmployeeSummary,
 } from "./dashboard-types";
 
@@ -33,262 +31,206 @@ export const EMPTY_SUMMARY: DashboardSummary = {
   importedReportFiles: 0,
 };
 
-export const EMPTY_INVENTORY_ANALYTICS: DashboardInventoryAnalytics = {
-  totalProducts: 0,
-  lowStockProducts: 0,
-  outOfStockProducts: 0,
+export const EMPTY_INVENTORY_ANALYTICS: InventoryAnalytics = {
+  totalInventoryItems: 0,
   totalInventoryValue: 0,
-  totalInventoryAvailable: 0,
   totalInventoryOnRent: 0,
   totalInventoryCommitted: 0,
   lowStockItems: [],
 };
 
-export const EMPTY_BIRTHDAYS: BirthdayAnalytics = {
+ export const EMPTY_BIRTHDAYS: BirthdayAnalytics = {
   today: [],
   next7Days: [],
   next30Days: [],
   thisMonth: [],
+  upcomingBirthdays: [],
+
   todayCount: 0,
   next7DaysCount: 0,
   next30DaysCount: 0,
   thisMonthCount: 0,
 };
 
-export function safeNumber(value: unknown): number {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-export function safeString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-export function formatMoney(value: unknown): string {
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: 2,
-  }).format(safeNumber(value));
-}
-
-export function formatDate(value: unknown): string {
-  if (!value) return "-";
-
-  try {
-    if (
-      typeof value === "object" &&
-      value !== null &&
-      "toDate" in value &&
-      typeof (value as { toDate?: unknown }).toDate === "function"
-    ) {
-      return (value as { toDate: () => Date }).toDate().toLocaleDateString();
-    }
-
-    const parsed =
-      value instanceof Date
-        ? value
-        : typeof value === "string" || typeof value === "number"
-          ? new Date(value)
-          : null;
-
-    if (!parsed || Number.isNaN(parsed.getTime())) {
-      return "-";
-    }
-
-    return parsed.toLocaleDateString();
-  } catch {
-    return "-";
-  }
-}
-
-export function formatBirthdayTiming(daysUntil: number): string {
-  if (daysUntil <= 0) return "Today";
-  if (daysUntil === 1) return "Tomorrow";
-  return `${daysUntil} days`;
-}
-
-export function privateOrderLabel(value: unknown): string {
-  const text = safeString(value);
-  return text || "Private Order";
-}
-
-export function normalizeDashboardSummary(value: unknown): DashboardSummary {
-  const data = toRecord(value);
-
+export function normalizeDashboardSummary(
+  data: Partial<DashboardSummary> | undefined
+): DashboardSummary {
   return {
-    totalRevenue: safeNumber(data.totalRevenue),
-    outstandingBalance: safeNumber(data.outstandingBalance),
-
-    totalWips: safeNumber(data.totalWips),
-    openWips: safeNumber(data.openWips),
-    completedWips: safeNumber(data.completedWips),
-
-    activeOrders: safeNumber(data.activeOrders),
-    deliveredOrders: safeNumber(data.deliveredOrders),
-    cancelledOrders: safeNumber(data.cancelledOrders),
-    archivedOrders: safeNumber(data.archivedOrders),
-
-    activeRentals: safeNumber(data.activeRentals),
-    monthlyRentalRevenue: safeNumber(data.monthlyRentalRevenue),
-
-    lowStockAlerts: safeNumber(data.lowStockAlerts),
-
-    importedReportRows: safeNumber(data.importedReportRows),
-    importedReportFiles: safeNumber(data.importedReportFiles),
+    ...EMPTY_SUMMARY,
+    ...data,
   };
 }
 
 export function normalizeInventoryAnalytics(
-  value: unknown
-): DashboardInventoryAnalytics {
-  const data = toRecord(value);
-
+  data: Partial<InventoryAnalytics> | undefined
+): InventoryAnalytics {
   return {
-    totalProducts: safeNumber(data.totalProducts),
-    lowStockProducts: safeNumber(data.lowStockProducts),
-    outOfStockProducts: safeNumber(data.outOfStockProducts),
-    totalInventoryValue: safeNumber(data.totalInventoryValue),
-
-    totalInventoryAvailable: safeNumber(data.totalInventoryAvailable),
-    totalInventoryOnRent: safeNumber(data.totalInventoryOnRent),
-    totalInventoryCommitted: safeNumber(data.totalInventoryCommitted),
-
-    lowStockItems: Array.isArray(data.lowStockItems)
-      ? data.lowStockItems.map(normalizeProduct)
+    ...EMPTY_INVENTORY_ANALYTICS,
+    ...data,
+    lowStockItems: Array.isArray(data?.lowStockItems)
+      ? data!.lowStockItems
       : [],
   };
 }
 
-export function normalizeBirthdayAnalytics(value: unknown): BirthdayAnalytics {
-  const data = toRecord(value);
-
-  const today = normalizeBirthdayArray(data.today);
-  const next7Days = normalizeBirthdayArray(data.next7Days);
-  const next30Days = normalizeBirthdayArray(data.next30Days);
-  const thisMonth = normalizeBirthdayArray(data.thisMonth);
-
+export function normalizeBirthdayAnalytics(
+  data: Partial<BirthdayAnalytics> | undefined
+): BirthdayAnalytics {
   return {
-    today,
-    next7Days,
-    next30Days,
-    thisMonth,
+    today: Array.isArray(data?.today) ? data.today : [],
+    next7Days: Array.isArray(data?.next7Days) ? data.next7Days : [],
+    next30Days: Array.isArray(data?.next30Days) ? data.next30Days : [],
+    thisMonth: Array.isArray(data?.thisMonth) ? data.thisMonth : [],
+    upcomingBirthdays: Array.isArray(data?.upcomingBirthdays)
+      ? data.upcomingBirthdays
+      : [],
 
-    todayCount: safeNumber(data.todayCount) || today.length,
-    next7DaysCount: safeNumber(data.next7DaysCount) || next7Days.length,
-    next30DaysCount: safeNumber(data.next30DaysCount) || next30Days.length,
-    thisMonthCount: safeNumber(data.thisMonthCount) || thisMonth.length,
+    todayCount: safeNumber(data?.todayCount),
+    next7DaysCount: safeNumber(data?.next7DaysCount),
+    next30DaysCount: safeNumber(data?.next30DaysCount),
+    thisMonthCount: safeNumber(data?.thisMonthCount),
   };
 }
 
-export function normalizeProduct(value: unknown): ProductRow {
-  const data = toRecord(value);
-
+export function normalizeProduct(data: any): ProductRow {
   return {
-    id: safeString(data.id),
-    name: safeString(data.name),
-    category: safeString(data.category),
-    status: safeString(data.status) || "active",
+    id: data?.id ?? "",
 
-    available: safeNumber(data.available),
-    quantityOnHand: safeNumber(data.quantityOnHand),
+    name: data?.name ?? "",
+    category: data?.category ?? "",
 
-    reorderLevel: safeNumber(data.reorderLevel),
+    status: data?.status ?? "active",
 
-    onRent: safeNumber(data.onRent),
-    committed: safeNumber(data.committed),
+    available: Number(data?.available ?? 0),
+    quantityOnHand: Number(data?.quantityOnHand ?? 0),
+
+    reorderLevel: Number(data?.reorderLevel ?? 0),
+
+    onRent: Number(data?.onRent ?? 0),
+    committed: Number(data?.committed ?? 0),
   };
 }
 
-export function normalizeOrder(value: unknown): DashboardOrder {
-  const data = toRecord(value);
-
+export function normalizeOrder(data: any): OrderRow {
   return {
-    id: safeString(data.id),
-    status: safeString(data.status),
-    productType: safeString(data.productType),
-    createdAt: data.createdAt,
+    id: data?.id ?? "",
+
+    patientName: data?.patientName ?? "",
+
+    orderNumber: data?.orderNumber ?? "",
+
+    status: data?.status ?? "pending",
+
+    total: Number(data?.total ?? 0),
+
+    createdAt: data?.createdAt ?? null,
   };
 }
 
-export function normalizeRental(value: unknown): DashboardRental {
-  const data = toRecord(value);
-
+export function normalizeRental(data: any): RentalRow {
   return {
-    id: safeString(data.id),
-    patientName: safeString(data.patientName),
-    equipment: safeString(data.equipment),
-    monthlyAmount: safeNumber(data.monthlyAmount),
-    status: safeString(data.status),
+    id: data?.id ?? "",
+
+    patientName: data?.patientName ?? "",
+
+    itemName: data?.itemName ?? "",
+
+    monthlyAmount: Number(data?.monthlyAmount ?? 0),
+
+    status: data?.status ?? "active",
+
+    startedAt: data?.startedAt ?? null,
   };
 }
 
-export function normalizeMovement(value: unknown): DashboardMovement {
-  const data = toRecord(value);
-
+export function normalizeMovement(data: any): MovementRow {
   return {
-    id: safeString(data.id),
-    productName: safeString(data.productName),
-    type: safeString(data.type || data.movementType),
-    quantity: safeNumber(data.quantity),
-    createdAt: data.createdAt,
+    id: data?.id ?? "",
+
+    productName: data?.productName ?? "",
+
+    movementType: data?.movementType ?? "",
+
+    quantity: Number(data?.quantity ?? 0),
+
+    performedBy: data?.performedBy ?? "",
+
+    createdAt: data?.createdAt ?? null,
   };
 }
 
-export function normalizeWipEmployee(value: unknown): WipEmployeeSummary {
-  const data = toRecord(value);
+export function normalizeWipEmployee(data: any): WipEmployeeSummary {
+  const employeeName = data?.employeeName ?? data?.employee ?? "Unassigned";
 
   return {
-    employee: safeString(data.employee || data.employeeName || data.name || "Unassigned"),
-    total: safeNumber(data.total),
-    open: safeNumber(data.open || data.unresolved),
-    completed: safeNumber(data.completed || data.resolved),
-    oldestDays: safeNumber(data.oldestDays),
+    employeeId: data?.employeeId ?? employeeName,
+    employeeName,
+    employee: data?.employee ?? employeeName,
+
+    openCount: safeNumber(data?.openCount),
+    completedCount: safeNumber(data?.completedCount),
+    pendingCount: safeNumber(data?.pendingCount),
   };
-}
-
-export function normalizeCleanDatabaseResult(
-  value: unknown
-): CleanDatabaseResult {
-  const data = toRecord(value);
-
-  return {
-    success: Boolean(data.success),
-    deletedCollections:
-      data.deletedCollections && typeof data.deletedCollections === "object"
-        ? (data.deletedCollections as Record<string, number>)
-        : {},
-    deletedStorageFiles: safeNumber(data.deletedStorageFiles),
-  };
-}
-
-function normalizeBirthdayArray(value: unknown): BirthdayItem[] {
-  if (!Array.isArray(value)) return [];
-
-  return value.map((item) => {
-    const data = toRecord(item);
-
-    return {
-      id: safeString(data.id),
-      fullName:
-        safeString(data.fullName) ||
-        `${safeString(data.firstName)} ${safeString(data.lastName)}`.trim() ||
-        "Unknown Patient",
-      phone: safeString(data.phone),
-      primaryInsurance: safeString(data.primaryInsurance),
-      nextAge:
-        data.nextAge === null || data.nextAge === undefined
-          ? undefined
-          : safeNumber(data.nextAge),
-      daysUntilBirthday: safeNumber(data.daysUntilBirthday),
-    };
-  });
-}
-
-function toRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === "object") {
-    return value as Record<string, unknown>;
+}export function safeNumber(value: unknown): number {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
   }
 
-  return {};
+  if (typeof value === "string") {
+    const parsed = Number(value);
+
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  return 0;
+}
+
+export function formatMoney(value: unknown): string {
+  const amount = safeNumber(value);
+
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: 2,
+  }).format(amount);
+}
+
+export function formatDate(
+  value?: string | number | Date | null
+): string {
+  if (!value) {
+    return "—";
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  }).format(date);
+}
+
+export function privateOrderLabel(
+  value?: string | null
+): string {
+  if (!value) {
+    return "Private Order";
+  }
+
+  const trimmed = value.trim();
+
+  if (!trimmed) {
+    return "Private Order";
+  }
+
+  if (trimmed.length <= 4) {
+    return trimmed;
+  }
+
+  return `#${trimmed.slice(-4)}`;
 }

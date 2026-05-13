@@ -4,7 +4,7 @@ import { getFirestore, Timestamp, FieldValue } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 import Papa from "papaparse";
 import pdfParse from "pdf-parse";
-import { updatePatientIndexFromRows } from "./patientIndex.js";
+import { updatePatientIndexFromRows } from "../analytics/patientIndex.js";
 
 const db = getFirestore();
 const storage = getStorage();

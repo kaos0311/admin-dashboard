@@ -13,6 +13,7 @@ import {
   where,
   writeBatch,
   type DocumentData,
+  type Query,
   type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
@@ -97,7 +98,9 @@ const DELETE_BATCH_SIZE = 200;
 const DEFAULT_PATIENT_REPORT_TYPE = "custom";
 
 function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => window.setTimeout(resolve, ms));
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
 }
 
 function normalizeString(value: unknown): string {
@@ -207,24 +210,24 @@ function parseFullName(rawFullName: string): {
     };
   }
 
-  let firstName = "";
-  let lastName = "";
-
   if (sourceFullName.includes(",")) {
     const [rawLast, rawRest] = sourceFullName.split(",", 2);
-    lastName = titleCaseNamePart(rawLast || "");
+    const restParts = (rawRest || "").trim().split(/\s+/).filter(Boolean);
 
-    const restParts = (rawRest || "")
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
+    const firstName = titleCaseNamePart(restParts[0] || "");
+    const lastName = titleCaseNamePart(rawLast || "");
 
-    firstName = titleCaseNamePart(restParts[0] || "");
-  } else {
-    const parts = sourceFullName.split(/\s+/).filter(Boolean);
-    firstName = titleCaseNamePart(parts[0] || "");
-    lastName = titleCaseNamePart(parts[parts.length - 1] || "");
+    return {
+      firstName,
+      lastName,
+      normalizedFullName: [firstName, lastName].filter(Boolean).join(" ").trim(),
+      sourceFullName,
+    };
   }
+
+  const parts = sourceFullName.split(/\s+/).filter(Boolean);
+  const firstName = titleCaseNamePart(parts[0] || "");
+  const lastName = titleCaseNamePart(parts[parts.length - 1] || "");
 
   return {
     firstName,
@@ -316,17 +319,6 @@ function extractIdentity(row: Record<string, Primitive>) {
 }
 
 function extractDetails(row: Record<string, Primitive>) {
-  const address =
-    valueFromAliases(row, [
-      "address",
-      "street_address",
-      "street address",
-      "address1",
-      "patient_address",
-      "ptbilladdr",
-      "ptdelivaddr",
-    ]) || "";
-
   const cityStateZipCombined = valueFromAliases(row, [
     "ptbillcitystzip",
     "ptdelivcitystzip",
@@ -356,7 +348,15 @@ function extractDetails(row: Record<string, Primitive>) {
       "email address",
       "patient_email",
     ]),
-    address,
+    address: valueFromAliases(row, [
+      "address",
+      "street_address",
+      "street address",
+      "address1",
+      "patient_address",
+      "ptbilladdr",
+      "ptdelivaddr",
+    ]),
     city:
       valueFromAliases(row, ["city", "patient_city"]) || cityStateZipCombined,
     state: valueFromAliases(row, ["state", "patient_state"]),
@@ -427,22 +427,33 @@ function toPrimitiveRecord(
 
 function readRowDoc(docSnap: QueryDocumentSnapshot<DocumentData>): SourceRow {
   const raw = docSnap.data() as Record<string, unknown>;
-  const data = toPrimitiveRecord(raw);
+
+  const directData =
+    raw.data && typeof raw.data === "object" && !Array.isArray(raw.data)
+      ? (raw.data as Record<string, unknown>)
+      : raw;
+
+  const data = toPrimitiveRecord(directData);
 
   const reportId =
-    normalizeString(data.sourcereportid) ||
+    normalizeString(raw.reportId) ||
+    normalizeString(raw.sourceReportId) ||
+    normalizeString(data.report_id) ||
     normalizeString(data.source_report_id) ||
-    getParentReportId(docSnap.ref.path);
+    getParentReportId(docSnap.ref.path) ||
+    "unknown";
 
   const reportType =
-    normalizeString(data.reporttype) ||
+    normalizeString(raw.reportType) ||
     normalizeString(data.report_type) ||
+    normalizeString(data.reporttype) ||
     DEFAULT_PATIENT_REPORT_TYPE;
 
   const fileName =
+    normalizeString(raw.fileName) ||
+    normalizeString(raw.sourceFileName) ||
+    normalizeString(data.file_name) ||
     normalizeString(data.filename) ||
-    normalizeString(data.sourcefilename) ||
-    normalizeString(data.source_file_name) ||
     "Imported report";
 
   return {
@@ -508,7 +519,7 @@ async function fetchRowsPaged(): Promise<SourceRow[]> {
   let lastDoc: QueryDocumentSnapshot<DocumentData> | null = null;
 
   while (true) {
-    const pageQuery = lastDoc
+    const pageQuery: Query<DocumentData> = lastDoc
       ? query(
           collectionGroup(db, "rows"),
           orderBy(documentId()),
@@ -523,13 +534,17 @@ async function fetchRowsPaged(): Promise<SourceRow[]> {
 
     const snap = await getDocs(pageQuery);
 
-    if (snap.empty) break;
+    if (snap.empty) {
+      break;
+    }
 
     rows.push(...snap.docs.map(readRowDoc));
 
-    lastDoc = snap.docs[snap.docs.length - 1];
+    lastDoc = snap.docs[snap.docs.length - 1] ?? null;
 
-    if (snap.size < READ_PAGE_SIZE) break;
+    if (snap.size < READ_PAGE_SIZE) {
+      break;
+    }
 
     await sleep(75);
   }
@@ -543,7 +558,7 @@ async function commitInChunks(
     data: Omit<PatientIndexDoc, "createdAt" | "updatedAt">;
   }>,
   collectionName: string
-) {
+): Promise<void> {
   for (let i = 0; i < refsAndData.length; i += WRITE_BATCH_SIZE) {
     const chunk = refsAndData.slice(i, i + WRITE_BATCH_SIZE);
     const batch = writeBatch(db);
@@ -572,7 +587,7 @@ async function deleteStalePatientDocs(validIds: Set<string>): Promise<number> {
   let lastDoc: QueryDocumentSnapshot<DocumentData> | null = null;
 
   while (true) {
-    const staleQuery = lastDoc
+    const staleQuery: Query<DocumentData> = lastDoc
       ? query(
           collection(db, "patients"),
           where("indexSource", "==", "patient_indexer"),
@@ -589,7 +604,9 @@ async function deleteStalePatientDocs(validIds: Set<string>): Promise<number> {
 
     const snap = await getDocs(staleQuery);
 
-    if (snap.empty) break;
+    if (snap.empty) {
+      break;
+    }
 
     const staleDocs = snap.docs.filter((docSnap) => !validIds.has(docSnap.id));
 
@@ -606,9 +623,11 @@ async function deleteStalePatientDocs(validIds: Set<string>): Promise<number> {
       await sleep(100);
     }
 
-    lastDoc = snap.docs[snap.docs.length - 1];
+    lastDoc = snap.docs[snap.docs.length - 1] ?? null;
 
-    if (snap.size < DELETE_BATCH_SIZE) break;
+    if (snap.size < DELETE_BATCH_SIZE) {
+      break;
+    }
   }
 
   return deleted;
@@ -704,7 +723,7 @@ async function writePatientIndexAnalytics(params: {
       sourceRows: result.sourceRows,
       lastIndexedReportId,
       lastIndexedReportType,
-      indexVersion: "patient-index-v1",
+      indexVersion: "patient-index-v2",
       lastUpdatedAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     },
@@ -773,7 +792,11 @@ export async function runPatientIndexer(
       });
     }
 
-    const patient = map.get(patientKey)!;
+    const patient = map.get(patientKey);
+
+    if (!patient) {
+      continue;
+    }
 
     patient.gender = mergePreferExisting(patient.gender, details.gender);
     patient.phone = mergePreferExisting(patient.phone, details.phone);
@@ -823,37 +846,41 @@ export async function runPatientIndexer(
   const patientDocs: Array<{
     refPathId: string;
     data: Omit<PatientIndexDoc, "createdAt" | "updatedAt">;
-  }> = Array.from(map.values()).map((patient) => ({
-    refPathId: patient.patientKey,
-    data: {
-      patientKey: patient.patientKey,
-      normalizedFullName: patient.normalizedFullName,
-      fullName: patient.fullName,
-      sourceFullName: patient.sourceFullName,
-      firstName: patient.firstName,
-      lastName: patient.lastName,
-      dob: patient.dob,
-      dod: patient.dod,
-      gender: patient.gender,
-      phone: patient.phone,
-      email: patient.email,
-      address: patient.address,
-      city: patient.city,
-      state: patient.state,
-      zip: patient.zip,
-      payors: dedupeAndSort(patient.payors),
-      patientStatuses: dedupeAndSort(patient.patientStatuses),
-      reportType: DEFAULT_PATIENT_REPORT_TYPE,
-      sourceReportTypes: dedupeAndSort(patient.sourceReportTypes),
-      sourceReportIds: dedupeAndSort(patient.sourceReportIds),
-      recordCount: patient.recordCount,
-      hospice: patient.isHospice,
-      isHospice: patient.isHospice,
-      isDeceased: patient.isDeceased,
-      hospiceStatus: patient.hospiceStatus,
-      indexSource: "patient_indexer",
-    },
-  }));
+  }> = Array.from(map.values()).map((patient) => {
+    const sourceReportTypes = dedupeAndSort(patient.sourceReportTypes);
+
+    return {
+      refPathId: patient.patientKey,
+      data: {
+        patientKey: patient.patientKey,
+        normalizedFullName: patient.normalizedFullName,
+        fullName: patient.fullName,
+        sourceFullName: patient.sourceFullName,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        dob: patient.dob,
+        dod: patient.dod,
+        gender: patient.gender,
+        phone: patient.phone,
+        email: patient.email,
+        address: patient.address,
+        city: patient.city,
+        state: patient.state,
+        zip: patient.zip,
+        payors: dedupeAndSort(patient.payors),
+        patientStatuses: dedupeAndSort(patient.patientStatuses),
+        reportType: sourceReportTypes[0] ?? DEFAULT_PATIENT_REPORT_TYPE,
+        sourceReportTypes,
+        sourceReportIds: dedupeAndSort(patient.sourceReportIds),
+        recordCount: patient.recordCount,
+        hospice: patient.isHospice,
+        isHospice: patient.isHospice,
+        isDeceased: patient.isDeceased,
+        hospiceStatus: patient.hospiceStatus,
+        indexSource: "patient_indexer",
+      },
+    };
+  });
 
   await commitInChunks(patientDocs, "patients");
   await writeHospicePatientMirror(patientDocs);

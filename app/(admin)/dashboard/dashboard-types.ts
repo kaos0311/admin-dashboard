@@ -37,19 +37,56 @@ export type ProductRow = {
   committed: number;
 };
 
-export type DashboardInventoryAnalytics = {
-  totalProducts: number;
+export type OrderRow = {
+  id: string;
 
-  lowStockProducts: number;
-  outOfStockProducts: number;
+  patientName: string;
 
-  totalInventoryValue: number;
+  orderNumber: string;
 
-  totalInventoryAvailable: number;
-  totalInventoryOnRent: number;
-  totalInventoryCommitted: number;
+  status: string;
 
-  lowStockItems: ProductRow[];
+  total: number;
+
+  createdAt?: string | null;
+};
+
+export type RentalRow = {
+  id: string;
+
+  patientName: string;
+
+  itemName: string;
+
+  monthlyAmount: number;
+
+  status: string;
+
+  startedAt?: string | null;
+};
+
+export type MovementRow = {
+  id: string;
+
+  productName: string;
+
+  movementType: string;
+
+  quantity: number;
+
+  performedBy: string;
+
+  createdAt?: string | null;
+};
+
+export type WipEmployeeSummary = {
+  employeeId: string;
+  employeeName: string;
+  employee?: string;
+
+  openCount: number;
+  completedCount: number;
+  pendingCount: number;
 };
 
 export type BirthdayItem = {
@@ -61,73 +98,53 @@ export type BirthdayItem = {
 
   primaryInsurance?: string;
 
-  nextAge?: number;
+  birthday?: string;
 
-  daysUntilBirthday: number;
+  age?: number;
 };
-
 export type BirthdayAnalytics = {
   today: BirthdayItem[];
   next7Days: BirthdayItem[];
   next30Days: BirthdayItem[];
   thisMonth: BirthdayItem[];
+  upcomingBirthdays: BirthdayItem[];
 
   todayCount: number;
   next7DaysCount: number;
   next30DaysCount: number;
   thisMonthCount: number;
 };
+export interface InventoryAnalytics {
+  totalInventoryItems: number;
 
-export type DashboardOrder = {
-  id: string;
+  totalInventoryValue: number;
 
-  status: string;
+  totalInventoryOnRent: number;
 
-  productType?: string;
+  totalInventoryCommitted: number;
 
-  createdAt?: unknown;
-};
-
-export type DashboardRental = {
-  id: string;
-
-  patientName?: string;
-
-  equipment?: string;
-
-  monthlyAmount?: number;
-
-  status: string;
-};
-
-export type DashboardMovement = {
-  id: string;
-
-  productName?: string;
-
-  type?: string;
-
-  quantity: number;
-
-  createdAt?: unknown;
-};
-
-export type WipEmployeeSummary = {
-  employee: string;
-
-  total: number;
-
-  open: number;
-
-  completed: number;
-
-  oldestDays: number;
-};
-
+  lowStockItems: ProductRow[];
+}
 export type CleanDatabaseResult = {
+  ok?: boolean;
   success?: boolean;
 
-  deletedCollections?: Record<string, number>;
+  dryRun?: boolean;
 
+  message?: string;
+
+  deletedCollections?: string[];
   deletedStorageFiles?: number;
+
+  deletedDocuments?: number;
+  deletedReports?: number;
+  deletedRows?: number;
+  deletedJobs?: number;
+
+  skipped?: string[];
+
+  startedAt?: string | null;
+  completedAt?: string | null;
+
+  error?: string;
 };
