@@ -25,12 +25,10 @@ export type ProductRow = {
 
   name: string;
   category: string;
-
   status: string;
 
   available: number;
   quantityOnHand: number;
-
   reorderLevel: number;
 
   onRent: number;
@@ -41,9 +39,7 @@ export type OrderRow = {
   id: string;
 
   patientName: string;
-
   orderNumber: string;
-
   status: string;
 
   total: number;
@@ -55,12 +51,10 @@ export type RentalRow = {
   id: string;
 
   patientName: string;
-
   itemName: string;
+  status: string;
 
   monthlyAmount: number;
-
-  status: string;
 
   startedAt?: string | null;
 };
@@ -69,12 +63,10 @@ export type MovementRow = {
   id: string;
 
   productName: string;
-
   movementType: string;
+  performedBy: string;
 
   quantity: number;
-
-  performedBy: string;
 
   createdAt?: string | null;
 };
@@ -95,13 +87,11 @@ export type BirthdayItem = {
   fullName: string;
 
   phone?: string;
-
   primaryInsurance?: string;
-
   birthday?: string;
-
   age?: number;
 };
+
 export type BirthdayAnalytics = {
   today: BirthdayItem[];
   next7Days: BirthdayItem[];
@@ -114,24 +104,23 @@ export type BirthdayAnalytics = {
   next30DaysCount: number;
   thisMonthCount: number;
 };
-export interface InventoryAnalytics {
+
+export type InventoryAnalytics = {
   totalInventoryItems: number;
-
   totalInventoryValue: number;
-
   totalInventoryOnRent: number;
-
   totalInventoryCommitted: number;
 
   lowStockItems: ProductRow[];
-}
+};
+
 export type CleanDatabaseResult = {
   ok?: boolean;
   success?: boolean;
-
   dryRun?: boolean;
 
   message?: string;
+  error?: string;
 
   deletedCollections?: string[];
   deletedStorageFiles?: number;
@@ -145,6 +134,4 @@ export type CleanDatabaseResult = {
 
   startedAt?: string | null;
   completedAt?: string | null;
-
-  error?: string;
 };

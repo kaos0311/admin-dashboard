@@ -3,6 +3,12 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
+    /*
+    |--------------------------------------------------------------------------
+    | HELPERS
+    |--------------------------------------------------------------------------
+    */
+
     function signedIn() {
       return request.auth != null;
     }
@@ -36,11 +42,11 @@ service cloud.firestore {
     }
 
     function isAdmin() {
-      return hasRole("admin");
+      return signedIn() && hasRole("admin");
     }
 
     function isStaff() {
-      return hasRole("staff");
+      return signedIn() && hasRole("staff");
     }
 
     function isStaffOrAdmin() {
@@ -59,6 +65,56 @@ service cloud.firestore {
       return signedIn() && request.auth.uid == uid;
     }
 
+    function onlyAllowedKeys(keys) {
+      return request.resource.data.keys().hasOnly(keys);
+    }
+
+    function userCreateKeys() {
+      return [
+        "uid",
+        "email",
+        "displayName",
+        "role",
+        "active",
+        "createdAt",
+        "updatedAt"
+      ];
+    }
+
+    function userSelfUpdateKeys() {
+      return [
+        "displayName",
+        "updatedAt"
+      ];
+    }
+
+    function safeAppSettingsKeys() {
+      return [
+        "companyName",
+        "companyPhone",
+        "companyEmail",
+        "companyAddress",
+        "defaultTheme",
+        "defaultHomeScreen",
+        "compactTables",
+        "showDashboardCounters",
+        "enableOrderFilters",
+        "enableProductFilters",
+        "enableRentalFilters",
+        "maintenanceMode",
+        "maintenanceMessage",
+        "allowAdminsDuringMaintenance",
+        "allowedUploadTypes",
+        "maxUploadSizeMb",
+        "pdfParsingEnabled",
+        "csvParsingEnabled",
+        "autoIndexAfterUpload",
+        "keepRawUploadsInStorage",
+        "createdAt",
+        "updatedAt"
+      ];
+    }
+
     /*
     |--------------------------------------------------------------------------
     | USERS
@@ -68,11 +124,38 @@ service cloud.firestore {
     match /users/{uid} {
       allow read: if canAccessDashboard() && (isAdmin() || isSelf(uid));
 
-      allow create: if isAdmin() || isSelf(uid);
+      allow create: if
+        (
+          isAdmin()
+          && onlyAllowedKeys(userCreateKeys())
+          && request.resource.data.role in ["admin", "staff"]
+          && request.resource.data.active is bool
+        )
+        ||
+        (
+          isSelf(uid)
+          && !exists(/databases/$(database)/documents/users/$(uid))
+          && onlyAllowedKeys(userCreateKeys())
+          && request.resource.data.uid == uid
+          && request.resource.data.email == request.auth.token.email
+          && request.resource.data.role == "staff"
+          && request.resource.data.active == true
+        );
 
-      allow update: if isAdmin() || isSelf(uid);
+      allow update: if
+        (
+          isAdmin()
+          && request.resource.data.role in ["admin", "staff"]
+          && request.resource.data.active is bool
+        )
+        ||
+        (
+          isSelf(uid)
+          && canAccessDashboard()
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(userSelfUpdateKeys())
+        );
 
-      allow delete: if isAdmin();
+      allow delete: if isAdmin() && !isSelf(uid);
     }
 
     /*
@@ -82,8 +165,14 @@ service cloud.firestore {
     */
 
     match /settings/{docId} {
-      allow read: if canAccessDashboard();
-      allow create, update, delete: if isAdmin();
+      allow read: if docId == "app" || canAccessDashboard();
+
+      allow create, update: if
+        isAdmin()
+        && docId == "app"
+        && request.resource.data.keys().hasOnly(safeAppSettingsKeys());
+
+      allow delete: if isAdmin();
     }
 
     /*
@@ -167,8 +256,7 @@ service cloud.firestore {
     }
 
     match /importJobs/{jobId} {
-      allow read, create: if canAccessDashboard();
-      allow update: if canAccessDashboard();
+      allow read, create, update: if canAccessDashboard();
       allow delete: if isAdmin();
     }
 
@@ -194,6 +282,11 @@ service cloud.firestore {
     }
 
     match /patientProfiles/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /dataQualityIssues/{docId} {
       allow read, create, update: if canAccessDashboard();
       allow delete: if isAdmin();
     }
@@ -261,6 +354,73 @@ service cloud.firestore {
       allow delete: if isAdmin();
     }
 
+    match /insuranceRecords/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | COMMAND CENTER / OPERATIONS INTELLIGENCE
+    |--------------------------------------------------------------------------
+    */
+
+    match /complianceIssues/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /tasks/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /taskComments/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /parAlerts/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /cmnQueue/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /equipmentRecalls/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /recallMatches/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /hospiceOversight/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /careSummaries/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | NOTIFICATIONS
+    |--------------------------------------------------------------------------
+    */
+
+    match /notifications/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
     /*
     |--------------------------------------------------------------------------
     | AUDIT LOGS
@@ -275,13 +435,12 @@ service cloud.firestore {
 
     /*
     |--------------------------------------------------------------------------
-    | SAFE FALLBACK FOR ADMIN DASHBOARD COLLECTIONS
+    | DENY EVERYTHING ELSE
     |--------------------------------------------------------------------------
     */
 
     match /{document=**} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
+      allow read, create, update, delete: if false;
     }
   }
 }

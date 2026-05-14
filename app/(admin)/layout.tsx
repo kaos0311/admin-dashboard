@@ -2,7 +2,7 @@
 
 import { useCallback, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { Menu, LogOut } from "lucide-react";
+import { LogOut, Menu } from "lucide-react";
 import { signOut } from "firebase/auth";
 
 import AdminSidebar from "@/app/components/admin/AdminSidebar";
@@ -11,7 +11,11 @@ import MaintenanceGate from "@/app/components/MaintenanceGate";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 import { auth } from "@/lib/firebase";
 
-export default function AdminLayout({ children }: { children: ReactNode }) {
+type AdminLayoutProps = {
+  children: ReactNode;
+};
+
+export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter();
   const { user, loading } = useAuthRole();
 
@@ -27,10 +31,13 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
   }, []);
 
   const handleLogout = useCallback(async () => {
-    if (loggingOut) return;
+    if (loggingOut) {
+      return;
+    }
+
+    setLoggingOut(true);
 
     try {
-      setLoggingOut(true);
       await signOut(auth);
       router.replace("/login");
       router.refresh();
@@ -85,6 +92,7 @@ export default function AdminLayout({ children }: { children: ReactNode }) {
                     <div className="text-sm font-medium text-white">
                       Welcome
                     </div>
+
                     <div className="truncate text-sm text-white/65">
                       {user?.email ?? "Signed in"}
                     </div>

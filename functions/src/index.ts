@@ -4,8 +4,8 @@ if (!getApps().length) {
   initializeApp();
 }
 
-/* IMPORT ENGINE */
-export { importFileFromStorage } from "./imports/importEngine.js";
+/* IMPORT STORAGE TRIGGER */
+export { importFileFromStorage } from "./imports/importFileFromStorage.js";
 
 /* MAINTENANCE */
 export { cleanDatabase } from "./maintenance/cleanDatabase.js";

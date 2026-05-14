@@ -66,7 +66,7 @@ const DOCUMENT_TYPE_OPTIONS = [
   "Signed Pickup Ticket",
   "Physician Order",
   "CMN",
-  "PAR",
+  "wip",
   "Prescription",
   "Insurance Document",
   "Face Sheet",

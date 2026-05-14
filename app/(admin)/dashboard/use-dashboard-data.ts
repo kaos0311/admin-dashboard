@@ -87,10 +87,8 @@ function withDocId<T extends Record<string, unknown>>(
 
 export function useDashboardData(): DashboardDataState {
   const [summary, setSummary] = useState<DashboardSummary>(EMPTY_SUMMARY);
-
   const [birthdays, setBirthdays] =
     useState<BirthdayAnalytics>(EMPTY_BIRTHDAYS);
-
   const [inventoryAnalytics, setInventoryAnalytics] =
     useState<InventoryAnalytics>(EMPTY_INVENTORY_ANALYTICS);
 
@@ -164,10 +162,7 @@ export function useDashboardData(): DashboardDataState {
       setWipEmployees(
         wipEmployeesSnap.docs.map((docSnap) =>
           normalizeWipEmployee(
-            withDocId(
-              docSnap.id,
-              docSnap.data() as Record<string, unknown>
-            )
+            withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
           )
         )
       );
@@ -175,10 +170,7 @@ export function useDashboardData(): DashboardDataState {
       setOrders(
         ordersSnap.docs.map((docSnap) =>
           normalizeOrder(
-            withDocId(
-              docSnap.id,
-              docSnap.data() as Record<string, unknown>
-            )
+            withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
           )
         )
       );
@@ -186,10 +178,7 @@ export function useDashboardData(): DashboardDataState {
       setRentals(
         rentalsSnap.docs.map((docSnap) =>
           normalizeRental(
-            withDocId(
-              docSnap.id,
-              docSnap.data() as Record<string, unknown>
-            )
+            withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
           )
         )
       );
@@ -197,10 +186,7 @@ export function useDashboardData(): DashboardDataState {
       setProducts(
         productsSnap.docs.map((docSnap) =>
           normalizeProduct(
-            withDocId(
-              docSnap.id,
-              docSnap.data() as Record<string, unknown>
-            )
+            withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
           )
         )
       );
@@ -208,10 +194,7 @@ export function useDashboardData(): DashboardDataState {
       setMovements(
         movementsSnap.docs.map((docSnap) =>
           normalizeMovement(
-            withDocId(
-              docSnap.id,
-              docSnap.data() as Record<string, unknown>
-            )
+            withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
           )
         )
       );
@@ -225,14 +208,13 @@ export function useDashboardData(): DashboardDataState {
       setProducts([]);
       setMovements([]);
       setWipEmployees([]);
+      setPreviewsLoaded(true);
 
       setError(
         `Dashboard preview data could not be loaded. Check Firestore permissions, rules, and required indexes. ${getErrorMessage(
           loadError
         )}`
       );
-
-      setPreviewsLoaded(true);
     } finally {
       setRefreshing(false);
     }
@@ -241,79 +223,79 @@ export function useDashboardData(): DashboardDataState {
   useEffect(() => {
     const unsubscribes: Unsubscribe[] = [];
 
-    unsubscribes.push(
-      onSnapshot(
-        doc(db, "analytics", "dashboard"),
-        (snap) => {
-          setSummary(
-            snap.exists()
-              ? normalizeDashboardSummary(
-                  snap.data() as Partial<DashboardSummary>
-                )
-              : EMPTY_SUMMARY
-          );
+    const dashboardUnsubscribe = onSnapshot(
+      doc(db, "analytics", "dashboard"),
+      (snap) => {
+        setSummary(
+          snap.exists()
+            ? normalizeDashboardSummary(
+                snap.data() as Partial<DashboardSummary>
+              )
+            : EMPTY_SUMMARY
+        );
 
-          setAnalyticsLoaded(true);
-        },
-        (snapshotError) => {
-          console.warn("analytics/dashboard listener failed.", snapshotError);
+        setAnalyticsLoaded(true);
+      },
+      (snapshotError) => {
+        console.warn("analytics/dashboard listener failed.", snapshotError);
 
-          setSummary(EMPTY_SUMMARY);
-          setAnalyticsLoaded(true);
+        setSummary(EMPTY_SUMMARY);
+        setAnalyticsLoaded(true);
 
-          setError(
-            `Dashboard analytics could not be loaded. Check Firestore rules for analytics/dashboard. ${getErrorMessage(
-              snapshotError
-            )}`
-          );
-        }
-      )
+        setError(
+          `Dashboard analytics could not be loaded. Check Firestore rules for analytics/dashboard. ${getErrorMessage(
+            snapshotError
+          )}`
+        );
+      }
+    );
+
+    const birthdaysUnsubscribe = onSnapshot(
+      doc(db, "analytics", "birthdays"),
+      (snap) => {
+        setBirthdays(
+          snap.exists()
+            ? normalizeBirthdayAnalytics(
+                snap.data() as Partial<BirthdayAnalytics>
+              )
+            : EMPTY_BIRTHDAYS
+        );
+
+        setBirthdaysLoaded(true);
+      },
+      (snapshotError) => {
+        console.warn("analytics/birthdays listener failed.", snapshotError);
+
+        setBirthdays(EMPTY_BIRTHDAYS);
+        setBirthdaysLoaded(true);
+      }
+    );
+
+    const inventoryUnsubscribe = onSnapshot(
+      doc(db, "analytics", "inventory"),
+      (snap) => {
+        setInventoryAnalytics(
+          snap.exists()
+            ? normalizeInventoryAnalytics(
+                snap.data() as Partial<InventoryAnalytics>
+              )
+            : EMPTY_INVENTORY_ANALYTICS
+        );
+
+        setInventoryLoaded(true);
+      },
+      (snapshotError) => {
+        console.warn("analytics/inventory listener failed.", snapshotError);
+
+        setInventoryAnalytics(EMPTY_INVENTORY_ANALYTICS);
+        setInventoryLoaded(true);
+      }
     );
 
     unsubscribes.push(
-      onSnapshot(
-        doc(db, "analytics", "birthdays"),
-        (snap) => {
-          setBirthdays(
-            snap.exists()
-              ? normalizeBirthdayAnalytics(
-                  snap.data() as Partial<BirthdayAnalytics>
-                )
-              : EMPTY_BIRTHDAYS
-          );
-
-          setBirthdaysLoaded(true);
-        },
-        (snapshotError) => {
-          console.warn("analytics/birthdays listener failed.", snapshotError);
-
-          setBirthdays(EMPTY_BIRTHDAYS);
-          setBirthdaysLoaded(true);
-        }
-      )
-    );
-
-    unsubscribes.push(
-      onSnapshot(
-        doc(db, "analytics", "inventory"),
-        (snap) => {
-          setInventoryAnalytics(
-            snap.exists()
-              ? normalizeInventoryAnalytics(
-                  snap.data() as Partial<InventoryAnalytics>
-                )
-              : EMPTY_INVENTORY_ANALYTICS
-          );
-
-          setInventoryLoaded(true);
-        },
-        (snapshotError) => {
-          console.warn("analytics/inventory listener failed.", snapshotError);
-
-          setInventoryAnalytics(EMPTY_INVENTORY_ANALYTICS);
-          setInventoryLoaded(true);
-        }
-      )
+      dashboardUnsubscribe,
+      birthdaysUnsubscribe,
+      inventoryUnsubscribe
     );
 
     void refreshDashboard();
@@ -330,12 +312,7 @@ export function useDashboardData(): DashboardDataState {
       !inventoryLoaded ||
       !previewsLoaded
     );
-  }, [
-    analyticsLoaded,
-    birthdaysLoaded,
-    inventoryLoaded,
-    previewsLoaded,
-  ]);
+  }, [analyticsLoaded, birthdaysLoaded, inventoryLoaded, previewsLoaded]);
 
   return {
     summary,

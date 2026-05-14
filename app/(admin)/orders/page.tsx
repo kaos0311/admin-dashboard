@@ -14,7 +14,6 @@ import {
   doc,
   getDocs,
   limit,
-  onSnapshot,
   orderBy,
   query,
   serverTimestamp,
@@ -29,7 +28,6 @@ import {
 } from "firebase/firestore";
 import { onAuthStateChanged } from "firebase/auth";
 import { ref, uploadBytes } from "firebase/storage";
-import { auth, db, storage } from "@/lib/firebase";
 import {
   AlertTriangle,
   Archive,
@@ -53,13 +51,15 @@ import {
   X,
 } from "lucide-react";
 import toast from "react-hot-toast";
+
 import BarcodeScannerModal from "@/app/components/barcode/BarcodeScannerModal";
+import { normalizeBarcode } from "@/lib/barcode";
+import { auth, db, storage } from "@/lib/firebase";
 import {
   allocateInventoryToOrder,
   findProductByBarcode,
   restoreInventoryFromOrder,
 } from "@/lib/inventory";
-import { normalizeBarcode } from "@/lib/barcode";
 
 type OrderStatus =
   | "processing"
@@ -132,7 +132,6 @@ type OrderRow = {
   inventoryAllocationSourceId?: string;
   inventoryRestored?: boolean;
   searchText?: string;
-
   patientKey?: string;
   orderKey?: string;
   normalizedName?: string;
@@ -226,7 +225,6 @@ const initialSmartFilters: SmartFilters = {
 };
 
 const ORDERS_PAGE_SIZE = 75;
-const IMPORT_JOBS_LIMIT = 12;
 const IMPORT_SAMPLE_BYTES = 48_000;
 
 function toDateSafe(value: unknown): Date | null {
@@ -266,31 +264,6 @@ function formatDate(date: Date | null): string {
     day: "numeric",
     year: "numeric",
   }).format(date);
-}
-
-function formatDateTime(date: Date | null): string {
-  if (!date) return "—";
-
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
-}
-
-function formatDuration(start: Date | null, end: Date | null): string {
-  if (!start || !end) return "—";
-
-  const ms = Math.max(0, end.getTime() - start.getTime());
-  const seconds = Math.round(ms / 1000);
-
-  if (seconds < 60) return `${seconds}s`;
-
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-
-  return `${minutes}m ${remainingSeconds}s`;
 }
 
 function normalizeSearchText(value: string): string {
@@ -339,8 +312,11 @@ function makeOrderKey(input: {
   const customerId = normalizeCompact(input.customerId || "");
 
   if (salesOrderNumber) return `so:${salesOrderNumber}`;
+
   if (customerId && input.productType) {
-    return `customer:${customerId}|product:${normalizeCompact(input.productType)}`;
+    return `customer:${customerId}|product:${normalizeCompact(
+      input.productType
+    )}`;
   }
 
   return normalizeSearchText(
@@ -359,14 +335,6 @@ function isHospiceText(value: string): boolean {
 
 function makeDuplicateImportKey(file: File, reportType: ImportReportType): string {
   return normalizeSearchText(`${reportType}_${file.name}_${file.size}`);
-}
-
-function isArchivedStatus(status: OrderStatus): boolean {
-  return (
-    status === "delivered" ||
-    status === "cancelled" ||
-    status === "archived"
-  );
 }
 
 function getCurrentUserLabel(): string {
@@ -535,14 +503,14 @@ function normalizeOrder(id: string, data: Record<string, unknown>): OrderRow {
       typeof data.normalizedAddress === "string" ? data.normalizedAddress : "",
     needsReview: data.needsReview === true,
     reviewReasons: Array.isArray(data.reviewReasons)
-      ? data.reviewReasons.filter((item): item is SmartReviewReason => {
-          return typeof item === "string";
-        })
+      ? data.reviewReasons.filter(
+          (item): item is SmartReviewReason => typeof item === "string"
+        )
       : [],
     smartRouteTargets: Array.isArray(data.smartRouteTargets)
-      ? data.smartRouteTargets.filter((item): item is SmartRouteTarget => {
-          return typeof item === "string";
-        })
+      ? data.smartRouteTargets.filter(
+          (item): item is SmartRouteTarget => typeof item === "string"
+        )
       : [],
     linkedPatientId:
       typeof data.linkedPatientId === "string" ? data.linkedPatientId : "",
@@ -578,11 +546,14 @@ function normalizeOrder(id: string, data: Record<string, unknown>): OrderRow {
     ...baseOrder,
     patientKey,
     orderKey,
-    normalizedName: baseOrder.normalizedName || normalizeSearchText(baseOrder.patientName),
+    normalizedName:
+      baseOrder.normalizedName || normalizeSearchText(baseOrder.patientName),
     normalizedDob: baseOrder.normalizedDob || normalizeDob(baseOrder.dob || ""),
-    normalizedPhone: baseOrder.normalizedPhone || normalizePhone(baseOrder.phone || ""),
+    normalizedPhone:
+      baseOrder.normalizedPhone || normalizePhone(baseOrder.phone || ""),
     normalizedAddress:
-      baseOrder.normalizedAddress || normalizeSearchText(baseOrder.patientAddress),
+      baseOrder.normalizedAddress ||
+      normalizeSearchText(baseOrder.patientAddress),
     needsReview: baseOrder.needsReview || reviewReasons.length > 0,
     reviewReasons,
     smartRouteTargets: baseOrder.smartRouteTargets?.length
@@ -668,7 +639,6 @@ async function findRecentDuplicateImport(
   );
 
   const snapshot = await getDocs(duplicateQuery);
-
   if (snapshot.empty) return null;
 
   const first = snapshot.docs[0];
@@ -680,14 +650,16 @@ async function readFileSample(file: File): Promise<string> {
   return await blob.text();
 }
 
-async function detectReportTypeFromFile(file: File): Promise<SmartDetectionResult> {
+async function detectReportTypeFromFile(
+  file: File
+): Promise<SmartDetectionResult> {
   const lowerName = file.name.toLowerCase();
   let sample = "";
 
   try {
     if (
       file.type.includes("csv") ||
-      file.name.toLowerCase().endsWith(".csv") ||
+      lowerName.endsWith(".csv") ||
       file.type.includes("text")
     ) {
       sample = await readFileSample(file);
@@ -710,7 +682,7 @@ async function detectReportTypeFromFile(file: File): Promise<SmartDetectionResul
 
   if (haystack.includes("ticket")) deliveryScore += 1;
   if (haystack.includes("delivery")) deliveryScore += 2;
-  if (haystack.endsWith(".pdf") || file.type.includes("pdf")) deliveryScore += 1;
+  if (lowerName.endsWith(".pdf") || file.type.includes("pdf")) deliveryScore += 1;
 
   if (haystack.includes("outstanding sales")) {
     outstandingScore += 4;
@@ -744,7 +716,7 @@ async function detectReportTypeFromFile(file: File): Promise<SmartDetectionResul
   const confidence = Math.min(0.98, Math.max(0.25, winner.score / 8));
 
   if (!reasons.length) {
-    reasons.push("No strong report pattern found. Using safest generic fallback.");
+    reasons.push("No strong report pattern found. Using generic fallback.");
   }
 
   return {
@@ -784,9 +756,12 @@ function getReviewReasonLabel(reason: SmartReviewReason): string {
   return labels[reason];
 }
 
+function isArchivedStatus(status: OrderStatus): boolean {
+  return status === "delivered" || status === "cancelled" || status === "archived";
+}
+
 export default function OrdersPage() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [importJobs, setImportJobs] = useState<ImportJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -829,7 +804,6 @@ export default function OrdersPage() {
 
       if (!user) {
         setOrders([]);
-        setImportJobs([]);
         setLoading(false);
         setLastCursor(null);
         setHasMore(false);
@@ -838,36 +812,6 @@ export default function OrdersPage() {
 
     return () => unsubscribeAuth();
   }, []);
-
-  useEffect(() => {
-    if (!isAuthed) return;
-
-    const jobsQuery = query(
-      collection(db, "importJobs"),
-      orderBy("createdAt", "desc"),
-      limit(IMPORT_JOBS_LIMIT)
-    );
-
-    const unsubscribe = onSnapshot(
-      jobsQuery,
-      (snapshot) => {
-        const next = snapshot.docs.map((docSnap) =>
-          normalizeImportJob(
-            docSnap.id,
-            docSnap.data() as Record<string, unknown>
-          )
-        );
-
-        setImportJobs(next);
-      },
-      (error) => {
-        console.error("IMPORT JOBS SNAPSHOT ERROR:", error);
-        toast.error("Could not load recent import jobs.");
-      }
-    );
-
-    return () => unsubscribe();
-  }, [isAuthed]);
 
   const buildOrdersQuery = useCallback(
     (
@@ -1050,16 +994,22 @@ export default function OrdersPage() {
     return orders.filter((order) => {
       const reasons = order.reviewReasons || [];
 
-      if (smartFilters.sourceReportType) {
-        if (order.sourceReportType !== smartFilters.sourceReportType) return false;
+      if (
+        smartFilters.sourceReportType &&
+        order.sourceReportType !== smartFilters.sourceReportType
+      ) {
+        return false;
       }
 
-      if (smartFilters.facilityName) {
-        if (order.facilityName !== smartFilters.facilityName) return false;
+      if (
+        smartFilters.facilityName &&
+        order.facilityName !== smartFilters.facilityName
+      ) {
+        return false;
       }
 
-      if (smartFilters.insurance) {
-        if (order.insurance !== smartFilters.insurance) return false;
+      if (smartFilters.insurance && order.insurance !== smartFilters.insurance) {
+        return false;
       }
 
       if (smartFilters.reviewOnly && !order.needsReview) return false;
@@ -1342,7 +1292,7 @@ export default function OrdersPage() {
       resetCreateForm();
       setLastCursor(null);
       await loadOrders("refresh");
-      toast.success("Order created, indexed, and inventory allocated.");
+      toast.success("Order created and inventory allocated.");
     } catch (error: unknown) {
       console.error("CREATE ORDER ERROR:", error);
       setCreateError(
@@ -1392,10 +1342,10 @@ export default function OrdersPage() {
 
       setShowEditModal(false);
       resetEditForm();
-      toast.success("Order updated and smart fields rebuilt.");
+      toast.success("Order updated.");
     } catch (error: unknown) {
       console.error("UPDATE ORDER ERROR:", error);
-      setEditError("Failed to update order. Please try again.");
+      setEditError("Failed to update order.");
     } finally {
       setEditing(false);
     }
@@ -1417,7 +1367,7 @@ export default function OrdersPage() {
 
     try {
       setImporting(true);
-      setImportMessage("Detecting report type...");
+      setImportMessage("Detecting report type.");
 
       const detection = detectedImport ?? (await detectReportTypeFromFile(file));
       const resolvedImportType = detection.reportType;
@@ -1425,7 +1375,7 @@ export default function OrdersPage() {
       setImportType(resolvedImportType);
       setDetectedImport(detection);
 
-      setImportMessage("Checking for duplicate upload...");
+      setImportMessage("Checking for duplicate upload.");
 
       const duplicateKey = makeDuplicateImportKey(file, resolvedImportType);
       const duplicate = await findRecentDuplicateImport(duplicateKey);
@@ -1442,7 +1392,7 @@ export default function OrdersPage() {
         return;
       }
 
-      setImportMessage("Uploading raw file to Firebase Storage...");
+      setImportMessage("Uploading raw file to Firebase Storage.");
 
       const importJobRef = doc(collection(db, "importJobs"));
       const importId = importJobRef.id;
@@ -1635,10 +1585,7 @@ export default function OrdersPage() {
       setSavingId(orderId);
       applyLocalStatusUpdate(orderId, "processing");
 
-      if (
-        currentOrder?.productId &&
-        currentOrder.inventoryAllocated !== true
-      ) {
+      if (currentOrder?.productId && currentOrder.inventoryAllocated !== true) {
         await allocateInventoryToOrder({
           productId: currentOrder.productId,
           quantity: currentOrder.quantity,
@@ -1783,8 +1730,6 @@ export default function OrdersPage() {
         onDetectFile={(file) => void handleDetectImportFile(file)}
         onImportFile={handleImportFile}
       />
-
-      <ImportJobsPanel jobs={importJobs} />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
         <SummaryCard label="Processing" value={summary.processing} />
@@ -2019,8 +1964,8 @@ function ImportPanel({
             Smart Import Orders From Report
           </h2>
           <p className="mt-1 text-sm text-zinc-400">
-            Upload CSV/PDF reports. The page detects the report type, creates an
-            import job, and sends routing metadata to Cloud Functions.
+            Upload CSV/PDF reports. This creates an import job for Cloud
+            Functions without displaying uploaded file history on this page.
           </p>
 
           {detectedImport ? (
@@ -2106,102 +2051,6 @@ function ImportPanel({
         </div>
       </div>
     </div>
-  );
-}
-
-function ImportJobsPanel({ jobs }: { jobs: ImportJob[] }) {
-  if (!jobs.length) return null;
-
-  return (
-    <section className="rounded-2xl border border-white/10 bg-[#0b1220] p-5">
-      <h2 className="text-lg font-semibold text-white">Recent Import Jobs</h2>
-
-      <div className="mt-4 grid gap-3">
-        {jobs.map((job) => (
-          <div
-            key={job.id}
-            className="rounded-xl border border-white/10 bg-black/20 p-4"
-          >
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div>
-                <div className="font-medium text-white">
-                  {job.fileName || "Unnamed report"}
-                </div>
-                <div className="mt-1 text-xs text-zinc-500">
-                  {getReportTypeLabel(job.reportType)} · Uploaded{" "}
-                  {formatDateTime(job.createdAt)}
-                </div>
-                {job.detectedReportType ? (
-                  <div className="mt-1 text-xs text-cyan-400">
-                    Detected {getReportTypeLabel(job.detectedReportType)} ·{" "}
-                    {Math.round(job.detectionConfidence * 100)}%
-                  </div>
-                ) : null}
-              </div>
-
-              <JobStatusBadge status={job.status} />
-            </div>
-
-            <div className="mt-3 grid gap-2 text-sm text-zinc-400 sm:grid-cols-2 xl:grid-cols-4">
-              <div>Rows: {job.rowCount.toLocaleString()}</div>
-              <div>
-                Review: {job.needsReviewRows.toLocaleString()}
-              </div>
-              <div>
-                Missing DOB: {job.missingDobRows.toLocaleString()}
-              </div>
-              <div>
-                Missing Product: {job.missingProductRows.toLocaleString()}
-              </div>
-              <div>
-                Hospice skipped: {job.skippedHospiceRows.toLocaleString()}
-              </div>
-              <div>
-                Duplicates: {job.duplicateRows.toLocaleString()}
-              </div>
-              <div>Size: {(job.fileSize / 1024).toFixed(1)} KB</div>
-              <div>
-                Runtime:{" "}
-                {formatDuration(job.createdAt, job.completedAt || job.updatedAt)}
-              </div>
-            </div>
-
-            {job.storagePath ? (
-              <div className="mt-2 break-all text-xs text-zinc-600">
-                Storage: {job.storagePath}
-              </div>
-            ) : null}
-
-            {job.errorMessage ? (
-              <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
-                {job.errorMessage}
-              </div>
-            ) : null}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function JobStatusBadge({ status }: { status: ImportJobStatus }) {
-  const styles: Record<ImportJobStatus, string> = {
-    uploaded: "border-blue-500/20 bg-blue-500/10 text-blue-300",
-    processing: "border-amber-500/20 bg-amber-500/10 text-amber-300",
-    complete: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-    empty: "border-zinc-500/20 bg-zinc-500/10 text-zinc-300",
-    failed: "border-red-500/20 bg-red-500/10 text-red-300",
-  };
-
-  return (
-    <span
-      className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium capitalize ${styles[status]}`}
-    >
-      {status === "processing" ? (
-        <Loader2 className="h-3.5 w-3.5 animate-spin" aria-hidden={true} />
-      ) : null}
-      {status}
-    </span>
   );
 }
 
@@ -2373,7 +2222,7 @@ function ToggleFilter({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-xl border px-3 py-2 text-xs font-medium transition ${
+      className={`rounded-xl border px-4 py-2 text-sm font-medium transition ${
         active
           ? "border-cyan-500/40 bg-cyan-500/15 text-cyan-300"
           : "border-white/10 bg-black/20 text-zinc-300 hover:bg-white/5"
@@ -2427,19 +2276,13 @@ function OrdersTable({
           <tbody>
             {loading ? (
               <tr>
-                <td
-                  colSpan={12}
-                  className="px-4 py-10 text-center text-zinc-400"
-                >
+                <td colSpan={12} className="px-4 py-10 text-center text-zinc-400">
                   Loading orders...
                 </td>
               </tr>
             ) : orders.length === 0 ? (
               <tr>
-                <td
-                  colSpan={12}
-                  className="px-4 py-10 text-center text-zinc-400"
-                >
+                <td colSpan={12} className="px-4 py-10 text-center text-zinc-400">
                   No orders found.
                 </td>
               </tr>
@@ -2450,36 +2293,23 @@ function OrdersTable({
                 return (
                   <tr
                     key={order.id}
-                    className="border-t border-white/5 align-top"
+                    className="border-b border-white/5 align-top last:border-0 hover:bg-white/[0.02]"
                   >
                     <td className="px-4 py-4">
-                      <div className="inline-flex items-start gap-2">
-                        <User
-                          className="mt-0.5 h-4 w-4 text-zinc-500"
-                          aria-hidden={true}
-                        />
+                      <div className="flex items-start gap-3">
+                        <div className="rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-300">
+                          <User className="h-4 w-4" aria-hidden={true} />
+                        </div>
                         <div>
                           <div className="font-medium text-white">
-                            {order.patientName || "—"}
+                            {order.patientName || "Unnamed patient"}
                           </div>
-
-                          {order.customerId || order.dob ? (
+                          <div className="mt-1 text-xs text-zinc-500">
+                            DOB: {order.dob || "—"}
+                          </div>
+                          {order.facilityName ? (
                             <div className="mt-1 text-xs text-zinc-500">
-                              {order.customerId ? `ID ${order.customerId}` : ""}
-                              {order.customerId && order.dob ? " · " : ""}
-                              {order.dob ? `DOB ${order.dob}` : ""}
-                            </div>
-                          ) : null}
-
-                          {order.patientKey ? (
-                            <div className="mt-1 max-w-xs truncate text-xs text-zinc-600">
-                              Key: {order.patientKey}
-                            </div>
-                          ) : null}
-
-                          {order.insurance ? (
-                            <div className="mt-1 max-w-xs truncate text-xs text-zinc-500">
-                              {order.insurance}
+                              {order.facilityName}
                             </div>
                           ) : null}
                         </div>
@@ -2492,78 +2322,70 @@ function OrdersTable({
 
                     <td className="px-4 py-4 text-zinc-300">
                       {order.salesOrderNumber || "—"}
-                      {order.orderKey ? (
-                        <div className="mt-1 max-w-xs truncate text-xs text-zinc-600">
-                          {order.orderKey}
-                        </div>
-                      ) : null}
                     </td>
 
+                    <td className="max-w-xs px-4 py-4 text-zinc-300">
+                      {order.patientAddress || "—"}
+                    </td>
+
+                    <td className="px-4 py-4">
+                      <div className="flex items-start gap-2">
+                        <Package className="mt-0.5 h-4 w-4 text-zinc-500" />
+                        <div>
+                          <div className="text-zinc-200">
+                            {order.productType || "—"}
+                          </div>
+                          <div className="mt-1 text-xs text-zinc-500">
+                            Barcode: {order.barcode || "—"}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="px-4 py-4 text-zinc-300">{order.quantity}</td>
                     <td className="px-4 py-4 text-zinc-300">
-                      <div className="max-w-xs whitespace-pre-wrap break-words">
-                        {order.patientAddress || "—"}
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-4 text-white">
-                      <div className="max-w-sm whitespace-pre-wrap break-words">
-                        {order.productType || "—"}
-                      </div>
-
-                      {order.barcode ? (
-                        <div className="mt-1 text-xs text-zinc-500">
-                          Barcode: {order.barcode}
-                        </div>
-                      ) : null}
-                    </td>
-
-                    <td className="px-4 py-4 text-white">{order.quantity}</td>
-
-                    <td className="px-4 py-4 text-white">
                       {formatCurrency(order.purchaseCost)}
                     </td>
-
                     <td className="px-4 py-4 text-zinc-300">
                       {order.phone || "—"}
                     </td>
 
-                    <td className="px-4 py-4 text-zinc-300 capitalize">
-                      {order.status}
+                    <td className="px-4 py-4">
+                      <StatusBadge status={order.status} />
                     </td>
 
                     <td className="px-4 py-4">
                       <InventoryBadge order={order} />
                     </td>
 
-                    <td className="px-4 py-4 text-zinc-300">
+                    <td className="px-4 py-4 text-zinc-400">
                       {formatDate(order.createdAt)}
                     </td>
 
                     <td className="px-4 py-4">
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => onEdit(order)}
-                          disabled={isSaving}
-                          className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:bg-white/10 disabled:opacity-50"
-                        >
-                          <Pencil className="h-4 w-4" aria-hidden={true} />
-                          Edit
-                        </button>
-
-                        {order.status !== "archived" ? (
+                        {!isArchivedStatus(order.status) ? (
                           <>
-                            {order.status !== "ready" &&
-                            !isArchivedStatus(order.status) ? (
+                            <button
+                              type="button"
+                              onClick={() => onEdit(order)}
+                              disabled={isSaving}
+                              className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-zinc-200 transition hover:bg-white/10 disabled:opacity-50"
+                            >
+                              <Pencil className="h-4 w-4" aria-hidden={true} />
+                              Edit
+                            </button>
+
+                            {order.status !== "ready" ? (
                               <button
                                 type="button"
                                 onClick={() =>
                                   void onUpdateStatus(order.id, "ready")
                                 }
                                 disabled={isSaving}
-                                className="inline-flex items-center gap-2 rounded-xl border border-amber-500/20 bg-amber-500/10 px-3 py-2 text-xs font-medium text-amber-300 transition hover:bg-amber-500/15 disabled:opacity-50"
+                                className="inline-flex items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-3 py-2 text-xs font-medium text-cyan-300 transition hover:bg-cyan-500/15 disabled:opacity-50"
                               >
-                                <Package
+                                <CheckCircle2
                                   className="h-4 w-4"
                                   aria-hidden={true}
                                 />
@@ -2571,8 +2393,7 @@ function OrdersTable({
                               </button>
                             ) : null}
 
-                            {order.status !== "delivered" &&
-                            !isArchivedStatus(order.status) ? (
+                            {order.status !== "delivered" ? (
                               <button
                                 type="button"
                                 onClick={() =>
@@ -2581,16 +2402,11 @@ function OrdersTable({
                                 disabled={isSaving}
                                 className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/20 bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-300 transition hover:bg-emerald-500/15 disabled:opacity-50"
                               >
-                                <CheckCircle2
-                                  className="h-4 w-4"
-                                  aria-hidden={true}
-                                />
                                 Delivered
                               </button>
                             ) : null}
 
-                            {order.status !== "cancelled" &&
-                            !isArchivedStatus(order.status) ? (
+                            {order.status !== "cancelled" ? (
                               <button
                                 type="button"
                                 onClick={() =>
@@ -2612,10 +2428,7 @@ function OrdersTable({
                                 disabled={isSaving}
                                 className="inline-flex items-center gap-2 rounded-xl border border-zinc-500/20 bg-zinc-500/10 px-3 py-2 text-xs font-medium text-zinc-300 transition hover:bg-zinc-500/15 disabled:opacity-50"
                               >
-                                <Archive
-                                  className="h-4 w-4"
-                                  aria-hidden={true}
-                                />
+                                <Archive className="h-4 w-4" aria-hidden={true} />
                                 Archive
                               </button>
                             ) : null}
@@ -2639,7 +2452,7 @@ function OrdersTable({
                             className="h-3.5 w-3.5 animate-spin"
                             aria-hidden={true}
                           />
-                          Saving...
+                          Saving.
                         </div>
                       ) : null}
                     </td>
@@ -2651,6 +2464,24 @@ function OrdersTable({
         </table>
       </div>
     </div>
+  );
+}
+
+function StatusBadge({ status }: { status: OrderStatus }) {
+  const styles: Record<OrderStatus, string> = {
+    processing: "border-blue-500/20 bg-blue-500/10 text-blue-300",
+    ready: "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
+    delivered: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
+    cancelled: "border-red-500/20 bg-red-500/10 text-red-300",
+    archived: "border-zinc-500/20 bg-zinc-500/10 text-zinc-300",
+  };
+
+  return (
+    <span
+      className={`inline-flex rounded-full border px-3 py-1 text-xs font-medium capitalize ${styles[status]}`}
+    >
+      {status}
+    </span>
   );
 }
 
@@ -2750,10 +2581,10 @@ function OrderModal({
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4">
-      <div className="max-h-[92vh] w-full max-w-3xl overflow-hidden rounded-2xl border border-white/10 bg-[#0b1220] shadow-2xl">
-        <div className="flex items-center justify-between border-b border-white/10 px-6 py-4">
+      <div className="max-h-[90vh] w-full max-w-4xl overflow-y-auto rounded-2xl border border-white/10 bg-[#0b1220] p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className="text-xl font-semibold text-white">{title}</h2>
+            <h2 className="text-xl font-bold text-white">{title}</h2>
             <p className="mt-1 text-sm text-zinc-400">{description}</p>
           </div>
 
@@ -2761,289 +2592,209 @@ function OrderModal({
             type="button"
             onClick={onClose}
             disabled={busy}
-            aria-label={`Close ${title} modal`}
-            title="Close"
-            className="rounded-xl border border-white/10 p-2 text-zinc-400 transition hover:bg-white/5 hover:text-white disabled:opacity-50"
+            className="rounded-xl border border-white/10 bg-white/5 p-2 text-zinc-300 transition hover:bg-white/10 disabled:opacity-50"
+            aria-label="Close order modal"
           >
             <X className="h-4 w-4" aria-hidden={true} />
           </button>
         </div>
 
-        <div className="max-h-[calc(92vh-150px)] overflow-y-auto px-6 py-5">
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <div className="space-y-2 md:col-span-2">
-              <label
-                htmlFor={`${prefix}-barcode`}
-                className="block text-sm font-medium text-zinc-300"
+        {error ? (
+          <div className="mt-4 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-sm text-red-300">
+            {error}
+          </div>
+        ) : null}
+
+        <div className="mt-5 grid grid-cols-1 gap-4 md:grid-cols-2">
+          <TextField
+            id={`${prefix}-patient-name`}
+            label="Patient name"
+            value={form.patientName}
+            onChange={(value) => onChange("patientName", value)}
+            required
+          />
+
+          <TextField
+            id={`${prefix}-phone`}
+            label="Phone"
+            value={form.phone}
+            onChange={(value) => onChange("phone", value)}
+          />
+
+          <TextField
+            id={`${prefix}-address`}
+            label="Patient address"
+            value={form.patientAddress}
+            onChange={(value) => onChange("patientAddress", value)}
+            required
+          />
+
+          <TextField
+            id={`${prefix}-facility`}
+            label="Facility"
+            value={form.facilityName}
+            onChange={(value) => onChange("facilityName", value)}
+          />
+
+          <TextField
+            id={`${prefix}-barcode`}
+            label="Barcode"
+            value={form.barcode}
+            onChange={(value) => onChange("barcode", value)}
+          />
+
+          <div className="flex items-end gap-2">
+            <button
+              type="button"
+              onClick={onLoadBarcode}
+              disabled={busy}
+              className="inline-flex w-full items-center justify-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2.5 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/15 disabled:opacity-50"
+            >
+              <Package className="h-4 w-4" aria-hidden={true} />
+              Load Item
+            </button>
+
+            {onScan ? (
+              <button
+                type="button"
+                onClick={onScan}
+                disabled={busy}
+                className="inline-flex items-center justify-center rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-zinc-200 transition hover:bg-white/10 disabled:opacity-50"
               >
-                Inventory Barcode
-              </label>
+                <ScanLine className="h-4 w-4" aria-hidden={true} />
+                <span className="sr-only">Scan barcode</span>
+              </button>
+            ) : null}
+          </div>
 
-              <div className="flex gap-2">
-                <input
-                  id={`${prefix}-barcode`}
-                  value={form.barcode}
-                  onChange={(event) =>
-                    onChange("barcode", normalizeBarcode(event.target.value))
-                  }
-                  placeholder="Scan or enter barcode"
-                  className="w-full rounded-xl border border-white/10 bg-[#07090d] px-4 py-2.5 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-cyan-500/40"
-                />
+          <TextField
+            id={`${prefix}-product-id`}
+            label="Product ID"
+            value={form.productId}
+            onChange={(value) => onChange("productId", value)}
+            required
+          />
 
-                {onScan ? (
-                  <button
-                    type="button"
-                    onClick={onScan}
-                    aria-label="Scan barcode"
-                    title="Scan barcode"
-                    className="rounded-xl border border-white/10 bg-white/10 px-4 py-2.5 transition hover:bg-white/15"
-                  >
-                    <ScanLine className="h-4 w-4" aria-hidden={true} />
-                  </button>
-                ) : null}
+          <TextField
+            id={`${prefix}-product-type`}
+            label="Product type"
+            value={form.productType}
+            onChange={(value) => onChange("productType", value)}
+            required
+          />
 
-                <button
-                  type="button"
-                  onClick={onLoadBarcode}
-                  aria-label="Load product from barcode"
-                  title="Load product from barcode"
-                  className="rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2.5 text-sm text-cyan-300 transition hover:bg-cyan-500/15"
-                >
-                  Load
-                </button>
-              </div>
-            </div>
+          <TextField
+            id={`${prefix}-cost`}
+            label="Purchase cost"
+            value={form.purchaseCost}
+            onChange={(value) => onChange("purchaseCost", value)}
+            inputMode="decimal"
+            required
+          />
 
-            <LabeledInput
-              id={`${prefix}-patient-name`}
-              label="Patient name"
-              value={form.patientName}
-              onChange={(value) => onChange("patientName", value)}
-              placeholder="Patient name"
-              required
-            />
+          <TextField
+            id={`${prefix}-quantity`}
+            label="Quantity"
+            value={form.quantity}
+            onChange={(value) => onChange("quantity", value)}
+            inputMode="numeric"
+            required
+          />
 
-            <LabeledInput
-              id={`${prefix}-phone`}
-              label="Phone"
-              value={form.phone}
-              onChange={(value) => onChange("phone", value)}
-              placeholder="Phone number"
-            />
-
-            <LabeledTextArea
-              id={`${prefix}-address`}
-              label="Patient address"
-              value={form.patientAddress}
-              onChange={(value) => onChange("patientAddress", value)}
-              placeholder="Patient address"
-              rows={3}
-              className="md:col-span-2"
-              required
-            />
-
-            <LabeledInput
-              id={`${prefix}-product`}
-              label="Product"
-              value={form.productType}
-              onChange={(value) => onChange("productType", value)}
-              placeholder="Product"
-              required
-            />
-
-            <LabeledInput
-              id={`${prefix}-cost`}
-              label="Cost"
-              type="number"
-              min="0"
-              step="0.01"
-              value={form.purchaseCost}
-              onChange={(value) => onChange("purchaseCost", value)}
-              placeholder="0.00"
-              required
-            />
-
-            <LabeledInput
-              id={`${prefix}-quantity`}
-              label="Quantity"
-              type="number"
-              min="1"
-              step="1"
-              value={form.quantity}
-              onChange={(value) => onChange("quantity", value)}
-              placeholder="1"
-              required
-            />
-
-            <LabeledInput
-              id={`${prefix}-facility`}
-              label="Facility name"
-              value={form.facilityName}
-              onChange={(value) => onChange("facilityName", value)}
-              placeholder="Facility name"
-            />
-
-            <div>
-              <label
-                htmlFor={`${prefix}-status`}
-                className="mb-2 block text-sm font-medium text-zinc-300"
-              >
-                Order status
-              </label>
-              <select
-                id={`${prefix}-status`}
-                value={form.status}
-                onChange={(event) =>
-                  onChange("status", event.target.value as OrderStatus)
-                }
-                className="w-full rounded-xl border border-white/10 bg-[#07090d] px-4 py-2.5 text-sm text-white outline-none focus:border-cyan-500/40"
-              >
-                <option value="processing">Processing</option>
-                <option value="ready">Ready</option>
-                <option value="delivered">Delivered</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-            </div>
-
-            <LabeledTextArea
-              id={`${prefix}-notes`}
-              label="Notes"
-              value={form.notes}
-              onChange={(value) => onChange("notes", value)}
-              placeholder="Order notes"
-              rows={4}
-              className="md:col-span-2"
-            />
+          <div>
+            <label
+              htmlFor={`${prefix}-status`}
+              className="mb-2 block text-xs font-medium text-zinc-400"
+            >
+              Status
+            </label>
+            <select
+              id={`${prefix}-status`}
+              value={form.status}
+              onChange={(event) =>
+                onChange("status", event.target.value as OrderStatus)
+              }
+              className="w-full rounded-xl border border-white/10 bg-[#07090d] px-4 py-2.5 text-sm text-white outline-none focus:border-cyan-500/40"
+            >
+              <option value="processing">Processing</option>
+              <option value="ready">Ready</option>
+              <option value="delivered">Delivered</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="archived">Archived</option>
+            </select>
           </div>
         </div>
 
-        <div className="border-t border-white/10 px-6 py-4">
-          {error ? (
-            <div className="mb-4 rounded-xl border border-red-500/20 bg-red-500/10 px-4 py-3 text-sm text-red-300">
-              {error}
-            </div>
-          ) : null}
+        <div className="mt-4">
+          <label
+            htmlFor={`${prefix}-notes`}
+            className="mb-2 block text-xs font-medium text-zinc-400"
+          >
+            Notes
+          </label>
+          <textarea
+            id={`${prefix}-notes`}
+            value={form.notes}
+            onChange={(event) => onChange("notes", event.target.value)}
+            rows={4}
+            className="w-full rounded-xl border border-white/10 bg-[#07090d] px-4 py-2.5 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-cyan-500/40"
+          />
+        </div>
 
-          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-            <button
-              type="button"
-              onClick={onClose}
-              disabled={busy}
-              className="rounded-xl border border-white/10 px-4 py-2.5 text-sm font-medium text-zinc-300 transition hover:bg-white/5 disabled:opacity-50"
-            >
-              Cancel
-            </button>
+        <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={busy}
+            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2.5 text-sm font-medium text-zinc-200 transition hover:bg-white/10 disabled:opacity-50"
+          >
+            Cancel
+          </button>
 
-            <button
-              type="button"
-              onClick={onSave}
-              disabled={busy}
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2.5 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/15 disabled:opacity-50"
-            >
-              {busy ? (
-                <Loader2 className="h-4 w-4 animate-spin" aria-hidden={true} />
-              ) : mode === "create" ? (
-                <Plus className="h-4 w-4" aria-hidden={true} />
-              ) : (
-                <Pencil className="h-4 w-4" aria-hidden={true} />
-              )}
-
-              {busy
-                ? "Saving..."
-                : mode === "create"
-                  ? "Create Order"
-                  : "Save Changes"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={busy}
+            className="inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2.5 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/15 disabled:opacity-50"
+          >
+            {busy ? (
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden={true} />
+            ) : null}
+            {busy ? "Saving..." : "Save Order"}
+          </button>
         </div>
       </div>
     </div>
   );
 }
 
-function LabeledInput({
+function TextField({
   id,
   label,
   value,
   onChange,
-  placeholder,
-  type = "text",
-  min,
-  step,
-  required = false,
+  required,
+  inputMode,
 }: {
   id: string;
   label: string;
   value: string;
   onChange: (value: string) => void;
-  placeholder?: string;
-  type?: string;
-  min?: string;
-  step?: string;
   required?: boolean;
+  inputMode?: "text" | "numeric" | "decimal" | "tel" | "email" | "url" | "search";
 }) {
   return (
     <div>
-      <label
-        htmlFor={id}
-        className="mb-2 block text-sm font-medium text-zinc-300"
-      >
+      <label htmlFor={id} className="mb-2 block text-xs font-medium text-zinc-400">
         {label}
         {required ? <span className="text-red-300"> *</span> : null}
       </label>
-
       <input
         id={id}
-        type={type}
-        min={min}
-        step={step}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        aria-required={required}
+        inputMode={inputMode}
         className="w-full rounded-xl border border-white/10 bg-[#07090d] px-4 py-2.5 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-cyan-500/40"
-      />
-    </div>
-  );
-}
-
-function LabeledTextArea({
-  id,
-  label,
-  value,
-  onChange,
-  placeholder,
-  rows,
-  className = "",
-  required = false,
-}: {
-  id: string;
-  label: string;
-  value: string;
-  onChange: (value: string) => void;
-  placeholder?: string;
-  rows: number;
-  className?: string;
-  required?: boolean;
-}) {
-  return (
-    <div className={className}>
-      <label
-        htmlFor={id}
-        className="mb-2 block text-sm font-medium text-zinc-300"
-      >
-        {label}
-        {required ? <span className="text-red-300"> *</span> : null}
-      </label>
-
-      <textarea
-        id={id}
-        rows={rows}
-        value={value}
-        onChange={(event) => onChange(event.target.value)}
-        placeholder={placeholder}
-        aria-required={required}
-        className="w-full rounded-xl border border-white/10 bg-[#07090d] px-4 py-3 text-sm text-white outline-none placeholder:text-zinc-500 focus:border-cyan-500/40"
       />
     </div>
   );

@@ -1,12 +1,26 @@
 import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
+import { createHash } from "crypto";
 
 const db = getFirestore();
+
+const INDEX_VERSION = "patient-index-v6-subcollections";
+const MAX_BULK_RETRY_ATTEMPTS = 3;
+const MAX_BIRTHDAY_ANALYTICS_ROWS = 500;
+const MAX_SOURCE_LABELS_ON_ROOT = 25;
 
 type PatientIndexSource = {
   reportId: string;
   reportType: string;
   reportLabel: string;
   fileName: string;
+  processedAtIso: string;
+};
+
+type ImportedRowWrapper = {
+  rowNumber?: number;
+  lineNumber?: number;
+  data?: Record<string, unknown>;
+  text?: string;
 };
 
 type PatientProfile = {
@@ -35,6 +49,7 @@ type InsuranceSnapshot = {
 };
 
 type CurrentEquipmentItem = {
+  id: string;
   itemId: string;
   itemName: string;
   hcpc: string;
@@ -51,6 +66,7 @@ type CurrentEquipmentItem = {
 };
 
 type RecentPurchaseItem = {
+  id: string;
   itemId: string;
   itemName: string;
   hcpc: string;
@@ -132,11 +148,51 @@ type DeliverySummary = {
   hipaaSignatureOnFile: string;
 };
 
-type ImportedRowWrapper = {
-  rowNumber?: number;
-  lineNumber?: number;
-  data?: Record<string, unknown>;
-  text?: string;
+type BirthdayFields = {
+  hasBirthday: boolean;
+  birthMonth: number;
+  birthDay: number;
+  birthMonthDay: string;
+  age: number | null;
+  nextAge: number | null;
+  nextBirthday: Timestamp | null;
+  nextBirthdayIso: string;
+  daysUntilBirthday: number | null;
+};
+
+type BirthdayAnalyticsItem = {
+  id: string;
+  patientId: string;
+  fullName: string;
+  firstName: string;
+  lastName: string;
+  dateOfBirth: string;
+  birthMonth: number;
+  birthDay: number;
+  birthMonthDay: string;
+  age: number | null;
+  nextAge: number | null;
+  nextBirthdayIso: string;
+  daysUntilBirthday: number;
+  phone: string;
+  city: string;
+  state: string;
+  primaryInsurance: string;
+  cpapOnRecord: boolean;
+  hospice: boolean;
+};
+
+type PatientRollup = {
+  equipment: Map<string, CurrentEquipmentItem>;
+  purchases: Map<string, RecentPurchaseItem>;
+  cpap: CpapInfo | null;
+  authorization: AuthorizationSnapshot | null;
+  cmn: CmnSnapshot | null;
+  billing: BillingSnapshot | null;
+  wip: WipSnapshot | null;
+  deliverySummary: DeliverySummary | null;
+  profile: PatientProfile | null;
+  insurance: InsuranceSnapshot | null;
 };
 
 function normalizeString(value: unknown): string {
@@ -145,6 +201,15 @@ function normalizeString(value: unknown): string {
 
 function normalizeKey(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function stableHash(value: string): string {
+  return createHash("sha1").update(value).digest("hex").slice(0, 24);
+}
+
+function safeDocId(value: string): string {
+  const clean = normalizeKey(value);
+  return clean || stableHash(value || "unknown");
 }
 
 function unwrapRow(row: Record<string, unknown>): Record<string, unknown> {
@@ -182,9 +247,7 @@ function numberFromAliases(row: Record<string, unknown>, aliases: string[]): num
   const raw = valueFromAliases(row, aliases);
   if (!raw) return 0;
 
-  const cleaned = raw.replace(/[$,]/g, "");
-  const parsed = Number(cleaned);
-
+  const parsed = Number(raw.replace(/[$,]/g, ""));
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -212,7 +275,6 @@ function normalizeIsoDate(value: string): string {
     const yyyy = parsed.getFullYear();
     const mm = String(parsed.getMonth() + 1).padStart(2, "0");
     const dd = String(parsed.getDate()).padStart(2, "0");
-
     return `${yyyy}-${mm}-${dd}`;
   }
 
@@ -264,12 +326,31 @@ function parseFullName(rawFullName: string) {
   };
 }
 
-function buildPatientId(firstName: string, lastName: string, dob: string): string {
-  return [
-    normalizeKey(lastName),
-    normalizeKey(firstName),
-    normalizeKey(dob || "unknown-dob"),
-  ].join("_");
+function buildPatientId(input: {
+  firstName: string;
+  lastName: string;
+  dob: string;
+  accountNumber?: string;
+  brightreePatientId?: string;
+  brightreePatientKey?: string;
+}): string {
+  const primary =
+    input.brightreePatientKey ||
+    input.brightreePatientId ||
+    input.accountNumber ||
+    "";
+
+  if (primary) {
+    return `pt_${stableHash(primary)}`;
+  }
+
+  return `pt_${stableHash(
+    [
+      normalizeKey(input.lastName),
+      normalizeKey(input.firstName),
+      normalizeKey(input.dob || "unknown-dob"),
+    ].join("|")
+  )}`;
 }
 
 function extractPatient(row: Record<string, unknown>) {
@@ -365,12 +446,7 @@ function extractPatient(row: Record<string, unknown>) {
     ]),
     city: valueFromAliases(row, ["city", "patient_city"]),
     state: valueFromAliases(row, ["state", "patient_state"]),
-    zip: valueFromAliases(row, [
-      "zip",
-      "zipcode",
-      "zip_code",
-      "postal_code",
-    ]),
+    zip: valueFromAliases(row, ["zip", "zipcode", "zip_code", "postal_code"]),
   };
 }
 
@@ -673,10 +749,15 @@ function rowLooksCurrentEquipment(
   const normalizedReportType = normalizeString(reportType).toLowerCase();
   const itemName = extractItemName(row);
   const itemId = extractItemId(row);
+
   if (!itemName && !itemId) return false;
 
   const status = extractEquipmentStatus(row).toLowerCase();
-  const saleType = valueFromAliases(row, ["Type", "SaleType", "Sales Type"]).toLowerCase();
+  const saleType = valueFromAliases(row, [
+    "Type",
+    "SaleType",
+    "Sales Type",
+  ]).toLowerCase();
 
   const activeStatus =
     status.includes("active") ||
@@ -697,6 +778,21 @@ function rowLooksCurrentEquipment(
   );
 }
 
+function buildEquipmentId(item: CurrentEquipmentItem): string {
+  return safeDocId(
+    [
+      item.serialNumber,
+      item.lotNumber,
+      item.itemId,
+      item.itemName,
+      item.startDate,
+      item.sourceReportId,
+    ]
+      .filter(Boolean)
+      .join("|")
+  );
+}
+
 function extractCurrentEquipment(
   row: Record<string, unknown>,
   args: {
@@ -712,7 +808,8 @@ function extractCurrentEquipment(
 
   if (!itemName && !itemId) return null;
 
-  return {
+  const item: CurrentEquipmentItem = {
+    id: "",
     itemId,
     itemName,
     hcpc: valueFromAliases(row, ["HCPC", "HCPCS", "hcpc", "hcpcs"]) || itemId,
@@ -730,7 +827,7 @@ function extractCurrentEquipment(
       "Sales Type",
       "SalesType",
     ]),
-    qty: numberFromAliases(row, ["Qty", "Quantity", "quantity", "qty"]),
+    qty: numberFromAliases(row, ["Qty", "Quantity", "quantity", "qty"]) || 1,
     serialNumber: extractSerialNumber(row),
     lotNumber: extractLotNumber(row),
     status: extractEquipmentStatus(row),
@@ -738,6 +835,11 @@ function extractCurrentEquipment(
     lastUpdated: new Date().toISOString(),
     sourceReportId: args.reportId,
     sourceFileName: args.fileName,
+  };
+
+  return {
+    ...item,
+    id: buildEquipmentId(item),
   };
 }
 
@@ -758,6 +860,21 @@ function extractPurchaseDate(row: Record<string, unknown>): string {
       "Date",
       "date",
     ])
+  );
+}
+
+function buildPurchaseId(item: RecentPurchaseItem): string {
+  return safeDocId(
+    [
+      item.orderId,
+      item.itemId,
+      item.itemName,
+      item.purchaseDate,
+      item.amount,
+      item.sourceReportId,
+    ]
+      .filter(Boolean)
+      .join("|")
   );
 }
 
@@ -786,19 +903,21 @@ function extractRecentPurchase(
   if (!itemName || !purchaseDate) return null;
   if (!isWithinLastDays(purchaseDate, 90)) return null;
 
-  return {
+  const item: RecentPurchaseItem = {
+    id: "",
     itemId: extractItemId(row),
     itemName,
     hcpc: valueFromAliases(row, ["HCPC", "HCPCS", "hcpc", "hcpcs"]),
     purchaseDate,
-    quantity: numberFromAliases(row, [
-      "quantity",
-      "qty",
-      "Qty",
-      "item_qty",
-      "item qty",
-      "Quantity",
-    ]),
+    quantity:
+      numberFromAliases(row, [
+        "quantity",
+        "qty",
+        "Qty",
+        "item_qty",
+        "item qty",
+        "Quantity",
+      ]) || 1,
     amount: numberFromAliases(row, [
       "amount",
       "total",
@@ -830,13 +949,23 @@ function extractRecentPurchase(
     sourceReportId: args.reportId,
     sourceFileName: args.fileName,
   };
+
+  return {
+    ...item,
+    id: buildPurchaseId(item),
+  };
 }
 
 function rowLooksCpap(row: Record<string, unknown>): boolean {
   const haystack = [
     extractItemId(row),
     extractItemName(row),
-    valueFromAliases(row, ["description", "itemdescription", "notes", "Comments or Special Instructions"]),
+    valueFromAliases(row, [
+      "description",
+      "itemdescription",
+      "notes",
+      "Comments or Special Instructions",
+    ]),
     valueFromAliases(row, ["hcpcs", "HCPCS", "HCPC", "code"]),
   ]
     .join(" ")
@@ -867,27 +996,35 @@ function extractCpapInfo(row: Record<string, unknown>): CpapInfo | null {
 
   const itemName = extractItemName(row);
   const itemId = extractItemId(row).toUpperCase();
+  const itemNameLower = itemName.toLowerCase();
 
   return {
     onRecord: true,
-    machine: itemId === "E0601" || itemName.toLowerCase().includes("cpap machine") ? itemName : "",
+    machine:
+      itemId === "E0601" || itemNameLower.includes("cpap machine")
+        ? itemName
+        : "",
     maskType:
-      itemName.toLowerCase().includes("mask") ||
+      itemNameLower.includes("mask") ||
       itemId === "A7030" ||
       itemId === "A7031" ||
       itemId === "A7034"
         ? itemName
         : "",
     humidifier:
-      itemName.toLowerCase().includes("humidifier") || itemId === "E0562" || itemId === "A7046"
+      itemNameLower.includes("humidifier") ||
+      itemId === "E0562" ||
+      itemId === "A7046"
         ? itemName
         : "",
-    tubing: itemName.toLowerCase().includes("tubing") || itemId === "A7037" ? itemName : "",
+    tubing: itemNameLower.includes("tubing") || itemId === "A7037" ? itemName : "",
     filters:
-      itemName.toLowerCase().includes("filter") || itemId === "A7038" || itemId === "A7039"
+      itemNameLower.includes("filter") ||
+      itemId === "A7038" ||
+      itemId === "A7039"
         ? itemName
         : "",
-    headgear: itemName.toLowerCase().includes("headgear") || itemId === "A7035" ? itemName : "",
+    headgear: itemNameLower.includes("headgear") || itemId === "A7035" ? itemName : "",
     pressure: valueFromAliases(row, [
       "pressure",
       "cpap_pressure",
@@ -926,7 +1063,11 @@ function extractAuthorization(row: Record<string, unknown>): AuthorizationSnapsh
     "FirstPARNumber",
   ]);
 
-  const parStatus = valueFromAliases(row, ["parstatus", "PARStatus", "PAR Status"]);
+  const parStatus = valueFromAliases(row, [
+    "parstatus",
+    "PARStatus",
+    "PAR Status",
+  ]);
 
   if (!parNumber && !parStatus) return null;
 
@@ -985,31 +1126,40 @@ function extractCmn(row: Record<string, unknown>): CmnSnapshot | null {
 }
 
 function extractBilling(row: Record<string, unknown>): BillingSnapshot | null {
-  const invoice = valueFromAliases(row, ["InvNbrDisplay", "Invoice", "Invoice Number"]);
+  const invoice = valueFromAliases(row, [
+    "InvNbrDisplay",
+    "Invoice",
+    "Invoice Number",
+  ]);
+
   const charge = numberFromAliases(row, ["Charge", "Charges"]);
   const payment = numberFromAliases(row, ["Payment", "Payments", "Paid"]);
   const allow = numberFromAliases(row, ["Allow", "Allowed"]);
-  const adjustment = numberFromAliases(row, ["Adjustment", "Adjustments", "WriteOff", "Write Off"]);
+  const adjustment = numberFromAliases(row, [
+    "Adjustment",
+    "Adjustments",
+    "WriteOff",
+    "Write Off",
+  ]);
 
   if (!invoice && charge === 0 && payment === 0 && allow === 0) return null;
 
+  const invoiceDate = valueFromAliases(row, ["InvDt", "Invoice Date"]);
+  const paymentDate = valueFromAliases(row, ["PmtDt", "Payment Date"]);
+
   return {
-    lastInvoiceDate: normalizeIsoDate(valueFromAliases(row, ["InvDt", "Invoice Date"])),
-    lastPaymentDate: normalizeIsoDate(valueFromAliases(row, ["PmtDt", "Payment Date"])),
-    totalCharges90Days: isWithinLastDays(valueFromAliases(row, ["InvDt", "Invoice Date"]), 90)
-      ? charge
-      : 0,
-    totalAllowed90Days: isWithinLastDays(valueFromAliases(row, ["InvDt", "Invoice Date"]), 90)
-      ? allow
-      : 0,
-    totalPayments90Days: isWithinLastDays(valueFromAliases(row, ["PmtDt", "Payment Date"]), 90)
-      ? payment
-      : 0,
-    totalAdjustments90Days: isWithinLastDays(valueFromAliases(row, ["InvDt", "Invoice Date"]), 90)
-      ? adjustment
-      : 0,
+    lastInvoiceDate: normalizeIsoDate(invoiceDate),
+    lastPaymentDate: normalizeIsoDate(paymentDate),
+    totalCharges90Days: isWithinLastDays(invoiceDate, 90) ? charge : 0,
+    totalAllowed90Days: isWithinLastDays(invoiceDate, 90) ? allow : 0,
+    totalPayments90Days: isWithinLastDays(paymentDate, 90) ? payment : 0,
+    totalAdjustments90Days: isWithinLastDays(invoiceDate, 90) ? adjustment : 0,
     openBalanceEstimate: Math.max(charge - payment - adjustment, 0),
-    invoiceStatus: valueFromAliases(row, ["InvoiceStatus", "Invoice Status", "Status"]),
+    invoiceStatus: valueFromAliases(row, [
+      "InvoiceStatus",
+      "Invoice Status",
+      "Status",
+    ]),
   };
 }
 
@@ -1022,7 +1172,11 @@ function extractDelivery(row: Record<string, unknown>): DeliverySummary | null {
   ]);
 
   const deliveryDate = normalizeIsoDate(
-    valueFromAliases(row, ["ActualDeliveryDate", "Delivery Date", "Delivered Date"])
+    valueFromAliases(row, [
+      "ActualDeliveryDate",
+      "Delivery Date",
+      "Delivered Date",
+    ])
   );
 
   const scheduledDate = normalizeIsoDate(
@@ -1083,7 +1237,10 @@ function mergeCpap(existing: CpapInfo | null, next: CpapInfo | null): CpapInfo |
   };
 }
 
-function mergeBilling(existing: BillingSnapshot | null, next: BillingSnapshot | null): BillingSnapshot | null {
+function mergeBilling(
+  existing: BillingSnapshot | null,
+  next: BillingSnapshot | null
+): BillingSnapshot | null {
   if (!existing && !next) return null;
   if (!existing) return next;
   if (!next) return existing;
@@ -1094,45 +1251,12 @@ function mergeBilling(existing: BillingSnapshot | null, next: BillingSnapshot | 
     totalCharges90Days: existing.totalCharges90Days + next.totalCharges90Days,
     totalAllowed90Days: existing.totalAllowed90Days + next.totalAllowed90Days,
     totalPayments90Days: existing.totalPayments90Days + next.totalPayments90Days,
-    totalAdjustments90Days: existing.totalAdjustments90Days + next.totalAdjustments90Days,
+    totalAdjustments90Days:
+      existing.totalAdjustments90Days + next.totalAdjustments90Days,
     openBalanceEstimate: existing.openBalanceEstimate + next.openBalanceEstimate,
     invoiceStatus: next.invoiceStatus || existing.invoiceStatus,
   };
 }
-
-type BirthdayFields = {
-  hasBirthday: boolean;
-  birthMonth: number;
-  birthDay: number;
-  birthMonthDay: string;
-  age: number | null;
-  nextAge: number | null;
-  nextBirthday: Timestamp | null;
-  nextBirthdayIso: string;
-  daysUntilBirthday: number | null;
-};
-
-type BirthdayAnalyticsItem = {
-  id: string;
-  patientId: string;
-  fullName: string;
-  firstName: string;
-  lastName: string;
-  dateOfBirth: string;
-  birthMonth: number;
-  birthDay: number;
-  birthMonthDay: string;
-  age: number | null;
-  nextAge: number | null;
-  nextBirthdayIso: string;
-  daysUntilBirthday: number;
-  phone: string;
-  city: string;
-  state: string;
-  primaryInsurance: string;
-  cpapOnRecord: boolean;
-  hospice: boolean;
-};
 
 function dateAtLocalNoon(value: Date): Date {
   return new Date(value.getFullYear(), value.getMonth(), value.getDate(), 12, 0, 0, 0);
@@ -1163,33 +1287,46 @@ function emptyBirthdayFields(): BirthdayFields {
 
 function buildBirthdayFields(dateOfBirth: string, now = new Date()): BirthdayFields {
   const normalizedDob = normalizeIsoDate(dateOfBirth);
-
   if (!normalizedDob) return emptyBirthdayFields();
 
   const parsed = new Date(`${normalizedDob}T12:00:00`);
-
   if (Number.isNaN(parsed.getTime())) return emptyBirthdayFields();
 
   const today = dateAtLocalNoon(now);
   const birthMonth = parsed.getMonth() + 1;
   const birthDay = parsed.getDate();
-  const birthMonthDay = `${String(birthMonth).padStart(2, "0")}-${String(birthDay).padStart(2, "0")}`;
+  const birthMonthDay = `${String(birthMonth).padStart(2, "0")}-${String(
+    birthDay
+  ).padStart(2, "0")}`;
 
-  const thisYearBirthday = safeBirthdayDate(today.getFullYear(), parsed.getMonth(), birthDay);
+  const thisYearBirthday = safeBirthdayDate(
+    today.getFullYear(),
+    parsed.getMonth(),
+    birthDay
+  );
+
   let nextBirthdayDate = thisYearBirthday;
 
   if (nextBirthdayDate.getTime() < today.getTime()) {
-    nextBirthdayDate = safeBirthdayDate(today.getFullYear() + 1, parsed.getMonth(), birthDay);
+    nextBirthdayDate = safeBirthdayDate(
+      today.getFullYear() + 1,
+      parsed.getMonth(),
+      birthDay
+    );
   }
 
   let age = today.getFullYear() - parsed.getFullYear();
 
-  if (today.getTime() < thisYearBirthday.getTime()) age -= 1;
+  if (today.getTime() < thisYearBirthday.getTime()) {
+    age -= 1;
+  }
 
   const nextAge = nextBirthdayDate.getFullYear() - parsed.getFullYear();
   const daysUntilBirthday = Math.max(
     0,
-    Math.ceil((nextBirthdayDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+    Math.ceil(
+      (nextBirthdayDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24)
+    )
   );
 
   return {
@@ -1233,16 +1370,118 @@ function buildPatientSnapshot(params: {
   pieces.push(params.fullName || "Unnamed patient");
 
   if (params.dateOfBirth) pieces.push(`DOB ${params.dateOfBirth}`);
-  if (params.city || params.state) pieces.push([params.city, params.state].filter(Boolean).join(", "));
+  if (params.city || params.state) {
+    pieces.push([params.city, params.state].filter(Boolean).join(", "));
+  }
   if (params.primaryInsurance) pieces.push(params.primaryInsurance);
   if (params.hospice) pieces.push("hospice flagged");
   if (params.cpapOnRecord) pieces.push("CPAP/PAP info on record");
-  if (params.currentEquipmentCount > 0) pieces.push(`${params.currentEquipmentCount} active equipment item(s)`);
-  if (params.recentPurchaseCount > 0) pieces.push(`${params.recentPurchaseCount} purchase(s) in last 90 days`);
+  if (params.currentEquipmentCount > 0) {
+    pieces.push(`${params.currentEquipmentCount} active equipment item(s)`);
+  }
+  if (params.recentPurchaseCount > 0) {
+    pieces.push(`${params.recentPurchaseCount} purchase(s) in last 90 days`);
+  }
   if (params.wipStatus) pieces.push(`WIP: ${params.wipStatus}`);
-  if (params.openBalanceEstimate > 0) pieces.push(`estimated open balance $${params.openBalanceEstimate.toFixed(2)}`);
+  if (params.openBalanceEstimate > 0) {
+    pieces.push(`estimated open balance $${params.openBalanceEstimate.toFixed(2)}`);
+  }
 
   return pieces.join(" • ");
+}
+
+function createEmptyRollup(): PatientRollup {
+  return {
+    equipment: new Map<string, CurrentEquipmentItem>(),
+    purchases: new Map<string, RecentPurchaseItem>(),
+    cpap: null,
+    authorization: null,
+    cmn: null,
+    billing: null,
+    wip: null,
+    deliverySummary: null,
+    profile: null,
+    insurance: null,
+  };
+}
+
+async function rebuildBirthdayAnalyticsFromPatients(): Promise<void> {
+  const snapshot = await db
+    .collection("patients_index")
+    .where("hasBirthday", "==", true)
+    .where("dateOfDeath", "==", "")
+    .orderBy("daysUntilBirthday", "asc")
+    .limit(MAX_BIRTHDAY_ANALYTICS_ROWS)
+    .get();
+
+  const items: BirthdayAnalyticsItem[] = snapshot.docs
+    .map((docSnap) => {
+      const data = docSnap.data();
+
+      const daysUntilBirthday =
+        typeof data.daysUntilBirthday === "number" ? data.daysUntilBirthday : null;
+
+      if (daysUntilBirthday == null) return null;
+
+      return {
+        id: docSnap.id,
+        patientId: docSnap.id,
+        fullName: normalizeString(data.fullName),
+        firstName: normalizeString(data.firstName),
+        lastName: normalizeString(data.lastName),
+        dateOfBirth: normalizeString(data.dateOfBirth),
+        birthMonth: typeof data.birthMonth === "number" ? data.birthMonth : 0,
+        birthDay: typeof data.birthDay === "number" ? data.birthDay : 0,
+        birthMonthDay: normalizeString(data.birthMonthDay),
+        age: typeof data.age === "number" ? data.age : null,
+        nextAge: typeof data.nextAge === "number" ? data.nextAge : null,
+        nextBirthdayIso: normalizeString(data.nextBirthdayIso),
+        daysUntilBirthday,
+        phone: normalizeString(data.phone),
+        city: normalizeString(data.city),
+        state: normalizeString(data.state),
+        primaryInsurance: normalizeString(
+          (data.insurance as InsuranceSnapshot | undefined)?.primaryInsurance ||
+            (data.insurance as InsuranceSnapshot | undefined)?.payor ||
+            ""
+        ),
+        cpapOnRecord: Boolean((data.cpap as CpapInfo | undefined)?.onRecord),
+        hospice: data.hospice === true,
+      };
+    })
+    .filter((item): item is BirthdayAnalyticsItem => item !== null);
+
+  const sorted = sortBirthdayItems(items);
+  const now = new Date();
+  const currentMonth = now.getMonth() + 1;
+
+  const today = sorted.filter((item) => item.daysUntilBirthday === 0);
+  const next7Days = sorted.filter((item) => item.daysUntilBirthday <= 7);
+  const next30Days = sorted.filter((item) => item.daysUntilBirthday <= 30);
+  const thisMonth = sorted
+    .filter((item) => item.birthMonth === currentMonth)
+    .sort((a, b) => a.birthDay - b.birthDay || a.fullName.localeCompare(b.fullName));
+
+  await db.doc("analytics/birthdays").set(
+    {
+      upcoming: sorted.slice(0, 25),
+      today: today.slice(0, 25),
+      next7Days: next7Days.slice(0, 25),
+      next30Days: next30Days.slice(0, 50),
+      thisMonth: thisMonth.slice(0, 50),
+
+      upcomingCount: sorted.length,
+      todayCount: today.length,
+      next7DaysCount: next7Days.length,
+      next30DaysCount: next30Days.length,
+      thisMonthCount: thisMonth.length,
+
+      indexVersion: `${INDEX_VERSION}-birthdays`,
+      lastUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
 }
 
 export async function updatePatientIndexFromRows(args: {
@@ -1251,8 +1490,19 @@ export async function updatePatientIndexFromRows(args: {
   reportLabel: string;
   fileName: string;
   rows: Record<string, unknown>[];
-}) {
+}): Promise<void> {
   const writer = db.bulkWriter();
+
+  writer.onWriteError((error) => {
+    console.error("PATIENT INDEX BULK WRITE ERROR:", {
+      path: error.documentRef.path,
+      code: error.code,
+      message: error.message,
+      failedAttempts: error.failedAttempts,
+    });
+
+    return error.failedAttempts < MAX_BULK_RETRY_ATTEMPTS;
+  });
 
   const uniquePatients = new Set<string>();
   const uniqueHospicePatients = new Set<string>();
@@ -1262,44 +1512,44 @@ export async function updatePatientIndexFromRows(args: {
   let wipTotal = 0;
   let wipCompleted = 0;
   let wipOpen = 0;
+  let rowsSkippedMissingName = 0;
 
-  const patientRollups = new Map<
-    string,
-    {
-      currentEquipment: CurrentEquipmentItem[];
-      purchasesLast90Days: RecentPurchaseItem[];
-      cpap: CpapInfo | null;
-      authorization: AuthorizationSnapshot | null;
-      cmn: CmnSnapshot | null;
-      billing: BillingSnapshot | null;
-      wip: WipSnapshot | null;
-      deliverySummary: DeliverySummary | null;
-      profile: PatientProfile | null;
-      insurance: InsuranceSnapshot | null;
-    }
-  >();
+  const patientRollups = new Map<string, PatientRollup>();
+  const processedAtIso = new Date().toISOString();
 
-  const birthdayRollups = new Map<string, BirthdayAnalyticsItem>();
+  const source: PatientIndexSource = {
+    reportId: args.reportId,
+    reportType: args.reportType,
+    reportLabel: args.reportLabel,
+    fileName: args.fileName,
+    processedAtIso,
+  };
 
   for (const rawRow of args.rows) {
     const row = unwrapRow(rawRow);
     const patient = extractPatient(row);
+    const profile = extractPatientProfile(row);
 
-    if (!patient.firstName && !patient.lastName) continue;
+    if (!patient.firstName && !patient.lastName) {
+      rowsSkippedMissingName++;
+      continue;
+    }
 
-    const patientId = buildPatientId(
-      patient.firstName,
-      patient.lastName,
-      patient.dateOfBirth
-    );
-
-    const birthday = buildBirthdayFields(patient.dateOfBirth);
+    const patientId = buildPatientId({
+      firstName: patient.firstName,
+      lastName: patient.lastName,
+      dob: patient.dateOfBirth,
+      accountNumber: profile.accountNumber,
+      brightreePatientId: profile.patientId,
+      brightreePatientKey: profile.patientKey,
+    });
 
     uniquePatients.add(patientId);
 
     const isHospice = rowLooksHospice(row, args.reportType);
     const isWip = rowLooksWip(row, args.reportType);
     const isCompletedWip = rowLooksCompletedWip(row);
+    const birthday = buildBirthdayFields(patient.dateOfBirth);
 
     if (isHospice) {
       uniqueHospicePatients.add(patientId);
@@ -1321,20 +1571,7 @@ export async function updatePatientIndexFromRows(args: {
       }
     }
 
-    const existingRollup =
-      patientRollups.get(patientId) ??
-      {
-        currentEquipment: [],
-        purchasesLast90Days: [],
-        cpap: null,
-        authorization: null,
-        cmn: null,
-        billing: null,
-        wip: null,
-        deliverySummary: null,
-        profile: null,
-        insurance: null,
-      };
+    const rollup = patientRollups.get(patientId) ?? createEmptyRollup();
 
     const equipment = extractCurrentEquipment(row, {
       reportId: args.reportId,
@@ -1342,39 +1579,39 @@ export async function updatePatientIndexFromRows(args: {
       reportType: args.reportType,
     });
 
-    if (equipment) existingRollup.currentEquipment.push(equipment);
+    if (equipment) {
+      rollup.equipment.set(equipment.id, equipment);
+    }
 
-    const recentPurchase = extractRecentPurchase(row, {
+    const purchase = extractRecentPurchase(row, {
       reportId: args.reportId,
       fileName: args.fileName,
       reportType: args.reportType,
     });
 
-    if (recentPurchase) existingRollup.purchasesLast90Days.push(recentPurchase);
+    if (purchase) {
+      rollup.purchases.set(purchase.id, purchase);
+    }
 
-    existingRollup.cpap = mergeCpap(existingRollup.cpap, extractCpapInfo(row));
-    existingRollup.authorization = extractAuthorization(row) ?? existingRollup.authorization;
-    existingRollup.cmn = extractCmn(row) ?? existingRollup.cmn;
-    existingRollup.billing = mergeBilling(existingRollup.billing, extractBilling(row));
-    existingRollup.wip = extractWip(row, args.reportType) ?? existingRollup.wip;
-    existingRollup.deliverySummary = extractDelivery(row) ?? existingRollup.deliverySummary;
-    existingRollup.profile = extractPatientProfile(row) ?? existingRollup.profile;
-    existingRollup.insurance = extractInsurance(row) ?? existingRollup.insurance;
+    rollup.cpap = mergeCpap(rollup.cpap, extractCpapInfo(row));
+    rollup.authorization = extractAuthorization(row) ?? rollup.authorization;
+    rollup.cmn = extractCmn(row) ?? rollup.cmn;
+    rollup.billing = mergeBilling(rollup.billing, extractBilling(row));
+    rollup.wip = extractWip(row, args.reportType) ?? rollup.wip;
+    rollup.deliverySummary = extractDelivery(row) ?? rollup.deliverySummary;
+    rollup.profile = profile ?? rollup.profile;
+    rollup.insurance = extractInsurance(row) ?? rollup.insurance;
 
-    patientRollups.set(patientId, existingRollup);
+    patientRollups.set(patientId, rollup);
+
+    const equipmentItems = Array.from(rollup.equipment.values());
+    const purchaseItems = Array.from(rollup.purchases.values());
+
+    const insurance = rollup.insurance;
+    const billing = rollup.billing;
+    const wip = rollup.wip;
 
     const patientRef = db.collection("patients_index").doc(patientId);
-
-    const source: PatientIndexSource = {
-      reportId: args.reportId,
-      reportType: args.reportType,
-      reportLabel: args.reportLabel,
-      fileName: args.fileName,
-    };
-
-    const insurance = existingRollup.insurance;
-    const billing = existingRollup.billing;
-    const wip = existingRollup.wip;
 
     const snapshot = buildPatientSnapshot({
       fullName: patient.fullName || "Unnamed Patient",
@@ -1382,37 +1619,13 @@ export async function updatePatientIndexFromRows(args: {
       city: patient.city,
       state: patient.state,
       hospice: isHospice,
-      cpapOnRecord: Boolean(existingRollup.cpap?.onRecord),
-      currentEquipmentCount: existingRollup.currentEquipment.length,
-      recentPurchaseCount: existingRollup.purchasesLast90Days.length,
+      cpapOnRecord: Boolean(rollup.cpap?.onRecord),
+      currentEquipmentCount: equipmentItems.length,
+      recentPurchaseCount: purchaseItems.length,
       primaryInsurance: insurance?.primaryInsurance || insurance?.payor || "",
       wipStatus: wip?.status || "",
       openBalanceEstimate: billing?.openBalanceEstimate || 0,
     });
-
-    if (birthday.hasBirthday && birthday.daysUntilBirthday != null && !patient.dateOfDeath) {
-      birthdayRollups.set(patientId, {
-        id: patientId,
-        patientId,
-        fullName: patient.fullName || "Unnamed Patient",
-        firstName: patient.firstName,
-        lastName: patient.lastName,
-        dateOfBirth: patient.dateOfBirth,
-        birthMonth: birthday.birthMonth,
-        birthDay: birthday.birthDay,
-        birthMonthDay: birthday.birthMonthDay,
-        age: birthday.age,
-        nextAge: birthday.nextAge,
-        nextBirthdayIso: birthday.nextBirthdayIso,
-        daysUntilBirthday: birthday.daysUntilBirthday,
-        phone: patient.phone,
-        city: patient.city,
-        state: patient.state,
-        primaryInsurance: insurance?.primaryInsurance || insurance?.payor || "",
-        cpapOnRecord: Boolean(existingRollup.cpap?.onRecord),
-        hospice: isHospice,
-      });
-    }
 
     writer.set(
       patientRef,
@@ -1450,9 +1663,9 @@ export async function updatePatientIndexFromRows(args: {
         patientSnapshot: snapshot,
         snapshot,
 
-        profile: existingRollup.profile ?? null,
-        insurance: existingRollup.insurance ?? null,
-        cpap: existingRollup.cpap ?? {
+        profile: rollup.profile ?? null,
+        insurance: rollup.insurance ?? null,
+        cpap: rollup.cpap ?? {
           onRecord: false,
           machine: "",
           maskType: "",
@@ -1466,60 +1679,153 @@ export async function updatePatientIndexFromRows(args: {
           lastServiceDate: "",
           complianceStatus: "",
         },
-        currentEquipment: existingRollup.currentEquipment.slice(-40),
-        currentEquipmentCount: existingRollup.currentEquipment.length,
-        purchasesLast90Days: existingRollup.purchasesLast90Days.slice(-40),
-        purchasesLast90DaysCount: existingRollup.purchasesLast90Days.length,
-        authorization: existingRollup.authorization ?? null,
-        cmn: existingRollup.cmn ?? null,
-        billing: existingRollup.billing ?? null,
-        wip: existingRollup.wip ?? null,
-        deliverySummary: existingRollup.deliverySummary ?? null,
+
+        currentEquipmentCount: equipmentItems.length,
+        latestEquipment:
+          equipmentItems
+            .slice()
+            .sort((a, b) => b.lastUpdated.localeCompare(a.lastUpdated))[0] ?? null,
+
+        purchasesLast90DaysCount: purchaseItems.length,
+        latestPurchase:
+          purchaseItems
+            .slice()
+            .sort((a, b) => b.purchaseDate.localeCompare(a.purchaseDate))[0] ?? null,
+
+        authorization: rollup.authorization ?? null,
+        cmn: rollup.cmn ?? null,
+        billing: rollup.billing ?? null,
+        wip: rollup.wip ?? null,
+        deliverySummary: rollup.deliverySummary ?? null,
 
         reportTypes: FieldValue.arrayUnion(args.reportLabel),
-        sources: FieldValue.arrayUnion(source),
+        sourceLabels: FieldValue.arrayUnion(args.reportLabel),
+        lastSource: source,
+        sourceCount: FieldValue.increment(1),
         rowCount: FieldValue.increment(1),
 
+        indexVersion: INDEX_VERSION,
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true }
     );
+
+    const sourceRef = patientRef.collection("sources").doc(safeDocId(args.reportId));
+    writer.set(
+      sourceRef,
+      {
+        ...source,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    if (equipment) {
+      writer.set(
+        patientRef.collection("equipment").doc(equipment.id),
+        {
+          ...equipment,
+          patientId,
+          patientName: patient.fullName,
+          reportType: args.reportType,
+          reportLabel: args.reportLabel,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+
+    if (purchase) {
+      writer.set(
+        patientRef.collection("purchases").doc(purchase.id),
+        {
+          ...purchase,
+          patientId,
+          patientName: patient.fullName,
+          reportType: args.reportType,
+          reportLabel: args.reportLabel,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+
+    if (billing) {
+      const billingId = safeDocId(
+        [
+          args.reportId,
+          billing.lastInvoiceDate,
+          billing.lastPaymentDate,
+          billing.openBalanceEstimate,
+        ].join("|")
+      );
+
+      writer.set(
+        patientRef.collection("billingHistory").doc(billingId),
+        {
+          ...billing,
+          patientId,
+          sourceReportId: args.reportId,
+          sourceFileName: args.fileName,
+          reportType: args.reportType,
+          reportLabel: args.reportLabel,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+
+    if (rollup.authorization) {
+      const authorizationId = safeDocId(
+        [
+          rollup.authorization.parNumber,
+          rollup.authorization.firstParNumber,
+          args.reportId,
+        ].join("|")
+      );
+
+      writer.set(
+        patientRef.collection("authorizations").doc(authorizationId),
+        {
+          ...rollup.authorization,
+          patientId,
+          sourceReportId: args.reportId,
+          sourceFileName: args.fileName,
+          reportType: args.reportType,
+          reportLabel: args.reportLabel,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+
+    if (rollup.deliverySummary) {
+      const deliveryId = safeDocId(
+        [
+          rollup.deliverySummary.salesOrderId,
+          rollup.deliverySummary.actualDeliveryDate,
+          rollup.deliverySummary.scheduledDeliveryDate,
+          args.reportId,
+        ].join("|")
+      );
+
+      writer.set(
+        patientRef.collection("deliveryHistory").doc(deliveryId),
+        {
+          ...rollup.deliverySummary,
+          patientId,
+          sourceReportId: args.reportId,
+          sourceFileName: args.fileName,
+          reportType: args.reportType,
+          reportLabel: args.reportLabel,
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
   }
 
   await writer.close();
-
-  const now = new Date();
-  const currentMonth = now.getMonth() + 1;
-  const upcomingBirthdays = sortBirthdayItems(Array.from(birthdayRollups.values()));
-  const birthdaysToday = upcomingBirthdays.filter((item) => item.daysUntilBirthday === 0);
-  const birthdaysNext7Days = upcomingBirthdays.filter((item) => item.daysUntilBirthday <= 7);
-  const birthdaysNext30Days = upcomingBirthdays.filter((item) => item.daysUntilBirthday <= 30);
-  const birthdaysThisMonth = upcomingBirthdays
-    .filter((item) => item.birthMonth === currentMonth)
-    .sort((a, b) => a.birthDay - b.birthDay || a.fullName.localeCompare(b.fullName));
-
-  await db.doc("analytics/birthdays").set(
-    {
-      upcoming: upcomingBirthdays.slice(0, 25),
-      today: birthdaysToday.slice(0, 25),
-      next7Days: birthdaysNext7Days.slice(0, 25),
-      next30Days: birthdaysNext30Days.slice(0, 50),
-      thisMonth: birthdaysThisMonth.slice(0, 50),
-      upcomingCount: upcomingBirthdays.length,
-      todayCount: birthdaysToday.length,
-      next7DaysCount: birthdaysNext7Days.length,
-      next30DaysCount: birthdaysNext30Days.length,
-      thisMonthCount: birthdaysThisMonth.length,
-      lastIndexedReportId: args.reportId,
-      lastIndexedReportType: args.reportType,
-      lastIndexedReportLabel: args.reportLabel,
-      lastIndexedFileName: args.fileName,
-      indexVersion: "birthdays-v1",
-      lastUpdatedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    },
-    { merge: true }
-  );
 
   await db.doc("analytics/patientIndex").set(
     {
@@ -1537,13 +1843,32 @@ export async function updatePatientIndexFromRows(args: {
       wipCompleted,
       completedWips: wipCompleted,
 
+      rowsProcessed: args.rows.length,
+      rowsSkippedMissingName,
+
       lastIndexedReportId: args.reportId,
       lastIndexedReportType: args.reportType,
       lastIndexedReportLabel: args.reportLabel,
       lastIndexedFileName: args.fileName,
 
-      indexVersion: "patient-index-v5-birthdays-owner-profile",
+      indexVersion: INDEX_VERSION,
       lastUpdatedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  await rebuildBirthdayAnalyticsFromPatients();
+
+  const dashboardRef = db.collection("analytics").doc("dashboard");
+
+  await dashboardRef.set(
+    {
+      totalPatients: FieldValue.increment(uniquePatients.size),
+      totalHospicePatients: FieldValue.increment(uniqueHospicePatients.size),
+      lastPatientIndexReportId: args.reportId,
+      lastPatientIndexFileName: args.fileName,
+      patientIndexVersion: INDEX_VERSION,
       updatedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }

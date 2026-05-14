@@ -1,5 +1,6 @@
 "use client";
 
+import type { ElementType } from "react";
 import { motion } from "framer-motion";
 import {
   Activity,
@@ -18,27 +19,26 @@ import {
 import { useDashboardData } from "./use-dashboard-data";
 import { formatMoney, safeNumber } from "./dashboard-utils";
 
-function StatCard({
-  title,
-  value,
-  icon: Icon,
-  description,
-}: {
+type StatCardProps = {
   title: string;
   value: string | number;
-  icon: React.ElementType;
+  icon: ElementType;
   description?: string;
-}) {
+};
+
+function StatCard({ title, value, icon: Icon, description }: StatCardProps) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.25 }}
       className="rounded-3xl border border-white/10 bg-white/10 p-5 shadow-lg backdrop-blur-xl"
     >
       <div className="flex items-center justify-between gap-4">
         <div>
           <p className="text-sm text-white/60">{title}</p>
           <p className="mt-2 text-3xl font-bold text-white">{value}</p>
+
           {description ? (
             <p className="mt-2 text-xs text-white/50">{description}</p>
           ) : null}
@@ -53,38 +53,26 @@ function StatCard({
 }
 
 export default function DashboardPage() {
-  const dashboard = useDashboardData() as any;
+  const dashboard = useDashboardData();
 
-  const loading = Boolean(dashboard?.loading);
-  const error = dashboard?.error as string | undefined;
+  const {
+    summary,
+    birthdays,
+    inventoryAnalytics,
+    orders,
+    rentals,
+    products,
+    wipEmployees,
+    loading,
+    refreshing,
+    error,
+    refreshDashboard,
+  } = dashboard;
 
-  const summary = dashboard?.summary ?? {};
-  const inventory = dashboard?.inventoryAnalytics ?? {};
-  const birthdays = dashboard?.birthdayAnalytics ?? {};
-
-  const products = Array.isArray(dashboard?.products)
-    ? dashboard.products
-    : [];
-
-  const orders = Array.isArray(dashboard?.orders)
-    ? dashboard.orders
-    : [];
-
-  const rentals = Array.isArray(dashboard?.rentals)
-    ? dashboard.rentals
-    : [];
-
-  const wipEmployees = Array.isArray(dashboard?.wipEmployeeSummaries)
-    ? dashboard.wipEmployeeSummaries
-    : [];
-
-  const refresh =
-    typeof dashboard?.refresh === "function"
-      ? dashboard.refresh
-      : undefined;
+  const isBusy = loading || refreshing;
 
   return (
-    <main className="min-h-screen bg-slate-950 px-6 py-6 text-white">
+    <main className="min-h-screen bg-slate-950 px-4 py-6 text-white md:px-6">
       <div className="mx-auto flex max-w-7xl flex-col gap-6">
         <section className="rounded-[2rem] border border-white/10 bg-gradient-to-br from-slate-900 via-slate-950 to-black p-6 shadow-2xl">
           <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
@@ -92,9 +80,11 @@ export default function DashboardPage() {
               <p className="text-sm font-medium uppercase tracking-[0.3em] text-blue-300">
                 Advanced Home Medical
               </p>
+
               <h1 className="mt-3 text-4xl font-black tracking-tight text-white">
                 Command Dashboard
               </h1>
+
               <p className="mt-2 max-w-2xl text-sm text-white/60">
                 Live operational overview for orders, rentals, inventory,
                 reports, WIP activity, and patient birthday tracking.
@@ -103,12 +93,14 @@ export default function DashboardPage() {
 
             <button
               type="button"
-              onClick={refresh}
-              disabled={!refresh || loading}
+              onClick={() => void refreshDashboard()}
+              disabled={isBusy}
               className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              <RefreshCcw className="h-4 w-4" />
-              {loading ? "Refreshing..." : "Refresh"}
+              <RefreshCcw
+                className={`h-4 w-4 ${isBusy ? "animate-spin" : ""}`}
+              />
+              {isBusy ? "Refreshing..." : "Refresh"}
             </button>
           </div>
 
@@ -157,7 +149,9 @@ export default function DashboardPage() {
 
           <StatCard
             title="Products"
-            value={products.length || safeNumber(inventory.totalInventoryItems)}
+            value={
+              products.length || safeNumber(inventoryAnalytics.totalInventoryItems)
+            }
             icon={Package}
             description="Inventory records loaded."
           />
@@ -186,7 +180,7 @@ export default function DashboardPage() {
 
             <div className="space-y-3">
               {orders.length > 0 ? (
-                orders.slice(0, 8).map((order: any) => (
+                orders.slice(0, 8).map((order) => (
                   <div
                     key={order.id}
                     className="rounded-2xl border border-white/10 bg-black/20 p-4"
@@ -196,6 +190,7 @@ export default function DashboardPage() {
                         <p className="font-semibold text-white">
                           {order.patientName || "Unknown Patient"}
                         </p>
+
                         <p className="text-xs text-white/50">
                           {order.orderNumber || order.id}
                         </p>
@@ -261,7 +256,7 @@ export default function DashboardPage() {
 
             <div className="space-y-3">
               {rentals.length > 0 ? (
-                rentals.slice(0, 6).map((rental: any) => (
+                rentals.slice(0, 6).map((rental) => (
                   <div
                     key={rental.id}
                     className="rounded-2xl border border-white/10 bg-black/20 p-4"
@@ -269,9 +264,11 @@ export default function DashboardPage() {
                     <p className="font-semibold">
                       {rental.patientName || "Unknown Patient"}
                     </p>
+
                     <p className="text-sm text-white/50">
                       {rental.itemName || "Rental item"}
                     </p>
+
                     <p className="mt-2 text-sm font-semibold text-white">
                       {formatMoney(rental.monthlyAmount)} / month
                     </p>
@@ -293,7 +290,7 @@ export default function DashboardPage() {
 
             <div className="space-y-3">
               {wipEmployees.length > 0 ? (
-                wipEmployees.slice(0, 6).map((employee: any) => (
+                wipEmployees.slice(0, 6).map((employee) => (
                   <div
                     key={employee.employeeId || employee.employeeName}
                     className="rounded-2xl border border-white/10 bg-black/20 p-4"

@@ -16,6 +16,7 @@ import {
   Repeat,
   Settings,
   Shield,
+  Siren,
   UploadCloud,
   UserSquare2,
   Users,
@@ -42,6 +43,11 @@ type AdminSidebarProps = {
   userRole?: UserRole;
 };
 
+type GroupedNavItems = Record<
+  NavSection,
+  Array<NavItem & { isActive: boolean }>
+>;
+
 const NAV_ITEMS: NavItem[] = [
   {
     id: "dashboard",
@@ -50,6 +56,13 @@ const NAV_ITEMS: NavItem[] = [
     icon: Home,
     section: "core",
     exact: true,
+  },
+  {
+    id: "command-center",
+    label: "Command Center",
+    href: "/command-center",
+    icon: Siren,
+    section: "core",
   },
   {
     id: "products",
@@ -120,7 +133,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: "reports-wip",
     label: "WIP",
-    href: "/reports/wip",
+    href: "/wip",
     icon: Hammer,
     section: "reports",
   },
@@ -150,7 +163,7 @@ const NAV_ITEMS: NavItem[] = [
   },
 ];
 
-function isActivePath(pathname: string | null, item: NavItem) {
+function isActivePath(pathname: string | null, item: NavItem): boolean {
   if (!pathname) return false;
 
   if (item.exact) {
@@ -158,6 +171,24 @@ function isActivePath(pathname: string | null, item: NavItem) {
   }
 
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
+}
+
+function getVisibleGroupedItems(
+  pathname: string | null,
+  userRole: UserRole
+): GroupedNavItems {
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    return !item.roles || item.roles.includes(userRole);
+  }).map((item) => ({
+    ...item,
+    isActive: isActivePath(pathname, item),
+  }));
+
+  return {
+    core: visibleItems.filter((item) => item.section === "core"),
+    reports: visibleItems.filter((item) => item.section === "reports"),
+    system: visibleItems.filter((item) => item.section === "system"),
+  };
 }
 
 export default function AdminSidebar({
@@ -193,7 +224,7 @@ export default function AdminSidebar({
 
           <aside
             aria-label="Mobile navigation"
-            className="absolute inset-y-0 left-0 flex w-64 flex-col border-r border-white/10 bg-neutral-950 text-white shadow-2xl"
+            className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-white/10 bg-neutral-950 text-white shadow-2xl"
           >
             <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
               <div>
@@ -210,7 +241,7 @@ export default function AdminSidebar({
                 onClick={onClose}
                 title="Close sidebar"
                 aria-label="Close sidebar"
-                className="rounded-xl border border-white/10 bg-white/5 p-2 text-white transition hover:border-white/20 hover:bg-white/10"
+                className="rounded-xl border border-white/10 bg-white/5 p-2 text-white transition hover:border-white/20 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30"
               >
                 <X className="h-5 w-5" aria-hidden />
               </button>
@@ -241,18 +272,7 @@ function SidebarInner({
   onNavigate?: () => void;
 }) {
   const groupedItems = useMemo(() => {
-    const visibleItems = NAV_ITEMS.filter(
-      (item) => !item.roles || item.roles.includes(userRole)
-    ).map((item) => ({
-      ...item,
-      isActive: isActivePath(pathname, item),
-    }));
-
-    return {
-      core: visibleItems.filter((item) => item.section === "core"),
-      reports: visibleItems.filter((item) => item.section === "reports"),
-      system: visibleItems.filter((item) => item.section === "system"),
-    };
+    return getVisibleGroupedItems(pathname, userRole);
   }, [pathname, userRole]);
 
   return (
@@ -267,7 +287,8 @@ function SidebarInner({
         </div>
 
         <div className="mt-2 text-sm leading-5 text-neutral-400">
-          Operations, reports, insurance, hospice, inventory, and rentals.
+          Operations, reports, insurance, hospice, inventory, rentals, and
+          command-level oversight.
         </div>
       </div>
 
@@ -275,32 +296,26 @@ function SidebarInner({
         aria-label="Admin sections"
         className="custom-sidebar-scroll flex flex-1 flex-col overflow-y-auto pr-1"
       >
-        {groupedItems.core.length > 0 ? (
-          <SidebarSection
-            title="Operations"
-            items={groupedItems.core}
-            navKeyPrefix={navKeyPrefix}
-            onNavigate={onNavigate}
-          />
-        ) : null}
+        <SidebarSection
+          title="Operations"
+          items={groupedItems.core}
+          navKeyPrefix={navKeyPrefix}
+          onNavigate={onNavigate}
+        />
 
-        {groupedItems.reports.length > 0 ? (
-          <SidebarSection
-            title="Reports & Analytics"
-            items={groupedItems.reports}
-            navKeyPrefix={navKeyPrefix}
-            onNavigate={onNavigate}
-          />
-        ) : null}
+        <SidebarSection
+          title="Reports & Analytics"
+          items={groupedItems.reports}
+          navKeyPrefix={navKeyPrefix}
+          onNavigate={onNavigate}
+        />
 
-        {groupedItems.system.length > 0 ? (
-          <SidebarSection
-            title="Administration"
-            items={groupedItems.system}
-            navKeyPrefix={navKeyPrefix}
-            onNavigate={onNavigate}
-          />
-        ) : null}
+        <SidebarSection
+          title="Administration"
+          items={groupedItems.system}
+          navKeyPrefix={navKeyPrefix}
+          onNavigate={onNavigate}
+        />
       </nav>
 
       <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-300">
@@ -321,6 +336,10 @@ function SidebarSection({
   navKeyPrefix: string;
   onNavigate?: () => void;
 }) {
+  if (items.length === 0) {
+    return null;
+  }
+
   return (
     <section className="mb-5" aria-label={title}>
       <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-500">
@@ -363,10 +382,7 @@ function SidebarSection({
                   {item.badge}
                 </span>
               ) : item.isActive ? (
-                <span
-                  aria-hidden
-                  className="h-2 w-2 rounded-full bg-white"
-                />
+                <span aria-hidden className="h-2 w-2 rounded-full bg-white" />
               ) : (
                 <span
                   aria-hidden

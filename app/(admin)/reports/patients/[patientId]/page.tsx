@@ -14,7 +14,6 @@ import {
   ClipboardCheck,
   Clock,
   FileText,
-  Flag,
   HeartPulse,
   NotebookPen,
   PackageCheck,
@@ -23,7 +22,6 @@ import {
   ShieldCheck,
   Stethoscope,
   Trash2,
-  Truck,
   UserRound,
   X,
 } from "lucide-react";
@@ -38,6 +36,8 @@ import {
 } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
+
+const PATIENTS_COLLECTION = "patients";
 
 type PatientStatus = "active" | "archived" | "destroyed";
 type PatientTaskStatus = "open" | "done";
@@ -101,7 +101,7 @@ type PatientTask = {
   createdBy?: string | null;
 };
 
-type PatientIndex = {
+type PatientRecord = {
   id: string;
   firstName: string;
   lastName: string;
@@ -176,12 +176,18 @@ function safeRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function textField(record: Record<string, unknown> | null | undefined, key: string): string {
+function textField(
+  record: Record<string, unknown> | null | undefined,
+  key: string
+): string {
   if (!record) return "";
   return safeText(record[key]);
 }
 
-function numberField(record: Record<string, unknown> | null | undefined, key: string): number {
+function numberField(
+  record: Record<string, unknown> | null | undefined,
+  key: string
+): number {
   if (!record) return 0;
   return safeNumber(record[key]);
 }
@@ -287,7 +293,6 @@ function formatBirthday(dateOfBirth: string): string {
   if (!birthday) return "—";
 
   const displayDate = new Date(2000, birthday.month - 1, birthday.day);
-
   const monthName = new Intl.DateTimeFormat("en-US", {
     month: "long",
   }).format(displayDate);
@@ -301,16 +306,19 @@ function addYears(date: Date, years: number): Date {
   return copy;
 }
 
-function getLastActivityDate(patient: PatientIndex): string {
+function getLastActivityDate(patient: PatientRecord): string {
   return (
     patient.lastActivityDate ||
     patient.lastEquipmentDate ||
     patient.lastTreatmentDate ||
+    patient.currentEquipment?.[0]?.lastUpdated ||
+    patient.currentEquipment?.[0]?.startDate ||
+    patient.purchasesLast90Days?.[0]?.purchaseDate ||
     ""
   );
 }
 
-function getDestroyEligibleDate(patient: PatientIndex): string {
+function getDestroyEligibleDate(patient: PatientRecord): string {
   if (patient.destroyEligibleDate) return patient.destroyEligibleDate;
 
   const lastActivity = parseDate(getLastActivityDate(patient));
@@ -319,7 +327,7 @@ function getDestroyEligibleDate(patient: PatientIndex): string {
   return addYears(lastActivity, 7).toISOString();
 }
 
-function isDestroyEligible(patient: PatientIndex): boolean {
+function isDestroyEligible(patient: PatientRecord): boolean {
   if (patient.status !== "archived") return false;
 
   const lastActivity = parseDate(getLastActivityDate(patient));
@@ -359,7 +367,7 @@ function normalizeTasks(value: unknown): PatientTask[] {
     .filter((task): task is PatientTask => Boolean(task?.title));
 }
 
-function normalizePatient(id: string, raw: Partial<PatientIndex>): PatientIndex {
+function normalizePatient(id: string, raw: Partial<PatientRecord>): PatientRecord {
   const firstName = safeText(raw.firstName);
   const lastName = safeText(raw.lastName);
   const fallbackName = [firstName, lastName].filter(Boolean).join(" ");
@@ -424,13 +432,16 @@ function normalizePatient(id: string, raw: Partial<PatientIndex>): PatientIndex 
   };
 }
 
-function calculatePatientRisk(patient: PatientIndex): number {
+function calculatePatientRisk(patient: PatientRecord): number {
   let score = 0;
 
   if (!patient.dateOfBirth) score += 2;
   if (!patient.phone && !patient.email) score += 2;
 
-  if (!textField(patient.insurance, "primaryInsurance") && !textField(patient.insurance, "payor")) {
+  if (
+    !textField(patient.insurance, "primaryInsurance") &&
+    !textField(patient.insurance, "payor")
+  ) {
     score += 2;
   }
 
@@ -438,7 +449,11 @@ function calculatePatientRisk(patient: PatientIndex): number {
   if (patient.cpap?.onRecord && !patient.cpap.lastServiceDate) score += 1;
   if (!textField(patient.profile, "primaryDoctor")) score += 1;
 
-  if (textField(patient.authorization, "parStatus").toLowerCase().includes("expired")) {
+  if (
+    textField(patient.authorization, "parStatus")
+      .toLowerCase()
+      .includes("expired")
+  ) {
     score += 3;
   }
 
@@ -452,34 +467,55 @@ function calculatePatientRisk(patient: PatientIndex): number {
 
   if (textField(patient.wip, "status")) score += 1;
 
-  if (patient.tasks?.some((task) => task.status === "open" && task.priority === "urgent")) {
+  if (
+    patient.tasks?.some(
+      (task) => task.status === "open" && task.priority === "urgent"
+    )
+  ) {
     score += 3;
   }
 
   return score;
 }
 
-function getRiskFlags(patient: PatientIndex): string[] {
+function getRiskFlags(patient: PatientRecord): string[] {
   const flags: string[] = [];
 
   if (!patient.dateOfBirth) flags.push("Missing DOB");
   if (!patient.phone && !patient.email) flags.push("No contact");
-  if (!textField(patient.insurance, "primaryInsurance") && !textField(patient.insurance, "payor")) {
+
+  if (
+    !textField(patient.insurance, "primaryInsurance") &&
+    !textField(patient.insurance, "payor")
+  ) {
     flags.push("Missing insurance");
   }
+
   if (patient.cpap?.onRecord && !patient.cpap.complianceStatus) {
     flags.push("CPAP compliance missing");
   }
-  if (textField(patient.authorization, "parStatus").toLowerCase().includes("expired")) {
+
+  if (
+    textField(patient.authorization, "parStatus")
+      .toLowerCase()
+      .includes("expired")
+  ) {
     flags.push("PAR expired");
   }
+
   if (!textField(patient.cmn, "status") && patient.cpap?.onRecord) {
     flags.push("CMN missing");
   }
+
   if (numberField(patient.billing, "openBalanceEstimate") > 500) {
     flags.push("High balance");
   }
-  if (patient.tasks?.some((task) => task.status === "open" && task.priority === "urgent")) {
+
+  if (
+    patient.tasks?.some(
+      (task) => task.status === "open" && task.priority === "urgent"
+    )
+  ) {
     flags.push("Urgent task");
   }
 
@@ -488,7 +524,7 @@ function getRiskFlags(patient: PatientIndex): string[] {
 
 async function writeAuditLog(params: {
   action: string;
-  patient: PatientIndex;
+  patient: PatientRecord;
   previousStatus: PatientStatus;
   newStatus: PatientStatus;
 }) {
@@ -500,7 +536,7 @@ async function writeAuditLog(params: {
     actorEmail: user?.email ?? null,
     targetId: params.patient.id,
     targetName: params.patient.fullName,
-    targetCollection: "patients_index",
+    targetCollection: PATIENTS_COLLECTION,
     previousStatus: params.previousStatus,
     newStatus: params.newStatus,
     details: {
@@ -520,14 +556,17 @@ async function addTimelineEntry(params: {
 }) {
   const user = auth.currentUser;
 
-  await addDoc(collection(db, "patients_index", params.patientId, "timeline"), {
-    type: params.type,
-    title: params.title,
-    body: params.body ?? "",
-    actorUid: user?.uid ?? null,
-    actorEmail: user?.email ?? null,
-    createdAt: serverTimestamp(),
-  });
+  await addDoc(
+    collection(db, PATIENTS_COLLECTION, params.patientId, "timeline"),
+    {
+      type: params.type,
+      title: params.title,
+      body: params.body ?? "",
+      actorUid: user?.uid ?? null,
+      actorEmail: user?.email ?? null,
+      createdAt: serverTimestamp(),
+    }
+  );
 }
 
 export default function PatientDetailPage() {
@@ -536,7 +575,7 @@ export default function PatientDetailPage() {
 
   const patientId = params.patientId;
 
-  const [patient, setPatient] = useState<PatientIndex | null>(null);
+  const [patient, setPatient] = useState<PatientRecord | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingStatus, setSavingStatus] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
@@ -551,12 +590,13 @@ export default function PatientDetailPage() {
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskAssignedTo, setNewTaskAssignedTo] = useState("");
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
-  const [newTaskPriority, setNewTaskPriority] = useState<PatientTaskPriority>("routine");
+  const [newTaskPriority, setNewTaskPriority] =
+    useState<PatientTaskPriority>("routine");
 
   useEffect(() => {
     if (!patientId) return;
 
-    const patientRef = doc(db, "patients_index", patientId);
+    const patientRef = doc(db, PATIENTS_COLLECTION, patientId);
 
     const unsubscribe = onSnapshot(
       patientRef,
@@ -569,7 +609,7 @@ export default function PatientDetailPage() {
 
         const nextPatient = normalizePatient(
           snapshot.id,
-          snapshot.data() as Partial<PatientIndex>
+          snapshot.data() as Partial<PatientRecord>
         );
 
         setPatient(nextPatient);
@@ -613,8 +653,10 @@ export default function PatientDetailPage() {
 
   const riskScore = patient ? calculatePatientRisk(patient) : 0;
   const riskFlags = patient ? getRiskFlags(patient) : [];
-  const openTasks = patient?.tasks?.filter((task) => task.status === "open") ?? [];
-  const completedTasks = patient?.tasks?.filter((task) => task.status === "done") ?? [];
+  const openTasks =
+    patient?.tasks?.filter((task) => task.status === "open") ?? [];
+  const completedTasks =
+    patient?.tasks?.filter((task) => task.status === "done") ?? [];
 
   async function saveNotes() {
     if (!patient) return;
@@ -623,7 +665,7 @@ export default function PatientDetailPage() {
     setMessage("");
 
     try {
-      await updateDoc(doc(db, "patients_index", patient.id), {
+      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), {
         notes: notesDraft,
         careNotes: careNotesDraft,
         equipmentNotes: equipmentNotesDraft,
@@ -673,7 +715,7 @@ export default function PatientDetailPage() {
         createdBy: auth.currentUser?.email ?? null,
       };
 
-      await updateDoc(doc(db, "patients_index", patient.id), {
+      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), {
         tasks: [...(patient.tasks ?? []), task],
         updatedAt: serverTimestamp(),
       });
@@ -715,7 +757,7 @@ export default function PatientDetailPage() {
           : task
       );
 
-      await updateDoc(doc(db, "patients_index", patient.id), {
+      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), {
         tasks: nextTasks,
         updatedAt: serverTimestamp(),
       });
@@ -745,7 +787,7 @@ export default function PatientDetailPage() {
     setMessage("");
 
     try {
-      await updateDoc(doc(db, "patients_index", patient.id), {
+      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), {
         status: "archived",
         archivedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -783,7 +825,7 @@ export default function PatientDetailPage() {
     setMessage("");
 
     try {
-      await updateDoc(doc(db, "patients_index", patient.id), {
+      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), {
         status: "active",
         restoredAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -831,7 +873,7 @@ export default function PatientDetailPage() {
     setMessage("");
 
     try {
-      await updateDoc(doc(db, "patients_index", patient.id), {
+      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), {
         status: "destroyed",
         destroyedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -920,7 +962,7 @@ export default function PatientDetailPage() {
                 {formatDate(patient.dateOfDeath)}
               </p>
 
-              {(patient.snapshot || patient.patientSnapshot) ? (
+              {patient.snapshot || patient.patientSnapshot ? (
                 <p className="mt-4 max-w-4xl rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-zinc-300">
                   {patient.snapshot || patient.patientSnapshot}
                 </p>
@@ -1004,7 +1046,11 @@ export default function PatientDetailPage() {
         )}
 
         {birthdayInfo?.isThisMonth ? (
-          <Panel icon={<Cake className="h-5 w-5" />} title="Birthday Reminder" tone="amber">
+          <Panel
+            icon={<Cake className="h-5 w-5" />}
+            title="Birthday Reminder"
+            tone="amber"
+          >
             {patient.fullName} turns {birthdayInfo.ageTurning ?? "—"} on{" "}
             {birthdayInfo.birthday}.
           </Panel>
@@ -1012,8 +1058,18 @@ export default function PatientDetailPage() {
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard label="Open Tasks" value={openTasks.length} />
-          <StatCard label="Equipment" value={patient.currentEquipment?.length ?? 0} />
-          <StatCard label="90-Day Purchases" value={patient.purchasesLast90Days?.length ?? 0} />
+          <StatCard
+            label="Equipment"
+            value={patient.currentEquipmentCount || patient.currentEquipment?.length || 0}
+          />
+          <StatCard
+            label="90-Day Purchases"
+            value={
+              patient.purchasesLast90DaysCount ||
+              patient.purchasesLast90Days?.length ||
+              0
+            }
+          />
           <StatCard label="Risk Score" value={riskScore} />
         </section>
 
@@ -1030,21 +1086,57 @@ export default function PatientDetailPage() {
           <Info label="Height" value={textField(patient.profile, "height")} />
           <Info label="Weight" value={textField(patient.profile, "weight")} />
           <Info label="Patient ID" value={textField(patient.profile, "patientId")} />
-          <Info label="Account #" value={textField(patient.profile, "accountNumber")} />
-          <Info label="Patient Status" value={textField(patient.profile, "patientStatus")} />
-          <Info label="Hub Status" value={textField(patient.profile, "patientHubStatus")} />
+          <Info
+            label="Account #"
+            value={textField(patient.profile, "accountNumber")}
+          />
+          <Info
+            label="Patient Status"
+            value={textField(patient.profile, "patientStatus")}
+          />
+          <Info
+            label="Hub Status"
+            value={textField(patient.profile, "patientHubStatus")}
+          />
         </Section>
 
         <Section title="Insurance / Clinical" icon={<Stethoscope className="h-5 w-5" />}>
-          <Info label="Primary Insurance" value={textField(patient.insurance, "primaryInsurance") || textField(patient.insurance, "payor")} />
-          <Info label="Secondary Insurance" value={textField(patient.insurance, "secondaryInsurance")} />
+          <Info
+            label="Primary Insurance"
+            value={
+              textField(patient.insurance, "primaryInsurance") ||
+              textField(patient.insurance, "payor")
+            }
+          />
+          <Info
+            label="Secondary Insurance"
+            value={textField(patient.insurance, "secondaryInsurance")}
+          />
           <Info label="Policy #" value={textField(patient.insurance, "policyNumber")} />
-          <Info label="Insurance Status" value={textField(patient.insurance, "insuranceStatus")} />
-          <Info label="Coverage Type" value={textField(patient.insurance, "coverageTypes")} />
-          <Info label="Primary Doctor" value={textField(patient.profile, "primaryDoctor")} />
-          <Info label="Ordering Doctor" value={textField(patient.profile, "orderingDoctor")} />
-          <Info label="Registration Date" value={formatDate(textField(patient.profile, "registrationDate"))} />
-          <Info label="Last Portal Login" value={formatDate(textField(patient.profile, "lastLoginDate"))} />
+          <Info
+            label="Insurance Status"
+            value={textField(patient.insurance, "insuranceStatus")}
+          />
+          <Info
+            label="Coverage Type"
+            value={textField(patient.insurance, "coverageTypes")}
+          />
+          <Info
+            label="Primary Doctor"
+            value={textField(patient.profile, "primaryDoctor")}
+          />
+          <Info
+            label="Ordering Doctor"
+            value={textField(patient.profile, "orderingDoctor")}
+          />
+          <Info
+            label="Registration Date"
+            value={formatDate(textField(patient.profile, "registrationDate"))}
+          />
+          <Info
+            label="Last Portal Login"
+            value={formatDate(textField(patient.profile, "lastLoginDate"))}
+          />
         </Section>
 
         <Section title="CPAP / PAP Therapy" icon={<HeartPulse className="h-5 w-5" />}>
@@ -1058,7 +1150,10 @@ export default function PatientDetailPage() {
           <Info label="Pressure" value={patient.cpap?.pressure} />
           <Info label="Serial #" value={patient.cpap?.serialNumber} />
           <Info label="Setup Date" value={formatDate(patient.cpap?.setupDate)} />
-          <Info label="Last Service" value={formatDate(patient.cpap?.lastServiceDate)} />
+          <Info
+            label="Last Service"
+            value={formatDate(patient.cpap?.lastServiceDate)}
+          />
           <Info label="Compliance" value={patient.cpap?.complianceStatus} />
         </Section>
 
@@ -1074,33 +1169,81 @@ export default function PatientDetailPage() {
           </div>
         </Section>
 
-        <Section title="Delivery / PAR / CMN / WIP" icon={<ClipboardCheck className="h-5 w-5" />}>
-          <Info label="Sales Order" value={textField(patient.deliverySummary, "salesOrderId")} />
-          <Info label="Delivery Date" value={formatDate(textField(patient.deliverySummary, "actualDeliveryDate"))} />
-          <Info label="Delivery Tech" value={textField(patient.deliverySummary, "deliveryTechName")} />
-          <Info label="Delivery Notes" value={textField(patient.deliverySummary, "comments")} />
+        <Section
+          title="Delivery / PAR / CMN / WIP"
+          icon={<ClipboardCheck className="h-5 w-5" />}
+        >
+          <Info
+            label="Sales Order"
+            value={textField(patient.deliverySummary, "salesOrderId")}
+          />
+          <Info
+            label="Delivery Date"
+            value={formatDate(textField(patient.deliverySummary, "actualDeliveryDate"))}
+          />
+          <Info
+            label="Delivery Tech"
+            value={textField(patient.deliverySummary, "deliveryTechName")}
+          />
+          <Info
+            label="Delivery Notes"
+            value={textField(patient.deliverySummary, "comments")}
+          />
           <Info label="PAR #" value={textField(patient.authorization, "parNumber")} />
-          <Info label="PAR Status" value={textField(patient.authorization, "parStatus")} />
-          <Info label="PAR Expiration" value={formatDate(textField(patient.authorization, "parExpiration"))} />
+          <Info
+            label="PAR Status"
+            value={textField(patient.authorization, "parStatus")}
+          />
+          <Info
+            label="PAR Expiration"
+            value={formatDate(textField(patient.authorization, "parExpiration"))}
+          />
           <Info label="CMN Status" value={textField(patient.cmn, "status")} />
           <Info label="CMN Form" value={textField(patient.cmn, "formName")} />
-          <Info label="CMN Expiration" value={formatDate(textField(patient.cmn, "expiryDate"))} />
+          <Info
+            label="CMN Expiration"
+            value={formatDate(textField(patient.cmn, "expiryDate"))}
+          />
           <Info label="WIP Status" value={textField(patient.wip, "status")} />
-          <Info label="WIP Assigned To" value={textField(patient.wip, "assignedTo")} />
-          <Info label="WIP Days in State" value={String(numberField(patient.wip, "daysInState") || "")} />
+          <Info
+            label="WIP Assigned To"
+            value={textField(patient.wip, "assignedTo")}
+          />
+          <Info
+            label="WIP Days in State"
+            value={String(numberField(patient.wip, "daysInState") || "")}
+          />
         </Section>
 
         <Section title="Billing Snapshot" icon={<Banknote className="h-5 w-5" />}>
-          <Info label="Last Invoice Date" value={formatDate(textField(patient.billing, "lastInvoiceDate"))} />
-          <Info label="Last Payment Date" value={formatDate(textField(patient.billing, "lastPaymentDate"))} />
-          <Info label="Charges 90 Days" value={formatMoney(numberField(patient.billing, "totalCharges90Days"))} />
-          <Info label="Allowed 90 Days" value={formatMoney(numberField(patient.billing, "totalAllowed90Days"))} />
-          <Info label="Payments 90 Days" value={formatMoney(numberField(patient.billing, "totalPayments90Days"))} />
-          <Info label="Open Balance Estimate" value={formatMoney(numberField(patient.billing, "openBalanceEstimate"))} />
+          <Info
+            label="Last Invoice Date"
+            value={formatDate(textField(patient.billing, "lastInvoiceDate"))}
+          />
+          <Info
+            label="Last Payment Date"
+            value={formatDate(textField(patient.billing, "lastPaymentDate"))}
+          />
+          <Info
+            label="Charges 90 Days"
+            value={formatMoney(numberField(patient.billing, "totalCharges90Days"))}
+          />
+          <Info
+            label="Allowed 90 Days"
+            value={formatMoney(numberField(patient.billing, "totalAllowed90Days"))}
+          />
+          <Info
+            label="Payments 90 Days"
+            value={formatMoney(numberField(patient.billing, "totalPayments90Days"))}
+          />
+          <Info
+            label="Open Balance Estimate"
+            value={formatMoney(numberField(patient.billing, "openBalanceEstimate"))}
+          />
         </Section>
 
         <Section title="Care Coordination Tasks" icon={<CalendarClock className="h-5 w-5" />}>
-          <div className="md:col-span-3 space-y-4">
+          <div className="space-y-4 md:col-span-3">
             <div className="grid gap-3 rounded-2xl border border-white/10 bg-black/30 p-4 md:grid-cols-4">
               <Input
                 label="Task Title"
@@ -1186,7 +1329,7 @@ export default function PatientDetailPage() {
         </Section>
 
         <Section title="Internal Notes" icon={<NotebookPen className="h-5 w-5" />}>
-          <div className="md:col-span-3 grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:col-span-3 md:grid-cols-2">
             <NoteBox
               id="general-notes"
               label="General Snapshot / Owner Notes"
@@ -1227,8 +1370,14 @@ export default function PatientDetailPage() {
 
         <Section title="Retention" icon={<Clock className="h-5 w-5" />}>
           <Info label="Last Activity" value={formatDate(getLastActivityDate(patient))} />
-          <Info label="Destroy Eligible After" value={formatDate(getDestroyEligibleDate(patient))} />
-          <Info label="Destroy Eligibility" value={isDestroyEligible(patient) ? "Eligible now" : "Not eligible"} />
+          <Info
+            label="Destroy Eligible After"
+            value={formatDate(getDestroyEligibleDate(patient))}
+          />
+          <Info
+            label="Destroy Eligibility"
+            value={isDestroyEligible(patient) ? "Eligible now" : "Not eligible"}
+          />
 
           <div className="md:col-span-3">
             {isDestroyEligible(patient) ? (
@@ -1237,14 +1386,14 @@ export default function PatientDetailPage() {
                 title="Destruction Eligible"
                 tone="red"
               >
-                This archived patient appears eligible based on the last activity date.
-                Verify equipment, billing, service, treatment, and legal retention
-                requirements before marking destroyed.
+                This archived patient appears eligible based on the last activity
+                date. Verify equipment, billing, service, treatment, and legal
+                retention requirements before marking destroyed.
               </Panel>
             ) : (
               <Panel icon={<Clock className="h-5 w-5" />} title="Retention Status" tone="neutral">
-                Records can move from archived to destroyed only after 7 years with
-                no equipment, billing, service, or treatment activity.
+                Records can move from archived to destroyed only after 7 years
+                with no equipment, billing, service, or treatment activity.
               </Panel>
             )}
           </div>
@@ -1328,17 +1477,30 @@ function EquipmentTable({ items }: { items: CurrentEquipmentItem[] }) {
 
         <tbody>
           {items.slice(0, 25).map((item, index) => (
-            <tr key={`${item.itemName}-${item.serialNumber}-${index}`} className="border-t border-white/10">
+            <tr
+              key={`${item.itemName}-${item.serialNumber}-${index}`}
+              className="border-t border-white/10"
+            >
               <td className="px-3 py-2 text-zinc-100">{item.itemName || "—"}</td>
-              <td className="px-3 py-2 text-zinc-400">{item.hcpc || item.itemId || "—"}</td>
+              <td className="px-3 py-2 text-zinc-400">
+                {item.hcpc || item.itemId || "—"}
+              </td>
               <td className="px-3 py-2 text-zinc-400">{item.saleType || "—"}</td>
               <td className="px-3 py-2 text-zinc-400">{item.qty ?? "—"}</td>
               <td className="px-3 py-2 text-zinc-400">{item.status || "—"}</td>
-              <td className="px-3 py-2 text-zinc-400">{item.serialNumber || "—"}</td>
+              <td className="px-3 py-2 text-zinc-400">
+                {item.serialNumber || "—"}
+              </td>
               <td className="px-3 py-2 text-zinc-400">{item.lotNumber || "—"}</td>
-              <td className="px-3 py-2 text-zinc-400">{formatDate(item.startDate)}</td>
-              <td className="px-3 py-2 text-zinc-400">{item.maintenanceStatus || "—"}</td>
-              <td className="px-3 py-2 text-zinc-400">{formatDate(item.replacementDueDate)}</td>
+              <td className="px-3 py-2 text-zinc-400">
+                {formatDate(item.startDate)}
+              </td>
+              <td className="px-3 py-2 text-zinc-400">
+                {item.maintenanceStatus || "—"}
+              </td>
+              <td className="px-3 py-2 text-zinc-400">
+                {formatDate(item.replacementDueDate)}
+              </td>
             </tr>
           ))}
         </tbody>
@@ -1372,12 +1534,21 @@ function PurchaseTable({ items }: { items: RecentPurchaseItem[] }) {
 
         <tbody>
           {items.slice(0, 25).map((item, index) => (
-            <tr key={`${item.itemName}-${item.orderId}-${index}`} className="border-t border-white/10">
+            <tr
+              key={`${item.itemName}-${item.orderId}-${index}`}
+              className="border-t border-white/10"
+            >
               <td className="px-3 py-2 text-zinc-100">{item.itemName || "—"}</td>
-              <td className="px-3 py-2 text-zinc-400">{item.hcpc || item.itemId || "—"}</td>
-              <td className="px-3 py-2 text-zinc-400">{formatDate(item.purchaseDate)}</td>
+              <td className="px-3 py-2 text-zinc-400">
+                {item.hcpc || item.itemId || "—"}
+              </td>
+              <td className="px-3 py-2 text-zinc-400">
+                {formatDate(item.purchaseDate)}
+              </td>
               <td className="px-3 py-2 text-zinc-400">{item.quantity ?? "—"}</td>
-              <td className="px-3 py-2 text-zinc-400">{formatMoney(item.amount)}</td>
+              <td className="px-3 py-2 text-zinc-400">
+                {formatMoney(item.amount)}
+              </td>
               <td className="px-3 py-2 text-zinc-400">{item.orderId || "—"}</td>
             </tr>
           ))}
@@ -1415,7 +1586,8 @@ function TaskList({
             </div>
 
             <p className="mt-1 text-xs text-zinc-400">
-              Assigned: {task.assignedTo || "—"} | Due: {formatDate(task.dueDate)}
+              Assigned: {task.assignedTo || "—"} | Due:{" "}
+              {formatDate(task.dueDate)}
             </p>
           </div>
 
@@ -1558,7 +1730,9 @@ function StatCard({ label, value }: { label: string; value: number }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-neutral-950 p-4">
       <p className="text-xs text-zinc-500">{label}</p>
-      <p className="mt-1 text-2xl font-bold text-white">{value.toLocaleString()}</p>
+      <p className="mt-1 text-2xl font-bold text-white">
+        {value.toLocaleString()}
+      </p>
     </div>
   );
 }

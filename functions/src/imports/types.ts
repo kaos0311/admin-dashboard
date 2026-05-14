@@ -1,11 +1,8 @@
-export interface ParsedCsvRow {
+// functions/src/imports/types/parsedImportRow.ts
+
+export interface ParsedImportRow {
   rowNumber: number;
   data: Record<string, unknown>;
-}
-
-export interface ParsedPdfLine {
-  lineNumber: number;
-  text: string;
 }
 
 export interface ImportProcessorParams {
@@ -13,12 +10,5 @@ export interface ImportProcessorParams {
   reportType: string;
   fileName: string;
   storagePath: string;
-
-  rows: Array<{
-    rowNumber?: number;
-    lineNumber?: number;
-    data?: Record<string, unknown>;
-    text?: string;
-    [key: string]: unknown;
-  }>;
+  rows: ParsedImportRow[];
 }

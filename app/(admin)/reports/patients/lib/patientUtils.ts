@@ -164,7 +164,7 @@ export function getBirthdaySortValue(dateOfBirth: string): number {
   const birthday = getLocalDateParts(dateOfBirth);
   if (!birthday) return 9999;
 
-  return birthday.day;
+  return birthday.month * 100 + birthday.day;
 }
 
 export function addYears(date: Date, years: number): Date {
@@ -178,9 +178,13 @@ export function getLastActivityDate(patient: PatientIndex): string {
     patient.lastActivityDate ||
     patient.lastEquipmentDate ||
     patient.lastTreatmentDate ||
+    patient.currentEquipment?.[0]?.lastUpdated ||
+    patient.currentEquipment?.[0]?.startDate ||
+    patient.purchasesLast90Days?.[0]?.purchaseDate ||
     ""
   );
 }
+
 
 export function getDestroyEligibleDate(patient: PatientIndex): string {
   if (patient.destroyEligibleDate) return patient.destroyEligibleDate;
@@ -242,12 +246,42 @@ export function normalizePatient(
   const fallbackName = [firstName, lastName].filter(Boolean).join(" ");
 
   return {
-    id,
-    firstName,
-    lastName,
-    fullName: safeText(raw.fullName, fallbackName || "Unnamed Patient"),
-    dateOfBirth: safeText(raw.dateOfBirth),
-    dateOfDeath: safeText(raw.dateOfDeath),
+  id,
+  firstName,
+  lastName,
+  fullName: safeText(raw.fullName, fallbackName || "Unnamed Patient"),
+
+  normalizedFullName: safeText(raw.normalizedFullName),
+  sourceFullName: safeText(raw.sourceFullName),
+
+  dateOfBirth: safeText(raw.dateOfBirth || raw.dob),
+  dateOfDeath: safeText(raw.dateOfDeath || raw.dod),
+
+  dob: safeText(raw.dob || raw.dateOfBirth),
+  dod: safeText(raw.dod || raw.dateOfDeath),
+
+  hasBirthday: raw.hasBirthday === true,
+  birthMonth: safeNumber(raw.birthMonth),
+  birthDay: safeNumber(raw.birthDay),
+  birthMonthDay: safeText(raw.birthMonthDay),
+
+age:
+  typeof raw.age === "number"
+    ? raw.age
+    : null,
+
+nextAge:
+  typeof raw.nextAge === "number"
+    ? raw.nextAge
+    : null,
+
+nextBirthday: raw.nextBirthday,
+nextBirthdayIso: safeText(raw.nextBirthdayIso),
+
+daysUntilBirthday:
+  typeof raw.daysUntilBirthday === "number"
+    ? raw.daysUntilBirthday
+    : null,
     phone: safeText(raw.phone),
     email: safeText(raw.email),
     address: safeText(raw.address),
@@ -256,6 +290,10 @@ export function normalizePatient(
     zip: safeText(raw.zip),
 
     reportTypes: Array.isArray(raw.reportTypes) ? raw.reportTypes : [],
+
+sources: Array.isArray(raw.sources)
+  ? raw.sources
+  : [],
 
     status:
       raw.status === "archived" || raw.status === "destroyed"
@@ -470,6 +508,21 @@ export function buildSearchBlob(patient: PatientWithDerived): string {
     textField(patient.authorization, "parStatus"),
     textField(patient.cmn, "status"),
     textField(patient.wip, "assignedTo"),
+    
+    (patient.sources ?? [])
+  .map(
+    (source) =>
+      `${source.reportType} ${source.reportLabel} ${source.fileName}`
+  )
+  .join(" "),
+
+  (patient.purchasesLast90Days ?? [])
+  .map(
+    (purchase) =>
+      `${purchase.itemName} ${purchase.hcpc} ${purchase.orderId}`
+  )
+  .join(" "),
+    
     (patient.tasks ?? [])
       .map((task) => `${task.title} ${task.assignedTo} ${task.priority}`)
       .join(" "),
@@ -545,4 +598,17 @@ export function sortPatients(
   }
 
   return sortedPatients;
+}
+export function patientNeedsAttention(
+  patient: PatientWithDerived
+): boolean {
+  return (
+    patient.riskScore >= 5 ||
+    patient.hospice === true ||
+    patient.openTaskCount > 0 ||
+    patient.dataCompletenessScore < 70 ||
+    textField(patient.authorization, "parStatus")
+      .toLowerCase()
+      .includes("expired")
+  );
 }
