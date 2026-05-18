@@ -14,17 +14,14 @@ export type ReportRegistryEntry = {
   processor: ReportProcessorName;
   targetCollections: string[];
   requiredSignals: string[];
+  aliases: string[];
+  description?: string;
 };
 
-export const REPORT_REGISTRY: Record<
-  string,
-  ReportRegistryEntry
-> = {
+export const REPORT_REGISTRY = {
   hospice: {
     reportType: "hospice",
-
     label: "Hospice Report",
-
     processor: "hospice",
 
     targetCollections: [
@@ -34,18 +31,22 @@ export const REPORT_REGISTRY: Record<
       "patients_index",
     ],
 
-    requiredSignals: [
+    requiredSignals: ["hospice", "patient", "dob"],
+
+    aliases: [
       "hospice",
-      "patient",
-      "dob",
+      "hospice report",
+      "hospice patients",
+      "hospice census",
+      "pennyroyal",
     ],
+
+    description: "Hospice patient import and hospice oversight records.",
   },
 
   insurance: {
     reportType: "insurance",
-
     label: "Insurance Report",
-
     processor: "insurance",
 
     targetCollections: [
@@ -55,18 +56,25 @@ export const REPORT_REGISTRY: Record<
       "patients_index",
     ],
 
-    requiredSignals: [
+    requiredSignals: ["insurance", "payer", "policy"],
+
+    aliases: [
       "insurance",
+      "insurance report",
       "payer",
+      "payor",
+      "payer report",
+      "payor report",
       "policy",
+      "eligibility",
     ],
+
+    description: "Insurance, payer, policy, and eligibility import records.",
   },
 
   wip: {
     reportType: "wip",
-
     label: "Work In Progress",
-
     processor: "wip",
 
     targetCollections: [
@@ -76,79 +84,184 @@ export const REPORT_REGISTRY: Record<
       "patients_index",
     ],
 
-    requiredSignals: [
+    requiredSignals: ["wip", "patient", "order"],
+
+    aliases: [
       "wip",
-      "patient",
-      "order",
+      "work in progress",
+      "work-in-progress",
+      "workinprogress",
+      "pending orders",
+      "open orders",
+      "in progress",
     ],
+
+    description: "Work-in-progress patient and order tracking records.",
   },
 
   patients: {
     reportType: "patients",
-
     label: "Patient Master",
-
     processor: "patients",
 
-    targetCollections: [
+    targetCollections: ["patients", "patients_index"],
+
+    requiredSignals: ["patient", "dob", "address"],
+
+    aliases: [
       "patients",
-      "patients_index",
+      "patient",
+      "patient master",
+      "patient list",
+      "patient report",
+      "patient demographics",
+      "patients report",
+      "customer",
+      "customers",
+      "customer master",
     ],
 
-    requiredSignals: [
-      "patient",
-      "dob",
-      "address",
-    ],
+    description: "Patient demographics and master patient index imports.",
   },
 
   orders: {
     reportType: "orders",
-
     label: "Orders Report",
-
     processor: "orders",
 
-    targetCollections: [
+    targetCollections: ["orders", "patients", "patients_index"],
+
+    requiredSignals: ["order", "patient", "item"],
+
+    aliases: [
       "orders",
-      "patients",
-      "patients_index",
+      "order",
+      "orders report",
+      "sales orders",
+      "sales order",
+      "sales order details",
+      "sales order detail",
+      "sales order detail lines",
+      "sales order lines",
+      "so",
+      "so detail",
+      "so details",
+      "tickets",
+      "ticket",
+      "delivery orders",
     ],
 
-    requiredSignals: [
-      "order",
-      "patient",
-      "item",
-    ],
+    description: "Sales orders, order details, equipment, and item records.",
   },
 
   generic: {
     reportType: "generic",
-
     label: "Generic Import",
-
     processor: "generic",
 
-    targetCollections: [
-      "importedReports",
-    ],
+    targetCollections: ["importedReports"],
 
     requiredSignals: [],
+
+    aliases: [
+      "generic",
+      "custom",
+      "unknown",
+      "misc",
+      "miscellaneous",
+      "other",
+    ],
+
+    description: "Fallback import type for unmatched reports.",
   },
-};
+} as const satisfies Record<string, ReportRegistryEntry>;
+
+export type ReportType = keyof typeof REPORT_REGISTRY;
+
+function normalizeReportKey(value: unknown): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/\u00a0/g, " ")
+    .replace(/[_\-./\\]/g, " ")
+    .replace(/[^a-z0-9 ]+/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+const REPORT_ALIAS_LOOKUP: Record<string, ReportType> = Object.fromEntries(
+  Object.entries(REPORT_REGISTRY).flatMap(([reportType, entry]) => {
+    const type = reportType as ReportType;
+
+    return [entry.reportType, entry.label, ...entry.aliases].map((alias) => [
+      normalizeReportKey(alias),
+      type,
+    ]);
+  })
+) as Record<string, ReportType>;
 
 export function getReportRegistryEntry(
-  reportType?: string
+  reportType?: string | null
 ): ReportRegistryEntry {
-  const normalized =
-    reportType?.toLowerCase().trim();
+  const normalized = normalizeReportKey(reportType);
 
   if (!normalized) {
     return REPORT_REGISTRY.generic;
   }
 
+  const directMatch = REPORT_REGISTRY[normalized as ReportType];
+
+  if (directMatch) {
+    return directMatch;
+  }
+
+  const aliasMatch = REPORT_ALIAS_LOOKUP[normalized];
+
+  if (aliasMatch) {
+    return REPORT_REGISTRY[aliasMatch];
+  }
+
+  return REPORT_REGISTRY.generic;
+}
+
+export function getReportProcessorName(
+  reportType?: string | null
+): ReportProcessorName {
+  return getReportRegistryEntry(reportType).processor;
+}
+
+export function getReportTargetCollections(
+  reportType?: string | null
+): string[] {
+  return [...getReportRegistryEntry(reportType).targetCollections];
+}
+
+export function getReportRequiredSignals(
+  reportType?: string | null
+): string[] {
+  return [...getReportRegistryEntry(reportType).requiredSignals];
+}
+
+export function getKnownReportTypes(): ReportType[] {
+  return Object.keys(REPORT_REGISTRY) as ReportType[];
+}
+
+export function getReportRegistryEntries(): ReportRegistryEntry[] {
+  return Object.values(REPORT_REGISTRY);
+}
+
+export function isKnownReportType(reportType?: string | null): boolean {
+  const normalized = normalizeReportKey(reportType);
+
+  if (!normalized) return false;
+
   return (
-    REPORT_REGISTRY[normalized] ??
-    REPORT_REGISTRY.generic
+    normalized in REPORT_REGISTRY ||
+    REPORT_ALIAS_LOOKUP[normalized] !== undefined
   );
+}
+
+export function resolveReportType(reportType?: string | null): ReportType {
+  const entry = getReportRegistryEntry(reportType);
+
+  return entry.reportType as ReportType;
 }

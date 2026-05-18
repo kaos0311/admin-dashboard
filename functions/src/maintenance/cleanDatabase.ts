@@ -1,32 +1,61 @@
+// functions/src/maintenance/cleanDatabase.ts
+
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
+
 import {
   FieldValue,
   getFirestore,
   Timestamp,
   type DocumentReference,
+  type QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
+
 import { getStorage } from "firebase-admin/storage";
 
 const db = getFirestore();
 const storage = getStorage();
 
 const CONFIRM_TEXT = "STERILIZE";
+
 const DELETE_BATCH_SIZE = 300;
 const STORAGE_DELETE_CHUNK_SIZE = 100;
+
+const MAX_DELETE_OPERATIONS = 250_000;
+
+const PROTECTED_COLLECTIONS = [
+  "users",
+  "settings",
+  "roles",
+  "permissions",
+  "systemJobs",
+];
 
 const DEFAULT_COLLECTIONS_TO_DELETE = [
   "importJobs",
   "importedReports",
+
   "patients_index",
   "patients",
+
   "hospicePatients",
   "insurancePatients",
+
   "analytics",
   "auditLogs",
+
+  "duplicatePatientCandidates",
+  "dataQualityIssues",
+  "notifications",
+
+  "searchIndex",
 ];
 
-const OPTIONAL_BUSINESS_COLLECTIONS = ["products", "orders", "rentals"];
+const OPTIONAL_BUSINESS_COLLECTIONS = [
+  "products",
+  "orders",
+  "rentals",
+];
 
 const STORAGE_PREFIXES_TO_DELETE = [
   "imports/",
@@ -60,7 +89,10 @@ type CallableRequestLike = {
 
 function requireAdmin(request: CallableRequestLike): void {
   if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be signed in.");
+    throw new HttpsError(
+      "unauthenticated",
+      "You must be signed in."
+    );
   }
 
   if (request.auth.token.role !== "admin") {
@@ -72,21 +104,46 @@ function requireAdmin(request: CallableRequestLike): void {
 }
 
 function getPayload(data: unknown): CleanDatabasePayload {
-  if (!data || typeof data !== "object") return {};
+  if (!data || typeof data !== "object") {
+    return {};
+  }
+
   return data as CleanDatabasePayload;
 }
 
-function getAuthEmail(request: CallableRequestLike): string {
+function getAuthEmail(
+  request: CallableRequestLike
+): string {
   const email = request.auth?.token.email;
-  return typeof email === "string" ? email : "";
+
+  return typeof email === "string"
+    ? email
+    : "";
 }
 
-async function countCollection(collectionPath: string): Promise<number> {
-  const snap = await db.collection(collectionPath).count().get();
+function validateCollectionPath(
+  collectionPath: string
+): void {
+  if (PROTECTED_COLLECTIONS.includes(collectionPath)) {
+    throw new HttpsError(
+      "failed-precondition",
+      `Refusing to delete protected collection: ${collectionPath}`
+    );
+  }
+}
+
+async function countCollection(
+  collectionPath: string
+): Promise<number> {
+  const snap = await db
+    .collection(collectionPath)
+    .count()
+    .get();
+
   return snap.data().count;
 }
 
-async function deleteDocumentWithSubcollections(
+async function deleteSubcollectionsRecursive(
   docRef: DocumentReference,
   dryRun: boolean
 ): Promise<number> {
@@ -95,36 +152,77 @@ async function deleteDocumentWithSubcollections(
   const subcollections = await docRef.listCollections();
 
   for (const subcollection of subcollections) {
-    deletedCount += await deleteCollectionRecursive(
-      subcollection.path,
-      DELETE_BATCH_SIZE,
-      dryRun
-    );
+    deletedCount += await deleteCollectionRecursive({
+      collectionPath: subcollection.path,
+      dryRun,
+    });
   }
 
-  if (!dryRun) {
-    await docRef.delete();
-  }
-
-  return deletedCount + 1;
+  return deletedCount;
 }
 
-async function deleteCollectionRecursive(
-  collectionPath: string,
-  batchSize = DELETE_BATCH_SIZE,
-  dryRun = false
-): Promise<number> {
+async function deleteBatchDocuments(params: {
+  docs: QueryDocumentSnapshot[];
+  dryRun: boolean;
+}): Promise<number> {
+  const { docs, dryRun } = params;
+
+  let deletedCount = 0;
+
+  const batch = db.batch();
+
+  for (const docSnap of docs) {
+    deletedCount += await deleteSubcollectionsRecursive(
+      docSnap.ref,
+      dryRun
+    );
+
+    if (!dryRun) {
+      batch.delete(docSnap.ref);
+    }
+
+    deletedCount += 1;
+  }
+
+  if (!dryRun && docs.length > 0) {
+    await batch.commit();
+  }
+
+  return deletedCount;
+}
+
+async function deleteCollectionRecursive(params: {
+  collectionPath: string;
+  batchSize?: number;
+  dryRun?: boolean;
+}): Promise<number> {
+  const {
+    collectionPath,
+    batchSize = DELETE_BATCH_SIZE,
+    dryRun = false,
+  } = params;
+
+  validateCollectionPath(collectionPath);
+
   let deletedCount = 0;
 
   while (true) {
-    const snap = await db.collection(collectionPath).limit(batchSize).get();
+    const snap = await db
+      .collection(collectionPath)
+      .limit(batchSize)
+      .get();
 
     if (snap.empty) break;
 
-    for (const docSnap of snap.docs) {
-      deletedCount += await deleteDocumentWithSubcollections(
-        docSnap.ref,
-        dryRun
+    deletedCount += await deleteBatchDocuments({
+      docs: snap.docs,
+      dryRun,
+    });
+
+    if (deletedCount >= MAX_DELETE_OPERATIONS) {
+      throw new HttpsError(
+        "resource-exhausted",
+        `Delete limit exceeded (${MAX_DELETE_OPERATIONS}).`
       );
     }
 
@@ -134,10 +232,12 @@ async function deleteCollectionRecursive(
   return deletedCount;
 }
 
-async function deleteStoragePrefix(
-  prefix: string,
-  dryRun: boolean
-): Promise<DeleteStorageResult> {
+async function deleteStoragePrefix(params: {
+  prefix: string;
+  dryRun: boolean;
+}): Promise<DeleteStorageResult> {
+  const { prefix, dryRun } = params;
+
   const bucket = storage.bucket();
 
   const [files] = await bucket.getFiles({
@@ -146,18 +246,33 @@ async function deleteStoragePrefix(
   });
 
   if (!dryRun && files.length > 0) {
-    for (let i = 0; i < files.length; i += STORAGE_DELETE_CHUNK_SIZE) {
-      const chunk = files.slice(i, i + STORAGE_DELETE_CHUNK_SIZE);
+    for (
+      let index = 0;
+      index < files.length;
+      index += STORAGE_DELETE_CHUNK_SIZE
+    ) {
+      const chunk = files.slice(
+        index,
+        index + STORAGE_DELETE_CHUNK_SIZE
+      );
 
       await Promise.all(
         chunk.map(async (file) => {
           try {
-            await file.delete({ ignoreNotFound: true });
-          } catch (error) {
-            logger.warn("Failed to delete storage file", {
-              name: file.name,
-              error: error instanceof Error ? error.message : String(error),
+            await file.delete({
+              ignoreNotFound: true,
             });
+          } catch (error) {
+            logger.warn(
+              "Failed to delete storage file",
+              {
+                fileName: file.name,
+                error:
+                  error instanceof Error
+                    ? error.message
+                    : String(error),
+              }
+            );
           }
         })
       );
@@ -176,14 +291,22 @@ export const cleanDatabase = onCall(
     memory: "1GiB",
     timeoutSeconds: 540,
   },
+
   async (request) => {
     requireAdmin(request);
 
     const payload = getPayload(request.data);
 
-    const confirmText = String(payload.confirmText || "");
-    const includeBusinessData = payload.includeBusinessData === true;
-    const deleteUploadedFiles = payload.deleteUploadedFiles === true;
+    const confirmText = String(
+      payload.confirmText || ""
+    );
+
+    const includeBusinessData =
+      payload.includeBusinessData === true;
+
+    const deleteUploadedFiles =
+      payload.deleteUploadedFiles === true;
+
     const dryRun = payload.dryRun === true;
 
     if (confirmText !== CONFIRM_TEXT) {
@@ -197,37 +320,61 @@ export const cleanDatabase = onCall(
     const email = getAuthEmail(request);
 
     const collectionsToDelete = includeBusinessData
-      ? [...DEFAULT_COLLECTIONS_TO_DELETE, ...OPTIONAL_BUSINESS_COLLECTIONS]
+      ? [
+          ...DEFAULT_COLLECTIONS_TO_DELETE,
+          ...OPTIONAL_BUSINESS_COLLECTIONS,
+        ]
       : DEFAULT_COLLECTIONS_TO_DELETE;
 
     const startedAt = Timestamp.now();
 
-    const cleanJobRef = await db.collection("systemJobs").add({
-      type: "cleanDatabase",
-      status: dryRun ? "dry_run_processing" : "processing",
-      requestedBy: uid,
-      requestedByEmail: email,
-      includeBusinessData,
-      deleteUploadedFiles,
-      dryRun,
-      collectionsToDelete,
-      storagePrefixesToDelete: deleteUploadedFiles
-        ? STORAGE_PREFIXES_TO_DELETE
-        : [],
-      startedAt,
-      updatedAt: startedAt,
-    });
+    const cleanJobRef = await db
+      .collection("systemJobs")
+      .add({
+        type: "cleanDatabase",
+
+        status: dryRun
+          ? "dry_run_processing"
+          : "processing",
+
+        requestedBy: uid,
+        requestedByEmail: email,
+
+        includeBusinessData,
+        deleteUploadedFiles,
+        dryRun,
+
+        collectionsToDelete,
+
+        storagePrefixesToDelete:
+          deleteUploadedFiles
+            ? STORAGE_PREFIXES_TO_DELETE
+            : [],
+
+        startedAt,
+        updatedAt: startedAt,
+      });
 
     try {
-      const deletedCollections: Record<string, number> = {};
-      const collectionResults: DeleteCollectionResult[] = [];
+      const deletedCollections: Record<
+        string,
+        number
+      > = {};
+
+      const collectionResults: DeleteCollectionResult[] =
+        [];
 
       for (const collectionPath of collectionsToDelete) {
+        validateCollectionPath(collectionPath);
+
         const count = dryRun
           ? await countCollection(collectionPath)
-          : await deleteCollectionRecursive(collectionPath);
+          : await deleteCollectionRecursive({
+              collectionPath,
+            });
 
-        deletedCollections[collectionPath] = count;
+        deletedCollections[collectionPath] =
+          count;
 
         collectionResults.push({
           collectionPath,
@@ -238,43 +385,66 @@ export const cleanDatabase = onCall(
           {
             deletedCollections,
             collectionResults,
-            updatedAt: Timestamp.now(),
+
+            progress: {
+              collectionsCompleted:
+                collectionResults.length,
+              collectionsTotal:
+                collectionsToDelete.length,
+            },
+
+            updatedAt:
+              FieldValue.serverTimestamp(),
           },
           { merge: true }
         );
       }
 
-      const deletedStorageResults: DeleteStorageResult[] = [];
+      const deletedStorageResults: DeleteStorageResult[] =
+        [];
 
       if (deleteUploadedFiles) {
         for (const prefix of STORAGE_PREFIXES_TO_DELETE) {
-          const result = await deleteStoragePrefix(prefix, dryRun);
+          const result =
+            await deleteStoragePrefix({
+              prefix,
+              dryRun,
+            });
+
           deletedStorageResults.push(result);
 
           await cleanJobRef.set(
             {
               deletedStorageResults,
-              updatedAt: Timestamp.now(),
+
+              updatedAt:
+                FieldValue.serverTimestamp(),
             },
             { merge: true }
           );
         }
       }
 
-      const deletedStorageFiles = deletedStorageResults.reduce(
-        (sum, item) => sum + item.deletedCount,
-        0
-      );
+      const deletedStorageFiles =
+        deletedStorageResults.reduce(
+          (sum, item) => sum + item.deletedCount,
+          0
+        );
 
       const completedAt = Timestamp.now();
 
       await cleanJobRef.set(
         {
-          status: dryRun ? "dry_run_completed" : "completed",
+          status: dryRun
+            ? "dry_run_completed"
+            : "completed",
+
           deletedCollections,
           collectionResults,
+
           deletedStorageResults,
           deletedStorageFiles,
+
           completedAt,
           updatedAt: completedAt,
         },
@@ -282,48 +452,66 @@ export const cleanDatabase = onCall(
       );
 
       await db.collection("auditLogs").add({
-        action: dryRun ? "database_clean_dry_run" : "database_clean_completed",
+        action: dryRun
+          ? "database_clean_dry_run"
+          : "database_clean_completed",
+
         actorUid: uid,
         actorEmail: email,
+
         targetUid: null,
         targetEmail: null,
+
         details: {
           includeBusinessData,
           deleteUploadedFiles,
           dryRun,
+
           deletedCollections,
           deletedStorageFiles,
+
           collectionResults,
           deletedStorageResults,
         },
-        createdAt: FieldValue.serverTimestamp(),
+
+        createdAt:
+          FieldValue.serverTimestamp(),
       });
 
       logger.info("Database clean finished", {
         requestedBy: uid,
+
         includeBusinessData,
         deleteUploadedFiles,
         dryRun,
+
         deletedCollections,
         deletedStorageFiles,
       });
 
       return {
         ok: true,
+
         dryRun,
+
         deletedCollections,
         collectionResults,
+
         deletedStorageResults,
         deletedStorageFiles,
       };
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Unknown clean database error";
+        error instanceof Error
+          ? error.message
+          : "Unknown clean database error";
 
       await cleanJobRef.set(
         {
           status: "failed",
+
           error: message,
+
           failedAt: Timestamp.now(),
           updatedAt: Timestamp.now(),
         },
@@ -335,7 +523,10 @@ export const cleanDatabase = onCall(
         requestedBy: uid,
       });
 
-      throw new HttpsError("internal", message);
+      throw new HttpsError(
+        "internal",
+        message
+      );
     }
   }
 );

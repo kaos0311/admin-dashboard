@@ -1,3 +1,5 @@
+// app/(admin)/reports/upload/page.tsx
+
 "use client";
 
 import Link from "next/link";
@@ -11,7 +13,6 @@ import {
   type ReactNode,
 } from "react";
 import {
-  Activity,
   AlertTriangle,
   CheckCircle2,
   Cloud,
@@ -22,6 +23,7 @@ import {
   Loader2,
   RefreshCcw,
   Search,
+  ShieldAlert,
   Trash2,
   Upload,
   Users,
@@ -31,6 +33,7 @@ import {
 import toast from "react-hot-toast";
 import {
   collection,
+  deleteDoc,
   doc,
   limit,
   onSnapshot,
@@ -41,12 +44,14 @@ import {
   type DocumentData,
 } from "firebase/firestore";
 import {
+  deleteObject,
   getDownloadURL,
   ref,
   uploadBytesResumable,
   type UploadTaskSnapshot,
 } from "firebase/storage";
 
+import { useAuthRole } from "@/app/hooks/useAuthRole";
 import { auth, db, storage } from "@/lib/firebase";
 import {
   DEFAULT_REPORT_TYPE,
@@ -66,6 +71,8 @@ type UploadStep =
   | "failed";
 
 type QueueFilter = "all" | "ready" | "active" | "complete" | "failed";
+
+type ImportMode = "append" | "overwrite_report_type";
 
 type TimestampLike = {
   toDate?: () => Date;
@@ -105,6 +112,18 @@ type RecentImportJob = {
   status: string;
   processingStatus: string;
   uploadedByEmail: string;
+  storagePath: string;
+  downloadURL: string;
+  importMode: string;
+  refreshRequested: boolean;
+  forceReprocess: boolean;
+  reportVersion: number;
+  weeklyBatchKey: string;
+  progressPercent: number;
+  rowsProcessed: number;
+  rowsInserted: number;
+  rowsFailed: number;
+  processingStage: string;
   createdAt: TimestampLike;
   updatedAt: TimestampLike;
 };
@@ -136,6 +155,7 @@ const EMPTY_STATS: PatientIndexStats = {
 
 const MAX_FILES_PER_BATCH = 20;
 const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
+const STUCK_AFTER_MS = 1000 * 60 * 10;
 
 function makeLocalId(): string {
   return `upload-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
@@ -185,6 +205,10 @@ function safeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+function safeBoolean(value: unknown): boolean {
+  return value === true;
+}
+
 function toTimestampLike(value: unknown): TimestampLike {
   if (
     typeof value === "object" &&
@@ -206,6 +230,63 @@ function formatTimestamp(value: TimestampLike): string {
   } catch {
     return "Never";
   }
+}
+
+function makeWeeklyBatchKey(date = new Date()): string {
+  return date.toISOString().slice(0, 10);
+}
+
+function fileSignature(file: File): string {
+  return `${file.name}-${file.size}-${file.lastModified}`;
+}
+
+function isActiveStep(step: UploadStep): boolean {
+  return ["creating_job", "uploading_cloud", "marking_uploaded", "queued"].includes(
+    step
+  );
+}
+
+function getStepLabel(step: UploadStep): string {
+  if (step === "idle") return "Ready";
+  if (step === "creating_job") return "Creating Job";
+  if (step === "uploading_cloud") return "Uploading";
+  if (step === "marking_uploaded") return "Verifying";
+  if (step === "queued") return "Queued";
+  if (step === "complete") return "Complete";
+
+  return "Failed";
+}
+
+function validateFile(file: File): string {
+  const extension = getFileExtension(file.name);
+
+  if (!extension) return "Only CSV and PDF files are supported.";
+
+  if (file.size > MAX_FILE_SIZE_BYTES) {
+    return `File is too large. Max allowed is ${formatBytes(
+      MAX_FILE_SIZE_BYTES
+    )}.`;
+  }
+
+  return "";
+}
+
+function isReportType(value: string | null): value is ReportType {
+  if (!value) return false;
+
+  return REPORT_TYPES.some((option) => {
+    const maybeOption = option as unknown as {
+      value?: string;
+      type?: string;
+      id?: string;
+    };
+
+    return (
+      maybeOption.value === value ||
+      maybeOption.type === value ||
+      maybeOption.id === value
+    );
+  });
 }
 
 function readPatientIndexStats(
@@ -237,62 +318,163 @@ function normalizeRecentJob(id: string, data: DocumentData): RecentImportJob {
     status: safeString(data.status),
     processingStatus: safeString(data.processingStatus),
     uploadedByEmail: safeString(data.uploadedByEmail),
+    storagePath: safeString(data.storagePath),
+    downloadURL: safeString(data.downloadURL),
+    importMode: safeString(data.importMode),
+    refreshRequested: safeBoolean(data.refreshRequested),
+    forceReprocess: safeBoolean(data.forceReprocess),
+    reportVersion: safeNumber(data.reportVersion),
+    weeklyBatchKey: safeString(data.weeklyBatchKey),
+    progressPercent: safeNumber(data.progressPercent),
+    rowsProcessed: safeNumber(data.rowsProcessed),
+    rowsInserted: safeNumber(data.rowsInserted),
+    rowsFailed: safeNumber(data.rowsFailed),
+    processingStage: safeString(data.processingStage),
     createdAt: toTimestampLike(data.createdAt),
     updatedAt: toTimestampLike(data.updatedAt),
   };
 }
 
-function getStepLabel(step: UploadStep): string {
-  if (step === "idle") return "Ready";
-  if (step === "creating_job") return "Creating Job";
-  if (step === "uploading_cloud") return "Uploading";
-  if (step === "marking_uploaded") return "Verifying";
-  if (step === "queued") return "Queued";
-  if (step === "complete") return "Complete";
+function isJobStuck(job: RecentImportJob): boolean {
+  if (!job.createdAt?.toDate) return false;
 
-  return "Failed";
-}
+  const ageMs = Date.now() - job.createdAt.toDate().getTime();
+  const combined = `${job.status} ${job.processingStatus}`.toLowerCase();
 
-function validateFile(file: File): string {
-  const extension = getFileExtension(file.name);
-
-  if (!extension) return "Only CSV and PDF files are supported.";
-
-  if (file.size > MAX_FILE_SIZE_BYTES) {
-    return `File is too large. Max allowed is ${formatBytes(
-      MAX_FILE_SIZE_BYTES
-    )}.`;
-  }
-
-  return "";
-}
-
-function fileSignature(file: File): string {
-  return `${file.name}-${file.size}-${file.lastModified}`;
-}
-
-function isActiveStep(step: UploadStep): boolean {
-  return ["creating_job", "uploading_cloud", "marking_uploaded", "queued"].includes(
-    step
+  return (
+    ageMs > STUCK_AFTER_MS &&
+    (combined.includes("waiting") ||
+      combined.includes("created") ||
+      combined.includes("queued"))
   );
 }
 
-function isReportType(value: string | null): value is ReportType {
-  if (!value) return false;
+function getJobProgressValue(job: RecentImportJob): number {
+  const rawProgress = safeNumber(job.progressPercent);
 
-  return REPORT_TYPES.some((option) => {
-    const maybeOption = option as unknown as {
-      value?: string;
-      type?: string;
-      id?: string;
-    };
+  const combined =
+    `${job.status} ${job.processingStatus} ${job.processingStage}`.toLowerCase();
 
-    return (
-      maybeOption.value === value ||
-      maybeOption.type === value ||
-      maybeOption.id === value
-    );
-  });
+  /*
+    HARD COMPLETE STATES
+  */
+  if (
+    combined.includes("complete") ||
+    combined.includes("completed") ||
+    combined.includes("success") ||
+    combined.includes("finished") ||
+    combined.includes("done") ||
+    combined.includes("processors_completed")
+  ) {
+    return 100;
+  }
+
+  /*
+    HARD FAILURE STATES
+  */
+  if (
+    combined.includes("failed") ||
+    combined.includes("error") ||
+    combined.includes("crash") ||
+    combined.includes("processor_failure")
+  ) {
+    return rawProgress > 0 ? rawProgress : 100;
+  }
+
+  /*
+    REAL BACKEND PROGRESS
+  */
+  if (rawProgress > 0) {
+    return Math.min(Math.max(rawProgress, 0), 100);
+  }
+
+  /*
+    PIPELINE STATE ESTIMATES
+  */
+
+  // Upload complete / waiting for function
+  if (
+    combined.includes("queued_for_cloud_function") ||
+    combined.includes("waiting_for_cloud_upload")
+  ) {
+    return 15;
+  }
+
+  // Cloud function started
+  if (
+    combined.includes("processing") ||
+    combined.includes("running")
+  ) {
+    return 45;
+  }
+
+  // Processor stages
+  if (combined.includes("patients")) {
+    return 60;
+  }
+
+  if (combined.includes("orders")) {
+    return 75;
+  }
+
+  if (combined.includes("hospice")) {
+    return 85;
+  }
+
+  // Indexing / analytics
+  if (
+    combined.includes("index") ||
+    combined.includes("analytics")
+  ) {
+    return 95;
+  }
+
+  /*
+    Initial created state
+  */
+  if (
+    combined.includes("created") ||
+    combined.includes("waiting") ||
+    combined.includes("queued")
+  ) {
+    return 5;
+  }
+
+  return 0;
+}
+
+
+function getProgressClass(step: UploadStep): string {
+  if (step === "failed") return "progressTrack progressFailed";
+  if (step === "complete") return "progressTrack progressCompleted";
+  if (step === "queued") return "progressTrack progressWaiting";
+
+  if (
+    step === "creating_job" ||
+    step === "uploading_cloud" ||
+    step === "marking_uploaded"
+  ) {
+    return "progressTrack progressProcessing";
+  }
+
+  return "progressTrack";
+}
+
+function getJobProgressClass(job: RecentImportJob): string {
+  const combined = `${job.status} ${job.processingStatus}`.toLowerCase();
+
+  if (isJobStuck(job)) return "progressTrack progressStuck";
+  if (combined.includes("failed") || combined.includes("error")) {
+    return "progressTrack progressFailed";
+  }
+  if (combined.includes("complete") || combined.includes("completed")) {
+    return "progressTrack progressCompleted";
+  }
+  if (combined.includes("waiting") || combined.includes("queue")) {
+    return "progressTrack progressWaiting";
+  }
+
+  return "progressTrack progressProcessing";
 }
 
 function normalizeGroupedReportOptions(): GroupedReportOption[] {
@@ -339,8 +521,7 @@ function normalizeGroupedReportOptions(): GroupedReportOption[] {
           category?: string;
         };
 
-        const value =
-          raw.value ?? raw.type ?? raw.id ?? DEFAULT_REPORT_TYPE;
+        const value = raw.value ?? raw.type ?? raw.id ?? DEFAULT_REPORT_TYPE;
 
         return {
           value,
@@ -356,9 +537,14 @@ export default function UploadReportPage() {
   const searchParams = useSearchParams();
   const requestedType = searchParams.get("type");
 
+  const { canDeleteImports, canRefreshImports, canUploadReports, isAdmin } =
+    useAuthRole();
+
   const [defaultReportType, setDefaultReportType] = useState<ReportType>(() =>
     isReportType(requestedType) ? requestedType : DEFAULT_REPORT_TYPE
   );
+
+  const [importMode, setImportMode] = useState<ImportMode>("append");
 
   const [queue, setQueue] = useState<QueuedUpload[]>([]);
   const [uploading, setUploading] = useState(false);
@@ -373,6 +559,9 @@ export default function UploadReportPage() {
 
   const [recentJobs, setRecentJobs] = useState<RecentImportJob[]>([]);
   const [recentJobsLoading, setRecentJobsLoading] = useState(true);
+  const [selectedJobIds, setSelectedJobIds] = useState<Set<string>>(new Set());
+  const [deletingJobs, setDeletingJobs] = useState(false);
+  const [refreshingJobs, setRefreshingJobs] = useState(false);
 
   const uploadLockRef = useRef(false);
 
@@ -459,7 +648,9 @@ export default function UploadReportPage() {
       );
     }).length;
 
-    return { failed, processing };
+    const stuck = recentJobs.filter((job) => isJobStuck(job)).length;
+
+    return { failed, processing, stuck };
   }, [recentJobs]);
 
   useEffect(() => {
@@ -492,7 +683,7 @@ export default function UploadReportPage() {
     const recentJobsQuery = query(
       collection(db, "importJobs"),
       orderBy("createdAt", "desc"),
-      limit(10)
+      limit(25)
     );
 
     const unsubscribe = onSnapshot(
@@ -526,6 +717,11 @@ export default function UploadReportPage() {
   function addFiles(files: FileList | File[]) {
     const incoming = Array.from(files);
     if (!incoming.length) return;
+
+    if (!canUploadReports) {
+      toast.error("You do not have permission to upload reports.");
+      return;
+    }
 
     const existingSignatures = new Set(
       queue.map((item) => fileSignature(item.file))
@@ -671,6 +867,45 @@ export default function UploadReportPage() {
     );
   }
 
+  function toggleJobSelection(jobId: string) {
+    setSelectedJobIds((current) => {
+      const next = new Set(current);
+
+      if (next.has(jobId)) {
+        next.delete(jobId);
+      } else {
+        next.add(jobId);
+      }
+
+      return next;
+    });
+  }
+
+  function selectAllRecentJobs() {
+    setSelectedJobIds(new Set(recentJobs.map((job) => job.id)));
+  }
+
+  function clearJobSelection() {
+    setSelectedJobIds(new Set());
+  }
+
+  async function writeAuditLog(
+    action: string,
+    details: Record<string, unknown>
+  ) {
+    const user = auth.currentUser;
+
+    await setDoc(doc(collection(db, "auditLogs")), {
+      action,
+      actorUid: user?.uid ?? null,
+      actorEmail: user?.email ?? null,
+      targetUid: null,
+      targetEmail: null,
+      details,
+      createdAt: serverTimestamp(),
+    });
+  }
+
   async function uploadOne(item: QueuedUpload) {
     const user = auth.currentUser;
 
@@ -701,6 +936,10 @@ export default function UploadReportPage() {
     const storagePath = `reports/uploads/${item.reportType}/${jobId}-${safeName}`;
     const storageRef = ref(storage, storagePath);
 
+    const now = new Date();
+    const reportVersion = now.getTime();
+    const weeklyBatchKey = makeWeeklyBatchKey(now);
+
     updateQueueItem(item.localId, {
       jobId,
       storagePath,
@@ -712,6 +951,14 @@ export default function UploadReportPage() {
       reportType: item.reportType,
       reportLabel: selectedOption?.label ?? item.reportType,
       reportCategory: selectedOption?.category ?? "Uncategorized",
+
+      importMode,
+      overwriteExistingData: importMode === "overwrite_report_type",
+      replaceScope: importMode === "overwrite_report_type" ? "reportType" : "none",
+      forceReprocess: false,
+
+      reportVersion,
+      weeklyBatchKey,
 
       originalFileName: item.file.name,
       safeFileName: safeName,
@@ -726,6 +973,12 @@ export default function UploadReportPage() {
       uploadedToCloud: false,
       cloudVerified: false,
       cloudUploadVerified: false,
+
+      progressPercent: 0,
+      processingStage: "waiting_for_cloud_upload",
+      rowsProcessed: 0,
+      rowsInserted: 0,
+      rowsFailed: 0,
 
       status: "created",
       processingStatus: "waiting_for_cloud_upload",
@@ -746,6 +999,9 @@ export default function UploadReportPage() {
       customMetadata: {
         jobId,
         reportType: item.reportType,
+        importMode,
+        reportVersion: String(reportVersion),
+        weeklyBatchKey,
         originalFileName: item.file.name,
         uploadedByUid: user.uid,
         uploadedByEmail: user.email ?? "",
@@ -785,6 +1041,8 @@ export default function UploadReportPage() {
       {
         status: "uploaded",
         processingStatus: "queued_for_cloud_function",
+        processingStage: "queued_for_cloud_function",
+        progressPercent: 5,
 
         uploadedToCloud: true,
         cloudVerified: true,
@@ -800,6 +1058,16 @@ export default function UploadReportPage() {
       { merge: true }
     );
 
+    await writeAuditLog("import_job_uploaded", {
+      jobId,
+      reportType: item.reportType,
+      importMode,
+      reportVersion,
+      weeklyBatchKey,
+      originalFileName: item.file.name,
+      storagePath,
+    });
+
     updateQueueItem(item.localId, {
       step: "complete",
       progress: 100,
@@ -810,6 +1078,11 @@ export default function UploadReportPage() {
 
   async function handleUploadBatch() {
     if (uploadLockRef.current || uploading) return;
+
+    if (!canUploadReports) {
+      toast.error("You do not have permission to upload reports.");
+      return;
+    }
 
     if (!queue.length) {
       toast.error("Add at least one CSV or PDF file first.");
@@ -878,8 +1151,362 @@ export default function UploadReportPage() {
     }
   }
 
+  async function deleteImportJob(job: RecentImportJob) {
+    if (deletingJobs || refreshingJobs) return;
+
+    if (!canDeleteImports) {
+      toast.error("Only admins can delete imports.");
+      return;
+    }
+
+    const user = auth.currentUser;
+
+    if (!user) {
+      toast.error("You must be logged in before deleting imports.");
+      return;
+    }
+
+    setDeletingJobs(true);
+
+    let storageDeleteFailed = false;
+
+    try {
+      if (job.storagePath) {
+        try {
+          await deleteObject(ref(storage, job.storagePath));
+        } catch (error) {
+          storageDeleteFailed = true;
+          console.warn("Storage file delete skipped or failed:", error);
+        }
+      }
+
+      await deleteDoc(doc(db, "importJobs", job.id));
+
+      await writeAuditLog("import_job_deleted", {
+        jobId: job.id,
+        reportType: job.reportType,
+        originalFileName: job.originalFileName,
+        storagePath: job.storagePath,
+        storageDeleteFailed,
+      });
+
+      toast.success(
+        storageDeleteFailed
+          ? "Import deleted. Storage cleanup failed."
+          : "Import deleted."
+      );
+
+      setSelectedJobIds((current) => {
+        const next = new Set(current);
+        next.delete(job.id);
+        return next;
+      });
+    } catch (error) {
+      console.error("DELETE IMPORT JOB ERROR:", error);
+      toast.error("Delete failed. Check Firestore and Storage rules.");
+    } finally {
+      setDeletingJobs(false);
+    }
+  }
+
+  async function deleteSelectedJobs() {
+    if (deletingJobs || refreshingJobs) return;
+
+    if (!canDeleteImports) {
+      toast.error("Only admins can delete imports.");
+      return;
+    }
+
+    const selected = recentJobs.filter((job) => selectedJobIds.has(job.id));
+
+    if (!selected.length) {
+      toast.error("Select at least one import job first.");
+      return;
+    }
+
+    const user = auth.currentUser;
+
+    if (!user) {
+      toast.error("You must be logged in before deleting imports.");
+      return;
+    }
+
+    setDeletingJobs(true);
+
+    let deleted = 0;
+    let failed = 0;
+    let storageCleanupFailures = 0;
+
+    try {
+      for (const job of selected) {
+        try {
+          let storageDeleteFailed = false;
+
+          if (job.storagePath) {
+            try {
+              await deleteObject(ref(storage, job.storagePath));
+            } catch (error) {
+              storageDeleteFailed = true;
+              storageCleanupFailures += 1;
+              console.warn("Storage file delete skipped or failed:", error);
+            }
+          }
+
+          await deleteDoc(doc(db, "importJobs", job.id));
+
+          await writeAuditLog("import_job_deleted", {
+            jobId: job.id,
+            reportType: job.reportType,
+            originalFileName: job.originalFileName,
+            storagePath: job.storagePath,
+            storageDeleteFailed,
+          });
+
+          deleted += 1;
+        } catch (error) {
+          console.error("BATCH DELETE IMPORT JOB ERROR:", error);
+          failed += 1;
+        }
+      }
+
+      if (deleted) {
+        toast.success(`${deleted} import${deleted === 1 ? "" : "s"} deleted.`);
+      }
+
+      if (storageCleanupFailures) {
+        toast.error(`${storageCleanupFailures} storage cleanup issue(s).`);
+      }
+
+      if (failed) {
+        toast.error(`${failed} delete${failed === 1 ? "" : "s"} failed.`);
+      }
+
+      setSelectedJobIds(new Set());
+    } finally {
+      setDeletingJobs(false);
+    }
+  }
+
+  async function refreshImportJob(job: RecentImportJob) {
+    if (deletingJobs || refreshingJobs) return;
+
+    if (!canRefreshImports) {
+      toast.error("You do not have permission to refresh imports.");
+      return;
+    }
+
+    const user = auth.currentUser;
+
+    if (!user) {
+      toast.error("You must be logged in before refreshing imports.");
+      return;
+    }
+
+    setRefreshingJobs(true);
+
+    try {
+      await setDoc(
+        doc(db, "importJobs", job.id),
+        {
+          status: "uploaded",
+          processingStatus: "queued_for_cloud_function",
+          processingStage: "queued_for_cloud_function",
+          progressPercent: 5,
+
+          refreshRequested: true,
+          forceReprocess: true,
+          refreshRequestedAt: serverTimestamp(),
+          refreshedByUid: user.uid,
+          refreshedByEmail: user.email ?? null,
+          retryCount: Date.now(),
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      await writeAuditLog("import_job_refreshed", {
+        jobId: job.id,
+        reportType: job.reportType,
+        originalFileName: job.originalFileName,
+        storagePath: job.storagePath,
+        forceReprocess: true,
+      });
+
+      toast.success("Import refreshed and requeued.");
+    } catch (error) {
+      console.error("REFRESH IMPORT JOB ERROR:", error);
+      toast.error("Refresh failed. Check Firestore rules.");
+    } finally {
+      setRefreshingJobs(false);
+    }
+  }
+
+  async function refreshSelectedJobs() {
+    if (deletingJobs || refreshingJobs) return;
+
+    if (!canRefreshImports) {
+      toast.error("You do not have permission to refresh imports.");
+      return;
+    }
+
+    const selected = recentJobs.filter((job) => selectedJobIds.has(job.id));
+
+    if (!selected.length) {
+      toast.error("Select at least one import job first.");
+      return;
+    }
+
+    const user = auth.currentUser;
+
+    if (!user) {
+      toast.error("You must be logged in before refreshing imports.");
+      return;
+    }
+
+    setRefreshingJobs(true);
+
+    let refreshed = 0;
+    let failed = 0;
+
+    try {
+      for (const job of selected) {
+        try {
+          await setDoc(
+            doc(db, "importJobs", job.id),
+            {
+              status: "uploaded",
+              processingStatus: "queued_for_cloud_function",
+              processingStage: "queued_for_cloud_function",
+              progressPercent: 5,
+
+              refreshRequested: true,
+              forceReprocess: true,
+              refreshRequestedAt: serverTimestamp(),
+              refreshedByUid: user.uid,
+              refreshedByEmail: user.email ?? null,
+              retryCount: Date.now(),
+              updatedAt: serverTimestamp(),
+            },
+            { merge: true }
+          );
+
+          await writeAuditLog("import_job_refreshed", {
+            jobId: job.id,
+            reportType: job.reportType,
+            originalFileName: job.originalFileName,
+            storagePath: job.storagePath,
+            forceReprocess: true,
+          });
+
+          refreshed += 1;
+        } catch (error) {
+          console.error("BATCH REFRESH IMPORT JOB ERROR:", error);
+          failed += 1;
+        }
+      }
+
+      if (refreshed) {
+        toast.success(
+          `${refreshed} import${refreshed === 1 ? "" : "s"} refreshed.`
+        );
+      }
+
+      if (failed) {
+        toast.error(`${failed} refresh${failed === 1 ? "" : "es"} failed.`);
+      }
+    } finally {
+      setRefreshingJobs(false);
+    }
+  }
+
   return (
     <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6">
+      <style jsx global>{`
+        .progressTrack {
+          width: 100%;
+          height: 0.55rem;
+          overflow: hidden;
+          appearance: none;
+          border: 0;
+          border-radius: 9999px;
+          background: rgb(255 255 255 / 0.06);
+          box-shadow:
+            inset 0 1px 2px rgb(0 0 0 / 0.45),
+            0 0 0 1px rgb(255 255 255 / 0.04);
+        }
+
+        .progressTrack::-webkit-progress-bar {
+          border-radius: 9999px;
+          background: rgb(255 255 255 / 0.06);
+        }
+
+        .progressTrack::-webkit-progress-value {
+          border-radius: 9999px;
+          transition:
+            width 180ms ease,
+            background 180ms ease,
+            box-shadow 180ms ease;
+        }
+
+        .progressTrack::-moz-progress-bar {
+          border-radius: 9999px;
+          transition:
+            width 180ms ease,
+            background 180ms ease,
+            box-shadow 180ms ease;
+        }
+
+        .progressProcessing::-webkit-progress-value {
+          background: linear-gradient(90deg, rgb(34 211 238), rgb(59 130 246));
+          box-shadow: 0 0 8px rgb(34 211 238 / 0.35);
+        }
+
+        .progressProcessing::-moz-progress-bar {
+          background: linear-gradient(90deg, rgb(34 211 238), rgb(59 130 246));
+          box-shadow: 0 0 8px rgb(34 211 238 / 0.35);
+        }
+
+        .progressCompleted::-webkit-progress-value {
+          background: linear-gradient(90deg, rgb(16 185 129), rgb(110 231 183));
+          box-shadow: 0 0 10px rgb(16 185 129 / 0.35);
+        }
+
+        .progressCompleted::-moz-progress-bar {
+          background: linear-gradient(90deg, rgb(16 185 129), rgb(110 231 183));
+          box-shadow: 0 0 10px rgb(16 185 129 / 0.35);
+        }
+
+        .progressFailed::-webkit-progress-value {
+          background: linear-gradient(90deg, rgb(239 68 68), rgb(248 113 113));
+          box-shadow: 0 0 10px rgb(239 68 68 / 0.35);
+        }
+
+        .progressFailed::-moz-progress-bar {
+          background: linear-gradient(90deg, rgb(239 68 68), rgb(248 113 113));
+          box-shadow: 0 0 10px rgb(239 68 68 / 0.35);
+        }
+
+        .progressWaiting::-webkit-progress-value {
+          background: linear-gradient(90deg, rgb(245 158 11), rgb(252 211 77));
+          box-shadow: 0 0 10px rgb(245 158 11 / 0.3);
+        }
+
+        .progressWaiting::-moz-progress-bar {
+          background: linear-gradient(90deg, rgb(245 158 11), rgb(252 211 77));
+          box-shadow: 0 0 10px rgb(245 158 11 / 0.3);
+        }
+
+        .progressStuck::-webkit-progress-value {
+          background: linear-gradient(90deg, rgb(168 85 247), rgb(192 132 252));
+          box-shadow: 0 0 10px rgb(168 85 247 / 0.35);
+        }
+
+        .progressStuck::-moz-progress-bar {
+          background: linear-gradient(90deg, rgb(168 85 247), rgb(192 132 252));
+          box-shadow: 0 0 10px rgb(168 85 247 / 0.35);
+        }
+      `}</style>
+
       <div className="mx-auto max-w-[1800px] space-y-6">
         <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-neutral-950 via-neutral-950 to-blue-950/30 p-6">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -894,8 +1521,9 @@ export default function UploadReportPage() {
                 </h1>
 
                 <p className="mt-2 max-w-3xl text-sm text-neutral-400">
-                  Upload CSV/PDF reports, classify them, verify cloud storage,
-                  and queue Cloud Function processing from one place.
+                  Upload CSV/PDF reports, classify them, refresh stuck jobs,
+                  overwrite weekly report data, and keep batch uploading without
+                  turning the database into soup.
                 </p>
 
                 <p className="mt-2 text-xs text-neutral-500">
@@ -912,6 +1540,21 @@ export default function UploadReportPage() {
             </Link>
           </div>
         </section>
+
+        {!canUploadReports ? (
+          <section className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5 text-sm text-red-100">
+            <div className="flex items-start gap-3">
+              <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
+              <div>
+                <div className="font-semibold">Upload access blocked</div>
+                <p className="mt-1 text-red-100/80">
+                  Your account does not currently have permission to upload
+                  reports.
+                </p>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <StatCard
@@ -951,10 +1594,7 @@ export default function UploadReportPage() {
         {analyticsMissing ? (
           <section className="rounded-3xl border border-amber-400/20 bg-amber-500/10 p-5 text-sm text-amber-100">
             <div className="flex items-start gap-3">
-              <AlertTriangle
-                className="mt-0.5 h-5 w-5 shrink-0"
-                aria-hidden="true"
-              />
+              <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
               <div>
                 <div className="font-semibold">
                   analytics/patientIndex is missing
@@ -970,42 +1610,81 @@ export default function UploadReportPage() {
 
         <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_420px]">
           <div className="rounded-3xl border border-white/10 bg-neutral-950 p-6">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
               <div>
                 <h2 className="text-lg font-semibold">Upload Files</h2>
                 <p className="mt-1 text-sm text-neutral-400">
-                  Choose the report type, drop files, and upload the batch.
+                  Choose the report type, choose the import behavior, drop files,
+                  and upload the batch.
                 </p>
               </div>
 
-              <div className="w-full md:w-80">
-                <label
-                  htmlFor="default-report-type"
-                  className="mb-2 block text-xs font-semibold uppercase tracking-wide text-neutral-500"
-                >
-                  Default Report Type
-                </label>
+              <div className="grid w-full gap-3 md:grid-cols-2 xl:w-[680px]">
+                <div>
+                  <label
+                    htmlFor="default-report-type"
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wide text-neutral-500"
+                  >
+                    Default Report Type
+                  </label>
 
-                <select
-                  id="default-report-type"
-                  value={defaultReportType}
-                  disabled={uploading}
-                  onChange={(event) =>
-                    setReportTypeForAll(event.target.value as ReportType)
-                  }
-                  className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-blue-400"
-                >
-                  {groupedOptions.map((group) => (
-                    <optgroup key={group.category} label={group.category}>
-                      {group.options.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </optgroup>
-                  ))}
-                </select>
+                  <select
+                    id="default-report-type"
+                    value={defaultReportType}
+                    disabled={uploading || !canUploadReports}
+                    onChange={(event) =>
+                      setReportTypeForAll(event.target.value as ReportType)
+                    }
+                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {groupedOptions.map((group) => (
+                      <optgroup key={group.category} label={group.category}>
+                        {group.options.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </optgroup>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="import-mode"
+                    className="mb-2 block text-xs font-semibold uppercase tracking-wide text-neutral-500"
+                  >
+                    Import Mode
+                  </label>
+
+                  <select
+                    id="import-mode"
+                    value={importMode}
+                    disabled={uploading || !canUploadReports}
+                    onChange={(event) =>
+                      setImportMode(event.target.value as ImportMode)
+                    }
+                    className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    <option value="append">Append new data</option>
+                    <option value="overwrite_report_type">
+                      Overwrite existing data for report type
+                    </option>
+                  </select>
+                </div>
               </div>
+            </div>
+
+            <div
+              className={`mt-5 rounded-2xl border p-4 text-sm ${
+                importMode === "overwrite_report_type"
+                  ? "border-amber-400/20 bg-amber-500/10 text-amber-100"
+                  : "border-white/10 bg-black/30 text-neutral-400"
+              }`}
+            >
+              {importMode === "overwrite_report_type"
+                ? "Overwrite mode is on. Your Cloud Function must delete old rows for this report type before inserting the new weekly report."
+                : "Append mode is on. New imports will be added without replacing previous rows."}
             </div>
 
             <label
@@ -1020,7 +1699,7 @@ export default function UploadReportPage() {
                 dragActive
                   ? "border-blue-400 bg-blue-500/10"
                   : "border-white/10 bg-black/30 hover:bg-white/[0.04]"
-              }`}
+              } ${!canUploadReports ? "cursor-not-allowed opacity-50" : ""}`}
             >
               <Cloud className="h-10 w-10 text-blue-300" aria-hidden="true" />
 
@@ -1043,7 +1722,7 @@ export default function UploadReportPage() {
                 type="file"
                 multiple
                 accept=".csv,.pdf,text/csv,application/pdf"
-                disabled={uploading}
+                disabled={uploading || !canUploadReports}
                 onChange={(event) => handleAddFiles(event.target.files)}
                 className="sr-only"
               />
@@ -1053,13 +1732,15 @@ export default function UploadReportPage() {
               <button
                 type="button"
                 onClick={() => void handleUploadBatch()}
-                disabled={uploading || !batchStats.hasUploadable}
+                disabled={
+                  uploading || !batchStats.hasUploadable || !canUploadReports
+                }
                 className="inline-flex items-center justify-center gap-2 rounded-2xl bg-blue-500 px-5 py-3 text-sm font-semibold text-white transition hover:bg-blue-400 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {uploading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                 ) : (
-                  <Upload className="h-4 w-4" aria-hidden="true" />
+                  <Upload className="h-4 w-4" />
                 )}
                 {uploading ? "Uploading..." : "Upload Batch"}
               </button>
@@ -1126,20 +1807,26 @@ export default function UploadReportPage() {
                 <span>{batchStats.averageProgress}%</span>
               </div>
 
-              <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                <div
-                  className="h-full rounded-full bg-blue-500 transition-all"
-                  style={{ width: `${batchStats.averageProgress}%` }}
-                />
-              </div>
+              <progress
+                value={batchStats.averageProgress}
+                max={100}
+                className="progressTrack progressProcessing mt-2"
+              />
             </div>
 
             <div className="mt-5 rounded-2xl border border-white/10 bg-black/40 p-4">
-              <div className="text-sm font-medium">
-                Selected Default Report
-              </div>
+              <div className="text-sm font-medium">Selected Default Report</div>
               <p className="mt-1 text-sm text-neutral-400">
                 {defaultSelectedOption?.label ?? defaultReportType}
+              </p>
+            </div>
+
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/40 p-4">
+              <div className="text-sm font-medium">Current Import Mode</div>
+              <p className="mt-1 text-sm text-neutral-400">
+                {importMode === "overwrite_report_type"
+                  ? "Overwrite weekly report data"
+                  : "Append new data"}
               </p>
             </div>
           </div>
@@ -1158,10 +1845,7 @@ export default function UploadReportPage() {
             <div className="flex flex-col gap-2 sm:flex-row">
               <label className="relative block">
                 <span className="sr-only">Search queued files</span>
-                <Search
-                  className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500"
-                  aria-hidden="true"
-                />
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-500" />
                 <input
                   value={queueSearch}
                   onChange={(event) => setQueueSearch(event.target.value)}
@@ -1207,17 +1891,11 @@ export default function UploadReportPage() {
                     <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
                       <div className="min-w-0">
                         <div className="flex flex-wrap items-center gap-2">
-                          <FileText
-                            className="h-4 w-4 text-blue-300"
-                            aria-hidden="true"
-                          />
-
+                          <FileText className="h-4 w-4 text-blue-300" />
                           <p className="truncate font-medium">{item.file.name}</p>
-
                           <span className="rounded-full border border-white/10 px-2 py-1 text-xs text-neutral-400">
                             {formatBytes(item.file.size)}
                           </span>
-
                           <StatusBadge step={item.step} />
                         </div>
 
@@ -1267,7 +1945,7 @@ export default function UploadReportPage() {
                           className="inline-flex items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10 p-2 text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
                           aria-label={`Remove ${item.file.name}`}
                         >
-                          <Trash2 className="h-4 w-4" aria-hidden="true" />
+                          <Trash2 className="h-4 w-4" />
                         </button>
                       </div>
                     </div>
@@ -1278,12 +1956,11 @@ export default function UploadReportPage() {
                         <span>{item.progress}%</span>
                       </div>
 
-                      <div className="mt-2 h-2 overflow-hidden rounded-full bg-white/10">
-                        <div
-                          className="h-full rounded-full bg-blue-500 transition-all"
-                          style={{ width: `${item.progress}%` }}
-                        />
-                      </div>
+                      <progress
+                        value={item.progress}
+                        max={100}
+                        className={`${getProgressClass(item.step)} mt-2`}
+                      />
                     </div>
                   </div>
                 );
@@ -1299,56 +1976,241 @@ export default function UploadReportPage() {
             <div className="mt-4 grid gap-3">
               <MiniStat label="Recent Jobs" value={recentJobs.length} />
               <MiniStat label="Processing" value={recentJobHealth.processing} />
+              <MiniStat label="Stuck / Waiting" value={recentJobHealth.stuck} />
               <MiniStat label="Failed" value={recentJobHealth.failed} />
+              <MiniStat label="Selected" value={selectedJobIds.size} />
             </div>
+
+            {!isAdmin ? (
+              <div className="mt-5 rounded-2xl border border-amber-400/20 bg-amber-500/10 p-4 text-sm text-amber-100">
+                Staff can refresh uploads, but only admins can delete imports.
+              </div>
+            ) : null}
           </div>
 
           <div className="rounded-3xl border border-white/10 bg-neutral-950 p-6">
-            <div className="flex items-center justify-between gap-3">
+            <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
               <div>
                 <h2 className="text-lg font-semibold">Recent Import Jobs</h2>
                 <p className="mt-1 text-sm text-neutral-400">
-                  Last 10 jobs from Firestore importJobs.
+                  Last 25 jobs from Firestore importJobs.
                 </p>
               </div>
 
-              <RefreshCcw className="h-5 w-5 text-neutral-500" aria-hidden="true" />
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={selectAllRecentJobs}
+                  disabled={
+                    recentJobsLoading ||
+                    deletingJobs ||
+                    refreshingJobs ||
+                    recentJobs.length === 0
+                  }
+                  className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Select All
+                </button>
+
+                <button
+                  type="button"
+                  onClick={clearJobSelection}
+                  disabled={
+                    deletingJobs || refreshingJobs || selectedJobIds.size === 0
+                  }
+                  className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Clear
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void refreshSelectedJobs()}
+                  disabled={
+                    !canRefreshImports ||
+                    refreshingJobs ||
+                    deletingJobs ||
+                    selectedJobIds.size === 0
+                  }
+                  className="inline-flex items-center gap-2 rounded-2xl border border-blue-500/20 bg-blue-500/10 px-4 py-2 text-sm font-semibold text-blue-200 transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {refreshingJobs ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <RefreshCcw className="h-4 w-4" />
+                  )}
+                  Refresh Selected
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => void deleteSelectedJobs()}
+                  disabled={
+                    !canDeleteImports ||
+                    deletingJobs ||
+                    refreshingJobs ||
+                    selectedJobIds.size === 0
+                  }
+                  className="inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {deletingJobs ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <Trash2 className="h-4 w-4" />
+                  )}
+                  Delete Selected
+                </button>
+              </div>
             </div>
 
             <div className="mt-5 space-y-3">
               {recentJobsLoading ? (
                 <div className="flex items-center gap-2 text-sm text-neutral-400">
-                  <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                  <Loader2 className="h-4 w-4 animate-spin" />
                   Loading recent jobs...
                 </div>
               ) : recentJobs.length === 0 ? (
                 <p className="text-sm text-neutral-500">No recent jobs found.</p>
               ) : (
-                recentJobs.map((job) => (
-                  <div
-                    key={job.id}
-                    className="rounded-2xl border border-white/10 bg-black/30 p-4"
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="font-medium">
-                        {job.reportLabel || job.reportType || "Unknown report"}
-                      </p>
+                recentJobs.map((job) => {
+                  const selected = selectedJobIds.has(job.id);
+                  const stuck = isJobStuck(job);
+                  const jobProgress = getJobProgressValue(job);
 
-                      <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-neutral-300">
-                        {job.processingStatus || job.status || "unknown"}
-                      </span>
+                  return (
+                    <div
+                      key={job.id}
+                      className={`rounded-2xl border p-4 transition ${
+                        selected
+                          ? "border-blue-400/40 bg-blue-500/10"
+                          : stuck
+                            ? "border-purple-400/30 bg-purple-500/10"
+                            : "border-white/10 bg-black/30"
+                      }`}
+                    >
+                      <div className="flex flex-col gap-3 xl:flex-row xl:items-start xl:justify-between">
+                        <label className="flex min-w-0 items-start gap-3">
+                          <input
+                            type="checkbox"
+                            checked={selected}
+                            disabled={deletingJobs || refreshingJobs}
+                            onChange={() => toggleJobSelection(job.id)}
+                            className="mt-1 h-4 w-4 rounded border-white/20 bg-black"
+                            aria-label={`Select ${
+                              job.originalFileName || job.reportType || "import job"
+                            }`}
+                          />
+
+                          <span className="min-w-0">
+                            <span className="block truncate font-medium">
+                              {job.reportLabel || job.reportType || "Unknown report"}
+                            </span>
+
+                            <span className="mt-1 block truncate text-sm text-neutral-400">
+                              {job.originalFileName || "Unnamed file"}
+                            </span>
+
+                            <span className="mt-1 block text-xs text-neutral-500">
+                              Uploaded by {job.uploadedByEmail || "unknown"} ·{" "}
+                              {formatTimestamp(job.createdAt)}
+                            </span>
+
+                            {job.weeklyBatchKey ? (
+                              <span className="mt-1 block text-xs text-neutral-500">
+                                Batch: {job.weeklyBatchKey}
+                              </span>
+                            ) : null}
+
+                            {job.storagePath ? (
+                              <span className="mt-1 block truncate text-xs text-neutral-600">
+                                Storage: {job.storagePath}
+                              </span>
+                            ) : null}
+                          </span>
+                        </label>
+
+                        <div className="flex flex-wrap items-center gap-2">
+                          {stuck ? (
+                            <span className="rounded-full border border-purple-400/20 bg-purple-500/10 px-3 py-1 text-xs text-purple-200">
+                              stuck
+                            </span>
+                          ) : null}
+
+                          <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-neutral-300">
+                            {job.processingStatus || job.status || "unknown"}
+                          </span>
+
+                          {job.importMode === "overwrite_report_type" ? (
+                            <span className="rounded-full border border-amber-400/20 bg-amber-500/10 px-3 py-1 text-xs text-amber-200">
+                              overwrite
+                            </span>
+                          ) : null}
+
+                          <button
+                            type="button"
+                            onClick={() => void refreshImportJob(job)}
+                            disabled={
+                              !canRefreshImports || deletingJobs || refreshingJobs
+                            }
+                            className="inline-flex items-center justify-center rounded-2xl border border-blue-500/20 bg-blue-500/10 p-2 text-blue-200 transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={`Refresh ${
+                              job.originalFileName || job.reportType || "import job"
+                            }`}
+                          >
+                            <RefreshCcw className="h-4 w-4" />
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => void deleteImportJob(job)}
+                            disabled={
+                              !canDeleteImports || deletingJobs || refreshingJobs
+                            }
+                            className="inline-flex items-center justify-center rounded-2xl border border-red-500/20 bg-red-500/10 p-2 text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                            aria-label={`Delete ${
+                              job.originalFileName || job.reportType || "import job"
+                            }`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div className="mt-4">
+                        <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-neutral-500">
+                          <span>
+                            {job.processingStage ||
+                              job.processingStatus ||
+                              "waiting"}
+                          </span>
+                          <span>{jobProgress}%</span>
+                        </div>
+
+                        <progress
+                          value={jobProgress}
+                          max={100}
+                          className={`${getJobProgressClass(job)} mt-2`}
+                        />
+
+                        {(job.rowsProcessed ||
+                          job.rowsInserted ||
+                          job.rowsFailed) > 0 ? (
+                          <div className="mt-3 grid gap-2 text-xs text-neutral-400 sm:grid-cols-3">
+                            <MiniStat
+                              label="Rows Processed"
+                              value={job.rowsProcessed}
+                            />
+                            <MiniStat
+                              label="Rows Inserted"
+                              value={job.rowsInserted}
+                            />
+                            <MiniStat label="Rows Failed" value={job.rowsFailed} />
+                          </div>
+                        ) : null}
+                      </div>
                     </div>
-
-                    <p className="mt-1 text-sm text-neutral-400">
-                      {job.originalFileName || "Unnamed file"}
-                    </p>
-
-                    <p className="mt-1 text-xs text-neutral-500">
-                      Uploaded by {job.uploadedByEmail || "unknown"} ·{" "}
-                      {formatTimestamp(job.createdAt)}
-                    </p>
-                  </div>
-                ))
+                  );
+                })
               )}
             </div>
           </div>

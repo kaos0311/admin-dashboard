@@ -3,11 +3,7 @@
 import { FieldValue } from "firebase-admin/firestore";
 
 import { writeAuditLog } from "../../audit/auditLogger.js";
-
-import {
-  updateSearchIndexForDocument,
-} from "../../intelligence/searchIndexBuilder.js";
-
+import { updateSearchIndexForDocument } from "../../intelligence/searchIndexBuilder.js";
 import { db, FIRESTORE_BATCH_SIZE, chunkArray } from "../utils/firestore.js";
 
 import {
@@ -29,6 +25,37 @@ export interface OrderProcessorParams {
   fileName: string;
   storagePath: string;
   rows: ParsedImportRow[];
+
+  importMode?: string;
+  overwriteExistingData?: boolean;
+  replaceScope?: string;
+  forceReprocess?: boolean;
+  refreshRequested?: boolean;
+  reportVersion?: number;
+  weeklyBatchKey?: string;
+}
+
+type IssueSeverity = "low" | "medium" | "high" | "critical";
+
+interface OrderIssueInput {
+  salesOrderNumber: string;
+  insurance: string;
+  productType: string;
+  quantity: number;
+}
+
+interface PostCommitTaskInput {
+  patientKey: string;
+  patientName: string;
+  orderDocId: string;
+  orderPayload: Record<string, unknown>;
+  patientPayload: Record<string, unknown>;
+  openIssues: string[];
+  importId: string;
+  reportType: string;
+  fileName: string;
+  reportVersion: number | null;
+  weeklyBatchKey: string;
 }
 
 const PATIENT_NAME_FIELDS = [
@@ -153,11 +180,7 @@ const STATUS_FIELDS = [
   "delivery status",
 ];
 
-const QUANTITY_FIELDS = [
-  "qty",
-  "quantity",
-  "units",
-];
+const QUANTITY_FIELDS = ["qty", "quantity", "units"];
 
 const MONEY_FIELDS = [
   "ext_amt",
@@ -171,41 +194,49 @@ const MONEY_FIELDS = [
   "purchase_cost",
 ];
 
-function getFirstField(
-  data: Record<string, unknown>,
-  fields: string[]
-): string {
+function getFirstField(data: Record<string, unknown>, fields: string[]): string {
   return cleanText(getCsvField(data, fields));
 }
 
-function buildOrderIssues(params: {
-  salesOrderNumber: string;
-  insurance: string;
-  productType: string;
-  quantity: number;
-}): string[] {
-  const {
-    salesOrderNumber,
-    insurance,
-    productType,
-    quantity,
-  } = params;
-
-  return [
-    !salesOrderNumber ? "Missing sales order number" : "",
-    !insurance ? "Missing insurance" : "",
-    !productType ? "Missing product type" : "",
-    quantity <= 0 ? "Invalid quantity" : "",
-  ].filter(Boolean);
+function safePositiveNumber(value: unknown): number | null {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
 }
 
-function getIssueSeverity(
-  issue: string
-): "low" | "medium" | "high" | "critical" {
+function safeErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return String(error);
+}
+
+function buildOrderIssues({
+  salesOrderNumber,
+  insurance,
+  productType,
+  quantity,
+}: OrderIssueInput): string[] {
+  const issues: string[] = [];
+
+  if (!salesOrderNumber) issues.push("Missing sales order number");
+  if (!insurance) issues.push("Missing insurance");
+  if (!productType) issues.push("Missing product type");
+  if (!Number.isFinite(quantity) || quantity <= 0) issues.push("Invalid quantity");
+
+  return issues;
+}
+
+function getIssueSeverity(issue: string): IssueSeverity {
   if (issue.includes("Missing sales order")) return "high";
   if (issue.includes("Invalid quantity")) return "high";
   if (issue.includes("Missing insurance")) return "medium";
   return "low";
+}
+
+function buildIssueDocId(orderId: string, issue: string): string {
+  return makeSafeDocId(`${orderId}_${normalizeSearchText(issue)}`);
+}
+
+function buildNotificationDocId(orderId: string, importId: string): string {
+  return makeSafeDocId(`order_review_${orderId}_${importId}`);
 }
 
 async function createDataQualityIssues(params: {
@@ -216,7 +247,9 @@ async function createDataQualityIssues(params: {
   importId: string;
   reportType: string;
   fileName: string;
-}): Promise<void> {
+  reportVersion: number | null;
+  weeklyBatchKey: string;
+}): Promise<number> {
   const {
     patientId,
     patientName,
@@ -225,42 +258,65 @@ async function createDataQualityIssues(params: {
     importId,
     reportType,
     fileName,
+    reportVersion,
+    weeklyBatchKey,
   } = params;
 
-  if (openIssues.length === 0) return;
+  if (openIssues.length === 0) return 0;
 
   const batch = db.batch();
 
-  openIssues.forEach((issue) => {
-    const issueRef = db.collection("dataQualityIssues").doc();
+  for (const issue of openIssues) {
+    const issueDocId = buildIssueDocId(orderId, issue);
+    const issueRef = db.collection("dataQualityIssues").doc(issueDocId);
 
-    batch.set(issueRef, {
-      patientId,
-      patientName,
-      orderId,
+    batch.set(
+      issueRef,
+      {
+        patientId,
+        patientName,
+        orderId,
 
-      issueType: normalizeSearchText(issue).replace(/\s+/g, "_"),
+        issueType: normalizeSearchText(issue).replace(/\s+/g, "_"),
+        severity: getIssueSeverity(issue),
+        status: "open",
 
-      severity: getIssueSeverity(issue),
+        title: issue,
+        description: `${issue} detected during order import.`,
 
-      status: "open",
+        sourceCollection: "orders",
+        sourceImportId: importId,
+        sourceReportType: reportType,
+        sourceFileName: fileName,
 
-      title: issue,
+        reportVersion,
+        weeklyBatchKey,
 
-      description: `${issue} detected during order import.`,
+        searchText: normalizeSearchText(
+          [
+            patientName,
+            orderId,
+            issue,
+            reportType,
+            fileName,
+            weeklyBatchKey,
+            reportVersion ?? "",
+          ].join(" ")
+        ),
 
-      sourceCollection: "orders",
-      sourceImportId: importId,
-      sourceReportType: reportType,
-      sourceFileName: fileName,
+        active: true,
+        archived: false,
 
-      detectedAt: FieldValue.serverTimestamp(),
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    });
-  });
+        detectedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+  }
 
   await batch.commit();
+
+  return openIssues.length;
 }
 
 async function createOrderNotification(params: {
@@ -268,42 +324,123 @@ async function createOrderNotification(params: {
   patientName: string;
   orderId: string;
   openIssues: string[];
-}): Promise<void> {
+  importId: string;
+  reportType: string;
+  fileName: string;
+  reportVersion: number | null;
+  weeklyBatchKey: string;
+}): Promise<number> {
   const {
     patientId,
     patientName,
     orderId,
     openIssues,
+    importId,
+    reportType,
+    fileName,
+    reportVersion,
+    weeklyBatchKey,
   } = params;
 
-  if (openIssues.length === 0) return;
+  if (openIssues.length === 0) return 0;
 
-  await db.collection("notifications").add({
-    type: "data_quality",
-
-    severity:
-      openIssues.length >= 3
-        ? "critical"
-        : openIssues.length >= 2
+  const severity =
+    openIssues.length >= 3
+      ? "critical"
+      : openIssues.length >= 2
         ? "warning"
-        : "info",
+        : "info";
 
-    title: "Order requires review",
+  const notificationDocId = buildNotificationDocId(orderId, importId);
 
-    message: `${patientName} order has ${openIssues.length} issue(s).`,
+  await db.collection("notifications").doc(notificationDocId).set(
+    {
+      type: "data_quality",
+      severity,
 
-    targetType: "order",
-    targetId: orderId,
+      title: "Order requires review",
+      message: `${patientName} order has ${openIssues.length} issue(s).`,
 
-    patientId,
+      targetType: "order",
+      targetId: orderId,
 
-    assignedToRole: "staff",
+      patientId,
+      patientName,
 
-    readBy: [],
+      assignedToRole: "staff",
 
-    createdAt: FieldValue.serverTimestamp(),
-    updatedAt: FieldValue.serverTimestamp(),
+      sourceImportId: importId,
+      sourceReportType: reportType,
+      sourceFileName: fileName,
+
+      reportVersion,
+      weeklyBatchKey,
+
+      issueCount: openIssues.length,
+      issues: openIssues,
+
+      readBy: [],
+
+      active: true,
+      archived: false,
+
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true }
+  );
+
+  return 1;
+}
+
+async function runPostCommitTask(input: PostCommitTaskInput): Promise<{
+  dataQualityIssuesCreated: number;
+  notificationsCreated: number;
+  orderSearchIndexesUpdated: number;
+  patientSearchIndexesUpdated: number;
+}> {
+  await updateSearchIndexForDocument({
+    collectionName: "orders",
+    documentId: input.orderDocId,
+    data: input.orderPayload,
   });
+
+  await updateSearchIndexForDocument({
+    collectionName: "patients_index",
+    documentId: input.patientKey,
+    data: input.patientPayload,
+  });
+
+  const dataQualityIssuesCreated = await createDataQualityIssues({
+    patientId: input.patientKey,
+    patientName: input.patientName,
+    orderId: input.orderDocId,
+    openIssues: input.openIssues,
+    importId: input.importId,
+    reportType: input.reportType,
+    fileName: input.fileName,
+    reportVersion: input.reportVersion,
+    weeklyBatchKey: input.weeklyBatchKey,
+  });
+
+  const notificationsCreated = await createOrderNotification({
+    patientId: input.patientKey,
+    patientName: input.patientName,
+    orderId: input.orderDocId,
+    openIssues: input.openIssues,
+    importId: input.importId,
+    reportType: input.reportType,
+    fileName: input.fileName,
+    reportVersion: input.reportVersion,
+    weeklyBatchKey: input.weeklyBatchKey,
+  });
+
+  return {
+    dataQualityIssuesCreated,
+    notificationsCreated,
+    orderSearchIndexesUpdated: 1,
+    patientSearchIndexesUpdated: 1,
+  };
 }
 
 export async function processOrdersFromRows({
@@ -312,26 +449,44 @@ export async function processOrdersFromRows({
   fileName,
   storagePath,
   rows,
+
+  importMode = "append",
+  overwriteExistingData = false,
+  replaceScope = "none",
+  forceReprocess = false,
+  refreshRequested = false,
+  reportVersion,
+  weeklyBatchKey = "",
 }: OrderProcessorParams): Promise<void> {
+  const resolvedReportVersion = safePositiveNumber(reportVersion);
+  const resolvedWeeklyBatchKey = cleanText(weeklyBatchKey);
+  const normalizedReportType = cleanText(reportType);
+  const normalizedFileName = cleanText(fileName);
+  const normalizedStoragePath = cleanText(storagePath);
+
   let processedCount = 0;
   let skippedCount = 0;
+  let hospiceSkippedCount = 0;
   let issueCount = 0;
+  let dataQualityIssuesCreated = 0;
+  let notificationsCreated = 0;
+  let orderSearchIndexesUpdated = 0;
+  let patientSearchIndexesUpdated = 0;
+  let postCommitFailures = 0;
 
-  const postCommitTasks: Array<() => Promise<void>> = [];
-
+  const postCommitTasks: PostCommitTaskInput[] = [];
   const chunks = chunkArray(rows, FIRESTORE_BATCH_SIZE);
 
   for (const chunk of chunks) {
     const batch = db.batch();
 
     chunk.forEach((row, chunkIndex) => {
-      const data = row.data ?? {};
+      const data: Record<string, unknown> = row.data ?? {};
 
       const patientName =
         getFirstField(data, PATIENT_NAME_FIELDS) || "Unknown Patient";
 
       const customerId = getFirstField(data, CUSTOMER_ID_FIELDS);
-
       const dob = getFirstField(data, DOB_FIELDS);
 
       if (patientName === "Unknown Patient" && !customerId) {
@@ -340,27 +495,17 @@ export async function processOrdersFromRows({
       }
 
       const salesOrderNumber = getFirstField(data, ORDER_FIELDS);
-
       const patientAddress = getFirstField(data, ADDRESS_FIELDS);
-
-      const productType =
-        getFirstField(data, PRODUCT_FIELDS) || "Imported item";
-
+      const productType = getFirstField(data, PRODUCT_FIELDS) || "Imported item";
       const phone = getFirstField(data, PHONE_FIELDS);
-
       const insurance = getFirstField(data, INSURANCE_FIELDS);
+      const status = getFirstField(data, STATUS_FIELDS) || "processing";
 
-      const status =
-        getFirstField(data, STATUS_FIELDS) || "processing";
+      const rawQuantity = getFirstField(data, QUANTITY_FIELDS);
+      const quantity = cleanNumber(rawQuantity, 1);
 
-      const quantity = cleanNumber(
-        getFirstField(data, QUANTITY_FIELDS),
-        1
-      );
-
-      const purchaseCost = cleanMoney(
-        getFirstField(data, MONEY_FIELDS)
-      );
+      const rawMoney = getFirstField(data, MONEY_FIELDS);
+      const purchaseCost = cleanMoney(rawMoney);
 
       const isHospice = detectHospiceFromValues([
         ...Object.keys(data),
@@ -369,23 +514,25 @@ export async function processOrdersFromRows({
         patientAddress,
         insurance,
         productType,
+        normalizedReportType,
+        normalizedFileName,
       ]);
 
       if (isHospice) {
+        hospiceSkippedCount += 1;
         skippedCount += 1;
         return;
       }
 
-      const patientKey = patientKeyFrom(
-        patientName,
-        dob,
-        customerId
-      );
+      const patientKey = patientKeyFrom(patientName, dob, customerId);
 
+      const fallbackRowNumber = row.rowNumber ?? chunkIndex;
       const orderDocId = makeSafeDocId(
         salesOrderNumber
-          ? `${reportType}_sales_order_${salesOrderNumber}_${customerId || patientKey}`
-          : `${reportType}_${patientKey}_${row.rowNumber ?? chunkIndex}`
+          ? `${normalizedReportType}_sales_order_${salesOrderNumber}_${
+              customerId || patientKey
+            }`
+          : `${normalizedReportType}_${patientKey}_${fallbackRowNumber}`
       );
 
       const searchText = normalizeSearchText(
@@ -399,6 +546,10 @@ export async function processOrdersFromRows({
           dob,
           insurance,
           status,
+          normalizedReportType,
+          normalizedFileName,
+          resolvedWeeklyBatchKey,
+          resolvedReportVersion ?? "",
           ...Object.values(data).map(cleanText),
         ].join(" ")
       );
@@ -412,8 +563,46 @@ export async function processOrdersFromRows({
 
       issueCount += openIssues.length;
 
-      const orderPayload = {
+      const importHistoryEntry = {
+        importId,
+        reportType: normalizedReportType,
+        fileName: normalizedFileName,
+        reportVersion: resolvedReportVersion,
+        weeklyBatchKey: resolvedWeeklyBatchKey,
+        importedAt: new Date().toISOString(),
+      };
+
+      const sharedSourcePayload = {
+        sourceImportId: importId,
+        sourceReportType: normalizedReportType,
+        sourceFileName: normalizedFileName,
+        sourceStoragePath: normalizedStoragePath,
+        sourceRowNumber: row.rowNumber ?? null,
+
+        importMode,
+        overwriteExistingData,
+        replaceScope,
+        forceReprocess,
+        refreshRequested,
+        reportVersion: resolvedReportVersion,
+        weeklyBatchKey: resolvedWeeklyBatchKey,
+
+        lastImportId: importId,
+        lastImportFileName: normalizedFileName,
+        lastReportType: normalizedReportType,
+
+        active: true,
+        archived: false,
+
+        importedAt: FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      };
+
+      const orderPayload: Record<string, unknown> = {
         orderId: orderDocId,
+
+        patientId: patientKey,
+        patientKey,
 
         patientName: cleanText(patientName),
         patientAddress: cleanText(patientAddress),
@@ -437,29 +626,29 @@ export async function processOrdersFromRows({
         customerId: cleanText(customerId),
 
         dob: cleanText(dob),
-        insurance: cleanText(insurance),
+        dateOfBirth: cleanText(dob),
 
-        patientKey,
+        insurance: cleanText(insurance),
+        payor: cleanText(insurance),
 
         searchText,
 
         isHospice: false,
 
-        sourceImportId: importId,
-        sourceReportType: reportType,
-        sourceFileName: fileName,
-        sourceStoragePath: storagePath,
-        sourceRowNumber: row.rowNumber ?? null,
+        issueCount: openIssues.length,
+        hasOpenIssues: openIssues.length > 0,
+        openIssues,
 
-        importedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
+        ...sharedSourcePayload,
       };
 
-      const patientPayload = {
+      const patientPayload: Record<string, unknown> = {
         patientKey,
+        patientId: patientKey,
 
         patientName: cleanText(patientName),
         fullName: cleanText(patientName),
+        displayName: cleanText(patientName),
 
         dob: cleanText(dob),
         dateOfBirth: cleanText(dob),
@@ -471,69 +660,71 @@ export async function processOrdersFromRows({
         address: cleanText(patientAddress),
 
         insurance: cleanText(insurance),
+        payor: cleanText(insurance),
 
         searchText,
 
-        sourceImportId: importId,
-        sourceFileName: fileName,
+        hasOrders: true,
+        lastOrderId: orderDocId,
+        lastSalesOrderNumber: cleanText(salesOrderNumber),
 
-        updatedAt: FieldValue.serverTimestamp(),
+        ...sharedSourcePayload,
       };
 
       const orderRef = db.collection("orders").doc(orderDocId);
-
       const patientRef = db.collection("patients").doc(patientKey);
+      const patientIndexRef = db.collection("patients_index").doc(patientKey);
+      const patientOrderRef = patientRef.collection("orders").doc(orderDocId);
 
-      const patientIndexRef =
-        db.collection("patients_index").doc(patientKey);
+      batch.set(
+        orderRef,
+        {
+          ...orderPayload,
+          importHistory: FieldValue.arrayUnion(importHistoryEntry),
+        },
+        { merge: true }
+      );
 
-      const patientOrderRef =
-        patientRef.collection("orders").doc(orderDocId);
+      batch.set(
+        patientRef,
+        {
+          ...patientPayload,
+          importHistory: FieldValue.arrayUnion(importHistoryEntry),
+        },
+        { merge: true }
+      );
 
-      batch.set(orderRef, orderPayload, { merge: true });
-
-      batch.set(patientRef, patientPayload, { merge: true });
-
-      batch.set(patientIndexRef, patientPayload, { merge: true });
+      batch.set(
+        patientIndexRef,
+        {
+          ...patientPayload,
+          importHistory: FieldValue.arrayUnion(importHistoryEntry),
+        },
+        { merge: true }
+      );
 
       batch.set(
         patientOrderRef,
         {
           ...orderPayload,
           orderId: orderDocId,
+          importHistory: FieldValue.arrayUnion(importHistoryEntry),
         },
         { merge: true }
       );
 
-      postCommitTasks.push(async () => {
-        await updateSearchIndexForDocument({
-          collectionName: "orders",
-          documentId: orderDocId,
-          data: orderPayload,
-        });
-
-        await updateSearchIndexForDocument({
-          collectionName: "patients_index",
-          documentId: patientKey,
-          data: patientPayload,
-        });
-
-        await createDataQualityIssues({
-          patientId: patientKey,
-          patientName: cleanText(patientName),
-          orderId: orderDocId,
-          openIssues,
-          importId,
-          reportType,
-          fileName,
-        });
-
-        await createOrderNotification({
-          patientId: patientKey,
-          patientName: cleanText(patientName),
-          orderId: orderDocId,
-          openIssues,
-        });
+      postCommitTasks.push({
+        patientKey,
+        patientName: cleanText(patientName),
+        orderDocId,
+        orderPayload,
+        patientPayload,
+        openIssues,
+        importId,
+        reportType: normalizedReportType,
+        fileName: normalizedFileName,
+        reportVersion: resolvedReportVersion,
+        weeklyBatchKey: resolvedWeeklyBatchKey,
       });
 
       processedCount += 1;
@@ -542,8 +733,28 @@ export async function processOrdersFromRows({
     await batch.commit();
   }
 
-  for (const task of postCommitTasks) {
-    await task();
+  for (const taskChunk of chunkArray(postCommitTasks, 25)) {
+    const results = await Promise.allSettled(
+      taskChunk.map((task) => runPostCommitTask(task))
+    );
+
+    for (const result of results) {
+      if (result.status === "fulfilled") {
+        dataQualityIssuesCreated += result.value.dataQualityIssuesCreated;
+        notificationsCreated += result.value.notificationsCreated;
+        orderSearchIndexesUpdated += result.value.orderSearchIndexesUpdated;
+        patientSearchIndexesUpdated += result.value.patientSearchIndexesUpdated;
+      } else {
+        postCommitFailures += 1;
+
+        console.error("POST COMMIT ORDER TASK FAILED", {
+          importId,
+          reportType: normalizedReportType,
+          fileName: normalizedFileName,
+          error: safeErrorMessage(result.reason),
+        });
+      }
+    }
   }
 
   await writeAuditLog({
@@ -558,11 +769,29 @@ export async function processOrdersFromRows({
     safeSummary: "Processed order import rows.",
 
     metadata: {
-      reportType,
-      fileName,
+      reportType: normalizedReportType,
+      fileName: normalizedFileName,
+      storagePath: normalizedStoragePath,
+
+      importMode,
+      overwriteExistingData,
+      replaceScope,
+      forceReprocess,
+      refreshRequested,
+      reportVersion: resolvedReportVersion,
+      weeklyBatchKey: resolvedWeeklyBatchKey,
+
+      totalRows: rows.length,
       processedCount,
       skippedCount,
+      hospiceSkippedCount,
       issueCount,
+
+      dataQualityIssuesCreated,
+      notificationsCreated,
+      orderSearchIndexesUpdated,
+      patientSearchIndexesUpdated,
+      postCommitFailures,
     },
   });
 }

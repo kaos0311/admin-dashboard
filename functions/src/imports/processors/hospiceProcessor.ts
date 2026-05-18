@@ -9,7 +9,6 @@ import { db, FIRESTORE_BATCH_SIZE, chunkArray } from "../utils/firestore.js";
 
 import {
   cleanText,
-  detectHospiceFromValues,
   getCsvField,
   normalizeSearchText,
   patientKeyFrom,
@@ -23,9 +22,18 @@ export interface HospiceProcessorParams {
   fileName: string;
   storagePath: string;
   rows: ParsedImportRow[];
+
+  importMode?: string;
+  overwriteExistingData?: boolean;
+  replaceScope?: string;
+  forceReprocess?: boolean;
+  refreshRequested?: boolean;
+  reportVersion?: number;
+  weeklyBatchKey?: string;
 }
 
 type LivingStatus = "living" | "deceased";
+
 type HospiceStatus =
   | "active"
   | "living"
@@ -233,13 +241,18 @@ function splitList(value?: string): string[] {
       value
         .split(/[,\n;/|]+/)
         .map((item) => cleanText(item))
-        .filter(Boolean)
-    )
+        .filter(Boolean),
+    ),
   );
 }
 
 function getFirstField(data: Record<string, unknown>, keys: string[]): string {
   return cleanText(getCsvField(data, keys));
+}
+
+function safeNumber(value: unknown): number | null {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) && numberValue > 0 ? numberValue : null;
 }
 
 function getLivingStatus(dateOfDeath?: string): LivingStatus {
@@ -248,71 +261,28 @@ function getLivingStatus(dateOfDeath?: string): LivingStatus {
 
 function normalizeHospiceStatus(
   statusRaw: string,
-  dateOfDeath: string
+  dateOfDeath: string,
 ): HospiceStatus {
   const status = cleanText(statusRaw).toLowerCase();
 
   if (dateOfDeath) return "deceased";
   if (!status) return "active";
 
-  if (status.includes("deceased") || status.includes("dead")) {
-    return "deceased";
-  }
-
-  if (status.includes("discharge")) {
-    return "discharged";
-  }
-
-  if (status.includes("pickup") || status.includes("pick up")) {
-    return "pending_pickup";
-  }
-
-  if (status.includes("living")) {
-    return "living";
-  }
-
-  if (status.includes("active")) {
-    return "active";
-  }
+  if (status.includes("deceased") || status.includes("dead")) return "deceased";
+  if (status.includes("discharge")) return "discharged";
+  if (status.includes("pickup") || status.includes("pick up")) return "pending_pickup";
+  if (status.includes("living")) return "living";
+  if (status.includes("active")) return "active";
 
   return "unknown";
 }
 
-function hasHospiceSignal(params: {
-  data: Record<string, unknown>;
-  patientName: string;
-  address: string;
-  payor: string;
-  hospiceProvider: string;
-  nurseName: string;
-  reportType: string;
-  fileName: string;
-  storagePath: string;
-}): boolean {
-  const {
-    data,
-    patientName,
-    address,
-    payor,
-    hospiceProvider,
-    nurseName,
-    reportType,
-    fileName,
-    storagePath,
-  } = params;
+function detectHospiceByMarkerOnly(data: Record<string, unknown>): boolean {
+  return Object.values(data).some((value) => cleanText(value).includes("*"));
+}
 
-  return detectHospiceFromValues([
-    ...Object.keys(data),
-    ...Object.values(data),
-    patientName,
-    address,
-    payor,
-    hospiceProvider,
-    nurseName,
-    reportType,
-    fileName,
-    storagePath,
-  ]);
+function removeHospiceMarker(value: string): string {
+  return cleanText(value).replace(/\*/g, "").trim();
 }
 
 function buildOpenIssues(params: {
@@ -345,11 +315,26 @@ function getIssueSeverity(issue: string): "low" | "medium" | "high" | "critical"
 }
 
 function getNotificationSeverity(
-  openIssueCount: number
+  openIssueCount: number,
 ): "info" | "warning" | "critical" {
   if (openIssueCount >= 3) return "critical";
   if (openIssueCount >= 2) return "warning";
   return "info";
+}
+
+function normalizeRowDataForStorage(
+  data: Record<string, unknown>,
+): Record<string, unknown> {
+  const cleaned: Record<string, unknown> = {};
+
+  for (const [key, value] of Object.entries(data)) {
+    cleaned[key] =
+      typeof value === "string"
+        ? removeHospiceMarker(value)
+        : value;
+  }
+
+  return cleaned;
 }
 
 async function createDataQualityIssues(params: {
@@ -360,7 +345,9 @@ async function createDataQualityIssues(params: {
   reportType: string;
   fileName: string;
   rowNumber: number | null;
-}): Promise<void> {
+  reportVersion: number | null;
+  weeklyBatchKey: string;
+}): Promise<number> {
   const {
     patientId,
     patientName,
@@ -369,9 +356,11 @@ async function createDataQualityIssues(params: {
     reportType,
     fileName,
     rowNumber,
+    reportVersion,
+    weeklyBatchKey,
   } = params;
 
-  if (openIssues.length === 0) return;
+  if (openIssues.length === 0) return 0;
 
   const batch = db.batch();
 
@@ -398,24 +387,44 @@ async function createDataQualityIssues(params: {
         sourceFileName: fileName,
         sourceRowNumber: rowNumber,
 
+        reportVersion,
+        weeklyBatchKey,
+
         detectedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       },
-      { merge: true }
+      { merge: true },
     );
   });
 
   await batch.commit();
+
+  return openIssues.length;
 }
 
 async function createHospiceNotification(params: {
   patientId: string;
   patientName: string;
   openIssues: string[];
-}): Promise<void> {
-  const { patientId, patientName, openIssues } = params;
+  importId: string;
+  reportType: string;
+  fileName: string;
+  reportVersion: number | null;
+  weeklyBatchKey: string;
+}): Promise<number> {
+  const {
+    patientId,
+    patientName,
+    openIssues,
+    importId,
+    reportType,
+    fileName,
+    reportVersion,
+    weeklyBatchKey,
+  } = params;
 
-  if (openIssues.length === 0) return;
+  if (openIssues.length === 0) return 0;
 
   const notificationId = `data_quality_${patientId}`;
 
@@ -431,13 +440,23 @@ async function createHospiceNotification(params: {
       targetId: patientId,
 
       assignedToRole: "staff",
+
+      sourceImportId: importId,
+      sourceReportType: reportType,
+      sourceFileName: fileName,
+
+      reportVersion,
+      weeklyBatchKey,
+
       readBy: [],
 
       createdAt: FieldValue.serverTimestamp(),
       updatedAt: FieldValue.serverTimestamp(),
     },
-    { merge: true }
+    { merge: true },
   );
+
+  return 1;
 }
 
 export async function processHospiceRows({
@@ -446,10 +465,26 @@ export async function processHospiceRows({
   fileName,
   storagePath,
   rows,
+
+  importMode = "append",
+  overwriteExistingData = false,
+  replaceScope = "none",
+  forceReprocess = false,
+  refreshRequested = false,
+  reportVersion,
+  weeklyBatchKey = "",
 }: HospiceProcessorParams): Promise<void> {
+  const resolvedReportVersion = safeNumber(reportVersion);
+  const resolvedWeeklyBatchKey = cleanText(weeklyBatchKey);
+
   let processedCount = 0;
   let skippedCount = 0;
   let issueCount = 0;
+  let dataQualityIssuesCreated = 0;
+  let notificationsCreated = 0;
+  let patientSearchIndexesUpdated = 0;
+  let hospiceSearchIndexesUpdated = 0;
+  let postCommitFailures = 0;
 
   const postCommitTasks: Array<() => Promise<void>> = [];
 
@@ -459,47 +494,43 @@ export async function processHospiceRows({
     const batch = db.batch();
 
     chunk.forEach((row) => {
-      const data = row.data ?? {};
+      const rawData = row.data ?? {};
+      const data = normalizeRowDataForStorage(rawData);
+
+      const hospiceDetected = detectHospiceByMarkerOnly(rawData);
+
+      if (!hospiceDetected) {
+        skippedCount += 1;
+        return;
+      }
 
       const patientName =
-        getFirstField(data, PATIENT_NAME_FIELDS) || "Unknown Patient";
+        removeHospiceMarker(getFirstField(data, PATIENT_NAME_FIELDS)) ||
+        "Unknown Patient";
 
-      const dob = getFirstField(data, DOB_FIELDS);
-      const customerId = getFirstField(data, CUSTOMER_ID_FIELDS);
+      const dob = removeHospiceMarker(getFirstField(data, DOB_FIELDS));
+      const customerId = removeHospiceMarker(getFirstField(data, CUSTOMER_ID_FIELDS));
 
       if (patientName === "Unknown Patient" && !customerId) {
         skippedCount += 1;
         return;
       }
 
-      const address = getFirstField(data, ADDRESS_FIELDS);
-      const phone = getFirstField(data, PHONE_FIELDS);
-      const payor = getFirstField(data, PAYOR_FIELDS);
-      const hospiceProvider = getFirstField(data, HOSPICE_PROVIDER_FIELDS);
-      const dateOfDeath = getFirstField(data, DATE_OF_DEATH_FIELDS);
-      const nurseName = getFirstField(data, NURSE_FIELDS);
-      const nursePhone = getFirstField(data, NURSE_PHONE_FIELDS);
-      const nextOfKin = getFirstField(data, NEXT_OF_KIN_FIELDS);
-      const notes = getFirstField(data, NOTES_FIELDS);
-      const equipmentRaw = getFirstField(data, EQUIPMENT_FIELDS);
-      const statusRaw = getFirstField(data, STATUS_FIELDS);
-
-      const hospiceDetected = hasHospiceSignal({
-        data,
-        patientName,
-        address,
-        payor,
-        hospiceProvider,
-        nurseName,
-        reportType,
-        fileName,
-        storagePath,
-      });
-
-      if (!hospiceDetected) {
-        skippedCount += 1;
-        return;
-      }
+      const address = removeHospiceMarker(getFirstField(data, ADDRESS_FIELDS));
+      const phone = removeHospiceMarker(getFirstField(data, PHONE_FIELDS));
+      const payor = removeHospiceMarker(getFirstField(data, PAYOR_FIELDS));
+      const hospiceProvider = removeHospiceMarker(
+        getFirstField(data, HOSPICE_PROVIDER_FIELDS),
+      );
+      const dateOfDeath = removeHospiceMarker(
+        getFirstField(data, DATE_OF_DEATH_FIELDS),
+      );
+      const nurseName = removeHospiceMarker(getFirstField(data, NURSE_FIELDS));
+      const nursePhone = removeHospiceMarker(getFirstField(data, NURSE_PHONE_FIELDS));
+      const nextOfKin = removeHospiceMarker(getFirstField(data, NEXT_OF_KIN_FIELDS));
+      const notes = removeHospiceMarker(getFirstField(data, NOTES_FIELDS));
+      const equipmentRaw = removeHospiceMarker(getFirstField(data, EQUIPMENT_FIELDS));
+      const statusRaw = removeHospiceMarker(getFirstField(data, STATUS_FIELDS));
 
       const patientKey = patientKeyFrom(patientName, dob, customerId);
       const livingStatus = getLivingStatus(dateOfDeath);
@@ -536,45 +567,59 @@ export async function processHospiceRows({
           reportType,
           fileName,
           storagePath,
+          resolvedWeeklyBatchKey,
+          resolvedReportVersion ?? "",
           ...Object.values(data).map(cleanText),
-        ].join(" ")
+        ].join(" "),
       );
+
+      const importHistoryEntry = {
+        importId,
+        reportType,
+        fileName,
+        reportVersion: resolvedReportVersion,
+        weeklyBatchKey: resolvedWeeklyBatchKey,
+        importedAt: new Date().toISOString(),
+      };
 
       const basePayload = {
         patientKey,
         patientId: customerId || patientKey,
-        customerId,
+        customerId: cleanText(customerId),
 
         patientName: cleanText(patientName),
         fullName: cleanText(patientName),
         displayName: cleanText(patientName),
         normalizedFullName: normalizeSearchText(patientName),
 
-        dob,
-        dateOfBirth: dob,
+        dob: cleanText(dob),
+        dateOfBirth: cleanText(dob),
 
-        address,
-        phone,
+        address: cleanText(address),
+        phone: cleanText(phone),
 
-        payor,
-        payer: payor,
-        insurance: payor,
+        payor: cleanText(payor),
+        payer: cleanText(payor),
+        insurance: cleanText(payor),
 
-        hospiceProvider,
-        nurseName,
-        assignedNurse: nurseName,
-        nursePhone,
-        nextOfKin,
+        hospiceProvider: cleanText(hospiceProvider),
+        nurseName: cleanText(nurseName),
+        assignedNurse: cleanText(nurseName),
+        nursePhone: cleanText(nursePhone),
+        nextOfKin: cleanText(nextOfKin),
 
-        dateOfDeath,
+        dateOfDeath: cleanText(dateOfDeath),
         livingStatus,
         status,
 
         equipment,
         openIssues,
-        notes,
+        notes: cleanText(notes),
 
         isHospice: true,
+        hospiceDetectedByMarker: true,
+        hospiceDetectionMethod: "asterisk_marker_only",
+
         searchText,
 
         sourceImportId: importId,
@@ -583,11 +628,23 @@ export async function processHospiceRows({
         sourceStoragePath: storagePath,
         sourceRowNumber: row.rowNumber ?? null,
 
+        importMode,
+        overwriteExistingData,
+        replaceScope,
+        forceReprocess,
+        refreshRequested,
+        reportVersion: resolvedReportVersion,
+        weeklyBatchKey: resolvedWeeklyBatchKey,
+
         lastImportId: importId,
         lastImportFileName: fileName,
         lastReportType: reportType,
 
+        active: true,
+        archived: false,
+
         importedAt: FieldValue.serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
       };
 
@@ -596,7 +653,14 @@ export async function processHospiceRows({
       const patientRef = db.collection("patients").doc(patientKey);
       const patientIndexRef = db.collection("patients_index").doc(patientKey);
 
-      batch.set(hospiceRef, basePayload, { merge: true });
+      batch.set(
+        hospiceRef,
+        {
+          ...basePayload,
+          importHistory: FieldValue.arrayUnion(importHistoryEntry),
+        },
+        { merge: true },
+      );
 
       batch.set(
         oversightRef,
@@ -604,10 +668,11 @@ export async function processHospiceRows({
           ...basePayload,
           hospicePatientRef: hospiceRef.path,
           patientRef: patientRef.path,
-          lastReviewedAt: null,
           reviewStatus: openIssues.length > 0 ? "needs_review" : "current",
+          lastReviewedAt: null,
+          importHistory: FieldValue.arrayUnion(importHistoryEntry),
         },
-        { merge: true }
+        { merge: true },
       );
 
       batch.set(
@@ -616,8 +681,9 @@ export async function processHospiceRows({
           ...basePayload,
           hospicePatientRef: hospiceRef.path,
           hospiceOversightRef: oversightRef.path,
+          importHistory: FieldValue.arrayUnion(importHistoryEntry),
         },
-        { merge: true }
+        { merge: true },
       );
 
       batch.set(
@@ -626,8 +692,9 @@ export async function processHospiceRows({
           ...basePayload,
           hospicePatientRef: hospiceRef.path,
           hospiceOversightRef: oversightRef.path,
+          importHistory: FieldValue.arrayUnion(importHistoryEntry),
         },
-        { merge: true }
+        { merge: true },
       );
 
       postCommitTasks.push(async () => {
@@ -637,13 +704,17 @@ export async function processHospiceRows({
           data: basePayload,
         });
 
+        patientSearchIndexesUpdated += 1;
+
         await updateSearchIndexForDocument({
           collectionName: "hospicePatients",
           documentId: patientKey,
           data: basePayload,
         });
 
-        await createDataQualityIssues({
+        hospiceSearchIndexesUpdated += 1;
+
+        dataQualityIssuesCreated += await createDataQualityIssues({
           patientId: patientKey,
           patientName: cleanText(patientName),
           openIssues,
@@ -651,12 +722,19 @@ export async function processHospiceRows({
           reportType,
           fileName,
           rowNumber: row.rowNumber ?? null,
+          reportVersion: resolvedReportVersion,
+          weeklyBatchKey: resolvedWeeklyBatchKey,
         });
 
-        await createHospiceNotification({
+        notificationsCreated += await createHospiceNotification({
           patientId: patientKey,
           patientName: cleanText(patientName),
           openIssues,
+          importId,
+          reportType,
+          fileName,
+          reportVersion: resolvedReportVersion,
+          weeklyBatchKey: resolvedWeeklyBatchKey,
         });
       });
 
@@ -667,7 +745,18 @@ export async function processHospiceRows({
   }
 
   for (const task of postCommitTasks) {
-    await task();
+    try {
+      await task();
+    } catch (error) {
+      postCommitFailures += 1;
+
+      console.error("POST COMMIT HOSPICE TASK FAILED", {
+        importId,
+        reportType,
+        fileName,
+        error,
+      });
+    }
   }
 
   await writeAuditLog({
@@ -683,9 +772,26 @@ export async function processHospiceRows({
     metadata: {
       reportType,
       fileName,
+
+      importMode,
+      overwriteExistingData,
+      replaceScope,
+      forceReprocess,
+      refreshRequested,
+      reportVersion: resolvedReportVersion,
+      weeklyBatchKey: resolvedWeeklyBatchKey,
+
       processedCount,
       skippedCount,
       issueCount,
+
+      dataQualityIssuesCreated,
+      notificationsCreated,
+      patientSearchIndexesUpdated,
+      hospiceSearchIndexesUpdated,
+      postCommitFailures,
+
+      hospiceDetectionMethod: "asterisk_marker_only",
     },
   });
 }

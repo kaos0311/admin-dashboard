@@ -1,5 +1,5 @@
 import { FieldValue } from "firebase-admin/firestore";
-import { db } from "../imports/utils/firestore";
+import { db } from "../imports/utils/firestore.js";
 
 export type AuditAction =
   | "import_processed"

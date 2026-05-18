@@ -1,14 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-
 import {
   getIdTokenResult,
   onAuthStateChanged,
   signOut,
   type User,
 } from "firebase/auth";
-
 import { doc, getDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
@@ -21,9 +19,16 @@ type UseAuthRoleResult = {
   loading: boolean;
   error: string;
   active: boolean | null;
+
   isAdmin: boolean;
   isStaff: boolean;
   isAdminOrStaff: boolean;
+
+  canAccessDashboard: boolean;
+  canUploadReports: boolean;
+  canRefreshImports: boolean;
+  canDeleteImports: boolean;
+  canReadAuditLogs: boolean;
 };
 
 function parseRole(value: unknown): UserRole {
@@ -132,9 +137,13 @@ export function useAuthRole(): UseAuthRoleResult {
     };
   }, []);
 
-  const result = useMemo<UseAuthRoleResult>(() => {
+  return useMemo<UseAuthRoleResult>(() => {
     const isAdmin = role === "admin";
     const isStaff = role === "staff";
+    const isAdminOrStaff = isAdmin || isStaff;
+    const isActiveUser = active !== false;
+
+    const canAccessDashboard = Boolean(user && isActiveUser && isAdminOrStaff);
 
     return {
       user,
@@ -142,11 +151,16 @@ export function useAuthRole(): UseAuthRoleResult {
       loading,
       error,
       active,
+
       isAdmin,
       isStaff,
-      isAdminOrStaff: isAdmin || isStaff,
+      isAdminOrStaff,
+
+      canAccessDashboard,
+      canUploadReports: canAccessDashboard,
+      canRefreshImports: canAccessDashboard,
+      canDeleteImports: canAccessDashboard && isAdmin,
+      canReadAuditLogs: canAccessDashboard && isAdmin,
     };
   }, [user, role, loading, error, active]);
-
-  return result;
 }

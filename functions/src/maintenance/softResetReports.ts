@@ -1,5 +1,8 @@
+// functions/src/maintenance/softResetReports.ts
+
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
+
 import {
   FieldValue,
   getFirestore,
@@ -14,16 +17,36 @@ const CONFIRM_TEXT = "RESET REPORTS";
 const REPORT_RESET_COLLECTIONS = [
   "importJobs",
   "importedReports",
+
   "patients_index",
   "patients",
+
   "hospicePatients",
   "insurancePatients",
+
   "analytics",
+
+  "dataQualityIssues",
+  "duplicatePatientCandidates",
+  "notifications",
+  "searchIndex",
+];
+
+const PROTECTED_COLLECTIONS = [
+  "users",
+  "settings",
+  "roles",
+  "permissions",
+  "systemJobs",
+  "products",
+  "orders",
+  "rentals",
 ];
 
 type SoftResetPayload = {
   confirmText?: string;
   includeAuditLogs?: boolean;
+  dryRun?: boolean;
 };
 
 type CallableRequestLike = {
@@ -32,6 +55,11 @@ type CallableRequestLike = {
     token: Record<string, unknown>;
   };
   data?: unknown;
+};
+
+type ResetCollectionResult = {
+  collectionName: string;
+  deletedCount: number;
 };
 
 function requireAdmin(request: CallableRequestLike): void {
@@ -57,6 +85,20 @@ function getAuthEmail(request: CallableRequestLike): string {
   return typeof email === "string" ? email : "";
 }
 
+function assertSafeCollection(collectionName: string): void {
+  if (PROTECTED_COLLECTIONS.includes(collectionName)) {
+    throw new HttpsError(
+      "failed-precondition",
+      `Refusing to reset protected collection: ${collectionName}`
+    );
+  }
+}
+
+async function countCollection(collectionName: string): Promise<number> {
+  const snapshot = await db.collection(collectionName).count().get();
+  return snapshot.data().count;
+}
+
 async function recursiveDeleteCollection(
   collectionRef: CollectionReference
 ): Promise<void> {
@@ -69,6 +111,7 @@ export const softResetReports = onCall(
     memory: "2GiB",
     timeoutSeconds: 540,
   },
+
   async (request) => {
     requireAdmin(request);
 
@@ -82,10 +125,13 @@ export const softResetReports = onCall(
     }
 
     const includeAuditLogs = payload.includeAuditLogs === true;
+    const dryRun = payload.dryRun === true;
 
     const collectionsToDelete = includeAuditLogs
       ? [...REPORT_RESET_COLLECTIONS, "auditLogs"]
       : REPORT_RESET_COLLECTIONS;
+
+    collectionsToDelete.forEach(assertSafeCollection);
 
     const uid = request.auth!.uid;
     const email = getAuthEmail(request);
@@ -94,37 +140,64 @@ export const softResetReports = onCall(
 
     const resetJobRef = await db.collection("systemJobs").add({
       type: "softResetReports",
-      status: "processing",
+      status: dryRun ? "dry_run_processing" : "processing",
+
       requestedBy: uid,
       requestedByEmail: email,
+
       includeAuditLogs,
+      dryRun,
+
       collectionsToDelete,
+
       startedAt,
       updatedAt: startedAt,
     });
 
     const deletedCollections: string[] = [];
+    const collectionResults: ResetCollectionResult[] = [];
 
     try {
       for (const collectionName of collectionsToDelete) {
-        logger.info("Soft reset deleting collection", { collectionName });
+        logger.info("Soft reset handling collection", {
+          collectionName,
+          dryRun,
+        });
 
         await resetJobRef.set(
           {
             currentCollection: collectionName,
-            updatedAt: Timestamp.now(),
+            progress: {
+              collectionsCompleted: collectionResults.length,
+              collectionsTotal: collectionsToDelete.length,
+            },
+            updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }
         );
 
-        await recursiveDeleteCollection(db.collection(collectionName));
+        const deletedCount = dryRun
+          ? await countCollection(collectionName)
+          : await recursiveDeleteCollection(db.collection(collectionName)).then(
+              async () => countCollection(collectionName).then(() => 0)
+            );
 
         deletedCollections.push(collectionName);
+
+        collectionResults.push({
+          collectionName,
+          deletedCount,
+        });
 
         await resetJobRef.set(
           {
             deletedCollections,
-            updatedAt: Timestamp.now(),
+            collectionResults,
+            progress: {
+              collectionsCompleted: collectionResults.length,
+              collectionsTotal: collectionsToDelete.length,
+            },
+            updatedAt: FieldValue.serverTimestamp(),
           },
           { merge: true }
         );
@@ -134,9 +207,10 @@ export const softResetReports = onCall(
 
       await resetJobRef.set(
         {
-          status: "completed",
+          status: dryRun ? "dry_run_completed" : "completed",
           currentCollection: "",
           deletedCollections,
+          collectionResults,
           completedAt,
           updatedAt: completedAt,
         },
@@ -144,21 +218,27 @@ export const softResetReports = onCall(
       );
 
       await db.collection("auditLogs").add({
-        action: "soft_reset_reports_completed",
+        action: dryRun
+          ? "soft_reset_reports_dry_run"
+          : "soft_reset_reports_completed",
         actorUid: uid,
         actorEmail: email,
         targetUid: null,
         targetEmail: null,
         details: {
           includeAuditLogs,
+          dryRun,
           deletedCollections,
+          collectionResults,
         },
         createdAt: FieldValue.serverTimestamp(),
       });
 
       return {
         ok: true,
+        dryRun,
         deletedCollections,
+        collectionResults,
       };
     } catch (error) {
       const message =
@@ -188,7 +268,9 @@ export const softResetReports = onCall(
         details: {
           error: message,
           includeAuditLogs,
+          dryRun,
           deletedCollections,
+          collectionResults,
         },
         createdAt: FieldValue.serverTimestamp(),
       });
