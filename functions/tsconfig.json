@@ -4,15 +4,16 @@
     "esModuleInterop": true,
     "moduleResolution": "nodenext",
     "noImplicitReturns": true,
-    "noUnusedLocals": true,
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
     "outDir": "lib",
     "rootDir": "src",
     "sourceMap": true,
     "strict": true,
-    "target": "es2017"
+    "target": "es2022",
+    "lib": ["es2022", "dom"]
   },
   "compileOnSave": true,
-  "include": [
-    "src"
-, "lib/imports/processors/processImportBatch.js"  ]
+  "include": ["src"],
+  "exclude": ["node_modules", "lib"]
 }

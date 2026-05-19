@@ -13,3 +13,4 @@ export { rebuildEverything } from "./maintenance/rebuildEverything.js";
 export { rebuildReportsAnalytics } from "./maintenance/rebuildReportsAnalytics.js";
 export { reprocessImportJob } from "./maintenance/reprocessImportJob.js";
 export { softResetReports } from "./maintenance/softResetReports.js";
+export { askAdminAi } from "./ai/callable/askAdminAi.js";

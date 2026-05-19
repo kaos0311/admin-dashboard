@@ -20,12 +20,30 @@ export type DashboardSummary = {
   importedReportFiles: number;
 };
 
+export type ProductStatus = "active" | "inactive" | "archived" | string;
+
+export type OrderStatus =
+  | "active"
+  | "pending"
+  | "delivered"
+  | "cancelled"
+  | "archived"
+  | string;
+
+export type RentalStatus =
+  | "active"
+  | "paused"
+  | "completed"
+  | "cancelled"
+  | "archived"
+  | string;
+
 export type ProductRow = {
   id: string;
 
   name: string;
   category: string;
-  status: string;
+  status: ProductStatus;
 
   available: number;
   quantityOnHand: number;
@@ -40,7 +58,7 @@ export type OrderRow = {
 
   patientName: string;
   orderNumber: string;
-  status: string;
+  status: OrderStatus;
 
   total: number;
 
@@ -52,7 +70,7 @@ export type RentalRow = {
 
   patientName: string;
   itemName: string;
-  status: string;
+  status: RentalStatus;
 
   monthlyAmount: number;
 
@@ -74,6 +92,11 @@ export type MovementRow = {
 export type WipEmployeeSummary = {
   employeeId: string;
   employeeName: string;
+
+  /**
+   * Legacy Brightree/report field.
+   * Keep this until all processors normalize to employeeName.
+   */
   employee?: string;
 
   openCount: number;
