@@ -14,3 +14,5 @@ export { rebuildReportsAnalytics } from "./maintenance/rebuildReportsAnalytics.j
 export { reprocessImportJob } from "./maintenance/reprocessImportJob.js";
 export { softResetReports } from "./maintenance/softResetReports.js";
 export { askAdminAi } from "./ai/callable/askAdminAi.js";
+export { resetOperationalDatabase } from "./admin/resetOperationalDatabase"
+;
