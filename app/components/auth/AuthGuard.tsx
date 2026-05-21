@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+
 import { auth, db } from "@/lib/firebase";
 
 type AllowedRole = "admin" | "staff";
@@ -13,12 +14,14 @@ type AuthGuardProps = {
   children: ReactNode;
   allow: AllowedRole[];
   fallback?: ReactNode;
+  loadingMessage?: string;
 };
 
 export default function AuthGuard({
   children,
   allow,
   fallback,
+  loadingMessage = "Checking permissions...",
 }: AuthGuardProps) {
   const router = useRouter();
   const pathname = usePathname();
@@ -143,9 +146,9 @@ export default function AuthGuard({
     return (
       <>
         {fallback ?? (
-          <div className="flex min-h-screen items-center justify-center bg-black text-white">
-            <div className="rounded-3xl border border-white/10 bg-neutral-950 px-6 py-4">
-              Loading...
+          <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_34%),#020617] px-4 text-white">
+            <div className="rounded-3xl border border-white/10 bg-white/[0.06] px-6 py-4 text-sm text-zinc-300 shadow-2xl shadow-black/30 backdrop-blur-2xl">
+              {loadingMessage}
             </div>
           </div>
         )}

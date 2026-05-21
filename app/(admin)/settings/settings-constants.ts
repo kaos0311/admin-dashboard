@@ -3,44 +3,162 @@ import type {
   CreateUserForm,
   IdentityForm,
   PasswordResetForm,
+  SettingsTabKey,
+  UserDraft,
+  UserRole,
+  UserStatus,
 } from "./settings-types";
 
-export const USERS_PAGE_SIZE = 100;
-export const RECENT_ACTIVITY_LIMIT = 8;
+/* -------------------------------------------------------------------------- */
+/* FIRESTORE                                                                  */
+/* -------------------------------------------------------------------------- */
 
-export const initialSettings: AppSettings = {
-  companyName: "",
-  companyPhone: "",
-  companyEmail: "",
-  companyAddress: "",
-  defaultTheme: "dark",
-  defaultHomeScreen: "/dashboard",
-  compactTables: false,
-  showDashboardCounters: true,
-  enableOrderFilters: true,
-  enableProductFilters: true,
-  enableRentalFilters: true,
-  maintenanceMode: false,
-  maintenanceMessage: "The admin dashboard is temporarily under maintenance.",
-  allowAdminsDuringMaintenance: true,
-  allowedUploadTypes: ".csv,.pdf,.xlsx",
-  maxUploadSizeMb: 25,
-  pdfParsingEnabled: true,
-  csvParsingEnabled: true,
-  autoIndexAfterUpload: true,
-  keepRawUploadsInStorage: true,
+export const SETTINGS_COLLECTION = "settings";
+
+export const SETTINGS_APP_DOC_ID = "app";
+
+export const USERS_COLLECTION = "users";
+
+export const AUDIT_LOGS_COLLECTION = "auditLogs";
+
+/* -------------------------------------------------------------------------- */
+/* PAGINATION / LIMITS                                                        */
+/* -------------------------------------------------------------------------- */
+
+export const USERS_PAGE_SIZE = 25;
+
+export const RECENT_ACTIVITY_LIMIT = 25;
+
+/* -------------------------------------------------------------------------- */
+/* SETTINGS TABS                                                              */
+/* -------------------------------------------------------------------------- */
+
+export const SETTINGS_TABS: {
+  key: SettingsTabKey;
+  label: string;
+  description: string;
+}[] = [
+  {
+    key: "company",
+    label: "Company",
+    description: "Business identity and contact details.",
+  },
+  {
+    key: "preferences",
+    label: "Preferences",
+    description: "Dashboard behavior and display options.",
+  },
+  {
+    key: "users",
+    label: "Users",
+    description: "Manage staff and administrator access.",
+  },
+  {
+    key: "security",
+    label: "Security",
+    description: "Access controls and protected workflows.",
+  },
+  {
+    key: "danger",
+    label: "Danger Zone",
+    description: "High-risk reset and maintenance actions.",
+  },
+];
+
+/* -------------------------------------------------------------------------- */
+/* USER OPTIONS                                                               */
+/* -------------------------------------------------------------------------- */
+
+export const USER_ROLE_OPTIONS: {
+  label: string;
+  value: UserRole;
+}[] = [
+  {
+    label: "Admin",
+    value: "admin",
+  },
+  {
+    label: "Staff",
+    value: "staff",
+  },
+];
+
+export const USER_STATUS_OPTIONS: {
+  label: string;
+  value: UserStatus;
+}[] = [
+  {
+    label: "Active",
+    value: "active",
+  },
+  {
+    label: "Disabled",
+    value: "disabled",
+  },
+  {
+    label: "Pending",
+    value: "pending",
+  },
+];
+
+/* -------------------------------------------------------------------------- */
+/* DEFAULT SETTINGS                                                           */
+/* -------------------------------------------------------------------------- */
+
+export const DEFAULT_APP_SETTINGS: AppSettings = {
+  company: {
+    companyName: "Advanced Home Medical",
+    legalName: "Advanced Home Medical",
+    phone: "",
+    fax: "",
+    email: "",
+    website: "",
+    addressLine1: "",
+    addressLine2: "",
+    city: "",
+    state: "",
+    zip: "",
+    timezone: "America/Chicago",
+  },
+
+  preferences: {
+    defaultDashboardRoute: "/dashboard",
+    compactTables: false,
+    enableAnimations: true,
+    showPhiWarnings: true,
+    requireDeleteConfirmations: true,
+    autoRefreshMinutes: 5,
+  },
+
+  security: {
+    maintenanceMode: false,
+    requireAdminForReportsReset: true,
+    requireAdminForUserManagement: true,
+    auditSettingsChanges: true,
+    sessionTimeoutMinutes: 60,
+    allowStaffExports: false,
+  },
 };
 
-export const initialCreateUserForm: CreateUserForm = {
+/* -------------------------------------------------------------------------- */
+/* INITIAL STATE                                                              */
+/* -------------------------------------------------------------------------- */
+
+export const initialSettings: AppSettings =
+  DEFAULT_APP_SETTINGS;
+
+export const DEFAULT_USER_DRAFT: UserDraft = {
   email: "",
-  password: "",
   displayName: "",
   role: "staff",
 };
 
-export const initialPasswordResetForm: PasswordResetForm = {
-  uid: "",
-  newPassword: "",
+export const initialCreateUserForm: CreateUserForm = {
+  email: "",
+  displayName: "",
+  password: "",
+  role: "staff",
+  active: true,
 };
 
 export const initialIdentityForm: IdentityForm = {
@@ -49,11 +167,17 @@ export const initialIdentityForm: IdentityForm = {
   displayName: "",
 };
 
-export const inputClass =
-  "w-full rounded-xl border border-white/10 bg-[#07090d] px-4 py-2.5 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-cyan-500/40 disabled:cursor-not-allowed disabled:opacity-50";
+export const initialPasswordResetForm: PasswordResetForm = {
+  uid: "",
+  newPassword: "",
+};
 
-export const primaryButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-2.5 text-sm font-medium text-cyan-300 transition hover:bg-cyan-500/15 disabled:cursor-not-allowed disabled:opacity-50";
+/* -------------------------------------------------------------------------- */
+/* UI                                                                         */
+/* -------------------------------------------------------------------------- */
 
-export const secondaryButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 bg-[#07090d] px-4 py-2.5 text-sm text-zinc-300 transition hover:bg-white/5 disabled:cursor-not-allowed disabled:opacity-50";
+export const SETTINGS_SUCCESS_TIMEOUT = 2500;
+
+export const SETTINGS_ERROR_TIMEOUT = 5000;
+
+export const SETTINGS_SEARCH_DEBOUNCE = 250;

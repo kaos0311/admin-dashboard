@@ -9,7 +9,7 @@ import {
 } from "react";
 
 import AdminSidebar from "@/app/components/admin/AdminSidebar";
-import AdminTopbar from "@/app/components/admin/AdminTopbar";
+import { AdminShellTopbar } from "@/app/components/admin/AdminShellTopbar";
 
 export default function AdminShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -56,14 +56,14 @@ export default function AdminShell({ children }: { children: ReactNode }) {
         <AdminSidebar mobileOpen={sidebarOpen} onClose={closeSidebar} />
 
         <div className="flex min-w-0 flex-1 flex-col lg:pl-64">
-          <AdminTopbar onMenuClick={openSidebar} />
+          <AdminShellTopbar onMenuClick={openSidebar} />
 
           <main
             id="admin-main-content"
             tabIndex={-1}
             className="min-w-0 flex-1 overflow-x-hidden bg-[#07090d] outline-none"
           >
-            <div className="mx-auto min-h-[calc(100vh-65px)] w-full max-w-[1800px] px-3 py-4 sm:px-4 md:px-5 lg:px-6 xl:px-8">
+            <div className="min-h-[calc(100vh-65px)] w-full px-2 py-3 sm:px-3 md:px-4 lg:px-5 xl:px-6">
               {children}
             </div>
           </main>

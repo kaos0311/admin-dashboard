@@ -133,7 +133,7 @@ const NAV_ITEMS: NavItem[] = [
   {
     id: "reports-wip",
     label: "WIP",
-    href: "/wip",
+    href: "/reports/wip",
     icon: Hammer,
     section: "reports",
   },

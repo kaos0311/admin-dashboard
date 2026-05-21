@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Loader2 } from "lucide-react";
 
-import BarcodeScannerModal from "@/app/components/barcode/BarcodeScannerModal";
+import BarcodeScannerModal from "@/app/components/barcode-scanner/BarcodeScannerModal";
 import { normalizeBarcode } from "@/lib/barcode";
 
 import { ImportPanel } from "./components/ImportPanel";

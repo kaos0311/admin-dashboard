@@ -1,186 +1,181 @@
-"use client";
-
+import type { Dispatch, SetStateAction } from "react";
 import { Loader2, Search } from "lucide-react";
-
+import { RENTAL_STATUSES } from "../rentals-constants";
 import type {
-  DeliveryStatus,
-  Rental,
+  RentalFilters,
+  RentalRecord,
   RentalStatus,
-} from "../types/rentalTypes";
-
+} from "../rentals-types";
 import { RentalMobileCard } from "./RentalMobileCard";
 import { RentalTableRow } from "./RentalTableRow";
-import { SelectField } from "../fields/SelectField";
+import { EmptyState } from "./shared/EmptyState";
+import { GlassCard } from "./shared/GlassCard";
+import { SectionHeader } from "./shared/SectionHeader";
 
 type RentalRecordsProps = {
-  rentals: Rental[];
+  records: RentalRecord[];
   loading: boolean;
-  search: string;
-  setSearch: (value: string) => void;
-  statusFilter: "all" | RentalStatus;
-  setStatusFilter: (value: "all" | RentalStatus) => void;
-  deliveryFilter: "all" | DeliveryStatus;
-  setDeliveryFilter: (value: "all" | DeliveryStatus) => void;
-  showDeleted: boolean;
-  setShowDeleted: (value: boolean) => void;
-  onEdit: (rental: Rental) => void;
-  onReturn: (rental: Rental) => void;
-  onArchive: (rental: Rental) => void;
+  filters: RentalFilters;
+  setFilters: Dispatch<SetStateAction<RentalFilters>>;
+  hasActiveFilters: boolean;
+  onClearFilters: () => void;
+  onEdit: (record: RentalRecord) => void;
+  onDelete: (recordId: string) => Promise<void>;
+  onMarkReturned: (recordId: string) => Promise<void>;
 };
 
 export function RentalRecords({
-  rentals,
+  records,
   loading,
-  search,
-  setSearch,
-  statusFilter,
-  setStatusFilter,
-  deliveryFilter,
-  setDeliveryFilter,
-  showDeleted,
-  setShowDeleted,
+  filters,
+  setFilters,
+  hasActiveFilters,
+  onClearFilters,
   onEdit,
-  onReturn,
-  onArchive,
+  onDelete,
+  onMarkReturned,
 }: RentalRecordsProps) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/[0.07] p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl">
-      <div className="mb-4 flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div>
-          <h2 className="text-xl font-bold text-white">
-            Rental Records
-          </h2>
+    <GlassCard>
+      <SectionHeader
+        eyebrow="Live records"
+        title="Rental Inventory Records"
+        description="Search, filter, return, edit, or delete rental records. Try not to delete production evidence unless you enjoy audit pain."
+      />
 
-          <p className="text-sm text-slate-400">
-            {rentals.length.toLocaleString()} visible records
-          </p>
-        </div>
+      <div className="mt-6 grid gap-3 lg:grid-cols-[1fr_220px_auto]">
+        <label className="relative block" htmlFor="rental-search">
+          <span className="sr-only">Search rentals</span>
+          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
 
-        <div className="flex flex-col gap-3 lg:flex-row">
-          <div className="relative">
-            <Search
-              className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-500"
-              aria-hidden="true"
-            />
-
-            <input
-              value={search}
-              title="Search rentals"
-              aria-label="Search rentals"
-              placeholder="Search rentals..."
-              onChange={(event) => setSearch(event.target.value)}
-              className="w-full rounded-2xl border border-white/10 bg-black/30 py-3 pl-10 pr-4 text-sm text-white outline-none placeholder:text-slate-500 transition focus:border-white/30 focus:bg-black/40 lg:w-72"
-            />
-          </div>
-
-          <SelectField
-            label="Filter by rental status"
-            srOnlyLabel
-            value={statusFilter}
-            onChange={(value) =>
-              setStatusFilter(value as "all" | RentalStatus)
+          <input
+            id="rental-search"
+            value={filters.search}
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                search: event.target.value,
+              }))
             }
-            options={[
-              { value: "all", label: "All statuses" },
-              { value: "Active", label: "Active" },
-              { value: "Returned", label: "Returned" },
-              { value: "Past Due", label: "Past Due" },
-              { value: "Cancelled", label: "Cancelled" },
-              { value: "Deleted", label: "Deleted" },
-            ]}
+            placeholder="Search product, serial, asset tag, patient, location..."
+            className="h-11 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60 focus:bg-black/40 focus:ring-4 focus:ring-cyan-400/10"
           />
+        </label>
 
-          <SelectField
-            label="Filter by delivery status"
-            srOnlyLabel
-            value={deliveryFilter}
-            onChange={(value) =>
-              setDeliveryFilter(value as "all" | DeliveryStatus)
+        <label className="block" htmlFor="rental-status-filter">
+          <span className="sr-only">Filter rental status</span>
+
+          <select
+            id="rental-status-filter"
+            value={filters.status}
+            onChange={(event) =>
+              setFilters((current) => ({
+                ...current,
+                status: event.target.value as "all" | RentalStatus,
+              }))
             }
-            options={[
-              { value: "all", label: "All delivery" },
-              { value: "Not Scheduled", label: "Not Scheduled" },
-              { value: "Scheduled", label: "Scheduled" },
-              { value: "Delivered", label: "Delivered" },
-              {
-                value: "Pickup Scheduled",
-                label: "Pickup Scheduled",
-              },
-              { value: "Picked Up", label: "Picked Up" },
-              { value: "Cleaning", label: "Cleaning" },
-              { value: "Ready", label: "Ready" },
-            ]}
-          />
-        </div>
+            aria-label="Filter rental status"
+            className="h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:bg-black/40 focus:ring-4 focus:ring-cyan-400/10"
+          >
+            <option value="all" className="bg-slate-950">
+              All statuses
+            </option>
+
+            {RENTAL_STATUSES.map((status) => (
+              <option
+                key={status.value}
+                value={status.value}
+                className="bg-slate-950"
+              >
+                {status.label}
+              </option>
+            ))}
+          </select>
+        </label>
+
+        <button
+          type="button"
+          onClick={onClearFilters}
+          disabled={!hasActiveFilters}
+          className="h-11 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Clear
+        </button>
       </div>
 
-      <label className="mb-4 flex items-center gap-2 text-sm text-slate-300">
-        <input
-          type="checkbox"
-          checked={showDeleted}
-          title="Show archived rental records"
-          aria-label="Show archived rental records"
-          onChange={(event) => setShowDeleted(event.target.checked)}
-          className="h-4 w-4 rounded border-white/20 bg-black"
-        />
-
-        Show archived rental records
-      </label>
-
-      {loading ? (
-        <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black/30 p-4 text-slate-300">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading rentals...
-        </div>
-      ) : rentals.length === 0 ? (
-        <div className="rounded-2xl border border-white/10 bg-black/30 p-6 text-center text-sm text-slate-400">
-          No rental records match the current filters.
-        </div>
-      ) : (
-        <>
-          <div className="hidden overflow-x-auto rounded-2xl border border-white/10 xl:block">
-            <table className="w-full min-w-[1450px] text-left text-sm">
-              <thead className="sticky top-0 z-10 bg-black/60 text-slate-400 backdrop-blur-xl">
-                <tr>
-                  <th className="px-4 py-3">Product</th>
-                  <th className="px-4 py-3">Customer / Patient</th>
-                  <th className="px-4 py-3">Billing</th>
-                  <th className="px-4 py-3">Dates</th>
-                  <th className="px-4 py-3 text-right">Months</th>
-                  <th className="px-4 py-3 text-right">Total</th>
-                  <th className="px-4 py-3">Status</th>
-                  <th className="px-4 py-3">Delivery</th>
-                  <th className="px-4 py-3 text-right">Actions</th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {rentals.map((rental) => (
-                  <RentalTableRow
-                    key={rental.id}
-                    rental={rental}
-                    onEdit={onEdit}
-                    onReturn={onReturn}
-                    onArchive={onArchive}
-                  />
-                ))}
-              </tbody>
-            </table>
+      <div className="mt-6">
+        {loading ? (
+          <div className="flex min-h-48 items-center justify-center rounded-3xl border border-white/10 bg-black/20">
+            <div className="flex items-center gap-3 text-sm text-slate-300">
+              <Loader2 className="h-5 w-5 animate-spin text-cyan-200" />
+              Loading rentals...
+            </div>
           </div>
+        ) : records.length === 0 ? (
+          <EmptyState
+            title="No rental records found"
+            description={
+              hasActiveFilters
+                ? "No rental assets match the current filters. Clear them before blaming the database like everyone else does."
+                : "No rental assets have been created yet. Add one above to begin tracking equipment."
+            }
+            action={
+              hasActiveFilters ? (
+                <button
+                  type="button"
+                  onClick={onClearFilters}
+                  className="rounded-2xl bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200"
+                >
+                  Clear Filters
+                </button>
+              ) : null
+            }
+          />
+        ) : (
+          <>
+            <div className="hidden overflow-hidden rounded-3xl border border-white/10 lg:block">
+              <table className="w-full border-collapse text-left">
+                <thead className="bg-white/[0.045] text-xs uppercase tracking-[0.16em] text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Asset</th>
+                    <th className="px-4 py-3 font-semibold">Patient</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    <th className="px-4 py-3 font-semibold">Condition</th>
+                    <th className="px-4 py-3 font-semibold">Location</th>
+                    <th className="px-4 py-3 font-semibold">Dates</th>
+                    <th className="px-4 py-3 font-semibold">Rate</th>
+                    <th className="px-4 py-3 font-semibold">Actions</th>
+                  </tr>
+                </thead>
 
-          <div className="grid gap-4 xl:hidden">
-            {rentals.map((rental) => (
-              <RentalMobileCard
-                key={rental.id}
-                rental={rental}
-                onEdit={onEdit}
-                onReturn={onReturn}
-                onArchive={onArchive}
-              />
-            ))}
-          </div>
-        </>
-      )}
-    </section>
+                <tbody>
+                  {records.map((record) => (
+                    <RentalTableRow
+                      key={record.id}
+                      record={record}
+                      onEdit={onEdit}
+                      onDelete={onDelete}
+                      onMarkReturned={onMarkReturned}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="grid gap-4 lg:hidden">
+              {records.map((record) => (
+                <RentalMobileCard
+                  key={record.id}
+                  record={record}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                  onMarkReturned={onMarkReturned}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+    </GlassCard>
   );
 }

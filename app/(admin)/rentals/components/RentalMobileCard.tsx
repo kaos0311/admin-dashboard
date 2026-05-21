@@ -1,66 +1,105 @@
-"use client";
-
-import type { Rental } from "../types/rentalTypes";
-import { money } from "../utils/rentalCalculations";
-import { statusClass } from "../utils/rentalStyles";
+import type { RentalRecord } from "../rentals-types";
+import {
+  formatCondition,
+  formatCurrency,
+  formatDate,
+  formatStatus,
+} from "../utils/formatters";
 import { RentalActions } from "./RentalActions";
 
 type RentalMobileCardProps = {
-  rental: Rental;
-  onEdit: (rental: Rental) => void;
-  onReturn: (rental: Rental) => void;
-  onArchive: (rental: Rental) => void;
+  record: RentalRecord;
+  onEdit: (record: RentalRecord) => void;
+  onDelete: (recordId: string) => Promise<void>;
+  onMarkReturned: (recordId: string) => Promise<void>;
 };
 
 export function RentalMobileCard({
-  rental,
+  record,
   onEdit,
-  onReturn,
-  onArchive,
+  onDelete,
+  onMarkReturned,
 }: RentalMobileCardProps) {
   return (
-    <article className="rounded-2xl border border-white/10 bg-black/30 p-4 shadow-xl shadow-black/20 backdrop-blur-xl">
-      <div className="mb-3 flex items-start justify-between gap-3">
+    <article className="rounded-3xl border border-white/10 bg-black/25 p-4">
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h3 className="font-semibold text-white">{rental.productName}</h3>
-          <p className="text-xs text-slate-500">
-            {rental.category || "No category"}
-            {rental.sku ? ` • ${rental.sku}` : ""}
+          <h3 className="font-semibold text-white">{record.productName}</h3>
+          <p className="mt-1 text-xs text-slate-500">
+            SN: {record.serialNumber || "—"} · Asset: {record.assetTag || "—"}
           </p>
         </div>
 
-        <span
-          className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClass(
-            rental.status
-          )}`}
-        >
-          {rental.status}
+        <span className="shrink-0 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs font-semibold text-cyan-100">
+          {formatStatus(record.status)}
         </span>
       </div>
 
-      <div className="grid gap-2 text-sm text-slate-300">
-        <p>Customer: {rental.customerName || "-"}</p>
-        <p>Patient: {rental.patientName || "-"}</p>
-        <p>Serial: {rental.serialNumber || "-"}</p>
-        <p>
-          Dates: {rental.rentalStartDate || "-"} to{" "}
-          {rental.rentalEndDate || "Active"}
-        </p>
-        <p>
-          Total:{" "}
-          <span className="font-semibold text-white">
-            {money(rental.totalCharges)}
-          </span>
-        </p>
-        <p>Delivery: {rental.deliveryStatus}</p>
+      <div className="mt-4 grid gap-3 text-sm sm:grid-cols-2">
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+            Patient
+          </p>
+          <p className="mt-1 text-slate-200">{record.patientName || "—"}</p>
+          <p className="text-xs text-slate-500">{record.patientId || "—"}</p>
+        </div>
+
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+            Location
+          </p>
+          <p className="mt-1 text-slate-200">{record.location || "—"}</p>
+        </div>
+
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+            Condition
+          </p>
+          <p className="mt-1 text-slate-200">
+            {formatCondition(record.condition)}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+            Monthly
+          </p>
+          <p className="mt-1 font-semibold text-white">
+            {formatCurrency(record.monthlyRate)}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+            Checked Out
+          </p>
+          <p className="mt-1 text-slate-200">
+            {formatDate(record.checkedOutDate)}
+          </p>
+        </div>
+
+        <div>
+          <p className="text-xs uppercase tracking-[0.16em] text-slate-500">
+            Expected Return
+          </p>
+          <p className="mt-1 text-slate-200">
+            {formatDate(record.expectedReturnDate)}
+          </p>
+        </div>
       </div>
+
+      {record.notes ? (
+        <p className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm leading-6 text-slate-300">
+          {record.notes}
+        </p>
+      ) : null}
 
       <div className="mt-4">
         <RentalActions
-          rental={rental}
+          record={record}
           onEdit={onEdit}
-          onReturn={onReturn}
-          onArchive={onArchive}
+          onDelete={onDelete}
+          onMarkReturned={onMarkReturned}
         />
       </div>
     </article>

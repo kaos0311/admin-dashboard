@@ -24,31 +24,29 @@ export default function DashboardPage() {
   } = useDashboardData();
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.12),_transparent_28%),#020617] px-4 py-6 text-white md:px-6">
-      <div className="mx-auto flex max-w-7xl flex-col gap-6">
-        <DashboardHero
-          loading={loading}
-          refreshing={refreshing}
-          error={error}
-          onRefresh={refreshDashboard}
-        />
+    <div className="w-full min-w-0 space-y-5 text-white">
+      <DashboardHero
+        loading={loading}
+        refreshing={refreshing}
+        error={error}
+        onRefresh={refreshDashboard}
+      />
 
-        <DashboardStatGrid
-          summary={summary}
-          inventoryAnalytics={inventoryAnalytics}
-          products={products}
-        />
+      <DashboardStatGrid
+        summary={summary}
+        inventoryAnalytics={inventoryAnalytics}
+        products={products}
+      />
 
-        <section className="grid gap-6 xl:grid-cols-3">
-          <RecentOrdersSection orders={orders} />
-          <BirthdaysSection birthdays={birthdays} />
-        </section>
+      <section className="grid w-full min-w-0 gap-5 2xl:grid-cols-[minmax(0,2fr)_minmax(340px,0.8fr)]">
+        <RecentOrdersSection orders={orders} />
+        <BirthdaysSection birthdays={birthdays} />
+      </section>
 
-        <section className="grid gap-6 xl:grid-cols-2">
-          <RentalsSection rentals={rentals} />
-          <WipEmployeeSection employees={wipEmployees} />
-        </section>
-      </div>
-    </main>
+      <section className="grid w-full min-w-0 gap-5 2xl:grid-cols-2">
+        <RentalsSection rentals={rentals} />
+        <WipEmployeeSection employees={wipEmployees} />
+      </section>
+    </div>
   );
 }

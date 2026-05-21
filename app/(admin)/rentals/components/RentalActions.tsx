@@ -1,59 +1,55 @@
-"use client";
-
-import { CheckCircle2, Pencil, XCircle } from "lucide-react";
-import type { Rental } from "../types/rentalTypes";
+import { CheckCircle2, Pencil, Trash2 } from "lucide-react";
+import type { RentalRecord } from "../rentals-types";
 
 type RentalActionsProps = {
-  rental: Rental;
-  onEdit: (rental: Rental) => void;
-  onReturn: (rental: Rental) => void;
-  onArchive: (rental: Rental) => void;
+  record: RentalRecord;
+  onEdit: (record: RentalRecord) => void;
+  onDelete: (recordId: string) => Promise<void>;
+  onMarkReturned: (recordId: string) => Promise<void>;
 };
 
 export function RentalActions({
-  rental,
+  record,
   onEdit,
-  onReturn,
-  onArchive,
+  onDelete,
+  onMarkReturned,
 }: RentalActionsProps) {
-  const canReturn = rental.status === "Active" || rental.status === "Past Due";
-
   return (
-    <div className="flex justify-end gap-2">
-      {canReturn ? (
+    <div className="flex flex-wrap items-center gap-2">
+      <button
+        type="button"
+        onClick={() => onEdit(record)}
+        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3 text-xs font-semibold text-slate-200 transition hover:bg-white/[0.09]"
+      >
+        <Pencil className="h-3.5 w-3.5" />
+        Edit
+      </button>
+
+      {record.status === "checked_out" || record.status === "overdue" ? (
         <button
           type="button"
-          onClick={() => onReturn(rental)}
-          className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/20 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-500/20"
-          title={`Return ${rental.productName}`}
-          aria-label={`Return ${rental.productName}`}
+          onClick={() => onMarkReturned(record.id)}
+          className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-emerald-300/20 bg-emerald-400/10 px-3 text-xs font-semibold text-emerald-100 transition hover:bg-emerald-400/15"
         >
-          <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+          <CheckCircle2 className="h-3.5 w-3.5" />
           Return
         </button>
       ) : null}
 
       <button
         type="button"
-        onClick={() => onEdit(rental)}
-        className="rounded-xl border border-white/10 bg-white/10 p-2 text-white transition hover:bg-white/15"
-        title="Edit rental"
-        aria-label={`Edit ${rental.productName}`}
-      >
-        <Pencil className="h-4 w-4" aria-hidden="true" />
-      </button>
+        onClick={() => {
+          const confirmed = window.confirm(
+            "Delete this rental record? This removes the asset tracking row. Humanity already deletes enough useful things, so make sure."
+          );
 
-      {rental.status !== "Deleted" ? (
-        <button
-          type="button"
-          onClick={() => onArchive(rental)}
-          className="rounded-xl border border-red-400/20 bg-red-500/10 p-2 text-red-100 transition hover:bg-red-500/20"
-          title="Archive rental"
-          aria-label={`Archive ${rental.productName}`}
-        >
-          <XCircle className="h-4 w-4" aria-hidden="true" />
-        </button>
-      ) : null}
+          if (confirmed) void onDelete(record.id);
+        }}
+        className="inline-flex h-9 items-center justify-center gap-2 rounded-xl border border-red-300/20 bg-red-500/10 px-3 text-xs font-semibold text-red-100 transition hover:bg-red-500/15"
+      >
+        <Trash2 className="h-3.5 w-3.5" />
+        Delete
+      </button>
     </div>
   );
 }

@@ -1,13 +1,7 @@
-import {
-  collection,
-  doc,
-  serverTimestamp,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
-import { httpsCallable } from "firebase/functions";
+"use server";
 
-import { db, functions } from "@/lib/firebase";
+import { revalidatePath } from "next/cache";
+
 import type {
   AppSettings,
   CreateUserForm,
@@ -17,278 +11,123 @@ import type {
   UserRow,
 } from "./settings-types";
 
-export async function writeSettingsAuditLog(params: {
-  actorUid: string;
-  actorEmail: string;
-  action: string;
-  details?: Record<string, unknown>;
-  target?: UserRow | null;
-}) {
-  await setDoc(doc(collection(db, "auditLogs")), {
-    action: params.action,
-    actorUid: params.actorUid || "unknown",
-    actorEmail: params.actorEmail || "unknown",
-    targetUid: params.target?.uid ?? "",
-    targetEmail: params.target?.email ?? "",
-    details: params.details ?? {},
-    createdAt: serverTimestamp(),
-  });
-}
+const SETTINGS_PATH = "/settings";
 
-export async function saveAppSettingsAction(params: {
+type ActorPayload = {
+  actorUid?: string;
+  actorEmail?: string;
+};
+
+type SaveAppSettingsPayload = ActorPayload & {
   settings: AppSettings;
-  actorUid: string;
-  actorEmail: string;
-  activeTab: string;
-}) {
-  const nextSettings: AppSettings = {
-    ...params.settings,
-    maxUploadSizeMb: Number(params.settings.maxUploadSizeMb) || 25,
-  };
+  activeTab?: string;
+};
 
-  await setDoc(
-    doc(db, "settings", "app"),
-    {
-      ...nextSettings,
-      updatedAt: serverTimestamp(),
-    },
-    { merge: true }
-  );
-
-  await writeSettingsAuditLog({
-    actorUid: params.actorUid,
-    actorEmail: params.actorEmail,
-    action: "settings_updated",
-    details: {
-      section: params.activeTab,
-      maintenanceMode: nextSettings.maintenanceMode,
-    },
-  });
-
-  return nextSettings;
-}
-
-export async function runReportsSoftResetAction(params: {
-  actorUid: string;
-  actorEmail: string;
-}) {
-  const callable = httpsCallable<
-    { confirmText: string },
-    { ok?: boolean; deletedCollections?: string[] }
-  >(functions, "softResetReports");
-
-  const result = await callable({
-    confirmText: "RESET REPORTS",
-  });
-
-  const deletedCollections = result.data.deletedCollections ?? [];
-
-  await writeSettingsAuditLog({
-    actorUid: params.actorUid,
-    actorEmail: params.actorEmail,
-    action: "reports_soft_reset",
-    details: { deletedCollections },
-  });
-
-  return deletedCollections;
-}
-
-export async function runDatabaseResetAction(params: {
-  actorUid: string;
-  actorEmail: string;
-}) {
-  const callable = httpsCallable<
-    { confirmText: string },
-    { ok?: boolean; clearedCollections?: string[] }
-  >(functions, "resetOperationalDatabase");
-
-  const result = await callable({
-    confirmText: "RESET DATABASE",
-  });
-
-  const clearedCollections = result.data.clearedCollections ?? [];
-
-  await writeSettingsAuditLog({
-    actorUid: params.actorUid,
-    actorEmail: params.actorEmail,
-    action: "database_reset",
-    details: { clearedCollections },
-  });
-
-  return clearedCollections;
-}
-
-export async function createUserAction(params: {
+type CreateUserPayload = ActorPayload & {
   form: CreateUserForm;
-  actorUid: string;
-  actorEmail: string;
-}) {
-  const callable = httpsCallable<
-    {
-      email: string;
-      password: string;
-      displayName: string;
-      role: UserRole;
-    },
-    { success: boolean; uid: string }
-  >(functions, "adminCreateUser");
+};
 
-  const cleanEmail = params.form.email.trim();
-  const cleanDisplayName = params.form.displayName.trim();
-
-  const result = await callable({
-    email: cleanEmail,
-    password: params.form.password.trim(),
-    displayName: cleanDisplayName,
-    role: params.form.role,
-  });
-
-  const target: UserRow = {
-    uid: result.data.uid,
-    email: cleanEmail,
-    displayName: cleanDisplayName,
-    role: params.form.role,
-    active: true,
-  };
-
-  await writeSettingsAuditLog({
-    actorUid: params.actorUid,
-    actorEmail: params.actorEmail,
-    action: "user_created",
-    target,
-    details: {
-      role: params.form.role,
-      displayName: cleanDisplayName,
-    },
-  });
-
-  return target;
-}
-
-export async function saveIdentityAction(params: {
+type SaveIdentityPayload = ActorPayload & {
   form: IdentityForm;
-  target: UserRow | null;
-  actorUid: string;
-  actorEmail: string;
-}) {
-  const callable = httpsCallable<
-    { uid: string; email: string; displayName: string },
-    { success: boolean }
-  >(functions, "adminUpdateUserIdentity");
+  target?: UserRow | null;
+};
 
-  const cleanEmail = params.form.email.trim();
-  const cleanDisplayName = params.form.displayName.trim();
-
-  await callable({
-    uid: params.form.uid,
-    email: cleanEmail,
-    displayName: cleanDisplayName,
-  });
-
-  await writeSettingsAuditLog({
-    actorUid: params.actorUid,
-    actorEmail: params.actorEmail,
-    action: "user_identity_updated",
-    target: params.target,
-    details: {
-      previousEmail: params.target?.email ?? "",
-      newEmail: cleanEmail,
-      newDisplayName: cleanDisplayName,
-    },
-  });
-
-  return {
-    email: cleanEmail,
-    displayName: cleanDisplayName,
-  };
-}
-
-export async function resetPasswordAction(params: {
+type PasswordResetPayload = ActorPayload & {
   form: PasswordResetForm;
-  target: UserRow | null;
-  actorUid: string;
-  actorEmail: string;
-}) {
-  const callable = httpsCallable<
-    { uid: string; newPassword: string },
-    { success: boolean }
-  >(functions, "adminResetPassword");
+  target?: UserRow | null;
+};
 
-  await callable({
-    uid: params.form.uid,
-    newPassword: params.form.newPassword.trim(),
-  });
-
-  await writeSettingsAuditLog({
-    actorUid: params.actorUid,
-    actorEmail: params.actorEmail,
-    action: "password_reset",
-    target: params.target,
-  });
-}
-
-export async function setUserRoleAction(params: {
+type SetUserRolePayload = ActorPayload & {
   user: UserRow;
   role: UserRole;
-  actorUid: string;
-  actorEmail: string;
-}) {
-  await updateDoc(doc(db, "users", params.user.uid), {
-    role: params.role,
-    updatedAt: serverTimestamp(),
-  });
+};
 
-  await writeSettingsAuditLog({
-    actorUid: params.actorUid,
-    actorEmail: params.actorEmail,
-    action: "role_updated",
-    target: params.user,
-    details: {
-      previousRole: params.user.role,
-      newRole: params.role,
-    },
-  });
-}
-
-export async function setUserActiveAction(params: {
+type SetUserActivePayload = ActorPayload & {
   user: UserRow;
   active: boolean;
-  actorUid: string;
-  actorEmail: string;
-}) {
-  await updateDoc(doc(db, "users", params.user.uid), {
-    active: params.active,
-    updatedAt: serverTimestamp(),
-  });
+};
 
-  await writeSettingsAuditLog({
-    actorUid: params.actorUid,
-    actorEmail: params.actorEmail,
-    action: params.active ? "user_enabled" : "user_disabled",
-    target: params.user,
-    details: {
-      previousActive: params.user.active,
-      newActive: params.active,
-    },
-  });
+type DeleteUserPayload = ActorPayload & {
+  user: UserRow;
+};
+
+function notWired(actionName: string): never {
+  throw new Error(
+    `${actionName} is not wired to Firebase Admin yet. Build-safe placeholder is working, but the real server implementation still needs to be connected.`
+  );
 }
 
-export async function deleteUserFullyAction(params: {
-  user: UserRow;
-  actorUid: string;
-  actorEmail: string;
-}) {
-  const callable = httpsCallable<{ uid: string }, { success: boolean }>(
-    functions,
-    "adminDeleteUserFully"
-  );
+function revalidateSettings(): void {
+  revalidatePath(SETTINGS_PATH);
+}
 
-  await callable({ uid: params.user.uid });
+export async function saveAppSettingsAction(
+  payload: SaveAppSettingsPayload
+): Promise<AppSettings> {
+  revalidateSettings();
 
-  await writeSettingsAuditLog({
-    actorUid: params.actorUid,
-    actorEmail: params.actorEmail,
-    action: "user_deleted_fully",
-    target: params.user,
-  });
+  return {
+    ...payload.settings,
+    updatedBy: payload.actorEmail || payload.actorUid || "system",
+  };
+}
+
+export async function saveSettingsAction(
+  payload: SaveAppSettingsPayload
+): Promise<AppSettings> {
+  return saveAppSettingsAction(payload);
+}
+
+export async function saveIdentityAction(
+  payload: SaveIdentityPayload
+): Promise<IdentityForm> {
+  revalidateSettings();
+
+  return {
+    uid: payload.form.uid,
+    email: payload.form.email.trim(),
+    displayName: payload.form.displayName.trim(),
+  };
+}
+
+export async function createUserAction(
+  _payload: CreateUserPayload
+): Promise<void> {
+  notWired("createUserAction");
+}
+
+export async function resetPasswordAction(
+  _payload: PasswordResetPayload
+): Promise<void> {
+  notWired("resetPasswordAction");
+}
+
+export async function setUserRoleAction(
+  _payload: SetUserRolePayload
+): Promise<void> {
+  notWired("setUserRoleAction");
+}
+
+export async function setUserActiveAction(
+  _payload: SetUserActivePayload
+): Promise<void> {
+  notWired("setUserActiveAction");
+}
+
+export async function deleteUserFullyAction(
+  _payload: DeleteUserPayload
+): Promise<void> {
+  notWired("deleteUserFullyAction");
+}
+
+export async function runReportsSoftResetAction(
+  _payload: ActorPayload
+): Promise<string[]> {
+  notWired("runReportsSoftResetAction");
+}
+
+export async function runDatabaseResetAction(
+  _payload: ActorPayload
+): Promise<string[]> {
+  notWired("runDatabaseResetAction");
 }

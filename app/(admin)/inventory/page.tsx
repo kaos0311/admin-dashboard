@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 
 import toast from "react-hot-toast";
 
-import BarcodeScannerModal from "@/app/components/barcode/BarcodeScannerModal";
+import BarcodeScannerModal from "@/app/components/barcode-scanner/BarcodeScannerModal";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 
 import { normalizeBarcode } from "@/lib/barcode";

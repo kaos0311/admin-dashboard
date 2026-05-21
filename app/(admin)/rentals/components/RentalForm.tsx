@@ -1,317 +1,240 @@
-"use client";
-
-import { Loader2, Pencil, Plus, Save } from "lucide-react";
-
+import type { Dispatch, SetStateAction } from "react";
+import { Loader2, Plus, Save, X } from "lucide-react";
+import {
+  RENTAL_CONDITIONS,
+  RENTAL_STATUSES,
+} from "../rentals-constants";
 import type {
-  BillingCycle,
-  DeliveryStatus,
-  ProductOption,
-  RentalForm as RentalFormType,
+  RentalCondition,
+  RentalFormState,
+  RentalProductOption,
   RentalStatus,
-} from "../types/rentalTypes";
-
-import { money } from "../utils/rentalCalculations";
-
-import { SelectField } from "../fields/SelectField";
-import { TextInput } from "../fields/TextInput";
-import { Textarea } from "../fields/Textarea";
+} from "../rentals-types";
+import { SelectField } from "./fields/SelectField";
+import { Textarea } from "./fields/Textarea";
+import { TextInput } from "./fields/TextInput";
+import { GlassCard } from "./shared/GlassCard";
+import { SectionHeader } from "./shared/SectionHeader";
 
 type RentalFormProps = {
-  form: RentalFormType;
-  products: ProductOption[];
+  form: RentalFormState;
+  setForm: Dispatch<SetStateAction<RentalFormState>>;
+  editingId: string | null;
   saving: boolean;
-  canWrite: boolean;
-  previewMonthsUsed: number;
-  previewTotalCharges: number;
-  onSubmit: (event: React.FormEvent<HTMLFormElement>) => void;
-  onReset: () => void;
-  updateForm: <K extends keyof RentalFormType>(
-    key: K,
-    value: RentalFormType[K]
-  ) => void;
-  applyProduct: (productId: string) => void;
+  products: RentalProductOption[];
+  productsLoading: boolean;
+  onSave: () => Promise<void>;
+  onCancel: () => void;
 };
 
 export function RentalForm({
   form,
-  products,
+  setForm,
+  editingId,
   saving,
-  canWrite,
-  previewMonthsUsed,
-  previewTotalCharges,
-  onSubmit,
-  onReset,
-  updateForm,
-  applyProduct,
+  products,
+  productsLoading,
+  onSave,
+  onCancel,
 }: RentalFormProps) {
+  function updateForm<Key extends keyof RentalFormState>(
+    key: Key,
+    value: RentalFormState[Key]
+  ) {
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+    }));
+  }
+
+  function handleProductSelect(productId: string) {
+    const product = products.find((item) => item.id === productId);
+
+    setForm((current) => ({
+      ...current,
+      productId,
+      productName: product?.name ?? current.productName,
+    }));
+  }
+
   return (
-    <form
-      onSubmit={onSubmit}
-      className="rounded-3xl border border-white/10 bg-white/[0.07] p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl"
-    >
-      <div className="mb-5 flex items-center gap-3">
-        <div className="rounded-2xl border border-white/10 bg-white/10 p-3 shadow-inner shadow-white/10">
-          {form.id ? (
-            <Pencil className="h-5 w-5" aria-hidden="true" />
-          ) : (
-            <Plus className="h-5 w-5" aria-hidden="true" />
-          )}
-        </div>
+    <GlassCard>
+      <SectionHeader
+        eyebrow="Rental control"
+        title={editingId ? "Edit Rental Asset" : "Add Rental Asset"}
+        description="Create or update rental assets with enough detail to keep accountability tight. Back in my day, this was a clipboard and somebody yelling across the warehouse. This is slightly less cursed."
+      />
 
-        <div>
-          <h2 className="text-xl font-bold text-white">
-            {form.id ? "Edit Rental" : "Add Rental"}
-          </h2>
+      <div className="mt-6 grid gap-4 lg:grid-cols-4">
+        <label className="block lg:col-span-2" htmlFor="rental-product">
+          <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+            Product
+          </span>
 
-          <p className="text-sm text-slate-400">
-            Billing updates automatically from rental dates because calculators
-            are apparently still useful in 2026.
-          </p>
-        </div>
-      </div>
+          <select
+            id="rental-product"
+            value={form.productId}
+            onChange={(event) => handleProductSelect(event.target.value)}
+            aria-label="Rental product"
+            className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:bg-black/40 focus:ring-4 focus:ring-cyan-400/10"
+          >
+            <option value="" className="bg-slate-950">
+              {productsLoading ? "Loading products..." : "Select product"}
+            </option>
 
-      <div className="space-y-4">
-        <SelectField
-          label="Rental Product"
-          value={form.productId}
-          onChange={applyProduct}
-          options={[
-            { value: "", label: "Manual / unlinked product" },
-            ...products.map((product) => ({
-              value: product.id,
-              label: `${product.name}${
-                product.sku ? ` • ${product.sku}` : ""
-              }`,
-            })),
-          ]}
-        />
+            {products.map((product) => (
+              <option
+                key={product.id}
+                value={product.id}
+                className="bg-slate-950"
+              >
+                {product.name}
+                {product.hcpcs ? ` • ${product.hcpcs}` : ""}
+              </option>
+            ))}
+          </select>
+        </label>
 
         <TextInput
+          id="rental-product-name"
           label="Product Name"
           value={form.productName}
-          onChange={(value: string) => updateForm("productName", value)}
+          onChange={(value) => updateForm("productName", value)}
+          placeholder="Manual product name"
           required
         />
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextInput
-            label="Category"
-            value={form.category}
-            onChange={(value: string) => updateForm("category", value)}
-          />
-
-          <TextInput
-            label="SKU"
-            value={form.sku}
-            onChange={(value: string) => updateForm("sku", value)}
-          />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextInput
-            label="Serial Number"
-            value={form.serialNumber}
-            onChange={(value: string) => updateForm("serialNumber", value)}
-          />
-
-          <TextInput
-            label="Lot Number"
-            value={form.lotNumber}
-            onChange={(value: string) => updateForm("lotNumber", value)}
-          />
-        </div>
+        <TextInput
+          id="rental-monthly-rate"
+          label="Monthly Rate"
+          type="number"
+          value={form.monthlyRate}
+          onChange={(value) => updateForm("monthlyRate", Number(value))}
+          placeholder="0.00"
+        />
 
         <TextInput
-          label="Customer Name"
-          value={form.customerName}
-          onChange={(value: string) => updateForm("customerName", value)}
+          id="rental-serial-number"
+          label="Serial Number"
+          value={form.serialNumber}
+          onChange={(value) => updateForm("serialNumber", value)}
+          placeholder="Serial number"
         />
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextInput
-            label="Patient Name"
-            value={form.patientName}
-            onChange={(value: string) => updateForm("patientName", value)}
-          />
-
-          <TextInput
-            label="Patient ID"
-            value={form.patientId}
-            onChange={(value: string) => updateForm("patientId", value)}
-          />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextInput
-            label="Payer Name"
-            value={form.payerName}
-            onChange={(value: string) => updateForm("payerName", value)}
-          />
-
-          <TextInput
-            label="Insurance Type"
-            value={form.insuranceType}
-            onChange={(value: string) => updateForm("insuranceType", value)}
-          />
-        </div>
 
         <TextInput
-          label="Authorization Number"
-          value={form.authorizationNumber}
-          onChange={(value: string) => updateForm("authorizationNumber", value)}
+          id="rental-asset-tag"
+          label="Asset Tag"
+          value={form.assetTag}
+          onChange={(value) => updateForm("assetTag", value)}
+          placeholder="Asset tag"
         />
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextInput
-            label="Start Date"
-            type="date"
-            value={form.rentalStartDate}
-            onChange={(value: string) => updateForm("rentalStartDate", value)}
-            required
-          />
-
-          <TextInput
-            label="End Date"
-            type="date"
-            value={form.rentalEndDate}
-            onChange={(value: string) => updateForm("rentalEndDate", value)}
-          />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextInput
-            label="Monthly Rate"
-            type="number"
-            value={form.monthlyRate}
-            onChange={(value: string) => updateForm("monthlyRate", value)}
-          />
-
-          <SelectField
-            label="Billing Cycle"
-            value={form.billingCycle}
-            onChange={(value: string) =>
-              updateForm("billingCycle", value as BillingCycle)
-            }
-            options={[
-              { value: "Monthly", label: "Monthly" },
-              { value: "Weekly", label: "Weekly" },
-              { value: "Daily", label: "Daily" },
-            ]}
-          />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <SelectField
-            label="Rental Status"
-            value={form.status}
-            onChange={(value: string) =>
-              updateForm("status", value as RentalStatus)
-            }
-            options={[
-              { value: "Active", label: "Active" },
-              { value: "Returned", label: "Returned" },
-              { value: "Past Due", label: "Past Due" },
-              { value: "Cancelled", label: "Cancelled" },
-            ]}
-          />
-
-          <SelectField
-            label="Delivery Status"
-            value={form.deliveryStatus}
-            onChange={(value: string) =>
-              updateForm("deliveryStatus", value as DeliveryStatus)
-            }
-            options={[
-              { value: "Not Scheduled", label: "Not Scheduled" },
-              { value: "Scheduled", label: "Scheduled" },
-              { value: "Delivered", label: "Delivered" },
-              {
-                value: "Pickup Scheduled",
-                label: "Pickup Scheduled",
-              },
-              { value: "Picked Up", label: "Picked Up" },
-              { value: "Cleaning", label: "Cleaning" },
-              { value: "Ready", label: "Ready" },
-            ]}
-          />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextInput
-            label="Delivery Date"
-            type="date"
-            value={form.deliveryDate}
-            onChange={(value: string) => updateForm("deliveryDate", value)}
-          />
-
-          <TextInput
-            label="Pickup Date"
-            type="date"
-            value={form.pickupDate}
-            onChange={(value: string) => updateForm("pickupDate", value)}
-          />
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2">
-          <TextInput
-            label="Location / Bin"
-            value={form.location}
-            onChange={(value: string) => updateForm("location", value)}
-          />
-
-          <TextInput
-            label="Assigned To"
-            value={form.assignedTo}
-            onChange={(value: string) => updateForm("assignedTo", value)}
-          />
-        </div>
-
-        <Textarea
-          label="Notes"
-          value={form.notes}
-          onChange={(value: string) => updateForm("notes", value)}
-          placeholder="Optional rental notes, delivery details, pickup notes, or billing context."
+        <SelectField<RentalStatus>
+          id="rental-status"
+          label="Status"
+          value={form.status}
+          options={RENTAL_STATUSES}
+          onChange={(value) => updateForm("status", value)}
+          required
         />
 
-        <div className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-slate-300">
-          Rental time:{" "}
-          <span className="font-semibold text-white">
-            {previewMonthsUsed.toLocaleString()} month
-            {previewMonthsUsed === 1 ? "" : "s"}
-          </span>
+        <SelectField<RentalCondition>
+          id="rental-condition"
+          label="Condition"
+          value={form.condition}
+          options={RENTAL_CONDITIONS}
+          onChange={(value) => updateForm("condition", value)}
+          required
+        />
 
-          {" • "}
+        <TextInput
+          id="rental-patient-name"
+          label="Patient Name"
+          value={form.patientName}
+          onChange={(value) => updateForm("patientName", value)}
+          placeholder="Assigned patient"
+        />
 
-          Total charges:{" "}
-          <span className="font-semibold text-white">
-            {money(previewTotalCharges)}
-          </span>
-        </div>
+        <TextInput
+          id="rental-patient-id"
+          label="Patient ID"
+          value={form.patientId}
+          onChange={(value) => updateForm("patientId", value)}
+          placeholder="Brightree / internal ID"
+        />
 
-        <div className="flex gap-3">
-          <button
-            type="submit"
-            disabled={saving || !canWrite}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            {saving ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4" />
-            )}
+        <TextInput
+          id="rental-location"
+          label="Location"
+          value={form.location}
+          onChange={(value) => updateForm("location", value)}
+          placeholder="Warehouse, branch, patient home"
+        />
 
-            Save Rental
-          </button>
+        <TextInput
+          id="rental-checkout-date"
+          label="Checked Out"
+          type="date"
+          value={form.checkedOutDate}
+          onChange={(value) => updateForm("checkedOutDate", value)}
+        />
 
-          <button
-            type="button"
-            onClick={onReset}
-            className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-white transition hover:bg-white/15"
-          >
-            Clear
-          </button>
+        <TextInput
+          id="rental-expected-return"
+          label="Expected Return"
+          type="date"
+          value={form.expectedReturnDate}
+          onChange={(value) => updateForm("expectedReturnDate", value)}
+        />
+
+        <TextInput
+          id="rental-returned-date"
+          label="Returned Date"
+          type="date"
+          value={form.returnedDate}
+          onChange={(value) => updateForm("returnedDate", value)}
+        />
+
+        <div className="lg:col-span-4">
+          <Textarea
+            id="rental-notes"
+            label="Notes"
+            value={form.notes}
+            onChange={(value) => updateForm("notes", value)}
+            placeholder="Service notes, patient assignment details, damage notes, return issues..."
+          />
         </div>
       </div>
-    </form>
+
+      <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+        {editingId ? (
+          <button
+            type="button"
+            onClick={onCancel}
+            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08]"
+          >
+            <X className="h-4 w-4" />
+            Cancel
+          </button>
+        ) : null}
+
+        <button
+          type="button"
+          onClick={onSave}
+          disabled={saving}
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 text-sm font-bold text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {saving ? (
+            <Loader2 className="h-4 w-4 animate-spin" />
+          ) : editingId ? (
+            <Save className="h-4 w-4" />
+          ) : (
+            <Plus className="h-4 w-4" />
+          )}
+
+          {editingId ? "Save Changes" : "Add Rental"}
+        </button>
+      </div>
+    </GlassCard>
   );
 }

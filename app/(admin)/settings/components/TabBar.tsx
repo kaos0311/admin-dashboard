@@ -1,69 +1,37 @@
-"use client";
-
 import type { ReactNode } from "react";
-import {
-  Building2,
-  Lock,
-  ShieldAlert,
-  SlidersHorizontal,
-  Users,
-} from "lucide-react";
+import type { SettingsTabKey } from "../settings-types";
+import { glassPanel } from "../styles/glass";
 
-import type { TabKey } from "../settings-types";
+type TabItem = {
+  key: SettingsTabKey;
+  label: string;
+  icon?: ReactNode;
+};
 
-export function TabBar({
-  activeTab,
-  onChange,
-}: {
-  activeTab: TabKey;
-  onChange: (tab: TabKey) => void;
-}) {
-  const tabs: Array<{ key: TabKey; label: string; icon: ReactNode }> = [
-    {
-      key: "company",
-      label: "Company",
-      icon: <Building2 className="h-4 w-4" />,
-    },
-    {
-      key: "preferences",
-      label: "Preferences",
-      icon: <SlidersHorizontal className="h-4 w-4" />,
-    },
-    {
-      key: "users",
-      label: "Users",
-      icon: <Users className="h-4 w-4" />,
-    },
-    {
-      key: "security",
-      label: "Security",
-      icon: <Lock className="h-4 w-4" />,
-    },
-    {
-      key: "danger",
-      label: "Danger Zone",
-      icon: <ShieldAlert className="h-4 w-4" />,
-    },
-  ];
+type TabBarProps = {
+  tabs: TabItem[];
+  activeTab: SettingsTabKey;
+  onChange: (tab: SettingsTabKey) => void;
+};
 
+export function TabBar({ tabs, activeTab, onChange }: TabBarProps) {
   return (
-    <div className="overflow-x-auto rounded-2xl border border-white/10 bg-[#0b1220] p-2">
-      <div className="flex min-w-max gap-2">
+    <nav className={`${glassPanel} p-2`} aria-label="Settings sections">
+      <div className="flex flex-wrap gap-2">
         {tabs.map((tab) => {
-          const active = activeTab === tab.key;
+          const active = tab.key === activeTab;
 
           return (
             <button
               key={tab.key}
               type="button"
-              title={tab.label}
-              aria-label={tab.label}
               onClick={() => onChange(tab.key)}
-              className={`inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium transition ${
+              className={[
+                "inline-flex h-10 items-center gap-2 rounded-2xl px-4 text-sm font-semibold transition",
                 active
-                  ? "bg-cyan-500/15 text-cyan-300"
-                  : "text-zinc-400 hover:bg-white/5 hover:text-white"
-              }`}
+                  ? "border border-cyan-300/50 bg-cyan-300/15 text-cyan-100 shadow-lg shadow-cyan-950/25"
+                  : "border border-transparent text-slate-400 hover:bg-white/[0.06] hover:text-slate-100",
+              ].join(" ")}
             >
               {tab.icon}
               {tab.label}
@@ -71,6 +39,6 @@ export function TabBar({
           );
         })}
       </div>
-    </div>
+    </nav>
   );
 }

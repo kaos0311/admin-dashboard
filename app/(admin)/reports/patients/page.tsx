@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import Link from "next/link";
 import {
   collection,
@@ -25,6 +25,8 @@ import {
 
 import OpenUploadCenterButton from "@/app/components/reports/OpenUploadCenterButton";
 import { db } from "@/lib/firebase";
+
+type FilterMode = "all" | "hospice" | "cpap" | "wip" | "birthday";
 
 type PatientProfile = {
   patientId?: string;
@@ -173,7 +175,14 @@ function asNumber(value: unknown): number {
 }
 
 function asBoolean(value: unknown): boolean {
-  return value === true;
+  if (value === true) return true;
+
+  if (typeof value === "string") {
+    const normalized = value.trim().toLowerCase();
+    return normalized === "true" || normalized === "yes" || normalized === "y";
+  }
+
+  return false;
 }
 
 function asStringArray(value: unknown): string[] {
@@ -188,6 +197,7 @@ function asArray<T>(value: unknown): T[] {
 
 function money(value: unknown): string {
   const number = asNumber(value);
+
   return number.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
@@ -195,15 +205,18 @@ function money(value: unknown): string {
 }
 
 function mapPatientDoc(id: string, data: DocumentData): Patient {
+  const firstName = asString(data.firstName);
+  const lastName = asString(data.lastName);
+
   const fullName =
     asString(data.fullName) ||
-    [asString(data.firstName), asString(data.lastName)].filter(Boolean).join(" ") ||
+    [firstName, lastName].filter(Boolean).join(" ") ||
     "Unnamed Patient";
 
   return {
     id,
-    firstName: asString(data.firstName),
-    lastName: asString(data.lastName),
+    firstName,
+    lastName,
     fullName,
     normalizedFullName: asString(data.normalizedFullName),
     sourceFullName: asString(data.sourceFullName),
@@ -221,7 +234,9 @@ function mapPatientDoc(id: string, data: DocumentData): Patient {
     nextAge: typeof data.nextAge === "number" ? data.nextAge : null,
     nextBirthdayIso: asString(data.nextBirthdayIso),
     daysUntilBirthday:
-      typeof data.daysUntilBirthday === "number" ? data.daysUntilBirthday : null,
+      typeof data.daysUntilBirthday === "number"
+        ? data.daysUntilBirthday
+        : null,
 
     phone: asString(data.phone),
     email: asString(data.email),
@@ -258,11 +273,11 @@ function StatCard({
 }: {
   title: string;
   value: string | number;
-  icon: React.ReactNode;
+  icon: ReactNode;
   subtext: string;
 }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.03] p-5 shadow-2xl shadow-black/20">
+    <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 backdrop-blur-xl">
       <div className="flex items-center justify-between gap-3">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
@@ -271,7 +286,7 @@ function StatCard({
           <p className="mt-2 text-2xl font-bold text-white">{value}</p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-zinc-300">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3 text-zinc-300">
           {icon}
         </div>
       </div>
@@ -285,16 +300,17 @@ function Badge({
   children,
   tone = "default",
 }: {
-  children: React.ReactNode;
+  children: ReactNode;
   tone?: "default" | "blue" | "green" | "yellow" | "red";
 }) {
-  const classes = {
-    default: "border-white/10 bg-white/[0.04] text-zinc-300",
-    blue: "border-blue-400/20 bg-blue-500/10 text-blue-200",
-    green: "border-emerald-400/20 bg-emerald-500/10 text-emerald-200",
-    yellow: "border-yellow-400/20 bg-yellow-500/10 text-yellow-200",
-    red: "border-red-400/20 bg-red-500/10 text-red-200",
-  };
+  const classes: Record<NonNullable<Parameters<typeof Badge>[0]["tone"]>, string> =
+    {
+      default: "border-white/10 bg-white/[0.04] text-zinc-300",
+      blue: "border-blue-400/20 bg-blue-500/10 text-blue-200",
+      green: "border-emerald-400/20 bg-emerald-500/10 text-emerald-200",
+      yellow: "border-yellow-400/20 bg-yellow-500/10 text-yellow-200",
+      red: "border-red-400/20 bg-red-500/10 text-red-200",
+    };
 
   return (
     <span
@@ -313,10 +329,16 @@ function PatientCard({ patient }: { patient: Patient }) {
 
   const location = [patient.city, patient.state].filter(Boolean).join(", ");
 
+  const equipmentCount =
+    patient.currentEquipmentCount || patient.currentEquipment?.length || 0;
+
+  const purchaseCount =
+    patient.purchasesLast90DaysCount || patient.purchasesLast90Days?.length || 0;
+
   return (
     <Link
       href={`/reports/patients/${patient.id}`}
-      className="group block rounded-3xl border border-white/10 bg-neutral-950 p-5 transition hover:border-blue-400/40 hover:bg-neutral-900"
+      className="group block rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-xl shadow-black/20 backdrop-blur-xl transition hover:border-blue-400/40 hover:bg-white/[0.06]"
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
@@ -344,20 +366,14 @@ function PatientCard({ patient }: { patient: Patient }) {
         </div>
 
         <div className="grid grid-cols-2 gap-2 text-right text-xs text-zinc-400 lg:min-w-72">
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
             <p className="text-zinc-500">Equipment</p>
-            <p className="mt-1 text-lg font-bold text-white">
-              {patient.currentEquipmentCount || patient.currentEquipment?.length || 0}
-            </p>
+            <p className="mt-1 text-lg font-bold text-white">{equipmentCount}</p>
           </div>
 
-          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
             <p className="text-zinc-500">Purchases</p>
-            <p className="mt-1 text-lg font-bold text-white">
-              {patient.purchasesLast90DaysCount ||
-                patient.purchasesLast90Days?.length ||
-                0}
-            </p>
+            <p className="mt-1 text-lg font-bold text-white">{purchaseCount}</p>
           </div>
         </div>
       </div>
@@ -394,9 +410,7 @@ function PatientCard({ patient }: { patient: Patient }) {
 export default function PatientsReportPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [search, setSearch] = useState("");
-  const [filterMode, setFilterMode] = useState<
-    "all" | "hospice" | "cpap" | "wip" | "birthday"
-  >("all");
+  const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -412,12 +426,15 @@ export default function PatientsReportPage() {
     const unsubscribe = onSnapshot(
       patientsQuery,
       (snapshot) => {
-        const rows = snapshot.docs.map((doc) => mapPatientDoc(doc.id, doc.data()));
+        const rows = snapshot.docs.map((doc) =>
+          mapPatientDoc(doc.id, doc.data())
+        );
+
         setPatients(rows);
         setError(null);
         setLoading(false);
       },
-      (err) => {
+      (err: Error) => {
         console.error("Failed to load patients", err);
         setError(err.message || "Failed to load patients.");
         setLoading(false);
@@ -445,6 +462,7 @@ export default function PatientsReportPage() {
         patient.patientSnapshot,
         patient.snapshot,
       ]
+        .filter(Boolean)
         .join(" ")
         .toLowerCase();
 
@@ -482,9 +500,9 @@ export default function PatientsReportPage() {
   }, [patients]);
 
   return (
-    <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6">
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.12),_transparent_28%),#020617] px-4 py-6 text-white md:px-6">
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-neutral-950 via-neutral-950 to-blue-950/30 p-6 shadow-2xl shadow-black/30">
+        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <div className="inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-200">
@@ -543,7 +561,7 @@ export default function PatientsReportPage() {
           />
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-neutral-950 p-5">
+        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-xl shadow-black/20 backdrop-blur-xl">
           <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative flex-1">
               <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -551,19 +569,17 @@ export default function PatientsReportPage() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search patients by name, DOB, phone, city, insurance..."
-                className="w-full rounded-2xl border border-white/10 bg-black px-11 py-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-blue-400/50"
+                className="w-full rounded-2xl border border-white/10 bg-black/30 px-11 py-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-blue-400/50"
               />
             </div>
 
             <select
               value={filterMode}
               onChange={(event) =>
-                setFilterMode(
-                  event.target.value as "all" | "hospice" | "cpap" | "wip" | "birthday"
-                )
+                setFilterMode(event.target.value as FilterMode)
               }
               aria-label="Filter patients"
-              className="rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none focus:border-blue-400/50"
+              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-blue-400/50"
             >
               <option value="all">All Patients</option>
               <option value="hospice">Hospice</option>
@@ -587,13 +603,13 @@ export default function PatientsReportPage() {
         )}
 
         {loading && (
-          <section className="rounded-3xl border border-white/10 bg-neutral-950 p-8 text-center text-zinc-400">
+          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center text-zinc-400 backdrop-blur-xl">
             Loading patients from Firestore...
           </section>
         )}
 
         {!loading && !error && filteredPatients.length === 0 && (
-          <section className="rounded-3xl border border-white/10 bg-neutral-950 p-8 text-center">
+          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center backdrop-blur-xl">
             <Package className="mx-auto h-8 w-8 text-zinc-600" />
             <h2 className="mt-3 text-lg font-semibold text-white">
               No patients found

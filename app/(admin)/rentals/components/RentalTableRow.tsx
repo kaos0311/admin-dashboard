@@ -1,98 +1,75 @@
-"use client";
-
-import type { Rental } from "../types/rentalTypes";
-import { money } from "../utils/rentalCalculations";
-import { statusClass } from "../utils/rentalStyles";
+import type { RentalRecord } from "../rentals-types";
+import {
+  formatCondition,
+  formatCurrency,
+  formatDate,
+  formatStatus,
+} from "../utils/formatters";
 import { RentalActions } from "./RentalActions";
 
 type RentalTableRowProps = {
-  rental: Rental;
-  onEdit: (rental: Rental) => void;
-  onReturn: (rental: Rental) => void;
-  onArchive: (rental: Rental) => void;
+  record: RentalRecord;
+  onEdit: (record: RentalRecord) => void;
+  onDelete: (recordId: string) => Promise<void>;
+  onMarkReturned: (recordId: string) => Promise<void>;
 };
 
 export function RentalTableRow({
-  rental,
+  record,
   onEdit,
-  onReturn,
-  onArchive,
+  onDelete,
+  onMarkReturned,
 }: RentalTableRowProps) {
   return (
-    <tr className="border-t border-white/10 align-top transition hover:bg-white/[0.04]">
-      <td className="px-4 py-3">
-        <div className="font-semibold text-white">{rental.productName}</div>
-        <div className="text-xs text-slate-500">
-          {rental.category || "No category"}
-          {rental.sku ? ` • ${rental.sku}` : ""}
-        </div>
-        <div className="text-xs text-slate-500">
-          SN: {rental.serialNumber || "-"} • Lot: {rental.lotNumber || "-"}
+    <tr className="border-b border-white/10 transition hover:bg-white/[0.035]">
+      <td className="px-4 py-4 align-top">
+        <div>
+          <p className="font-semibold text-white">{record.productName}</p>
+          <p className="mt-1 text-xs text-slate-500">
+            SN: {record.serialNumber || "—"} · Asset: {record.assetTag || "—"}
+          </p>
         </div>
       </td>
 
-      <td className="px-4 py-3 text-slate-300">
-        <div>{rental.customerName || "-"}</div>
-        <div className="text-xs text-slate-500">
-          Patient: {rental.patientName || "-"}
-        </div>
-        <div className="text-xs text-slate-500">
-          ID: {rental.patientId || "-"}
-        </div>
+      <td className="px-4 py-4 align-top">
+        <p className="text-sm text-slate-200">{record.patientName || "—"}</p>
+        <p className="mt-1 text-xs text-slate-500">
+          ID: {record.patientId || "—"}
+        </p>
       </td>
 
-      <td className="px-4 py-3 text-slate-300">
-        <div>{rental.payerName || "-"}</div>
-        <div className="text-xs text-slate-500">
-          {rental.insuranceType || "No insurance type"}
-        </div>
-        <div className="text-xs text-slate-500">
-          Auth: {rental.authorizationNumber || "-"}
-        </div>
-      </td>
-
-      <td className="px-4 py-3 text-slate-300">
-        <div>Start: {rental.rentalStartDate || "-"}</div>
-        <div>End: {rental.rentalEndDate || "Active"}</div>
-      </td>
-
-      <td className="px-4 py-3 text-right text-slate-300">
-        {rental.monthsUsed.toLocaleString()}
-      </td>
-
-      <td className="px-4 py-3 text-right">
-        <div className="font-semibold text-white">{money(rental.totalCharges)}</div>
-        <div className="text-xs text-slate-500">
-          {money(rental.monthlyRate)} / {rental.billingCycle}
-        </div>
-      </td>
-
-      <td className="px-4 py-3">
-        <span
-          className={`rounded-full border px-3 py-1 text-xs font-semibold ${statusClass(
-            rental.status
-          )}`}
-        >
-          {rental.status}
+      <td className="px-4 py-4 align-top">
+        <span className="rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs font-semibold text-cyan-100">
+          {formatStatus(record.status)}
         </span>
       </td>
 
-      <td className="px-4 py-3 text-slate-300">
-        <div>{rental.deliveryStatus}</div>
-        <div className="text-xs text-slate-500">
-          Delivery: {rental.deliveryDate || "-"}
-        </div>
-        <div className="text-xs text-slate-500">
-          Pickup: {rental.pickupDate || "-"}
+      <td className="px-4 py-4 align-top text-sm text-slate-300">
+        {formatCondition(record.condition)}
+      </td>
+
+      <td className="px-4 py-4 align-top text-sm text-slate-300">
+        {record.location || "—"}
+      </td>
+
+      <td className="px-4 py-4 align-top text-sm text-slate-300">
+        <div className="space-y-1">
+          <p>Out: {formatDate(record.checkedOutDate)}</p>
+          <p>Due: {formatDate(record.expectedReturnDate)}</p>
+          <p>Back: {formatDate(record.returnedDate)}</p>
         </div>
       </td>
 
-      <td className="px-4 py-3">
+      <td className="px-4 py-4 align-top text-sm font-semibold text-white">
+        {formatCurrency(record.monthlyRate)}
+      </td>
+
+      <td className="px-4 py-4 align-top">
         <RentalActions
-          rental={rental}
+          record={record}
           onEdit={onEdit}
-          onReturn={onReturn}
-          onArchive={onArchive}
+          onDelete={onDelete}
+          onMarkReturned={onMarkReturned}
         />
       </td>
     </tr>

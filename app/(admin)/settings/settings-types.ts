@@ -1,57 +1,79 @@
+export type SettingsTabKey =
+  | "company"
+  | "preferences"
+  | "users"
+  | "security"
+  | "danger";
+
+export type TabKey = SettingsTabKey;
+
 export type UserRole = "admin" | "staff";
-export type ThemeMode = "light" | "dark" | "system";
-export type TabKey = "company" | "preferences" | "users" | "security" | "danger";
 
-export type HomeScreen =
-  | "/dashboard"
-  | "/dashboard/products"
-  | "/dashboard/orders"
-  | "/dashboard/rentals"
-  | "/dashboard/users"
-  | "/dashboard/settings"
-  | "/dashboard/reports";
+export type UserStatus = "active" | "disabled" | "pending";
 
-export type UserRow = {
-  uid: string;
+export type CompanySettings = {
+  companyName: string;
+  legalName: string;
+  phone: string;
+  fax: string;
   email: string;
-  displayName: string;
-  role: UserRole;
-  active: boolean;
+  website: string;
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  zip: string;
+  timezone: string;
+};
+
+export type PreferenceSettings = {
+  defaultDashboardRoute: string;
+  compactTables: boolean;
+  enableAnimations: boolean;
+  showPhiWarnings: boolean;
+  requireDeleteConfirmations: boolean;
+  autoRefreshMinutes: number;
+};
+
+export type SecuritySettings = {
+  maintenanceMode: boolean;
+  requireAdminForReportsReset: boolean;
+  requireAdminForUserManagement: boolean;
+  auditSettingsChanges: boolean;
+  sessionTimeoutMinutes: number;
+  allowStaffExports: boolean;
 };
 
 export type AppSettings = {
-  companyName: string;
-  companyPhone: string;
-  companyEmail: string;
-  companyAddress: string;
-  defaultTheme: ThemeMode;
-  defaultHomeScreen: HomeScreen;
-  compactTables: boolean;
-  showDashboardCounters: boolean;
-  enableOrderFilters: boolean;
-  enableProductFilters: boolean;
-  enableRentalFilters: boolean;
-  maintenanceMode: boolean;
-  maintenanceMessage: string;
-  allowAdminsDuringMaintenance: boolean;
-  allowedUploadTypes: string;
-  maxUploadSizeMb: number;
-  pdfParsingEnabled: boolean;
-  csvParsingEnabled: boolean;
-  autoIndexAfterUpload: boolean;
-  keepRawUploadsInStorage: boolean;
+  company: CompanySettings;
+  preferences: PreferenceSettings;
+  security: SecuritySettings;
+  updatedAt?: unknown;
+  updatedBy?: string;
 };
+
+export type AdminUser = {
+  id: string;
+  uid: string;
+  email: string;
+  displayName: string;
+  role: UserRole;
+  status: UserStatus;
+  active: boolean;
+  disabled?: boolean;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+  lastLoginAt?: unknown;
+};
+
+export type UserRow = AdminUser;
 
 export type CreateUserForm = {
   email: string;
-  password: string;
   displayName: string;
+  password: string;
   role: UserRole;
-};
-
-export type PasswordResetForm = {
-  uid: string;
-  newPassword: string;
+  active: boolean;
 };
 
 export type IdentityForm = {
@@ -60,10 +82,37 @@ export type IdentityForm = {
   displayName: string;
 };
 
+export type PasswordResetForm = {
+  uid: string;
+  newPassword: string;
+};
+
+export type UserDraft = {
+  email: string;
+  displayName: string;
+  role: UserRole;
+};
+
 export type AuditLogRow = {
   id: string;
   action: string;
   actorEmail: string;
-  targetEmail: string;
-  createdAtText: string;
+  actorName?: string;
+  actorUid?: string;
+  target?: string;
+  targetId?: string;
+  targetEmail?: string;
+  message?: string;
+  collection?: string;
+  documentId?: string;
+  type?: string;
+  createdAt?: unknown;
+  timestamp?: unknown;
+  createdAtText?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type SettingsMessage = {
+  type: "success" | "error" | "info";
+  text: string;
 };

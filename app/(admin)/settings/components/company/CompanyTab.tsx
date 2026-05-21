@@ -1,199 +1,169 @@
-"use client";
+import type { Dispatch, SetStateAction } from "react";
+import type { AppSettings, CompanySettings } from "../../settings-types";
+import { glassPanel } from "../../styles/glass";
+import { Field } from "../shared/Field";
+import { InfoCard } from "../shared/InfoCard";
+import { SectionHeader } from "../shared/SectionHeader";
+import { RecentActivityCard } from "./RecentActivityCard";
 
-import Link from "next/link";
-import type { ReactNode } from "react";
-import { Activity, Building2, ChevronRight } from "lucide-react";
-
-import { inputClass } from "../../settings-constants";
-import type { AppSettings, AuditLogRow } from "../../settings-types";
-
-type Props = {
+type CompanyTabProps = {
   settings: AppSettings;
-  onChange: <K extends keyof AppSettings>(key: K, value: AppSettings[K]) => void;
-  recentActivity: AuditLogRow[];
-  activityLoading: boolean;
+  setSettings: Dispatch<SetStateAction<AppSettings>>;
 };
 
-export function CompanyTab({
-  settings,
-  onChange,
-  recentActivity,
-  activityLoading,
-}: Props) {
+export function CompanyTab({ settings, setSettings }: CompanyTabProps) {
+  function updateCompany<Key extends keyof CompanySettings>(
+    key: Key,
+    value: CompanySettings[Key]
+  ) {
+    setSettings((current) => ({
+      ...current,
+      company: {
+        ...current.company,
+        [key]: value,
+      },
+    }));
+  }
+
   return (
-    <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1fr_420px]">
-      <section className="rounded-2xl border border-white/10 bg-[#0b1220] p-6">
-        <SectionHeader
-          icon={<Building2 className="h-5 w-5 text-cyan-300" />}
-          title="Company Information"
-          description="These values can be reused across invoices, reports, headers, and admin views."
-        />
-
-        <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
-          <Field label="Company Name" id="company-name">
-            <input
-              id="company-name"
-              title="Company Name"
-              aria-label="Company Name"
-              placeholder="Company Name"
-              value={settings.companyName}
-              onChange={(event) => onChange("companyName", event.target.value)}
-              className={inputClass}
-            />
-          </Field>
-
-          <Field label="Company Phone" id="company-phone">
-            <input
-              id="company-phone"
-              title="Company Phone"
-              aria-label="Company Phone"
-              placeholder="Company Phone"
-              value={settings.companyPhone}
-              onChange={(event) => onChange("companyPhone", event.target.value)}
-              className={inputClass}
-            />
-          </Field>
-
-          <Field label="Company Email" id="company-email">
-            <input
-              id="company-email"
-              title="Company Email"
-              aria-label="Company Email"
-              placeholder="Company Email"
-              value={settings.companyEmail}
-              onChange={(event) => onChange("companyEmail", event.target.value)}
-              className={inputClass}
-            />
-          </Field>
-
-          <Field label="Company Address" id="company-address" wide>
-            <textarea
-              id="company-address"
-              title="Company Address"
-              aria-label="Company Address"
-              placeholder="Company Address"
-              rows={4}
-              value={settings.companyAddress}
-              onChange={(event) =>
-                onChange("companyAddress", event.target.value)
-              }
-              className={`${inputClass} resize-none`}
-            />
-          </Field>
-        </div>
-      </section>
-
-      <RecentActivityCard
-        recentActivity={recentActivity}
-        activityLoading={activityLoading}
-      />
-    </div>
-  );
-}
-
-function RecentActivityCard({
-  recentActivity,
-  activityLoading,
-}: {
-  recentActivity: AuditLogRow[];
-  activityLoading: boolean;
-}) {
-  return (
-    <section className="rounded-2xl border border-white/10 bg-[#0b1220] p-6">
+    <section className={`${glassPanel} p-5`}>
       <SectionHeader
-        icon={<Activity className="h-5 w-5 text-cyan-300" />}
-        title="Recent Admin Activity"
-        description="Last few admin actions. Full investigation stays on the Audit Logs page."
+        eyebrow="Company"
+        title="Company Defaults"
+        description="Set business identity, contact information, and location defaults used across operational pages. Boring stuff, until it’s wrong on paperwork and everyone starts acting surprised."
       />
 
-      <div className="mt-5">
-        {activityLoading ? (
-          <div className="rounded-xl border border-white/10 bg-[#07090d] p-4 text-sm text-zinc-400">
-            Loading activity...
-          </div>
-        ) : recentActivity.length === 0 ? (
-          <div className="rounded-xl border border-white/10 bg-[#07090d] p-4 text-sm text-zinc-400">
-            No recent activity found.
-          </div>
-        ) : (
-          <div className="space-y-3">
-            {recentActivity.map((row) => (
-              <div
-                key={row.id}
-                className="rounded-xl border border-white/10 bg-[#07090d] p-4"
-              >
-                <div className="flex items-center justify-between gap-3">
-                  <div className="font-medium text-white">{row.action}</div>
-                  <div className="text-xs text-zinc-500">
-                    {row.createdAtText}
-                  </div>
-                </div>
+      <div className="mt-6 grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 lg:col-span-2">
+          <InfoCard
+            title="Business Identity"
+            description="These values should match how the company should appear internally and on generated operational summaries."
+          >
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field
+                id="company-name"
+                label="Company Name"
+                value={settings.company.companyName}
+                onChange={(value) => updateCompany("companyName", value)}
+                placeholder="Advanced Home Medical"
+              />
 
-                <div className="mt-1 text-xs text-zinc-400">
-                  Actor: {row.actorEmail}
-                </div>
+              <Field
+                id="legal-name"
+                label="Legal Name"
+                value={settings.company.legalName}
+                onChange={(value) => updateCompany("legalName", value)}
+                placeholder="Legal business name"
+              />
 
-                {row.targetEmail ? (
-                  <div className="mt-1 text-xs text-zinc-500">
-                    Target: {row.targetEmail}
-                  </div>
-                ) : null}
+              <Field
+                id="company-website"
+                label="Website"
+                type="url"
+                value={settings.company.website}
+                onChange={(value) => updateCompany("website", value)}
+                placeholder="https://advhomemed.com"
+              />
+
+              <Field
+                id="company-timezone"
+                label="Timezone"
+                value={settings.company.timezone}
+                onChange={(value) => updateCompany("timezone", value)}
+                placeholder="America/Chicago"
+              />
+            </div>
+          </InfoCard>
+
+          <InfoCard title="Contact Information">
+            <div className="grid gap-4 md:grid-cols-2">
+              <Field
+                id="company-phone"
+                label="Phone"
+                type="tel"
+                value={settings.company.phone}
+                onChange={(value) => updateCompany("phone", value)}
+                placeholder="Main phone"
+              />
+
+              <Field
+                id="company-fax"
+                label="Fax"
+                type="tel"
+                value={settings.company.fax}
+                onChange={(value) => updateCompany("fax", value)}
+                placeholder="Fax"
+              />
+
+              <Field
+                id="company-email"
+                label="Email"
+                type="email"
+                value={settings.company.email}
+                onChange={(value) => updateCompany("email", value)}
+                placeholder="office@example.com"
+              />
+            </div>
+          </InfoCard>
+
+          <InfoCard title="Primary Address">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <Field
+                  id="address-line-1"
+                  label="Address Line 1"
+                  value={settings.company.addressLine1}
+                  onChange={(value) => updateCompany("addressLine1", value)}
+                  placeholder="Street address"
+                />
               </div>
-            ))}
-          </div>
-        )}
-      </div>
 
-      <Link
-        href="/audit-logs"
-        className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-cyan-300 hover:text-cyan-200"
-      >
-        View full audit log
-        <ChevronRight className="h-4 w-4" />
-      </Link>
+              <div className="md:col-span-2">
+                <Field
+                  id="address-line-2"
+                  label="Address Line 2"
+                  value={settings.company.addressLine2}
+                  onChange={(value) => updateCompany("addressLine2", value)}
+                  placeholder="Suite, unit, building"
+                />
+              </div>
+
+              <Field
+                id="company-city"
+                label="City"
+                value={settings.company.city}
+                onChange={(value) => updateCompany("city", value)}
+                placeholder="City"
+              />
+
+              <Field
+                id="company-state"
+                label="State"
+                value={settings.company.state}
+                onChange={(value) => updateCompany("state", value)}
+                placeholder="KY"
+              />
+
+              <Field
+                id="company-zip"
+                label="ZIP"
+                value={settings.company.zip}
+                onChange={(value) => updateCompany("zip", value)}
+                placeholder="ZIP code"
+              />
+            </div>
+          </InfoCard>
+        </div>
+
+        <div className="grid content-start gap-4">
+          <RecentActivityCard />
+
+          <InfoCard
+            title="PHI Reminder"
+            description="Do not store patient identifiers in company settings. Keep this section business-only, because compliance mistakes age like milk in a hot truck."
+          />
+        </div>
+      </div>
     </section>
-  );
-}
-
-function SectionHeader({
-  icon,
-  title,
-  description,
-}: {
-  icon: ReactNode;
-  title: string;
-  description?: string;
-}) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="mt-0.5">{icon}</div>
-      <div>
-        <h2 className="text-lg font-semibold">{title}</h2>
-        {description ? (
-          <p className="mt-1 text-sm text-zinc-400">{description}</p>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  id,
-  children,
-  wide = false,
-}: {
-  label: string;
-  id: string;
-  children: ReactNode;
-  wide?: boolean;
-}) {
-  return (
-    <div className={`space-y-2 ${wide ? "md:col-span-2" : ""}`}>
-      <label htmlFor={id} className="text-sm text-zinc-300">
-        {label}
-      </label>
-      {children}
-    </div>
   );
 }
