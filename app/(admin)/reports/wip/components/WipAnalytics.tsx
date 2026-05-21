@@ -2,7 +2,7 @@
 
 import { BarChart3 } from "lucide-react";
 
-import type { WipAnalytics as WipAnalyticsType } from "../types/wip.types";
+import type { WipAnalytics as WipAnalyticsType } from "@/lib/reports/wip";
 
 type WipAnalyticsProps = {
   analytics: WipAnalyticsType;

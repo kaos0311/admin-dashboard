@@ -2,7 +2,7 @@
 
 import { ClipboardList } from "lucide-react";
 
-import type { WipRecord } from "../types/wip.types";
+import type { WipRecord } from "@/lib/reports/wip";
 import { WipStatusBadge } from "./WipStatusBadge";
 
 type WipTableProps = {

@@ -6,8 +6,8 @@ import type {
   WipAgingBucket,
   WipRecord,
   WipStatusFilter,
-} from "../types/wip.types";
-import { filterByAging } from "../utils/wip-aging";
+} from "@/lib/reports/wip";
+import { filterByAging } from "@/lib/reports/wip";
 
 export function useWipFilters(records: WipRecord[]) {
   const [search, setSearch] = useState("");

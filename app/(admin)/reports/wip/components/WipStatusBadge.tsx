@@ -1,7 +1,7 @@
 "use client";
 
-import type { WipPriority, WipStatus } from "../types/wip.types";
-import { formatWipPriority, formatWipStatus } from "../utils/wip-formatters";
+import type { WipPriority, WipStatus } from "@/lib/reports/wip";
+import { formatWipPriority, formatWipStatus } from "@/lib/reports/wip";
 
 type BadgeProps =
   | {

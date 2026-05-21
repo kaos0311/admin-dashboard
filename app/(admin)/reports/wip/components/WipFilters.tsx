@@ -5,11 +5,11 @@ import { Search } from "lucide-react";
 import {
   WIP_AGING_OPTIONS,
   WIP_STATUS_OPTIONS,
-} from "../constants/wip.constants";
+} from "@/lib/reports/wip";
 import type {
   WipAgingBucket,
   WipStatusFilter,
-} from "../types/wip.types";
+} from "@/lib/reports/wip";
 
 type WipFiltersProps = {
   search: string;

@@ -2,7 +2,7 @@
 
 import { AlertTriangle } from "lucide-react";
 
-import type { WipRecord } from "../types/wip.types";
+import type { WipRecord } from "@/lib/reports/wip";
 
 type WipAgingAlertsProps = {
   records: WipRecord[];

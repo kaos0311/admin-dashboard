@@ -8,7 +8,7 @@ import {
   UserX,
 } from "lucide-react";
 
-import type { WipAnalytics } from "../types/wip.types";
+import type { WipAnalytics } from "@/lib/reports/wip";
 
 type WipStatGridProps = {
   analytics: WipAnalytics;
