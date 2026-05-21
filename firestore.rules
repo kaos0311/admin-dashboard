@@ -258,6 +258,11 @@ service cloud.firestore {
     match /importJobs/{jobId} {
       allow read, create, update: if canAccessDashboard();
       allow delete: if isAdmin();
+
+      match /rows/{rowId} {
+        allow read, create, update: if canAccessDashboard();
+        allow delete: if isAdmin();
+      }
     }
 
     /*
@@ -277,6 +282,11 @@ service cloud.firestore {
     }
 
     match /patientIndex/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /patients_index/{docId} {
       allow read, create, update: if canAccessDashboard();
       allow delete: if isAdmin();
     }
@@ -318,6 +328,11 @@ service cloud.firestore {
     |--------------------------------------------------------------------------
     */
 
+    match /wipRecords/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
     match /wip/{docId} {
       allow read, create, update: if canAccessDashboard();
       allow delete: if isAdmin();
@@ -340,6 +355,11 @@ service cloud.firestore {
     */
 
     match /insurance/{docId} {
+      allow read, create, update: if canAccessDashboard();
+      allow delete: if isAdmin();
+    }
+
+    match /Insurance/{docId} {
       allow read, create, update: if canAccessDashboard();
       allow delete: if isAdmin();
     }
