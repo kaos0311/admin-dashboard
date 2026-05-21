@@ -1,4 +1,4 @@
-import type { WipRecord } from "../types/wip.types";
+import type { WipRecord } from "./wip-types";
 
 export const WIP_STATUS_OPTIONS = [
   { label: "All Statuses", value: "all" },

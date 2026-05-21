@@ -1,4 +1,4 @@
-import type { WipAnalytics, WipRecord } from "../types/wip.types";
+import type { WipAnalytics, WipRecord } from "./wip-types";
 
 export function buildWipAnalytics(records: WipRecord[]): WipAnalytics {
   const total = records.length;

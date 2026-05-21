@@ -1,4 +1,4 @@
-import type { WipPriority, WipStatus } from "../types/wip.types";
+import type { WipPriority, WipStatus } from "./wip-types";
 
 export function formatWipStatus(status: WipStatus): string {
   const map: Record<WipStatus, string> = {

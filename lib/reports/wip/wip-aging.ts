@@ -1,4 +1,4 @@
-import type { WipAgingBucket, WipRecord } from "../types/wip.types";
+import type { WipAgingBucket, WipRecord } from "./wip-types";
 
 export function getAgingBucket(daysOpen: number): Exclude<WipAgingBucket, "all"> {
   if (daysOpen >= 7) return "critical";
