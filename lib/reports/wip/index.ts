@@ -1,3 +1,4 @@
+export * from "./normalize-wip-record";
 export * from "./wip-aging";
 export * from "./wip-constants";
 export * from "./wip-formatters";

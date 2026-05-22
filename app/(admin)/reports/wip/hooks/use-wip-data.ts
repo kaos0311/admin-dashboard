@@ -1,19 +1,39 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
-import { MOCK_WIP_RECORDS } from "@/lib/reports/wip";
+import { subscribeWipRecords } from "@/lib/firestore/wip";
+import type { WipRecord } from "@/lib/reports/wip";
 import { buildWipAnalytics } from "@/lib/reports/wip";
 
 export function useWipData() {
-  const [records] = useState(MOCK_WIP_RECORDS);
-  const [loading] = useState(false);
-  const [error] = useState<string | null>(null);
+  const [records, setRecords] = useState<WipRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    setLoading(true);
+    setError(null);
+
+    const unsubscribe = subscribeWipRecords({
+      onData: (nextRecords) => {
+        setRecords(nextRecords);
+        setLoading(false);
+      },
+      onError: (message) => {
+        setError(message);
+        setLoading(false);
+      },
+    });
+
+    return () => unsubscribe();
+  }, [reloadKey]);
 
   const analytics = useMemo(() => buildWipAnalytics(records), [records]);
 
   const refresh = useCallback(() => {
-    // Firestore refresh will go here later.
+    setReloadKey((current) => current + 1);
   }, []);
 
   return {
