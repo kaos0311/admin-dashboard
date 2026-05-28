@@ -2,10 +2,10 @@
 
 import type {
   AlertFilter,
+  InventoryStatus,
   LifecycleStatus,
   SortDirection,
   SortKey,
-  InventoryStatus,
 } from "../lib/inventoryTypes";
 
 import { FilterSelect } from "./fields/FilterSelect";

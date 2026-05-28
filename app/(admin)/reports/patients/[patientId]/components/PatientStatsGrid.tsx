@@ -1,3 +1,4 @@
+﻿import { tiles } from "@/theme";
 import type { PatientRecord, PatientTask } from "../patient-detail-types";
 
 import { StatCard } from "./PatientDetailPrimitives";
@@ -10,7 +11,7 @@ type Props = {
 
 export function PatientStatsGrid({ patient, openTasks, riskScore }: Props) {
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <section className={tiles.gridMetrics}>
       <StatCard label="Open Tasks" value={openTasks.length} />
 
       <StatCard

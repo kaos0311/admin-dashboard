@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 
 import OpenUploadCenterButton from "../components/OpenUploadCenterButton";
+import { colors, glass, typography } from "@/theme";
 
 const deliveryFocusAreas = [
   {
@@ -37,26 +38,25 @@ const deliveryFocusAreas = [
 
 export default function DeliveryReportPage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(16,185,129,0.16),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(34,211,238,0.12),_transparent_30%),#020617] px-4 py-6 text-white md:px-6 xl:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl">
-          <div
-            aria-hidden="true"
-            className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-emerald-300/40 to-transparent"
-          />
+    <main className={`${glass.page} ${colors.app}`}>
+      <div className={colors.grid} aria-hidden="true" />
 
-          <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+      <div className={`${glass.shell} relative z-10`}>
+        <section className={glass.panel}>
+          <div className={colors.grid} aria-hidden="true" />
+
+          <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-emerald-300/20 bg-emerald-400/10 px-3 py-1 text-xs font-medium text-emerald-200">
+              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
                 <Truck className="h-3.5 w-3.5" aria-hidden="true" />
                 Delivery Oversight
               </div>
 
-              <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl">
+              <h1 className={`${typography.pageTitle} mt-4`}>
                 Delivery Reports
               </h1>
 
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
                 View delivery tickets, item history, patient equipment,
                 inventory movement data, and delivery-related report history
                 without exposing unnecessary PHI on summary screens.
@@ -78,15 +78,12 @@ export default function DeliveryReportPage() {
             const Icon = area.icon;
 
             return (
-              <article
-                key={area.label}
-                className="rounded-[1.75rem] border border-white/10 bg-white/[0.055] p-5 shadow-xl shadow-black/20 backdrop-blur-2xl transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08]"
-              >
-                <div className="mb-4 inline-flex rounded-2xl border border-white/10 bg-white/10 p-3 text-emerald-200">
+              <article key={area.label} className={glass.card}>
+                <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
                   <Icon className="h-5 w-5" aria-hidden="true" />
                 </div>
 
-                <h2 className="text-sm font-semibold text-white">
+                <h2 className="mt-4 text-sm font-semibold text-white">
                   {area.label}
                 </h2>
 
@@ -98,21 +95,21 @@ export default function DeliveryReportPage() {
           })}
         </section>
 
-        <section className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-6 shadow-2xl shadow-black/25 backdrop-blur-2xl">
-          <div className="flex items-start gap-4">
-            <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-3 text-cyan-200">
+        <section className={glass.panel}>
+          <div className={colors.grid} aria-hidden="true" />
+
+          <div className="relative z-10 flex flex-col gap-4 p-6 sm:flex-row sm:items-start">
+            <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
               <ShieldCheck className="h-5 w-5" aria-hidden="true" />
             </div>
 
             <div>
-              <h2 className="text-lg font-semibold text-white">
-                Delivery Data
-              </h2>
+              <h2 className={typography.sectionTitle}>Delivery Data Layer</h2>
 
               <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
                 Delivery tickets, patient equipment rows, delivery statuses,
                 item history, and inventory movement links belong here once the
-                delivery processor is wired. Keep this screen focused on
+                delivery processor is wired. Keep this page focused on
                 operational summaries and avoid displaying patient identifiers
                 unless the user role and workflow require it.
               </p>

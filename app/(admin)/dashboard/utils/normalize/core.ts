@@ -1,7 +1,13 @@
 type UnknownRecord = Record<string, unknown>;
 
-export function isRecord(value: unknown): value is UnknownRecord {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
+export function isRecord(
+  value: unknown
+): value is UnknownRecord {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
 }
 
 export function getString(
@@ -12,10 +18,17 @@ export function getString(
   const value = data[key];
 
   if (typeof value === "string") {
-    return value.trim() || fallback;
+    const trimmed = value.trim();
+
+    return trimmed.length > 0
+      ? trimmed
+      : fallback;
   }
 
-  if (typeof value === "number" && Number.isFinite(value)) {
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
     return String(value);
   }
 
@@ -34,10 +47,16 @@ export function getNullableString(
 
   if (typeof value === "string") {
     const trimmed = value.trim();
-    return trimmed || null;
+
+    return trimmed.length > 0
+      ? trimmed
+      : null;
   }
 
-  if (typeof value === "number" && Number.isFinite(value)) {
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
     return String(value);
   }
 
@@ -50,29 +69,52 @@ export function getNullableString(
     typeof value.seconds === "number" &&
     Number.isFinite(value.seconds)
   ) {
-    return new Date(value.seconds * 1000).toISOString();
+    return new Date(
+      value.seconds * 1000
+    ).toISOString();
   }
 
   return null;
 }
 
-export function safeNumber(value: unknown): number {
-  if (typeof value === "number" && Number.isFinite(value)) {
+export function safeNumber(
+  value: unknown,
+  fallback = 0
+): number {
+  if (
+    typeof value === "number" &&
+    Number.isFinite(value)
+  ) {
     return value;
   }
 
   if (typeof value === "string") {
-    const cleaned = value.replace(/[$,%]/g, "").replace(/,/g, "").trim();
-    const parsed = Number(cleaned);
+    const cleanedValue = value
+      .replace(/[$,%]/g, "")
+      .replace(/,/g, "")
+      .trim();
 
-    return Number.isFinite(parsed) ? parsed : 0;
+    if (cleanedValue.length === 0) {
+      return fallback;
+    }
+
+    const parsedValue = Number(cleanedValue);
+
+    return Number.isFinite(parsedValue)
+      ? parsedValue
+      : fallback;
   }
 
-  return 0;
+  return fallback;
 }
 
-export function safePositiveNumber(value: unknown): number {
-  return Math.max(safeNumber(value), 0);
+export function safePositiveNumber(
+  value: unknown
+): number {
+  return Math.max(
+    safeNumber(value),
+    0
+  );
 }
 
 export function safeArray<T>(
@@ -86,12 +128,20 @@ export function safeArray<T>(
   return value.map(normalizer);
 }
 
-export function normalizeStatus(value: unknown, fallback = "unknown"): string {
+export function normalizeStatus(
+  value: unknown,
+  fallback = "unknown"
+): string {
   if (typeof value !== "string") {
     return fallback;
   }
 
-  const normalized = value.trim().toLowerCase().replace(/\s+/g, "_");
+  const normalized = value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, "_");
 
-  return normalized || fallback;
+  return normalized.length > 0
+    ? normalized
+    : fallback;
 }

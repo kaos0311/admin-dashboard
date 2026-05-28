@@ -1,12 +1,12 @@
 "use client";
 
-import { useRef, useState, type RefObject } from "react";
+import { type RefObject, useRef, useState } from "react";
 import {
   collection,
   doc,
+  type DocumentReference,
   serverTimestamp,
   setDoc,
-  type DocumentReference,
 } from "firebase/firestore";
 import { ref, uploadBytes } from "firebase/storage";
 import toast from "react-hot-toast";
@@ -15,7 +15,7 @@ import { auth, db, storage } from "@/lib/firebase";
 
 import { makeDuplicateImportKey } from "../lib/orderKeys";
 import {
-  detectReportTypeFromFile,
+  detectImportType,
   findRecentDuplicateImport,
 } from "../lib/orderImportDetection";
 import type { ImportReportType, SmartDetectionResult } from "../lib/orderTypes";
@@ -67,7 +67,7 @@ export function useOrderImport(): {
     }
 
     try {
-      const detection = await detectReportTypeFromFile(file);
+      const detection = await detectImportType(file)
       setDetectedImport(detection);
       setImportTypeState(detection.reportType);
     } catch (error: unknown) {
@@ -84,7 +84,7 @@ export function useOrderImport(): {
       setImporting(true);
       setImportMessage("Detecting report type.");
 
-      const detection = detectedImport ?? (await detectReportTypeFromFile(file));
+      const detection = detectedImport ?? (await detectImportType(file));
       const resolvedImportType = detection.reportType;
 
       setImportTypeState(resolvedImportType);

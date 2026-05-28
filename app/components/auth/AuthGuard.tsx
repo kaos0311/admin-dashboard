@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
+import { ShieldAlert } from "lucide-react";
 
 import { auth, db } from "@/lib/firebase";
 
@@ -17,6 +18,12 @@ type AuthGuardProps = {
   loadingMessage?: string;
 };
 
+type GuardState = "checking" | "authorized" | "signedOut" | "forbidden" | "error";
+
+function parseRole(value: unknown): ResolvedRole {
+  return value === "admin" || value === "staff" ? value : null;
+}
+
 export default function AuthGuard({
   children,
   allow,
@@ -26,29 +33,31 @@ export default function AuthGuard({
   const router = useRouter();
   const pathname = usePathname();
 
-  const [checking, setChecking] = useState(true);
-  const [authorized, setAuthorized] = useState(false);
+  const [guardState, setGuardState] = useState<GuardState>("checking");
+  const [message, setMessage] = useState("");
 
   const redirectedRef = useRef(false);
-
   const allowKey = useMemo(() => allow.join("|"), [allow]);
 
   useEffect(() => {
     let cancelled = false;
 
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      try {
-        setChecking(true);
+      setGuardState("checking");
+      setMessage("");
 
+      try {
         if (!user) {
-          if (!redirectedRef.current) {
-            redirectedRef.current = true;
-            router.replace(`/login?next=${encodeURIComponent(pathname || "/")}`);
+          if (!cancelled) {
+            setGuardState("signedOut");
+            setMessage("No signed-in user was found.");
           }
 
-          if (!cancelled) {
-            setAuthorized(false);
-            setChecking(false);
+          if (!redirectedRef.current) {
+            redirectedRef.current = true;
+            router.replace(
+              `/login?next=${encodeURIComponent(pathname || "/dashboard")}`
+            );
           }
 
           return;
@@ -56,60 +65,40 @@ export default function AuthGuard({
 
         let resolvedRole: ResolvedRole = null;
 
-        try {
-          const token = await user.getIdTokenResult(true);
-          const tokenRole = token.claims.role;
+        const token = await user.getIdTokenResult(true);
+        resolvedRole = parseRole(token.claims.role);
 
-          if (tokenRole === "admin" || tokenRole === "staff") {
-            resolvedRole = tokenRole;
-          }
-        } catch (error) {
-          console.error("TOKEN ROLE ERROR:", error);
-        }
+        const userSnap = await getDoc(doc(db, "users", user.uid));
 
-        try {
-          const userSnap = await getDoc(doc(db, "users", user.uid));
+        if (userSnap.exists()) {
+          const data = userSnap.data() as Record<string, unknown>;
 
-          if (userSnap.exists()) {
-            const data = userSnap.data() as Record<string, unknown>;
+          if (data.active === false) {
+            await auth.signOut();
 
-            if (data.active === false) {
-              await auth.signOut();
-
-              if (!redirectedRef.current) {
-                redirectedRef.current = true;
-                router.replace("/login");
-              }
-
-              if (!cancelled) {
-                setAuthorized(false);
-                setChecking(false);
-              }
-
-              return;
+            if (!cancelled) {
+              setGuardState("forbidden");
+              setMessage("This account is inactive.");
             }
 
-            const dbRole = data.role;
-
-            if (dbRole === "admin" || dbRole === "staff") {
-              resolvedRole = dbRole;
-            }
+            router.replace("/login");
+            return;
           }
-        } catch (error) {
-          console.error("USER DOC ROLE ERROR:", error);
+
+          const dbRole = parseRole(data.role);
+          if (dbRole) resolvedRole = dbRole;
         }
 
         const allowedRoles = allowKey.split("|") as AllowedRole[];
 
         if (!resolvedRole || !allowedRoles.includes(resolvedRole)) {
-          if (!redirectedRef.current) {
-            redirectedRef.current = true;
-            router.replace("/dashboard");
-          }
-
           if (!cancelled) {
-            setAuthorized(false);
-            setChecking(false);
+            setGuardState("forbidden");
+            setMessage(
+              resolvedRole
+                ? `Your role "${resolvedRole}" is not allowed here.`
+                : "No admin/staff role was found on your account."
+            );
           }
 
           return;
@@ -117,21 +106,13 @@ export default function AuthGuard({
 
         redirectedRef.current = false;
 
-        if (!cancelled) {
-          setAuthorized(true);
-          setChecking(false);
-        }
+        if (!cancelled) setGuardState("authorized");
       } catch (error) {
         console.error("AUTH GUARD ERROR:", error);
 
-        if (!redirectedRef.current) {
-          redirectedRef.current = true;
-          router.replace("/login");
-        }
-
         if (!cancelled) {
-          setAuthorized(false);
-          setChecking(false);
+          setGuardState("error");
+          setMessage("Auth guard failed while checking access.");
         }
       }
     });
@@ -142,11 +123,11 @@ export default function AuthGuard({
     };
   }, [allowKey, pathname, router]);
 
-  if (checking) {
+  if (guardState === "checking") {
     return (
       <>
         {fallback ?? (
-          <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_34%),#020617] px-4 text-white">
+          <div className="flex min-h-screen items-center justify-center bg-[#020617] px-4 text-white">
             <div className="rounded-3xl border border-white/10 bg-white/[0.06] px-6 py-4 text-sm text-zinc-300 shadow-2xl shadow-black/30 backdrop-blur-2xl">
               {loadingMessage}
             </div>
@@ -156,7 +137,29 @@ export default function AuthGuard({
     );
   }
 
-  if (!authorized) return null;
+  if (guardState !== "authorized") {
+    return (
+      <main className="flex min-h-screen items-center justify-center bg-[#07090d] p-6 text-white">
+        <section className="w-full max-w-md rounded-3xl border border-red-500/20 bg-red-950/20 p-8 text-red-200 shadow-2xl shadow-black/40">
+          <div className="flex gap-4">
+            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-3">
+              <ShieldAlert className="h-5 w-5" aria-hidden="true" />
+            </div>
+
+            <div>
+              <h1 className="text-xl font-semibold text-white">
+                Access blocked
+              </h1>
+
+              <p className="mt-2 text-sm leading-6">
+                {message || "You are not authorized to view this page."}
+              </p>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return <>{children}</>;
 }

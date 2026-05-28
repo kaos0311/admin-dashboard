@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import {
   collection,
   doc,
@@ -86,24 +87,47 @@ function withDocId<T extends Record<string, unknown>>(
 }
 
 export function useDashboardData(): DashboardDataState {
-  const [summary, setSummary] = useState<DashboardSummary>(EMPTY_SUMMARY);
+  const [summary, setSummary] =
+    useState<DashboardSummary>(EMPTY_SUMMARY);
+
   const [birthdays, setBirthdays] =
     useState<BirthdayAnalytics>(EMPTY_BIRTHDAYS);
+
   const [inventoryAnalytics, setInventoryAnalytics] =
-    useState<InventoryAnalytics>(EMPTY_INVENTORY_ANALYTICS);
+    useState<InventoryAnalytics>(
+      EMPTY_INVENTORY_ANALYTICS
+    );
 
-  const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [rentals, setRentals] = useState<RentalRow[]>([]);
-  const [products, setProducts] = useState<ProductRow[]>([]);
-  const [movements, setMovements] = useState<MovementRow[]>([]);
-  const [wipEmployees, setWipEmployees] = useState<WipEmployeeSummary[]>([]);
+  const [orders, setOrders] =
+    useState<OrderRow[]>([]);
 
-  const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
-  const [birthdaysLoaded, setBirthdaysLoaded] = useState(false);
-  const [inventoryLoaded, setInventoryLoaded] = useState(false);
-  const [previewsLoaded, setPreviewsLoaded] = useState(false);
+  const [rentals, setRentals] =
+    useState<RentalRow[]>([]);
 
-  const [refreshing, setRefreshing] = useState(false);
+  const [products, setProducts] =
+    useState<ProductRow[]>([]);
+
+  const [movements, setMovements] =
+    useState<MovementRow[]>([]);
+
+  const [wipEmployees, setWipEmployees] =
+    useState<WipEmployeeSummary[]>([]);
+
+  const [analyticsLoaded, setAnalyticsLoaded] =
+    useState(false);
+
+  const [birthdaysLoaded, setBirthdaysLoaded] =
+    useState(false);
+
+  const [inventoryLoaded, setInventoryLoaded] =
+    useState(false);
+
+  const [previewsLoaded, setPreviewsLoaded] =
+    useState(false);
+
+  const [refreshing, setRefreshing] =
+    useState(false);
+
   const [error, setError] = useState("");
 
   const refreshDashboard = useCallback(async () => {
@@ -120,7 +144,12 @@ export function useDashboardData(): DashboardDataState {
       ] = await Promise.all([
         getDocs(
           query(
-            collection(db, "analytics", "wip", "employees"),
+            collection(
+              db,
+              "analytics",
+              "wip",
+              "employees"
+            ),
             orderBy("open", "desc"),
             limit(WIP_EMPLOYEE_LIMIT)
           )
@@ -159,55 +188,90 @@ export function useDashboardData(): DashboardDataState {
         ),
       ]);
 
-      setWipEmployees(
+      const nextWipEmployees =
         wipEmployeesSnap.docs.map((docSnap) =>
           normalizeWipEmployee(
-            withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
+            withDocId(
+              docSnap.id,
+              docSnap.data() as Record<
+                string,
+                unknown
+              >
+            )
           )
-        )
-      );
+        );
 
-      setOrders(
-        ordersSnap.docs.map((docSnap) =>
+      const nextOrders = ordersSnap.docs.map(
+        (docSnap) =>
           normalizeOrder(
-            withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
+            withDocId(
+              docSnap.id,
+              docSnap.data() as Record<
+                string,
+                unknown
+              >
+            )
           )
-        )
       );
 
-      setRentals(
-        rentalsSnap.docs.map((docSnap) =>
+      const nextRentals = rentalsSnap.docs.map(
+        (docSnap) =>
           normalizeRental(
-            withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
+            withDocId(
+              docSnap.id,
+              docSnap.data() as Record<
+                string,
+                unknown
+              >
+            )
           )
-        )
       );
 
-      setProducts(
-        productsSnap.docs.map((docSnap) =>
+      const nextProducts = productsSnap.docs.map(
+        (docSnap) =>
           normalizeProduct(
-            withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
+            withDocId(
+              docSnap.id,
+              docSnap.data() as Record<
+                string,
+                unknown
+              >
+            )
           )
-        )
       );
 
-      setMovements(
+      const nextMovements =
         movementsSnap.docs.map((docSnap) =>
           normalizeMovement(
-            withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
+            withDocId(
+              docSnap.id,
+              docSnap.data() as Record<
+                string,
+                unknown
+              >
+            )
           )
-        )
-      );
+        );
+
+      setWipEmployees(nextWipEmployees);
+      setOrders(nextOrders);
+      setRentals(nextRentals);
+      setProducts(nextProducts);
+      setMovements(nextMovements);
 
       setPreviewsLoaded(true);
     } catch (loadError) {
-      console.warn("Dashboard preview data failed to load.", loadError);
+      console.warn(
+        "Dashboard preview data failed to load.",
+        loadError
+      );
 
       setOrders([]);
       setRentals([]);
       setProducts([]);
       setMovements([]);
       setWipEmployees([]);
+
       setPreviewsLoaded(true);
 
       setError(
@@ -225,19 +289,21 @@ export function useDashboardData(): DashboardDataState {
 
     const dashboardUnsubscribe = onSnapshot(
       doc(db, "analytics", "dashboard"),
-      (snap) => {
-        setSummary(
-          snap.exists()
-            ? normalizeDashboardSummary(
-                snap.data() as Partial<DashboardSummary>
-              )
-            : EMPTY_SUMMARY
-        );
+      (snapshot) => {
+        const nextSummary = snapshot.exists()
+          ? normalizeDashboardSummary(
+              snapshot.data() as Partial<DashboardSummary>
+            )
+          : EMPTY_SUMMARY;
 
+        setSummary(nextSummary);
         setAnalyticsLoaded(true);
       },
       (snapshotError) => {
-        console.warn("analytics/dashboard listener failed.", snapshotError);
+        console.warn(
+          "analytics/dashboard listener failed.",
+          snapshotError
+        );
 
         setSummary(EMPTY_SUMMARY);
         setAnalyticsLoaded(true);
@@ -252,20 +318,17 @@ export function useDashboardData(): DashboardDataState {
 
     const birthdaysUnsubscribe = onSnapshot(
       doc(db, "analytics", "birthdays"),
-      (snap) => {
-        setBirthdays(
-          snap.exists()
-            ? normalizeBirthdayAnalytics(
-                snap.data() as Partial<BirthdayAnalytics>
-              )
-            : EMPTY_BIRTHDAYS
-        );
+      (snapshot) => {
+        const nextBirthdays = snapshot.exists()
+          ? normalizeBirthdayAnalytics(
+              snapshot.data() as Partial<BirthdayAnalytics>
+            )
+          : EMPTY_BIRTHDAYS;
 
+        setBirthdays(nextBirthdays);
         setBirthdaysLoaded(true);
       },
-      (snapshotError) => {
-        console.warn("analytics/birthdays listener failed.", snapshotError);
-
+      () => {
         setBirthdays(EMPTY_BIRTHDAYS);
         setBirthdaysLoaded(true);
       }
@@ -273,21 +336,25 @@ export function useDashboardData(): DashboardDataState {
 
     const inventoryUnsubscribe = onSnapshot(
       doc(db, "analytics", "inventory"),
-      (snap) => {
-        setInventoryAnalytics(
-          snap.exists()
+      (snapshot) => {
+        const nextInventoryAnalytics =
+          snapshot.exists()
             ? normalizeInventoryAnalytics(
-                snap.data() as Partial<InventoryAnalytics>
+                snapshot.data() as Partial<InventoryAnalytics>
               )
-            : EMPTY_INVENTORY_ANALYTICS
+            : EMPTY_INVENTORY_ANALYTICS;
+
+        setInventoryAnalytics(
+          nextInventoryAnalytics
         );
 
         setInventoryLoaded(true);
       },
-      (snapshotError) => {
-        console.warn("analytics/inventory listener failed.", snapshotError);
+      () => {
+        setInventoryAnalytics(
+          EMPTY_INVENTORY_ANALYTICS
+        );
 
-        setInventoryAnalytics(EMPTY_INVENTORY_ANALYTICS);
         setInventoryLoaded(true);
       }
     );
@@ -301,7 +368,9 @@ export function useDashboardData(): DashboardDataState {
     void refreshDashboard();
 
     return () => {
-      unsubscribes.forEach((unsubscribe) => unsubscribe());
+      unsubscribes.forEach((unsubscribe) => {
+        unsubscribe();
+      });
     };
   }, [refreshDashboard]);
 
@@ -312,7 +381,12 @@ export function useDashboardData(): DashboardDataState {
       !inventoryLoaded ||
       !previewsLoaded
     );
-  }, [analyticsLoaded, birthdaysLoaded, inventoryLoaded, previewsLoaded]);
+  }, [
+    analyticsLoaded,
+    birthdaysLoaded,
+    inventoryLoaded,
+    previewsLoaded,
+  ]);
 
   return {
     summary,

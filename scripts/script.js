@@ -6,17 +6,42 @@ import { fileURLToPath } from "url";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const DEFAULT_TEMP_PASSWORD = "TempPassword123!";
+
+function readRequiredEnv(name) {
+  const value = process.env[name];
+
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+
+  return "";
+}
+
 function loadServiceAccount() {
+  const envProjectId = readRequiredEnv("FIREBASE_PROJECT_ID");
+  const envClientEmail = readRequiredEnv("FIREBASE_CLIENT_EMAIL");
+  const envPrivateKey = readRequiredEnv("FIREBASE_PRIVATE_KEY");
+
+  if (envProjectId && envClientEmail && envPrivateKey) {
+    return {
+      projectId: envProjectId,
+      clientEmail: envClientEmail,
+      privateKey: envPrivateKey.replace(/\\n/g, "\n"),
+    };
+  }
+
   const possiblePaths = [
     path.resolve(process.cwd(), "serviceAccountKey.json"),
     path.resolve(__dirname, "serviceAccountKey.json"),
+    path.resolve(__dirname, "../serviceAccountKey.json"),
   ];
 
   const filePath = possiblePaths.find((candidate) => fs.existsSync(candidate));
 
   if (!filePath) {
     throw new Error(
-      `Missing serviceAccountKey.json. Checked: ${possiblePaths.join(", ")}`
+      `Missing Firebase credentials. Set FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY, or provide serviceAccountKey.json. Checked: ${possiblePaths.join(", ")}`
     );
   }
 
@@ -42,21 +67,39 @@ function loadServiceAccount() {
 function getEmail() {
   const email = process.argv[2] || process.env.BOOTSTRAP_ADMIN_EMAIL;
 
-  if (!email) {
+  if (!email || !email.trim()) {
     throw new Error(
       "Provide an email: node scripts/bootstrapAdmin.js admin@email.com"
     );
   }
 
-  return email.trim().toLowerCase();
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    throw new Error(`Invalid email address: ${normalizedEmail}`);
+  }
+
+  return normalizedEmail;
 }
 
 function getDisplayName() {
-  return process.env.BOOTSTRAP_ADMIN_DISPLAY_NAME || "Admin";
+  return (
+    process.env.BOOTSTRAP_ADMIN_DISPLAY_NAME?.trim() ||
+    "Admin"
+  );
 }
 
 function getTempPassword() {
-  return process.env.BOOTSTRAP_ADMIN_PASSWORD || "TempPassword123!";
+  return (
+    process.env.BOOTSTRAP_ADMIN_PASSWORD?.trim() ||
+    DEFAULT_TEMP_PASSWORD
+  );
+}
+
+function validatePassword(password) {
+  if (password.length < 8) {
+    throw new Error("BOOTSTRAP_ADMIN_PASSWORD must be at least 8 characters.");
+  }
 }
 
 function initAdmin() {
@@ -72,21 +115,34 @@ function initAdmin() {
 
 async function getOrCreateUser(email) {
   try {
-    return await admin.auth().getUserByEmail(email);
+    const existingUser = await admin.auth().getUserByEmail(email);
+
+    return {
+      user: existingUser,
+      created: false,
+    };
   } catch (error) {
     if (error?.code !== "auth/user-not-found") {
       throw error;
     }
 
+    const password = getTempPassword();
+    validatePassword(password);
+
     console.log(`Creating Firebase Auth user: ${email}`);
 
-    return admin.auth().createUser({
+    const createdUser = await admin.auth().createUser({
       email,
-      password: getTempPassword(),
+      password,
       displayName: getDisplayName(),
       emailVerified: true,
       disabled: false,
     });
+
+    return {
+      user: createdUser,
+      created: true,
+    };
   }
 }
 
@@ -97,7 +153,8 @@ async function run() {
   const displayName = getDisplayName();
 
   const db = admin.firestore();
-  const user = await getOrCreateUser(email);
+
+  const { user, created } = await getOrCreateUser(email);
 
   await admin.auth().updateUser(user.uid, {
     emailVerified: true,
@@ -112,6 +169,8 @@ async function run() {
   const userRef = db.collection("users").doc(user.uid);
   const userSnap = await userRef.get();
 
+  const now = admin.firestore.FieldValue.serverTimestamp();
+
   await userRef.set(
     {
       uid: user.uid,
@@ -125,11 +184,11 @@ async function run() {
         email: true,
         sms: false,
       },
-      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      updatedAt: now,
       ...(userSnap.exists
         ? {}
         : {
-            createdAt: admin.firestore.FieldValue.serverTimestamp(),
+            createdAt: now,
           }),
     },
     { merge: true }
@@ -140,11 +199,17 @@ async function run() {
   console.log(`UID: ${user.uid}`);
   console.log("Role claim: admin");
   console.log("Firestore user doc: active admin");
-  console.log("\nIf this is a new user, temporary password is:");
-  console.log(getTempPassword());
+
+  if (created) {
+    console.log("\nTemporary password:");
+    console.log(getTempPassword());
+    console.log("\nChange it after first login. Leaving default passwords around is how raccoons get admin access.");
+  } else {
+    console.log("\nExisting user upgraded to admin.");
+  }
 }
 
 run().catch((error) => {
   console.error("Failed:", error);
-  process.exit(1);
+  process.exitCode = 1;
 });

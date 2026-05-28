@@ -1,3 +1,4 @@
+
 "use client";
 
 import "./globals.css";
@@ -14,7 +15,7 @@ import { AdminShellTopbar } from "./components/admin/AdminShellTopbar";
 import StaffOrAdmin from "@/app/components/auth/StaffOrAdmin";
 import MaintenanceGate from "@/app/components/MaintenanceGate";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
-import { ThemeProvider } from "@/app/theme/ThemeProvider";
+import { ThemeProvider } from "@/theme/ThemeProvider";
 
 type RootLayoutProps = {
   children: ReactNode;
@@ -88,15 +89,19 @@ function AppShell({ children }: RootLayoutProps) {
 
   if (!authChecked) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_32%),radial-gradient(circle_at_bottom_right,_rgba(14,165,233,0.10),_transparent_35%),#020617] px-4 text-white light:bg-slate-100 light:text-slate-950">
-        <div className="w-full max-w-md rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 text-center shadow-2xl shadow-black/40 backdrop-blur-2xl light:border-slate-200/70 light:bg-white/70 light:shadow-slate-300/40">
-          <div className="mx-auto mb-4 h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-cyan-300 light:border-slate-300 light:border-t-cyan-600" />
+      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#020617] px-4 text-white">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_30%),radial-gradient(circle_at_top_right,rgba(99,102,241,0.14),transparent_32%),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:100%_100%,100%_100%,48px_48px,48px_48px]" />
 
-          <h1 className="text-lg font-semibold text-white light:text-slate-950">
+        <div className="pointer-events-none absolute left-1/2 top-24 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-cyan-400/20 blur-3xl animate-[reactor-breathe_8s_ease-in-out_infinite]" />
+
+        <div className="relative z-10 w-full max-w-md rounded-[2rem] border border-white/10 bg-white/[0.05] p-7 shadow-[0_20px_80px_rgba(0,0,0,0.45),0_0_60px_rgba(34,211,238,0.10)] backdrop-blur-2xl">
+          <div className="mx-auto mb-5 h-10 w-10 animate-spin rounded-full border-2 border-white/20 border-t-cyan-300" />
+
+          <h1 className="text-lg font-semibold tracking-tight text-white">
             Checking access
           </h1>
 
-          <p className="mt-2 text-sm text-zinc-400 light:text-slate-600">
+          <p className="mt-2 text-sm leading-6 text-slate-400">
             Verifying staff/admin access before loading operational data.
           </p>
         </div>
@@ -107,7 +112,19 @@ function AppShell({ children }: RootLayoutProps) {
   return (
     <StaffOrAdmin>
       <MaintenanceGate>
-        <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.10),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.08),_transparent_35%),#020617] text-white transition-colors light:bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.14),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.10),_transparent_30%),radial-gradient(circle_at_bottom_right,_rgba(16,185,129,0.08),_transparent_35%),#f8fafc] light:text-slate-950">
+        <div className="relative min-h-screen overflow-hidden bg-[#020617] text-white">
+          {/* Atmospheric Background */}
+          <div className="pointer-events-none fixed inset-0 -z-30 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_28%),radial-gradient(circle_at_top_right,rgba(99,102,241,0.12),transparent_30%),linear-gradient(135deg,#020617_0%,#06111f_45%,#020617_100%)]" />
+
+          {/* Grid */}
+          <div className="pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:48px_48px]" />
+
+          {/* Arc Reactor Glow */}
+          <div className="pointer-events-none fixed left-1/2 top-20 -z-10 h-[540px] w-[540px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(34,211,238,0.20)_0%,rgba(14,165,233,0.10)_30%,rgba(99,102,241,0.05)_48%,transparent_72%)] blur-3xl opacity-70 animate-[reactor-breathe_8s_ease-in-out_infinite]" />
+
+          {/* Vignette */}
+          <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.30)_72%,rgba(0,0,0,0.78)_100%)]" />
+
           <a
             href="#admin-main-content"
             className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[200] focus:rounded-xl focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-black"
@@ -133,9 +150,9 @@ function AppShell({ children }: RootLayoutProps) {
 
             <main
               id="admin-main-content"
-              className="min-w-0 flex-1 px-4 py-5 md:px-6 md:py-6"
+              className="relative min-w-0 flex-1 px-4 py-5 md:px-6 md:py-6"
             >
-              <div className="mx-auto w-full max-w-[1800px]">
+              <div className="mx-auto w-full max-w-7xl">
                 {children}
               </div>
             </main>

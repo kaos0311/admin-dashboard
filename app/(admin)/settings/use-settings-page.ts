@@ -1,38 +1,38 @@
 "use client";
 
 import {
+  type Dispatch,
+  type SetStateAction,
   useCallback,
   useEffect,
   useMemo,
   useState,
-  type Dispatch,
-  type SetStateAction,
 } from "react";
 import {
   collection,
   doc,
+  type DocumentData,
   getCountFromServer,
   getDoc,
   getDocs,
   limit,
   orderBy,
   query,
+  type QueryDocumentSnapshot,
   startAfter,
   where,
-  type DocumentData,
-  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 
 import {
-  RECENT_ACTIVITY_LIMIT,
-  USERS_PAGE_SIZE,
   initialCreateUserForm,
   initialIdentityForm,
   initialPasswordResetForm,
   initialSettings,
+  RECENT_ACTIVITY_LIMIT,
+  USERS_PAGE_SIZE,
 } from "./settings-constants";
 
 import {

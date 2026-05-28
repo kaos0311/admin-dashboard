@@ -1,11 +1,11 @@
 "use client";
 
 import {
-  Firestore,
-  WriteBatch,
   collection,
   doc,
+  type Firestore,
   writeBatch,
+  type WriteBatch,
 } from "firebase/firestore";
 
 type PlainObject = Record<string, unknown>;

@@ -1,4 +1,4 @@
-import { HttpsError, onCall, type CallableRequest } from "firebase-functions/v2/https";
+import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 

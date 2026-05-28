@@ -1,3 +1,4 @@
+﻿import { tiles } from "@/theme";
 import {
   AlertTriangle,
   BadgeDollarSign,
@@ -61,3 +62,4 @@ export function RentalsStatsGrid({ stats }: RentalsStatsGridProps) {
     </section>
   );
 }
+

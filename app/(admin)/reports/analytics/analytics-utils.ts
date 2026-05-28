@@ -2,9 +2,9 @@ import { emptyCounts } from "./analytics-constants";
 import type {
   AnalyticsHealth,
   CountsByType,
-  ReportType,
   ReportsAnalyticsDoc,
   ReportsAnalyticsStatus,
+  ReportType,
   SelectedReportType,
 } from "./analytics-types";
 

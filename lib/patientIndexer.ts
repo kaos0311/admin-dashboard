@@ -2,19 +2,19 @@ import {
   collection,
   collectionGroup,
   doc,
+  type DocumentData,
   documentId,
   getDocs,
   limit,
   orderBy,
+  type Query,
   query,
+  type QueryDocumentSnapshot,
   serverTimestamp,
   setDoc,
   startAfter,
   where,
   writeBatch,
-  type DocumentData,
-  type Query,
-  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";

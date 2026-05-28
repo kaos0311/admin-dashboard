@@ -10,6 +10,65 @@ export type ReportType =
   | "payments"
   | "unknown";
 
+export type ProcessorName =
+  | "patients"
+  | "hospice"
+  | "insurance"
+  | "orders"
+  | "orderDetails"
+  | "invoiceDetails"
+  | "payments";
+
+export type ImportMode = "append" | "overwrite_report_type";
+
+export type ReplaceScope = "none" | "reportType";
+
+export type ProcessorErrorSample = {
+  rowNumber?: number | null;
+  rowId?: string | null;
+  message: string;
+  code?: string | null;
+};
+
+export type ProcessorResult = {
+  processor: ProcessorName;
+  required: boolean;
+
+  rowsProcessed: number;
+  rowsInserted: number;
+  rowsUpdated: number;
+  rowsSkipped: number;
+  rowsFailed: number;
+
+  errors: ProcessorErrorSample[];
+
+  startedAtMs: number;
+  completedAtMs: number;
+  durationMs: number;
+};
+
+export type ProcessorPipelineResult = {
+  importId: string;
+  reportType: ReportType;
+  originalReportType: string;
+  fileName: string;
+  rowCount: number;
+
+  selectedProcessors: ProcessorName[];
+
+  rowsProcessed: number;
+  rowsInserted: number;
+  rowsUpdated: number;
+  rowsSkipped: number;
+  rowsFailed: number;
+
+  errors: ProcessorErrorSample[];
+  processorResults: ProcessorResult[];
+
+  failedRequiredProcessor: boolean;
+  completedWithErrors: boolean;
+};
+
 export type FirestoreIndexFields = {
   reportType: ReportType;
   importedAtMs: number;

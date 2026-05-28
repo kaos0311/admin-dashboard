@@ -9,11 +9,11 @@ import {
 import type { PatientDetailProps } from "./patient-detail-types";
 
 import {
+  ActionButton,
   Badge,
   DataQualityPill,
   RiskPill,
   StatusPill,
-  ActionButton,
 } from "../PatientUI";
 
 import { isDestroyEligible } from "../../lib/patientUtils";

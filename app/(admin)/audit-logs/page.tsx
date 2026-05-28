@@ -1,214 +1,479 @@
 "use client";
 
-import { useDeferredValue, useMemo, useState } from "react";
-import { Download, Loader2, RefreshCw, Shield } from "lucide-react";
+import {
+  useCallback,
+  useDeferredValue,
+  useMemo,
+  useState,
+} from "react";
+
+import {
+  Download,
+  Loader2,
+  RefreshCw,
+  Shield,
+} from "lucide-react";
+
+import { colors, glass, typography } from "@/theme";
 
 import { useAuthRole } from "@/app/hooks/useAuthRole";
-import type { AuditLogRow } from "./utils/auditTypes";
+
 import { AuditDetails } from "./components/AuditDetails";
 import { AuditFilters } from "./components/AuditFilters";
 import { AuditList } from "./components/AuditList";
 import { AuditStats } from "./components/AuditStats";
 import { AuditWatchList } from "./components/AuditWatchList";
+
 import { useAuditLogs } from "./hooks/useAuditLogs";
+
 import { exportAuditCsv } from "./utils/auditExport";
 import { isSuspiciousAuditEvent } from "./utils/auditRisk";
+
 import type {
   AuditCategory,
+  AuditLogRow,
   AuditSeverity,
   DateFilter,
 } from "./utils/auditTypes";
 
-export default function AuditLogsPage() {
-  const { loading: authLoading, isAdmin } = useAuthRole();
+const DAY_MS = 24 * 60 * 60 * 1000;
 
-  const { logs, loading, refreshing, refresh } = useAuditLogs({
-    enabled: !authLoading && isAdmin,
+export default function AuditLogsPage() {
+  const { loading: authLoading, isAdmin } =
+    useAuthRole();
+
+  const {
+    logs,
+    loading,
+    refreshing,
+    refresh,
+  } = useAuditLogs({
+    enabled:
+      !authLoading && isAdmin,
   });
 
-  const [search, setSearch] = useState("");
-  const deferredSearch = useDeferredValue(search);
+  const [search, setSearch] =
+    useState("");
 
-  const [severityFilter, setSeverityFilter] =
-    useState<AuditSeverity | "all">("all");
+  const deferredSearch =
+    useDeferredValue(search);
 
-  const [categoryFilter, setCategoryFilter] =
-    useState<AuditCategory | "all">("all");
+  const [
+    severityFilter,
+    setSeverityFilter,
+  ] = useState<
+    AuditSeverity | "all"
+  >("all");
 
-  const [actionFilter, setActionFilter] = useState("all");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("all");
-  const [selectedLogId, setSelectedLogId] = useState<string | null>(null);
+  const [
+    categoryFilter,
+    setCategoryFilter,
+  ] = useState<
+    AuditCategory | "all"
+  >("all");
 
-  const actionOptions = useMemo(() => {
-    return Array.from(new Set(logs.map((log: AuditLogRow) => log.action))).sort();
-  }, [logs]);
+  const [
+    actionFilter,
+    setActionFilter,
+  ] = useState("all");
 
-  const filteredLogs = useMemo(() => {
-    const term = deferredSearch.trim().toLowerCase();
-    const now = Date.now();
+  const [
+    dateFilter,
+    setDateFilter,
+  ] = useState<DateFilter>(
+    "all",
+  );
 
-    return logs.filter((log: AuditLogRow) => {
-      const matchesSearch = !term || log.searchableText.includes(term);
+  const [
+    selectedLogId,
+    setSelectedLogId,
+  ] = useState<string | null>(
+    null,
+  );
 
-      const matchesSeverity =
-        severityFilter === "all" || log.severity === severityFilter;
+  /*
+  |--------------------------------------------------------------------------
+  | Stable Time Reference
+  |--------------------------------------------------------------------------
+  */
 
-      const matchesCategory =
-        categoryFilter === "all" || log.category === categoryFilter;
+  const [now] = useState(() =>
+    Date.now(),
+  );
 
-      const matchesAction =
-        actionFilter === "all" || log.action === actionFilter;
+  const actionOptions =
+    useMemo(() => {
+      return Array.from(
+        new Set(
+          logs.map(
+            (
+              log: AuditLogRow,
+            ) => log.action,
+          ),
+        ),
+      ).sort();
+    }, [logs]);
 
-      let matchesDate = true;
+  const filteredLogs =
+    useMemo(() => {
+      const term =
+        deferredSearch
+          .trim()
+          .toLowerCase();
 
-      if (dateFilter !== "all") {
-        if (!log.createdAtMs) {
-          matchesDate = false;
-        } else if (dateFilter === "today") {
-          const logDate = new Date(log.createdAtMs);
-          const today = new Date();
+      return logs.filter(
+        (
+          log: AuditLogRow,
+        ) => {
+          const matchesSearch =
+            !term ||
+            log.searchableText.includes(
+              term,
+            );
 
-          matchesDate =
-            logDate.getFullYear() === today.getFullYear() &&
-            logDate.getMonth() === today.getMonth() &&
-            logDate.getDate() === today.getDate();
-        } else {
-          const days = dateFilter === "7d" ? 7 : 30;
-          matchesDate =
-            log.createdAtMs >= now - days * 24 * 60 * 60 * 1000;
-        }
+          const matchesSeverity =
+            severityFilter ===
+              "all" ||
+            log.severity ===
+              severityFilter;
+
+          const matchesCategory =
+            categoryFilter ===
+              "all" ||
+            log.category ===
+              categoryFilter;
+
+          const matchesAction =
+            actionFilter ===
+              "all" ||
+            log.action ===
+              actionFilter;
+
+          let matchesDate =
+            true;
+
+          if (
+            dateFilter !==
+            "all"
+          ) {
+            if (
+              !log.createdAtMs
+            ) {
+              matchesDate =
+                false;
+            } else if (
+              dateFilter ===
+              "today"
+            ) {
+              const logDate =
+                new Date(
+                  log.createdAtMs,
+                );
+
+              const today =
+                new Date(now);
+
+              matchesDate =
+                logDate.getFullYear() ===
+                  today.getFullYear() &&
+                logDate.getMonth() ===
+                  today.getMonth() &&
+                logDate.getDate() ===
+                  today.getDate();
+            } else {
+              const days =
+                dateFilter ===
+                "7d"
+                  ? 7
+                  : 30;
+
+              matchesDate =
+                log.createdAtMs >=
+                now -
+                  days *
+                    DAY_MS;
+            }
+          }
+
+          return (
+            matchesSearch &&
+            matchesSeverity &&
+            matchesCategory &&
+            matchesAction &&
+            matchesDate
+          );
+        },
+      );
+    }, [
+      logs,
+      deferredSearch,
+      severityFilter,
+      categoryFilter,
+      actionFilter,
+      dateFilter,
+      now,
+    ]);
+
+  const selectedLog =
+    useMemo(() => {
+      if (
+        !filteredLogs.length
+      ) {
+        return null;
       }
 
       return (
-        matchesSearch &&
-        matchesSeverity &&
-        matchesCategory &&
-        matchesAction &&
-        matchesDate
+        filteredLogs.find(
+          (
+            log: AuditLogRow,
+          ) =>
+            log.id ===
+            selectedLogId,
+        ) ??
+        filteredLogs[0]
       );
-    });
-  }, [
-    logs,
-    deferredSearch,
-    severityFilter,
-    categoryFilter,
-    actionFilter,
-    dateFilter,
-  ]);
+    }, [
+      filteredLogs,
+      selectedLogId,
+    ]);
 
-  const selectedLog = useMemo(() => {
-    if (!filteredLogs.length) return null;
+  const recentHighRisk =
+    useMemo(() => {
+      return logs
+        .filter(
+          isSuspiciousAuditEvent,
+        )
+        .slice(0, 5);
+    }, [logs]);
 
+  const resetFilters =
+    useCallback(() => {
+      setSearch("");
+      setSeverityFilter(
+        "all",
+      );
+      setCategoryFilter(
+        "all",
+      );
+      setActionFilter(
+        "all",
+      );
+      setDateFilter("all");
+    }, []);
+
+  const handleExport =
+    useCallback(() => {
+      exportAuditCsv(
+        filteredLogs,
+      );
+    }, [filteredLogs]);
+
+  /*
+  |--------------------------------------------------------------------------
+  | Loading State
+  |--------------------------------------------------------------------------
+  */
+
+  if (
+    authLoading ||
+    loading
+  ) {
     return (
-      filteredLogs.find((log: AuditLogRow) => log.id === selectedLogId) ?? filteredLogs[0]
-    );
-  }, [filteredLogs, selectedLogId]);
+      <main className={`${glass.page} ${colors.app}`}>
+        <div className={colors.grid} />
 
-  const recentHighRisk = useMemo(() => {
-    return logs.filter(isSuspiciousAuditEvent).slice(0, 5);
-  }, [logs]);
+        <div className="relative flex min-h-[60vh] items-center justify-center">
+          <div className={glass.panel}>
+            <div className={colors.grid} />
 
-  function resetFilters() {
-    setSearch("");
-    setSeverityFilter("all");
-    setCategoryFilter("all");
-    setActionFilter("all");
-    setDateFilter("all");
-  }
+            <div className="relative flex items-center gap-3 p-6 text-slate-300">
+              <Loader2 className="h-5 w-5 animate-spin text-sky-200" />
 
-  if (authLoading || loading) {
-    return (
-      <main className="min-h-screen bg-slate-950 p-6 text-white">
-        <div className="flex items-center gap-2 text-slate-400">
-          <Loader2 className="h-4 w-4 animate-spin" />
-          Loading audit feed...
+              <span>
+                Loading audit
+                intelligence...
+              </span>
+            </div>
+          </div>
         </div>
       </main>
     );
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Permission Gate
+  |--------------------------------------------------------------------------
+  */
+
   if (!isAdmin) {
     return (
-      <main className="min-h-screen bg-slate-950 p-6 text-red-400">
-        Admin access required.
+      <main className={`${glass.page} ${colors.app}`}>
+        <div className={colors.grid} />
+
+        <div className="relative flex min-h-[60vh] items-center justify-center">
+          <div className="rounded-3xl border border-red-500/20 bg-red-500/10 px-6 py-5 text-sm text-red-300 shadow-[0_0_35px_rgba(239,68,68,0.18)]">
+            Admin access required.
+          </div>
+        </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen space-y-6 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.16),transparent_34%),linear-gradient(135deg,#f8fafc,#eef2ff_45%,#f8fafc)] p-6 text-slate-950 dark:bg-[radial-gradient(circle_at_top_left,rgba(96,165,250,0.18),transparent_32%),linear-gradient(135deg,#020617,#111827_48%,#020617)] dark:text-white">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-3xl font-semibold tracking-tight">
-            <Shield className="h-7 w-7" />
-            Audit Command Center
-          </h1>
+    <main className={`${glass.page} ${colors.app}`}>
+      <div className={colors.grid} />
 
-          <p className="mt-1 max-w-3xl text-sm text-slate-600 dark:text-slate-400">
-            Realtime admin tracking for user, role, database, report, settings,
-            and security events.
-          </p>
-        </div>
+      <div className={glass.shell}>
+        <section className={glass.panel}>
+          <div className={colors.grid} />
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => exportAuditCsv(filteredLogs)}
-            disabled={!filteredLogs.length}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/50 bg-white/60 px-4 py-3 text-sm font-medium shadow-sm backdrop-blur-xl transition hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:hover:bg-white/[0.1]"
-          >
-            <Download className="h-4 w-4" />
-            Export CSV
-          </button>
+          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+            <div className="space-y-4">
+              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+                <Shield className="h-3.5 w-3.5" />
 
-          <button
-            type="button"
-            onClick={refresh}
-            disabled={refreshing}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/50 bg-white/60 px-4 py-3 text-sm font-medium shadow-sm backdrop-blur-xl transition hover:bg-white/80 disabled:cursor-not-allowed disabled:opacity-50 dark:border-white/10 dark:bg-white/[0.06] dark:hover:bg-white/[0.1]"
-          >
-            <RefreshCw
-              className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
-            />
-            Refresh
-          </button>
-        </div>
-      </div>
+                Audit Intelligence
+              </div>
 
-      <AuditStats logs={logs} />
+              <div>
+                <h1 className={typography.pageTitle}>
+                  Audit Command
+                  Center
+                </h1>
 
-      <AuditFilters
-        search={search}
-        setSearch={setSearch}
-        severityFilter={severityFilter}
-        setSeverityFilter={setSeverityFilter}
-        categoryFilter={categoryFilter}
-        setCategoryFilter={setCategoryFilter}
-        actionFilter={actionFilter}
-        setActionFilter={setActionFilter}
-        dateFilter={dateFilter}
-        setDateFilter={setDateFilter}
-        actionOptions={actionOptions}
-        resetFilters={resetFilters}
-      />
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+                  Realtime operational
+                  visibility into user
+                  activity, security
+                  events, imports,
+                  settings changes,
+                  permissions, and
+                  database actions.
+                  Because eventually
+                  somebody clicks
+                  something stupid.
+                </p>
+              </div>
+            </div>
 
-      <div className="grid gap-4 xl:grid-cols-[440px_minmax(0,1fr)_280px]">
-        <AuditList
-          logs={logs}
-          filteredLogs={filteredLogs}
-          selectedLogId={selectedLog?.id ?? null}
-          setSelectedLogId={setSelectedLogId}
-        />
+            <div className="flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={
+                  handleExport
+                }
+                disabled={
+                  !filteredLogs.length
+                }
+                className={"inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"}
+              >
+                <Download className="h-4 w-4" />
 
-        <AuditDetails selectedLog={selectedLog} />
+                Export CSV
+              </button>
 
-        <AuditWatchList
-          logs={logs}
-          recentHighRisk={recentHighRisk}
+              <button
+                type="button"
+                onClick={refresh}
+                disabled={
+                  refreshing
+                }
+                className={"inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"}
+              >
+                <RefreshCw
+                  className={`h-4 w-4 ${
+                    refreshing
+                      ? "animate-spin"
+                      : ""
+                  }`}
+                />
+
+                Refresh
+              </button>
+            </div>
+          </div>
+        </section>
+
+        <AuditStats logs={logs} />
+
+        <AuditFilters
+          search={search}
           setSearch={setSearch}
-          setSelectedLogId={setSelectedLogId}
+          severityFilter={
+            severityFilter
+          }
+          setSeverityFilter={
+            setSeverityFilter
+          }
+          categoryFilter={
+            categoryFilter
+          }
+          setCategoryFilter={
+            setCategoryFilter
+          }
+          actionFilter={
+            actionFilter
+          }
+          setActionFilter={
+            setActionFilter
+          }
+          dateFilter={
+            dateFilter
+          }
+          setDateFilter={
+            setDateFilter
+          }
+          actionOptions={
+            actionOptions
+          }
+          resetFilters={
+            resetFilters
+          }
         />
+
+        <section
+          aria-label="Audit analysis panels"
+          className="grid gap-4 xl:grid-cols-[440px_minmax(0,1fr)_280px]"
+        >
+          <AuditList
+            logs={logs}
+            filteredLogs={
+              filteredLogs
+            }
+            selectedLogId={
+              selectedLog?.id ??
+              null
+            }
+            setSelectedLogId={
+              setSelectedLogId
+            }
+          />
+
+          <AuditDetails
+            selectedLog={
+              selectedLog
+            }
+          />
+
+          <AuditWatchList
+            logs={logs}
+            recentHighRisk={
+              recentHighRisk
+            }
+            setSearch={
+              setSearch
+            }
+            setSelectedLogId={
+              setSelectedLogId
+            }
+          />
+        </section>
       </div>
     </main>
   );
 }
+
+
+
+

@@ -1,18 +1,10 @@
-import { getApps, initializeApp } from "firebase-admin/app";
+import { setGlobalOptions } from "firebase-functions/v2";
 
-if (!getApps().length) {
-  initializeApp();
-}
+setGlobalOptions({
+  region: "us-central1",
+  maxInstances: 10,
+});
 
-/* IMPORT STORAGE TRIGGER */
-export { importFileFromStorage } from "./imports/importFileFromStorage.js";
-
-/* MAINTENANCE */
-export { cleanDatabase } from "./maintenance/cleanDatabase.js";
-export { rebuildEverything } from "./maintenance/rebuildEverything.js";
-export { rebuildReportsAnalytics } from "./maintenance/rebuildReportsAnalytics.js";
-export { reprocessImportJob } from "./maintenance/reprocessImportJob.js";
-export { softResetReports } from "./maintenance/softResetReports.js";
-export { askAdminAi } from "./ai/callable/askAdminAi.js";
-export { resetOperationalDatabase } from "./resetOperationalDatabase.js"
-;
+export { createDashboardUser } from "./adminUsers";
+export { importFileFromStorage } from "./imports/importFileFromStorage";
+export { askAdminAi } from "./ai/askAdminAi";

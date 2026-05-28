@@ -1,11 +1,11 @@
 import {
   collection,
   doc,
+  type Firestore,
   increment,
   serverTimestamp,
   setDoc,
   writeBatch,
-  type Firestore,
 } from "firebase/firestore";
 
 export type ImportedHospiceRow = {

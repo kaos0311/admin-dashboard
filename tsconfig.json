@@ -1,43 +1,46 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "lib": [
-      "dom",
-      "dom.iterable",
-      "es2022"
-    ],
-    "allowJs": true,
+    "lib": ["dom", "dom.iterable", "es2022"],
+
+    "allowJs": false,
     "skipLibCheck": true,
+
     "strict": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedIndexedAccess": false,
     "exactOptionalPropertyTypes": false,
+
     "forceConsistentCasingInFileNames": true,
     "noEmit": true,
+
     "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
+
     "module": "esnext",
     "moduleResolution": "bundler",
+
     "resolveJsonModule": true,
     "isolatedModules": true,
+
     "jsx": "react-jsx",
+
     "incremental": true,
-    "ignoreDeprecations": "5.0",
+
     "paths": {
-      "@/*": [
-        "./*"
-      ]
+      "@/*": ["./*"]
     },
-    "types": [
-      "node"
-    ],
+
+    "types": ["node"],
+
     "plugins": [
       {
         "name": "next"
       }
     ]
   },
+
   "include": [
     "next-env.d.ts",
     "**/*.ts",
@@ -45,9 +48,15 @@
     "**/*.mts",
     ".next/types/**/*.ts",
     ".next/dev/types/**/*.ts"
-, "functions/lib/imports/processors/buildPatientProfile.js", "functions/lib/imports/processors/processImportBatch.js"  ],
+  ],
+
   "exclude": [
     "node_modules",
+    ".next",
+    "out",
+    "dist",
+    "coverage",
+    "functions/lib",
     "firebase-debug.log",
     "firestore-debug.log"
   ]

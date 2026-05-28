@@ -1,7 +1,7 @@
 import {
-  Timestamp,
   type DocumentData,
   type QueryDocumentSnapshot,
+  Timestamp,
 } from "firebase/firestore";
 import {
   Ban,

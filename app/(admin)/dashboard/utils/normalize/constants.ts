@@ -31,6 +31,7 @@ export const EMPTY_INVENTORY_ANALYTICS: InventoryAnalytics = {
   totalInventoryValue: 0,
   totalInventoryOnRent: 0,
   totalInventoryCommitted: 0,
+
   lowStockItems: [],
 };
 

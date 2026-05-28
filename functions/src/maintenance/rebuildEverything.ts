@@ -1,13 +1,13 @@
 // functions/src/maintenance/rebuildEverything.ts
 
-import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 
 import {
+  type DocumentReference,
   FieldValue,
   getFirestore,
   Timestamp,
-  type DocumentReference,
 } from "firebase-admin/firestore";
 
 import { getStorage } from "firebase-admin/storage";

@@ -1,30 +1,50 @@
-export type InventoryStatus =
-  | "available"
-  | "inactive"
-  | "damaged"
-  | "lost"
-  | "discontinued";
+export const INVENTORY_STATUSES = [
+  "available",
+  "inactive",
+  "damaged",
+  "lost",
+  "discontinued",
+] as const;
 
-export type LifecycleStatus =
-  | "new"
-  | "active"
-  | "needs_service"
-  | "end_of_life"
-  | "retired";
+export const LIFECYCLE_STATUSES = [
+  "new",
+  "active",
+  "needs_service",
+  "end_of_life",
+  "retired",
+] as const;
+
+export const SORT_KEYS = [
+  "name",
+  "category",
+  "available",
+  "quantityOnHand",
+  "totalValue",
+  "status",
+  "lifecycleStatus",
+  "nextServiceDate",
+] as const;
+
+export const SORT_DIRECTIONS = ["asc", "desc"] as const;
+
+export const ALERT_FILTERS = [
+  "all",
+  "lowStock",
+  "serviceDue",
+  "warrantyExpired",
+] as const;
+
+export type InventoryStatus = (typeof INVENTORY_STATUSES)[number];
+
+export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number];
 
 export type ScanTarget = "barcode" | "serial" | "lotNumber" | null;
 
-export type SortKey =
-  | "name"
-  | "category"
-  | "available"
-  | "quantityOnHand"
-  | "totalValue"
-  | "status"
-  | "lifecycleStatus"
-  | "nextServiceDate";
+export type SortKey = (typeof SORT_KEYS)[number];
 
-export type SortDirection = "asc" | "desc";
+export type SortDirection = (typeof SORT_DIRECTIONS)[number];
+
+export type AlertFilter = (typeof ALERT_FILTERS)[number];
 
 export type InventoryItem = {
   id: string;
@@ -95,12 +115,6 @@ export type InventoryForm = {
   lifecycleNotes: string;
   notes: string;
 };
-
-export type AlertFilter =
-  | "all"
-  | "lowStock"
-  | "serviceDue"
-  | "warrantyExpired";
 
 export type MovementPayload = {
   productId: string;

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, type ComponentType } from "react";
+import { type ComponentType, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -18,8 +18,8 @@ import {
   Shield,
   Siren,
   UploadCloud,
-  UserSquare2,
   Users,
+  UserSquare2,
   X,
 } from "lucide-react";
 

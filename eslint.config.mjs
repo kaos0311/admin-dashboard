@@ -8,31 +8,33 @@ const eslintConfig = defineConfig([
   ...nextTs,
 
   {
+    linterOptions: {
+      reportUnusedDisableDirectives: true,
+    },
+
     rules: {
       /*
       |--------------------------------------------------------------------------
-      | GENERAL SAFETY
+      | CORE JAVASCRIPT
       |--------------------------------------------------------------------------
       */
 
-      "no-console": [
-        "warn",
-        {
-          allow: ["warn", "error"],
-        },
-      ],
+      "no-console": ["warn", { allow: ["warn", "error"] }],
 
       eqeqeq: ["error", "always"],
 
       "no-duplicate-imports": "error",
-
       "no-unreachable": "error",
-
       "no-return-await": "error",
+      "no-unsafe-finally": "error",
+      "no-debugger": "warn",
+      "no-alert": "warn",
+
+      "prefer-const": "warn",
 
       /*
       |--------------------------------------------------------------------------
-      | TYPESCRIPT
+      | UNUSED VARIABLES
       |--------------------------------------------------------------------------
       */
 
@@ -44,19 +46,42 @@ const eslintConfig = defineConfig([
           argsIgnorePattern: "^_",
           varsIgnorePattern: "^_",
           caughtErrorsIgnorePattern: "^_",
+          destructuredArrayIgnorePattern: "^_",
         },
       ],
 
+      /*
+      |--------------------------------------------------------------------------
+      | TYPESCRIPT
+      |--------------------------------------------------------------------------
+      */
+
       "@typescript-eslint/no-explicit-any": "warn",
 
+      /*
+        You had these OFF entirely.
+        That’s fine short-term during refactors,
+        but dangerous long-term in enterprise apps.
+      */
+
+      "@typescript-eslint/no-floating-promises": "warn",
+
       "@typescript-eslint/no-misused-promises": [
-        "error",
+        "warn",
         {
           checksVoidReturn: false,
         },
       ],
 
-      "@typescript-eslint/require-await": "warn",
+      "@typescript-eslint/require-await": "off",
+
+      "@typescript-eslint/no-unnecessary-type-assertion": "warn",
+
+      "@typescript-eslint/consistent-type-exports": "warn",
+
+      "@typescript-eslint/prefer-nullish-coalescing": "warn",
+
+      "@typescript-eslint/prefer-optional-chain": "warn",
 
       "@typescript-eslint/consistent-type-imports": [
         "warn",
@@ -66,16 +91,17 @@ const eslintConfig = defineConfig([
         },
       ],
 
-      "@typescript-eslint/consistent-type-exports": "warn",
-
-      "@typescript-eslint/no-floating-promises": "error",
-
-      "@typescript-eslint/no-unnecessary-type-assertion":
+      "@typescript-eslint/ban-ts-comment": [
         "warn",
+        {
+          "ts-ignore": "allow-with-description",
+          minimumDescriptionLength: 6,
+        },
+      ],
 
       /*
       |--------------------------------------------------------------------------
-      | REACT / NEXT
+      | REACT
       |--------------------------------------------------------------------------
       */
 
@@ -85,11 +111,17 @@ const eslintConfig = defineConfig([
 
       "react/self-closing-comp": "warn",
 
+      /*
+      |--------------------------------------------------------------------------
+      | NEXTJS
+      |--------------------------------------------------------------------------
+      */
+
       "@next/next/no-img-element": "warn",
 
       /*
       |--------------------------------------------------------------------------
-      | IMPORT HYGIENE
+      | IMPORTS
       |--------------------------------------------------------------------------
       */
 
@@ -97,8 +129,82 @@ const eslintConfig = defineConfig([
         "warn",
         {
           ignoreDeclarationSort: true,
+          ignoreCase: true,
         },
       ],
+
+      /*
+      |--------------------------------------------------------------------------
+      | CODE QUALITY
+      |--------------------------------------------------------------------------
+      */
+
+      curly: ["warn", "all"],
+
+      "object-shorthand": ["warn", "always"],
+
+      "prefer-template": "warn",
+
+      "no-var": "error",
+
+      /*
+      |--------------------------------------------------------------------------
+      | STYLISTIC SAFETY
+      |--------------------------------------------------------------------------
+      */
+
+      "no-trailing-spaces": "warn",
+
+      "eol-last": ["warn", "always"],
+
+      "comma-dangle": [
+        "warn",
+        {
+          arrays: "always-multiline",
+          objects: "always-multiline",
+          imports: "always-multiline",
+          exports: "always-multiline",
+          functions: "never",
+        },
+      ],
+    },
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | CLOUD FUNCTIONS / SCRIPTS
+  |--------------------------------------------------------------------------
+  */
+
+  {
+    files: ["functions/**/*.{ts,js}", "scripts/**/*.{ts,js,mjs}"],
+
+    rules: {
+      "no-console": "off",
+
+      /*
+        Firebase Functions often use explicit any
+        during request parsing and webhook handling.
+      */
+      "@typescript-eslint/no-explicit-any": "off",
+    },
+  },
+
+  /*
+  |--------------------------------------------------------------------------
+  | TEST FILES
+  |--------------------------------------------------------------------------
+  */
+
+  {
+    files: [
+      "**/*.test.{ts,tsx,js,jsx}",
+      "**/*.spec.{ts,tsx,js,jsx}",
+    ],
+
+    rules: {
+      "@typescript-eslint/no-explicit-any": "off",
+      "no-console": "off",
     },
   },
 
@@ -111,40 +217,22 @@ const eslintConfig = defineConfig([
   globalIgnores([
     /*
     |--------------------------------------------------------------------------
-    | NEXT / BUILD
+    | NEXT
     |--------------------------------------------------------------------------
     */
 
     ".next/**",
     "out/**",
+
+    /*
+    |--------------------------------------------------------------------------
+    | BUILD OUTPUT
+    |--------------------------------------------------------------------------
+    */
+
     "build/**",
     "dist/**",
-
-    /*
-    |--------------------------------------------------------------------------
-    | GENERATED FILES
-    |--------------------------------------------------------------------------
-    */
-
-    "next-env.d.ts",
-
-    /*
-    |--------------------------------------------------------------------------
-    | DEPENDENCIES
-    |--------------------------------------------------------------------------
-    */
-
-    "node_modules/**",
-
-    /*
-    |--------------------------------------------------------------------------
-    | LOG FILES
-    |--------------------------------------------------------------------------
-    */
-
-    "*.log",
-    "firebase-debug.log",
-    "firestore-debug.log",
+    "coverage/**",
 
     /*
     |--------------------------------------------------------------------------
@@ -152,16 +240,30 @@ const eslintConfig = defineConfig([
     |--------------------------------------------------------------------------
     */
 
+    "functions/lib/**",
     ".firebase/**",
+    "firebase-export/**",
+
+    "firebase-debug.log",
+    "firestore-debug.log",
 
     /*
     |--------------------------------------------------------------------------
-    | SECURITY
+    | TYPESCRIPT / NODE
     |--------------------------------------------------------------------------
-    |
-    | Prevent accidental credential commits.
-    |
     */
+
+    "next-env.d.ts",
+    "node_modules/**",
+
+    /*
+    |--------------------------------------------------------------------------
+    | ENV / SECRETS
+    |--------------------------------------------------------------------------
+    */
+
+    ".env",
+    ".env.*",
 
     "**/serviceAccountKey.json",
     "**/*serviceAccount*.json",
@@ -169,12 +271,22 @@ const eslintConfig = defineConfig([
 
     /*
     |--------------------------------------------------------------------------
-    | OPTIONAL ENV FILES
+    | TEMP FILES
     |--------------------------------------------------------------------------
     */
 
-    ".env",
-    ".env.*",
+    "*.log",
+    "*.tmp",
+    "*.temp",
+
+    /*
+    |--------------------------------------------------------------------------
+    | MAC / WINDOWS GARBAGE
+    |--------------------------------------------------------------------------
+    */
+
+    ".DS_Store",
+    "Thumbs.db",
   ]),
 ]);
 

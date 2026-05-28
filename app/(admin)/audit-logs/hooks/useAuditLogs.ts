@@ -19,77 +19,102 @@ import type { AuditLogRow } from "../utils/auditTypes";
 
 const AUDIT_PAGE_SIZE = 250;
 
-export function useAuditLogs({ enabled }: { enabled: boolean }) {
+type UseAuditLogsParams = {
+  enabled: boolean;
+};
+
+type UseAuditLogsResult = {
+  logs: AuditLogRow[];
+  loading: boolean;
+  refreshing: boolean;
+  refresh: () => void;
+};
+
+export function useAuditLogs({
+  enabled,
+}: UseAuditLogsParams): UseAuditLogsResult {
   const mountedRef = useRef(false);
   const unsubscribeRef = useRef<(() => void) | null>(null);
 
   const [logs, setLogs] = useState<AuditLogRow[]>([]);
-  const [loading, setLoading] = useState(enabled);
+  const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
-  const loadRealtimeLogs = useCallback(() => {
+  const cleanupSubscription = useCallback(() => {
     unsubscribeRef.current?.();
-    setRefreshing(true);
-
-    const auditQuery = query(
-      collection(db, "auditLogs"),
-      orderBy("createdAt", "desc"),
-      limit(AUDIT_PAGE_SIZE)
-    );
-
-    const unsubscribe = onSnapshot(
-      auditQuery,
-      (snapshot) => {
-        if (!mountedRef.current) return;
-
-        const nextLogs = snapshot.docs.map(mapAuditDoc);
-
-        setLogs(nextLogs);
-        setLoading(false);
-        setRefreshing(false);
-      },
-      (error) => {
-        console.error("AUDIT LOGS SNAPSHOT ERROR:", error);
-
-        if (!mountedRef.current) return;
-
-        toast.error("Audit feed could not be loaded.");
-        setLoading(false);
-        setRefreshing(false);
-      }
-    );
-
-    unsubscribeRef.current = unsubscribe;
+    unsubscribeRef.current = null;
   }, []);
+
+  const subscribeToAuditLogs = useCallback(
+    (options?: { silent?: boolean }) => {
+      cleanupSubscription();
+
+      if (!options?.silent) {
+        setRefreshing(true);
+      }
+
+      const auditQuery = query(
+        collection(db, "auditLogs"),
+        orderBy("createdAt", "desc"),
+        limit(AUDIT_PAGE_SIZE)
+      );
+
+      unsubscribeRef.current = onSnapshot(
+        auditQuery,
+        (snapshot) => {
+          if (!mountedRef.current) return;
+
+          setLogs(snapshot.docs.map(mapAuditDoc));
+          setHasLoadedOnce(true);
+          setRefreshing(false);
+        },
+        (error) => {
+          console.error("AUDIT LOGS SNAPSHOT ERROR:", error);
+
+          if (!mountedRef.current) return;
+
+          toast.error("Audit feed could not be loaded.");
+          setHasLoadedOnce(true);
+          setRefreshing(false);
+        }
+      );
+    },
+    [cleanupSubscription]
+  );
 
   useEffect(() => {
     mountedRef.current = true;
 
-    if (enabled) {
-      setLoading(true);
-      loadRealtimeLogs();
-    } else {
-      setLoading(false);
-      setLogs([]);
-    }
+    queueMicrotask(() => {
+      if (!mountedRef.current) return;
+
+      if (!enabled) {
+        cleanupSubscription();
+        setLogs([]);
+        setHasLoadedOnce(false);
+        setRefreshing(false);
+        return;
+      }
+
+      subscribeToAuditLogs({ silent: true });
+    });
 
     return () => {
       mountedRef.current = false;
-      unsubscribeRef.current?.();
-      unsubscribeRef.current = null;
+      cleanupSubscription();
     };
-  }, [enabled, loadRealtimeLogs]);
+  }, [cleanupSubscription, enabled, subscribeToAuditLogs]);
 
   const refresh = useCallback(() => {
-    if (refreshing) return;
+    if (!enabled || refreshing) return;
 
-    loadRealtimeLogs();
+    subscribeToAuditLogs();
     toast.success("Audit feed refreshed.");
-  }, [loadRealtimeLogs, refreshing]);
+  }, [enabled, refreshing, subscribeToAuditLogs]);
 
   return {
     logs,
-    loading,
+    loading: enabled && !hasLoadedOnce,
     refreshing,
     refresh,
   };

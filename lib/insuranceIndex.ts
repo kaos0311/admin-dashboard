@@ -2,10 +2,10 @@
 
 import {
   doc,
+  type Firestore,
   serverTimestamp,
   setDoc,
   writeBatch,
-  type Firestore,
 } from "firebase/firestore";
 
 export type RawImportedRow = Record<string, unknown>;

@@ -4,21 +4,47 @@ import type {
   SortKey,
 } from "./inventoryTypes";
 
+function compareNumbers(
+  left: number,
+  right: number,
+  direction: SortDirection
+): number {
+  return direction === "asc" ? left - right : right - left;
+}
+
+function compareStrings(
+  left: string,
+  right: string,
+  direction: SortDirection
+): number {
+  const result = left.localeCompare(right, undefined, {
+    numeric: true,
+    sensitivity: "base",
+  });
+
+  return direction === "asc" ? result : -result;
+}
+
 export function sortInventoryItems(
-  rows: InventoryItem[],
+  rows: readonly InventoryItem[],
   sortKey: SortKey,
   sortDirection: SortDirection
 ): InventoryItem[] {
-  const direction = sortDirection === "asc" ? 1 : -1;
+  return [...rows].sort((leftRow, rightRow) => {
+    const leftValue = leftRow[sortKey];
+    const rightValue = rightRow[sortKey];
 
-  return [...rows].sort((a, b) => {
-    const aValue = a[sortKey];
-    const bValue = b[sortKey];
-
-    if (typeof aValue === "number" && typeof bValue === "number") {
-      return (aValue - bValue) * direction;
+    if (
+      typeof leftValue === "number" &&
+      typeof rightValue === "number"
+    ) {
+      return compareNumbers(leftValue, rightValue, sortDirection);
     }
 
-    return String(aValue || "").localeCompare(String(bValue || "")) * direction;
+    return compareStrings(
+      String(leftValue ?? ""),
+      String(rightValue ?? ""),
+      sortDirection
+    );
   });
 }

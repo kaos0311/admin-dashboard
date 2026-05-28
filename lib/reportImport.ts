@@ -3,11 +3,11 @@ import {
   arrayUnion,
   collection,
   doc,
+  type DocumentData,
   increment,
   serverTimestamp,
   updateDoc,
   writeBatch,
-  type DocumentData,
 } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 

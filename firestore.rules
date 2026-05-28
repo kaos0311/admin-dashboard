@@ -2,465 +2,192 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
-
-    /*
-    |--------------------------------------------------------------------------
-    | HELPERS
-    |--------------------------------------------------------------------------
-    */
-
-    function signedIn() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    function userPath() {
-      return /databases/$(database)/documents/users/$(request.auth.uid);
-    }
-
-    function userExists() {
-      return signedIn() && exists(userPath());
-    }
-
-    function userData() {
-      return get(userPath()).data;
-    }
-
-    function tokenRole() {
-      return signedIn() && request.auth.token.role is string
+    function role() {
+      return isSignedIn() && request.auth.token.role is string
         ? request.auth.token.role
         : "";
     }
 
-    function docRole() {
-      return userExists() && userData().role is string
-        ? userData().role
-        : "";
-    }
-
-    function hasRole(role) {
-      return tokenRole() == role || docRole() == role;
-    }
-
     function isAdmin() {
-      return signedIn() && hasRole("admin");
+      return role() == "admin";
     }
 
     function isStaff() {
-      return signedIn() && hasRole("staff");
+      return role() == "staff";
     }
 
     function isStaffOrAdmin() {
       return isAdmin() || isStaff();
     }
 
-    function isActive() {
-      return userExists() && userData().active == true;
+    function isSelf(userId) {
+      return isSignedIn() && request.auth.uid == userId;
     }
-
-    function canAccessDashboard() {
-      return signedIn() && isActive() && isStaffOrAdmin();
-    }
-
-    function isSelf(uid) {
-      return signedIn() && request.auth.uid == uid;
-    }
-
-    function onlyAllowedKeys(keys) {
-      return request.resource.data.keys().hasOnly(keys);
-    }
-
-    function userCreateKeys() {
-      return [
-        "uid",
-        "email",
-        "displayName",
-        "role",
-        "active",
-        "createdAt",
-        "updatedAt"
-      ];
-    }
-
-    function userSelfUpdateKeys() {
-      return [
-        "displayName",
-        "updatedAt"
-      ];
-    }
-
-    function safeAppSettingsKeys() {
-      return [
-        "companyName",
-        "companyPhone",
-        "companyEmail",
-        "companyAddress",
-        "defaultTheme",
-        "defaultHomeScreen",
-        "compactTables",
-        "showDashboardCounters",
-        "enableOrderFilters",
-        "enableProductFilters",
-        "enableRentalFilters",
-        "maintenanceMode",
-        "maintenanceMessage",
-        "allowAdminsDuringMaintenance",
-        "allowedUploadTypes",
-        "maxUploadSizeMb",
-        "pdfParsingEnabled",
-        "csvParsingEnabled",
-        "autoIndexAfterUpload",
-        "keepRawUploadsInStorage",
-        "createdAt",
-        "updatedAt"
-      ];
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | USERS
-    |--------------------------------------------------------------------------
-    */
-
-    match /users/{uid} {
-      allow read: if canAccessDashboard() && (isAdmin() || isSelf(uid));
-
-      allow create: if
-        (
-          isAdmin()
-          && onlyAllowedKeys(userCreateKeys())
-          && request.resource.data.role in ["admin", "staff"]
-          && request.resource.data.active is bool
-        )
-        ||
-        (
-          isSelf(uid)
-          && !exists(/databases/$(database)/documents/users/$(uid))
-          && onlyAllowedKeys(userCreateKeys())
-          && request.resource.data.uid == uid
-          && request.resource.data.email == request.auth.token.email
-          && request.resource.data.role == "staff"
-          && request.resource.data.active == true
-        );
-
-      allow update: if
-        (
-          isAdmin()
-          && request.resource.data.role in ["admin", "staff"]
-          && request.resource.data.active is bool
-        )
-        ||
-        (
-          isSelf(uid)
-          && canAccessDashboard()
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly(userSelfUpdateKeys())
-        );
-
-      allow delete: if isAdmin() && !isSelf(uid);
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | SETTINGS
-    |--------------------------------------------------------------------------
-    */
 
     match /settings/{docId} {
-      allow read: if docId == "app" || canAccessDashboard();
-
-      allow create, update: if
-        isAdmin()
-        && docId == "app"
-        && request.resource.data.keys().hasOnly(safeAppSettingsKeys());
-
-      allow delete: if isAdmin();
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | DASHBOARD / ANALYTICS
-    |--------------------------------------------------------------------------
-    */
 
     match /analytics/{docId} {
-      allow read: if canAccessDashboard();
-      allow create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-
-      match /{subPath=**} {
-        allow read: if canAccessDashboard();
-        allow create, update: if canAccessDashboard();
-        allow delete: if isAdmin();
-      }
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | CORE ADMIN COLLECTIONS
-    |--------------------------------------------------------------------------
-    */
+    match /dashboardPreview/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
 
     match /products/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
     }
 
     match /inventory/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /stockMovements/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
     }
 
     match /orders/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /orderArchives/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
     }
 
     match /rentals/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
     }
 
-    match /rentalReminders/{docId} {
-      allow read, create, update: if canAccessDashboard();
+    match /users/{userId} {
+      allow read: if isSelf(userId) || isAdmin();
+      allow create: if isAdmin();
+      allow update: if isSelf(userId) || isAdmin();
       allow delete: if isAdmin();
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | REPORT IMPORTS
-    |--------------------------------------------------------------------------
-    */
-
-    match /importedReports/{reportId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-
-      match /rows/{rowId} {
-        allow read, create, update: if canAccessDashboard();
-        allow delete: if isAdmin();
-      }
-
-      match /{subPath=**} {
-        allow read, create, update: if canAccessDashboard();
-        allow delete: if isAdmin();
-      }
-    }
-
-    match /importJobs/{jobId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-
-      match /rows/{rowId} {
-        allow read, create, update: if canAccessDashboard();
-        allow delete: if isAdmin();
-      }
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | PATIENT INDEX / PATIENT PAGES
-    |--------------------------------------------------------------------------
-    */
-
-    match /patients/{patientId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-
-      match /{subPath=**} {
-        allow read, create, update: if canAccessDashboard();
-        allow delete: if isAdmin();
-      }
-    }
-
-    match /patientIndex/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /patients_index/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /patientProfiles/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /dataQualityIssues/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | HOSPICE
-    |--------------------------------------------------------------------------
-    */
-
-    match /hospicePatients/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /hospiceNurses/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /hospiceCare/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | WIP
-    |--------------------------------------------------------------------------
-    */
-
-    match /wipRecords/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /wip/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /wipPatients/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /workInProgress/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | INSURANCE
-    |--------------------------------------------------------------------------
-    */
-
-    match /insurance/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /Insurance/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /insurancePatients/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /insuranceQueue/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /insuranceRecords/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    /*
-    |--------------------------------------------------------------------------
-    | COMMAND CENTER / OPERATIONS INTELLIGENCE
-    |--------------------------------------------------------------------------
-    */
 
     match /complianceIssues/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
     }
 
     match /tasks/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /taskComments/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /parAlerts/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /cmnQueue/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /equipmentRecalls/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
-    }
-
-    match /recallMatches/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
     }
 
     match /hospiceOversight/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
     }
 
-    match /careSummaries/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
+    match /equipmentRecalls/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | NOTIFICATIONS
-    |--------------------------------------------------------------------------
-    */
+    match /recallMatches/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /cmnQueue/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /parAlerts/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /patients/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /patients_index/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /hospicePatients/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /insuranceRecords/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /insurance/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /wipRecords/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /importJobs/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+
+      match /rows/{rowId} {
+        allow read: if isStaffOrAdmin();
+        allow write: if isStaffOrAdmin();
+      }
+    }
+
+    match /importQueue/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /importedReports/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+
+      match /rows/{rowId} {
+        allow read: if isStaffOrAdmin();
+        allow write: if isStaffOrAdmin();
+      }
+    }
+
+    match /aiConversations/{conversationId} {
+      allow read: if isStaffOrAdmin();
+      allow create: if isStaffOrAdmin()
+        && request.resource.data.createdBy == request.auth.uid;
+      allow update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+
+      match /messages/{messageId} {
+        allow read: if isStaffOrAdmin();
+        allow create: if isStaffOrAdmin()
+          && request.resource.data.createdBy == request.auth.uid;
+        allow update: if false;
+        allow delete: if isAdmin();
+      }
+    }
 
     match /notifications/{docId} {
-      allow read, create, update: if canAccessDashboard();
-      allow delete: if isAdmin();
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
     }
 
-    /*
-    |--------------------------------------------------------------------------
-    | AUDIT LOGS
-    |--------------------------------------------------------------------------
-    */
-
-    match /auditLogs/{logId} {
+    match /auditLogs/{docId} {
       allow read: if isAdmin();
-      allow create: if canAccessDashboard();
-      allow update, delete: if false;
+      allow write: if false;
     }
-
-    /*
-    |--------------------------------------------------------------------------
-    | DENY EVERYTHING ELSE
-    |--------------------------------------------------------------------------
-    */
 
     match /{document=**} {
-      allow read, create, update, delete: if false;
+      allow read, write: if false;
     }
   }
 }

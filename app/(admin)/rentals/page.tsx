@@ -1,16 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { AlertTriangle } from "lucide-react";
+
+import {
+  AlertTriangle,
+  CalendarClock,
+  ShieldCheck,
+} from "lucide-react";
+
+import { colors, glass, typography } from "@/theme";
+
 import { DEFAULT_RENTAL_FILTERS } from "./rentals-constants";
+
 import { useRentalProducts } from "./hooks/useRentalProducts";
 import { useRentalStats } from "./hooks/useRentalStats";
 import { useRentals } from "./hooks/useRentals";
-import { RentalsHeader } from "./components/RentalsHeader";
-import { RentalsStatsGrid } from "./components/RentalsStatsGrid";
+
 import { RentalForm } from "./components/RentalForm";
 import { RentalRecords } from "./components/RentalRecords";
-import { GlassCard } from "./components/shared/GlassCard";
+import { RentalsHeader } from "./components/RentalsHeader";
+import { RentalsStatsGrid } from "./components/RentalsStatsGrid";
 
 export default function RentalsPage() {
   const {
@@ -31,15 +40,17 @@ export default function RentalsPage() {
   } = useRentals();
 
   const { products, loading: productsLoading } = useRentalProducts();
+
   const stats = useRentalStats(records);
+
   const [error, setError] = useState("");
 
-  const hasActiveFilters = useMemo(
-    () =>
+  const hasActiveFilters = useMemo(() => {
+    return (
       filters.search !== DEFAULT_RENTAL_FILTERS.search ||
-      filters.status !== DEFAULT_RENTAL_FILTERS.status,
-    [filters]
-  );
+      filters.status !== DEFAULT_RENTAL_FILTERS.status
+    );
+  }, [filters]);
 
   async function handleSave() {
     setError("");
@@ -56,44 +67,104 @@ export default function RentalsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(56,189,248,0.16),_transparent_30%),radial-gradient(circle_at_top_right,_rgba(99,102,241,0.14),_transparent_28%),linear-gradient(180deg,_#020617_0%,_#020617_48%,_#030712_100%)] px-4 py-6 text-white md:px-6">
-      <div className="mx-auto flex w-full max-w-7xl flex-col gap-6">
+    <main className={`${glass.page} ${colors.app}`}>
+      <div className={colors.grid} />
+
+      <div className={glass.shell}>
+        <section className={glass.panel}>
+          <div className={colors.grid} />
+
+          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+            <div className="space-y-4">
+              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+                <ShieldCheck className="h-3.5 w-3.5" />
+                Rental Intelligence
+              </div>
+
+              <div>
+                <h1 className={typography.pageTitle}>
+                  Rentals Command Center
+                </h1>
+
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+                  Operational rental tracking for active equipment,
+                  returns, patient-linked rental records, product
+                  availability, billing visibility, and overdue rental
+                  oversight. Because rented equipment has a funny habit of
+                  wandering off like it joined witness protection.
+                </p>
+              </div>
+            </div>
+
+            <div className={`${glass.card} max-w-sm`}>
+              <div className="flex items-center gap-4">
+                <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
+                  <CalendarClock className="h-6 w-6" />
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-white">
+                      Rental System
+                    </p>
+
+                    <span className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-sky-200 shadow-[0_0_10px_rgba(186,230,253,0.9)]" />
+                      Online
+                    </span>
+                  </div>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Rental tracking and return monitoring active
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <RentalsHeader />
 
         <RentalsStatsGrid stats={stats} />
 
         {error ? (
-          <GlassCard className="border-red-400/30 bg-red-500/10">
-            <div className="flex items-start gap-3 text-sm text-red-100">
+          <section className="rounded-3xl border border-red-400/25 bg-red-500/10 p-5 text-red-100 shadow-[0_0_35px_rgba(248,113,113,0.18)] backdrop-blur-2xl">
+            <div className="flex items-start gap-3 text-sm">
               <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-300" />
               <p>{error}</p>
             </div>
-          </GlassCard>
+          </section>
         ) : null}
 
-        <RentalForm
-          form={form}
-          setForm={setForm}
-          editingId={editingId}
-          saving={saving}
-          products={products}
-          productsLoading={productsLoading}
-          onSave={handleSave}
-          onCancel={resetForm}
-        />
+        <section
+          aria-label="Rental form and records"
+          className="grid gap-6 2xl:grid-cols-[420px_minmax(0,1fr)]"
+        >
+          <RentalForm
+            form={form}
+            setForm={setForm}
+            editingId={editingId}
+            saving={saving}
+            products={products}
+            productsLoading={productsLoading}
+            onSave={handleSave}
+            onCancel={resetForm}
+          />
 
-        <RentalRecords
-          records={filteredRecords}
-          loading={loading}
-          filters={filters}
-          setFilters={setFilters}
-          hasActiveFilters={hasActiveFilters}
-          onClearFilters={() => setFilters(DEFAULT_RENTAL_FILTERS)}
-          onEdit={editRental}
-          onDelete={deleteRental}
-          onMarkReturned={markReturned}
-        />
+          <RentalRecords
+            records={filteredRecords}
+            loading={loading}
+            filters={filters}
+            setFilters={setFilters}
+            hasActiveFilters={hasActiveFilters}
+            onClearFilters={() => setFilters(DEFAULT_RENTAL_FILTERS)}
+            onEdit={editRental}
+            onDelete={deleteRental}
+            onMarkReturned={markReturned}
+          />
+        </section>
       </div>
     </main>
   );
 }
+

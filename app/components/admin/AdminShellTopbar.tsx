@@ -9,7 +9,7 @@ import {
   UserRound,
 } from "lucide-react";
 
-import ThemeToggle from "../../theme/ThemeToggle";
+import ThemeToggle from "@/theme/ThemeToggle";
 
 type AdminShellTopbarProps = {
   userEmail?: string;

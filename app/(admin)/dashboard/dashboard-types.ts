@@ -1,3 +1,37 @@
+export const PRODUCT_STATUSES = [
+  "active",
+  "inactive",
+  "archived",
+] as const;
+
+export const ORDER_STATUSES = [
+  "active",
+  "pending",
+  "delivered",
+  "cancelled",
+  "archived",
+] as const;
+
+export const RENTAL_STATUSES = [
+  "active",
+  "paused",
+  "completed",
+  "cancelled",
+  "archived",
+] as const;
+
+export type ProductStatus =
+  | (typeof PRODUCT_STATUSES)[number]
+  | string;
+
+export type OrderStatus =
+  | (typeof ORDER_STATUSES)[number]
+  | string;
+
+export type RentalStatus =
+  | (typeof RENTAL_STATUSES)[number]
+  | string;
+
 export type DashboardSummary = {
   totalRevenue: number;
   outstandingBalance: number;
@@ -19,24 +53,6 @@ export type DashboardSummary = {
   importedReportRows: number;
   importedReportFiles: number;
 };
-
-export type ProductStatus = "active" | "inactive" | "archived" | string;
-
-export type OrderStatus =
-  | "active"
-  | "pending"
-  | "delivered"
-  | "cancelled"
-  | "archived"
-  | string;
-
-export type RentalStatus =
-  | "active"
-  | "paused"
-  | "completed"
-  | "cancelled"
-  | "archived"
-  | string;
 
 export type ProductRow = {
   id: string;
@@ -95,7 +111,7 @@ export type WipEmployeeSummary = {
 
   /**
    * Legacy Brightree/report field.
-   * Keep this until all processors normalize to employeeName.
+   * Keep until all processors normalize to employeeName.
    */
   employee?: string;
 

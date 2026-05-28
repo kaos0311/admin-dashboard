@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import { GlassCard } from "./shared/GlassCard";
 
 type StatCardProps = {
@@ -11,7 +11,7 @@ type StatCardProps = {
 export function StatCard({ label, value, description, icon }: StatCardProps) {
   return (
     <GlassCard className="p-4">
-      <div className="flex items-start justify-between gap-4">
+      <div className="flex items-stretch justify-between gap-4">
         <div>
           <p className="text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
             {label}
@@ -33,3 +33,4 @@ export function StatCard({ label, value, description, icon }: StatCardProps) {
     </GlassCard>
   );
 }
+

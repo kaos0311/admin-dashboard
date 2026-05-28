@@ -9,8 +9,8 @@ import { db, functions } from "@/lib/firebase";
 import { emptyAnalytics } from "./analytics-constants";
 import type {
   CallableResult,
-  ReportType,
   ReportsAnalyticsDoc,
+  ReportType,
   SelectedReportType,
 } from "./analytics-types";
 import {

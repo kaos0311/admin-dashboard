@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import {
   AlertTriangle,
   ArrowDownAZ,
@@ -13,15 +13,16 @@ import {
 } from "lucide-react";
 import {
   collection,
+  type DocumentData,
   limit,
   onSnapshot,
   query,
-  type DocumentData,
   type Timestamp,
 } from "firebase/firestore";
 
 import OpenUploadCenterButton from "@/app/components/reports/OpenUploadCenterButton";
 import { db } from "@/lib/firebase";
+import { colors, glass, typography } from "@/theme";
 
 type HospiceStatus =
   | "active"
@@ -86,8 +87,14 @@ const SORT_OPTIONS: Array<{ label: string; value: SortMode }> = [
 function getString(data: DocumentData, keys: string[]): string | undefined {
   for (const key of keys) {
     const value = data[key];
-    if (typeof value === "string" && value.trim()) return value.trim();
-    if (typeof value === "number") return String(value);
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+
+    if (typeof value === "number") {
+      return String(value);
+    }
   }
 
   return undefined;
@@ -101,8 +108,10 @@ function getStringArray(data: DocumentData, keys: string[]): string[] {
       return value
         .map((item) => {
           if (typeof item === "string") return item.trim();
+
           if (item && typeof item === "object") {
             const record = item as Record<string, unknown>;
+
             return String(
               record.name ??
                 record.itemName ??
@@ -111,6 +120,7 @@ function getStringArray(data: DocumentData, keys: string[]): string[] {
                 ""
             ).trim();
           }
+
           return "";
         })
         .filter(Boolean);
@@ -129,7 +139,6 @@ function getStringArray(data: DocumentData, keys: string[]): string[] {
 
 function formatTimestamp(value: unknown): string | undefined {
   if (!value) return undefined;
-
   if (typeof value === "string") return value;
 
   const maybeTimestamp = value as Timestamp;
@@ -145,26 +154,11 @@ function normalizeStatus(value?: string): HospiceStatus {
   const normalized = value?.toLowerCase().trim().replaceAll(" ", "_");
 
   if (!normalized) return "unknown";
-
-  if (normalized.includes("deceased") || normalized.includes("dead")) {
-    return "deceased";
-  }
-
-  if (normalized.includes("discharged")) {
-    return "discharged";
-  }
-
-  if (normalized.includes("pickup") || normalized.includes("pick_up")) {
-    return "pending_pickup";
-  }
-
-  if (normalized.includes("living")) {
-    return "living";
-  }
-
-  if (normalized.includes("active")) {
-    return "active";
-  }
+  if (normalized.includes("deceased") || normalized.includes("dead")) return "deceased";
+  if (normalized.includes("discharged")) return "discharged";
+  if (normalized.includes("pickup") || normalized.includes("pick_up")) return "pending_pickup";
+  if (normalized.includes("living")) return "living";
+  if (normalized.includes("active")) return "active";
 
   return "unknown";
 }
@@ -196,7 +190,9 @@ function buildPatientName(data: DocumentData): string {
   return "Unknown Patient";
 }
 
-function calculateRisk(patient: Omit<HospicePatient, "riskLevel" | "riskReasons">): {
+function calculateRisk(
+  patient: Omit<HospicePatient, "riskLevel" | "riskReasons">
+): {
   riskLevel: RiskLevel;
   riskReasons: string[];
 } {
@@ -220,7 +216,11 @@ function calculateRisk(patient: Omit<HospicePatient, "riskLevel" | "riskReasons"
   return { riskLevel: "low", riskReasons: ["No obvious hospice gaps found"] };
 }
 
-function normalizeHospiceDoc(id: string, data: DocumentData, source: string): HospicePatient {
+function normalizeHospiceDoc(
+  id: string,
+  data: DocumentData,
+  source: string
+): HospicePatient {
   const base = {
     id,
     patientId: getString(data, ["patientId", "patientID", "patient_id"]),
@@ -293,7 +293,7 @@ function badgeClass(value: string): string {
     case "living":
       return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
     default:
-      return "border-white/10 bg-white/5 text-zinc-300";
+      return "border-white/10 bg-white/5 text-slate-300";
   }
 }
 
@@ -308,16 +308,12 @@ export default function HospiceReportPage() {
   const [sortMode, setSortMode] = useState<SortMode>("riskDesc");
 
   useEffect(() => {
-    setLoading(true);
-    setLoadError(null);
-
-    const hospicePatientsQuery = query(collection(db, "hospicePatients"), limit(500));
-    const hospiceCareQuery = query(collection(db, "hospiceCare"), limit(500));
-    const hospiceOversightQuery = query(collection(db, "hospiceOversight"), limit(500));
-
+    let active = true;
     const patientMap = new Map<string, HospicePatient>();
 
-    function upsertPatients(records: HospicePatient[]) {
+    function safeUpdatePatients(records: HospicePatient[]) {
+      if (!active) return;
+
       records.forEach((patient) => {
         const key =
           patient.patientId ||
@@ -349,10 +345,20 @@ export default function HospiceReportPage() {
       setLoading(false);
     }
 
+    queueMicrotask(() => {
+      if (!active) return;
+      setLoading(true);
+      setLoadError(null);
+    });
+
+    const hospicePatientsQuery = query(collection(db, "hospicePatients"), limit(500));
+    const hospiceCareQuery = query(collection(db, "hospiceCare"), limit(500));
+    const hospiceOversightQuery = query(collection(db, "hospiceOversight"), limit(500));
+
     const unsubPatients = onSnapshot(
       hospicePatientsQuery,
       (snapshot) => {
-        upsertPatients(
+        safeUpdatePatients(
           snapshot.docs.map((doc) =>
             normalizeHospiceDoc(doc.id, doc.data(), "hospicePatients")
           )
@@ -360,6 +366,7 @@ export default function HospiceReportPage() {
       },
       (error) => {
         console.error(error);
+        if (!active) return;
         setLoadError("Could not load hospicePatients. Check Firestore rules.");
         setLoading(false);
       }
@@ -368,7 +375,7 @@ export default function HospiceReportPage() {
     const unsubCare = onSnapshot(
       hospiceCareQuery,
       (snapshot) => {
-        upsertPatients(
+        safeUpdatePatients(
           snapshot.docs.map((doc) =>
             normalizeHospiceDoc(doc.id, doc.data(), "hospiceCare")
           )
@@ -376,6 +383,7 @@ export default function HospiceReportPage() {
       },
       (error) => {
         console.error(error);
+        if (!active) return;
         setLoadError("Could not load hospiceCare. Check Firestore rules.");
         setLoading(false);
       }
@@ -384,7 +392,7 @@ export default function HospiceReportPage() {
     const unsubOversight = onSnapshot(
       hospiceOversightQuery,
       (snapshot) => {
-        upsertPatients(
+        safeUpdatePatients(
           snapshot.docs.map((doc) =>
             normalizeHospiceDoc(doc.id, doc.data(), "hospiceOversight")
           )
@@ -392,12 +400,14 @@ export default function HospiceReportPage() {
       },
       (error) => {
         console.error(error);
+        if (!active) return;
         setLoadError("Could not load hospiceOversight. Check Firestore rules.");
         setLoading(false);
       }
     );
 
     return () => {
+      active = false;
       unsubPatients();
       unsubCare();
       unsubOversight();
@@ -409,11 +419,18 @@ export default function HospiceReportPage() {
       (patient) => patient.status === "active" || patient.status === "living"
     ).length;
 
-    const deceased = patients.filter((patient) => patient.status === "deceased").length;
+    const deceased = patients.filter(
+      (patient) => patient.status === "deceased"
+    ).length;
+
     const pendingPickup = patients.filter(
       (patient) => patient.status === "pending_pickup"
     ).length;
-    const highRisk = patients.filter((patient) => patient.riskLevel === "high").length;
+
+    const highRisk = patients.filter(
+      (patient) => patient.riskLevel === "high"
+    ).length;
+
     const missingNurse = patients.filter((patient) => !patient.nurseName).length;
     const missingPayor = patients.filter((patient) => !patient.payor).length;
 
@@ -450,8 +467,10 @@ export default function HospiceReportPage() {
           .toLowerCase();
 
         const matchesSearch = !text || searchable.includes(text);
-        const matchesStatus = statusFilter === "all" || patient.status === statusFilter;
-        const matchesRisk = riskFilter === "all" || patient.riskLevel === riskFilter;
+        const matchesStatus =
+          statusFilter === "all" || patient.status === statusFilter;
+        const matchesRisk =
+          riskFilter === "all" || patient.riskLevel === riskFilter;
 
         return matchesSearch && matchesStatus && matchesRisk;
       })
@@ -473,23 +492,26 @@ export default function HospiceReportPage() {
   }, [patients, searchText, statusFilter, riskFilter, sortMode]);
 
   return (
-    <main className="min-h-screen bg-black px-4 py-6 text-white md:px-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-neutral-950 via-neutral-950 to-rose-950/30 p-6 shadow-2xl">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <main className={`${glass.page} ${colors.app}`}>
+      <div className={colors.grid} aria-hidden="true" />
+
+      <div className={`${glass.shell} relative z-10`}>
+        <section className={glass.panel}>
+          <div className={colors.grid} aria-hidden="true" />
+
+          <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-rose-300">
+              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+                <HeartPulse className="h-3.5 w-3.5" aria-hidden="true" />
                 Reports / Hospice
-              </p>
+              </div>
 
-              <h1 className="mt-2 text-2xl font-bold text-white md:text-3xl">
-                Hospice Reports
-              </h1>
+              <h1 className={`${typography.hero} mt-4`}>Hospice Reports</h1>
 
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-zinc-400">
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
                 Live hospice oversight for patient status, nurse assignments,
                 payor gaps, next-of-kin notes, equipment visibility, and pickup
-                risk. Basically, the page finally has a pulse.
+                risk. The page finally has a pulse. Took long enough.
               </p>
             </div>
 
@@ -501,7 +523,7 @@ export default function HospiceReportPage() {
         </section>
 
         {loadError ? (
-          <section className="rounded-3xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-200">
+          <section className="rounded-3xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-200 shadow-xl shadow-red-950/20 backdrop-blur-xl">
             {loadError}
           </section>
         ) : null}
@@ -539,16 +561,18 @@ export default function HospiceReportPage() {
           <MiniStat title="Missing Payor" value={stats.missingPayor} />
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-neutral-950 p-5">
-          <div className="grid gap-3 lg:grid-cols-[1fr_180px_180px_190px]">
+        <section className={glass.panel}>
+          <div className={colors.grid} aria-hidden="true" />
+
+          <div className="relative z-10 grid gap-3 p-5 lg:grid-cols-[1fr_180px_180px_190px]">
             <label className="relative block">
               <span className="sr-only">Search hospice records</span>
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
               <input
                 value={searchText}
                 onChange={(event) => setSearchText(event.target.value)}
                 placeholder="Search patient, nurse, payor, provider, equipment..."
-                className="w-full rounded-2xl border border-white/10 bg-black px-11 py-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-rose-400/60"
+                className={`${"w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none backdrop-blur-xl focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"} w-full pl-11`}
               />
             </label>
 
@@ -576,32 +600,36 @@ export default function HospiceReportPage() {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-neutral-950 p-6">
-          <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">Hospice Data</h2>
-              <p className="mt-1 text-sm text-zinc-500">
-                Showing {filteredPatients.length} of {patients.length} records.
-              </p>
-            </div>
+        <section className={glass.panel}>
+          <div className={colors.grid} aria-hidden="true" />
 
-            {loading ? (
-              <div className="flex items-center gap-2 text-sm text-zinc-400">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading hospice records
+          <div className="relative z-10 p-6">
+            <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+              <div>
+                <h2 className={typography.sectionTitle}>Hospice Data</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Showing {filteredPatients.length} of {patients.length} records.
+                </p>
               </div>
-            ) : null}
-          </div>
 
-          {filteredPatients.length === 0 ? (
-            <EmptyState />
-          ) : (
-            <div className="grid gap-4 xl:grid-cols-2">
-              {filteredPatients.map((patient) => (
-                <PatientCard key={patient.id} patient={patient} />
-              ))}
+              {loading ? (
+                <div className="flex items-center gap-2 text-sm text-slate-400">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading hospice records
+                </div>
+              ) : null}
             </div>
-          )}
+
+            {filteredPatients.length === 0 ? (
+              <EmptyState />
+            ) : (
+              <div className="grid gap-4 xl:grid-cols-2">
+                {filteredPatients.map((patient) => (
+                  <PatientCard key={patient.id} patient={patient} />
+                ))}
+              </div>
+            )}
+          </div>
         </section>
       </div>
     </main>
@@ -616,7 +644,7 @@ function StatCard({
 }: {
   title: string;
   value: number;
-  icon: React.ReactNode;
+  icon: ReactNode;
   tone: "rose" | "emerald" | "yellow" | "red";
 }) {
   const toneClass =
@@ -629,13 +657,13 @@ function StatCard({
           : "border-rose-500/20 bg-rose-500/10 text-rose-300";
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-neutral-950 p-5 shadow-xl">
+    <div className={glass.card}>
       <div
         className={`mb-4 flex h-11 w-11 items-center justify-center rounded-2xl border ${toneClass}`}
       >
         {icon}
       </div>
-      <p className="text-sm text-zinc-400">{title}</p>
+      <p className="text-sm text-slate-400">{title}</p>
       <p className="mt-2 text-3xl font-bold text-white">{value}</p>
     </div>
   );
@@ -643,8 +671,8 @@ function StatCard({
 
 function MiniStat({ title, value }: { title: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-neutral-950 px-5 py-4">
-      <p className="text-sm text-zinc-500">{title}</p>
+    <div className={glass.card}>
+      <p className="text-sm text-slate-500">{title}</p>
       <p className="mt-1 text-2xl font-bold text-white">{value}</p>
     </div>
   );
@@ -655,22 +683,30 @@ function SelectField({
   value,
   onChange,
   options,
+  icon,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   options: Array<{ label: string; value: string }>;
-  icon?: React.ReactNode;
+  icon?: ReactNode;
 }) {
   return (
-    <label>
+    <label className="relative block">
       <span className="sr-only">{label}</span>
+
+      {icon ? (
+        <span className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500">
+          {icon}
+        </span>
+      ) : null}
+
       <select
         title={label}
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-white/10 bg-black px-4 py-3 text-sm text-white outline-none transition focus:border-rose-400/60"
+        className={`${"w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none backdrop-blur-xl focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"} w-full ${icon ? "pl-10 pr-4" : "px-4"}`}
       >
         {options.map((option) => (
           <option key={option.value} value={option.value}>
@@ -684,22 +720,25 @@ function SelectField({
 
 function PatientCard({ patient }: { patient: HospicePatient }) {
   return (
-    <article className="rounded-3xl border border-white/10 bg-black/40 p-5">
+    <article className={`${glass.card} transition hover:border-sky-200/25`}>
       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <UserRound className="h-4 w-4 text-zinc-500" />
+            <UserRound className="h-4 w-4 text-slate-500" />
             <h3 className="font-semibold text-white">{patient.patientName}</h3>
           </div>
 
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-slate-500">
             DOB: {patient.dateOfBirth || "Missing"}
           </p>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <Badge value={patient.status} label={titleCase(patient.status)} />
-          <Badge value={patient.riskLevel} label={`${titleCase(patient.riskLevel)} Risk`} />
+          <Badge
+            value={patient.riskLevel}
+            label={`${titleCase(patient.riskLevel)} Risk`}
+          />
         </div>
       </div>
 
@@ -714,23 +753,33 @@ function PatientCard({ patient }: { patient: HospicePatient }) {
 
       {patient.address ? (
         <div className="mt-3 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm">
-          <p className="text-xs uppercase tracking-wide text-zinc-500">Address</p>
-          <p className="mt-1 text-zinc-300">{patient.address}</p>
+          <p className="text-xs uppercase tracking-wide text-slate-500">
+            Address
+          </p>
+          <p className="mt-1 text-slate-300">{patient.address}</p>
         </div>
       ) : null}
 
       <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <ListBlock title="Equipment" values={patient.equipment} empty="No equipment listed" />
-        <ListBlock title="Risk Flags" values={patient.riskReasons} empty="No risk flags" />
+        <ListBlock
+          title="Equipment"
+          values={patient.equipment}
+          empty="No equipment listed"
+        />
+        <ListBlock
+          title="Risk Flags"
+          values={patient.riskReasons}
+          empty="No risk flags"
+        />
       </div>
 
       {patient.notes ? (
-        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-zinc-300">
+        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.03] p-3 text-sm leading-6 text-slate-300">
           {patient.notes}
         </div>
       ) : null}
 
-      <div className="mt-4 flex flex-wrap justify-between gap-2 border-t border-white/10 pt-3 text-xs text-zinc-600">
+      <div className="mt-4 flex flex-wrap justify-between gap-2 border-t border-white/10 pt-3 text-xs text-slate-600">
         <span>Source: {patient.source || "Unknown"}</span>
         <span>Updated: {patient.lastUpdated || "Unknown"}</span>
       </div>
@@ -740,7 +789,11 @@ function PatientCard({ patient }: { patient: HospicePatient }) {
 
 function Badge({ value, label }: { value: string; label: string }) {
   return (
-    <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${badgeClass(value)}`}>
+    <span
+      className={`rounded-full border px-3 py-1 text-xs font-semibold ${badgeClass(
+        value
+      )}`}
+    >
       {label}
     </span>
   );
@@ -749,8 +802,8 @@ function Badge({ value, label }: { value: string; label: string }) {
 function Info({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-      <p className="text-xs uppercase tracking-wide text-zinc-500">{label}</p>
-      <p className="mt-1 text-zinc-300">{value || "Missing"}</p>
+      <p className="text-xs uppercase tracking-wide text-slate-500">{label}</p>
+      <p className="mt-1 text-slate-300">{value || "Missing"}</p>
     </div>
   );
 }
@@ -766,16 +819,16 @@ function ListBlock({
 }) {
   return (
     <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-      <p className="text-xs uppercase tracking-wide text-zinc-500">{title}</p>
+      <p className="text-xs uppercase tracking-wide text-slate-500">{title}</p>
 
       {values.length === 0 ? (
-        <p className="mt-2 text-sm text-zinc-500">{empty}</p>
+        <p className="mt-2 text-sm text-slate-500">{empty}</p>
       ) : (
         <div className="mt-2 flex flex-wrap gap-2">
           {values.slice(0, 8).map((value) => (
             <span
               key={value}
-              className="rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-xs text-zinc-300"
+              className="rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-xs text-slate-300"
             >
               {value}
             </span>
@@ -789,12 +842,12 @@ function ListBlock({
 function EmptyState() {
   return (
     <div className="rounded-3xl border border-dashed border-white/10 bg-black/30 p-8 text-center">
-      <HeartPulse className="mx-auto h-8 w-8 text-zinc-600" />
+      <HeartPulse className="mx-auto h-8 w-8 text-slate-600" />
       <h3 className="mt-3 font-semibold text-white">No hospice records found</h3>
-      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-zinc-500">
-        Upload hospice reports or confirm your importer writes to hospicePatients,
-        hospiceCare, or hospiceOversight. Empty pages are cute in design mockups.
-        In operations, they’re just expensive silence.
+      <p className="mx-auto mt-2 max-w-xl text-sm leading-6 text-slate-500">
+        Upload hospice reports or confirm your importer writes to
+        hospicePatients, hospiceCare, or hospiceOversight. Empty pages are cute
+        in design mockups. In operations, they’re just expensive silence.
       </p>
     </div>
   );

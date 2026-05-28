@@ -1,3 +1,4 @@
+﻿import { tiles } from "@/theme";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
@@ -21,7 +22,7 @@ export function ReportSectionGrid() {
             className="group rounded-[1.75rem] border border-white/10 bg-white/[0.055] p-5 shadow-xl shadow-black/20 backdrop-blur-2xl transition hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08]"
           >
             <div className="flex h-full flex-col justify-between gap-5">
-              <div className="flex items-start gap-4">
+              <div className="flex items-stretch gap-4">
                 <div
                   className={`rounded-2xl border border-white/10 bg-white/10 p-3 transition group-hover:bg-white/15 ${page.tone}`}
                 >
@@ -47,3 +48,5 @@ export function ReportSectionGrid() {
     </section>
   );
 }
+
+

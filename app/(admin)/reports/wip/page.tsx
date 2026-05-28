@@ -1,5 +1,7 @@
 "use client";
 
+import { colors, glass, typography } from "@/theme";
+
 import { WipAgingAlerts } from "./components/WipAgingAlerts";
 import { WipAnalytics } from "./components/WipAnalytics";
 import { WipEmployeeGroups } from "./components/WipEmployeeGroups";
@@ -11,6 +13,10 @@ import { WipStatGrid } from "./components/WipStatGrid";
 import { WipTable } from "./components/WipTable";
 import { useWipData } from "./hooks/use-wip-data";
 import { useWipFilters } from "./hooks/use-wip-filters";
+
+function cn(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
 
 export default function WipReportPage() {
   const { records, analytics, loading, error, refresh } = useWipData();
@@ -25,12 +31,52 @@ export default function WipReportPage() {
     filteredRecords,
   } = useWipFilters(records);
 
-  if (loading) return <WipLoadingState />;
-  if (error) return <WipErrorState message={error} onRetry={refresh} />;
+  if (loading) {
+    return (
+      <main className={cn(glass.page, colors.app)}>
+        <div className={colors.grid} />
+
+        <section className={cn(glass.shell, "space-y-6")}>
+          <div className={cn(glass.panel, "p-6 sm:p-8")}>
+            <div className="h-4 w-40 animate-pulse rounded-full bg-white/10" />
+            <div className="mt-5 h-10 w-full max-w-xl animate-pulse rounded-2xl bg-white/10" />
+            <div className="mt-4 h-4 w-full max-w-2xl animate-pulse rounded-full bg-white/10" />
+          </div>
+
+          <WipLoadingState />
+        </section>
+      </main>
+    );
+  }
+
+  if (error) {
+    return (
+      <main className={cn(glass.page, colors.app)}>
+        <div className={colors.grid} />
+
+        <section className={cn(glass.shell, "space-y-6")}>
+          <div className={cn(glass.panel, "p-6 sm:p-8")}>
+            <p className={typography.caption}>WIP Report</p>
+            <h1 className={cn(typography.pageTitle, "mt-3")}>
+              Work-in-progress oversight
+            </h1>
+            <p className={cn(typography.body, "mt-3 max-w-3xl text-white/65")}>
+              The report failed to load. Naturally, because one broken listener
+              can ruin everyone&apos;s morning.
+            </p>
+          </div>
+
+          <WipErrorState message={error} onRetry={refresh} />
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(245,158,11,0.18),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(251,191,36,0.1),_transparent_30%),#020617] px-4 py-6 text-white md:px-6 xl:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main className={cn(glass.page, colors.app)}>
+      <div className={colors.grid} />
+
+      <section className={cn(glass.shell, "space-y-6")}>
         <WipHero onRefresh={refresh} />
 
         <WipStatGrid analytics={analytics} />
@@ -53,7 +99,8 @@ export default function WipReportPage() {
           <WipEmployeeGroups records={records} />
           <WipTable records={filteredRecords} />
         </section>
-      </div>
+      </section>
     </main>
   );
 }
+

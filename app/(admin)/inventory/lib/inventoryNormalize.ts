@@ -4,16 +4,46 @@ import type {
   LifecycleStatus,
 } from "./inventoryTypes";
 
+type InventoryItemWithoutMeta = Omit<
+  InventoryItem,
+  "id" | "isDeleted" | "searchText"
+>;
+
+const VALID_INVENTORY_STATUSES = new Set<InventoryStatus>([
+  "available",
+  "inactive",
+  "damaged",
+  "lost",
+  "discontinued",
+]);
+
+const VALID_LIFECYCLE_STATUSES = new Set<LifecycleStatus>([
+  "active",
+  "new",
+  "needs_service",
+  "end_of_life",
+  "retired",
+]);
+
 export function toSafeString(value: unknown): string {
-  if (typeof value === "string") return value.trim();
-  if (typeof value === "number" && Number.isFinite(value)) return String(value);
+  if (typeof value === "string") {
+    return value.trim();
+  }
+
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+
   return "";
 }
 
 export function toSafeNumber(value: unknown): number {
-  if (value === "" || value == null || value === "-") return 0;
+  if (value === "" || value === null || value === undefined || value === "-") {
+    return 0;
+  }
 
   const parsed = Number(String(value).replace(/[$,%]/g, "").trim());
+
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
@@ -32,7 +62,11 @@ export function formatMoney(value: number): string {
   });
 }
 
-export function chunkArray<T>(items: T[], size: number): T[][] {
+export function chunkArray<T>(items: readonly T[], size: number): T[][] {
+  if (size <= 0) {
+    return [Array.from(items)];
+  }
+
   const chunks: T[][] = [];
 
   for (let index = 0; index < items.length; index += size) {
@@ -42,9 +76,7 @@ export function chunkArray<T>(items: T[], size: number): T[][] {
   return chunks;
 }
 
-export function buildSearchText(
-  item: Omit<InventoryItem, "id" | "isDeleted" | "searchText">
-): string {
+export function buildSearchText(item: InventoryItemWithoutMeta): string {
   return normalizeSearchText(
     [
       item.name,
@@ -67,6 +99,20 @@ export function buildSearchText(
   );
 }
 
+function normalizeInventoryStatus(value: unknown): InventoryStatus {
+  const status = toSafeString(value) as InventoryStatus;
+
+  return VALID_INVENTORY_STATUSES.has(status) ? status : "available";
+}
+
+function normalizeLifecycleStatus(value: unknown): LifecycleStatus {
+  const lifecycleStatus = toSafeString(value) as LifecycleStatus;
+
+  return VALID_LIFECYCLE_STATUSES.has(lifecycleStatus)
+    ? lifecycleStatus
+    : "active";
+}
+
 export function normalizeInventoryItem(
   id: string,
   data: Record<string, unknown>
@@ -78,31 +124,16 @@ export function normalizeInventoryItem(
   const unitCost = toSafeNumber(data.unitCost);
 
   const available =
-    data.available == null
+    data.available === null || data.available === undefined
       ? quantityOnHand - committed - onRent
       : toSafeNumber(data.available);
 
-  const rawStatus = toSafeString(data.status);
+  const totalValue =
+    data.totalValue === null || data.totalValue === undefined
+      ? quantityOnHand * unitCost
+      : toSafeNumber(data.totalValue);
 
-  const status: InventoryStatus =
-    rawStatus === "inactive" ||
-    rawStatus === "damaged" ||
-    rawStatus === "lost" ||
-    rawStatus === "discontinued"
-      ? rawStatus
-      : "available";
-
-  const rawLifecycle = toSafeString(data.lifecycleStatus);
-
-  const lifecycleStatus: LifecycleStatus =
-    rawLifecycle === "new" ||
-    rawLifecycle === "needs_service" ||
-    rawLifecycle === "end_of_life" ||
-    rawLifecycle === "retired"
-      ? rawLifecycle
-      : "active";
-
-  const itemWithoutSearch = {
+  const itemWithoutSearch: InventoryItemWithoutMeta = {
     productId: toSafeString(data.productId),
     name: toSafeString(data.name),
     category: toSafeString(data.category),
@@ -119,11 +150,8 @@ export function normalizeInventoryItem(
     available,
     reorderLevel: toSafeNumber(data.reorderLevel),
     unitCost,
-    totalValue:
-      data.totalValue == null
-        ? quantityOnHand * unitCost
-        : toSafeNumber(data.totalValue),
-    status,
+    totalValue,
+    status: normalizeInventoryStatus(data.status),
     manufacturer: toSafeString(data.manufacturer),
     manufacturerItemId: toSafeString(data.manufacturerItemId),
     modelNumber: toSafeString(data.modelNumber),
@@ -133,7 +161,7 @@ export function normalizeInventoryItem(
     warrantyNotes: toSafeString(data.warrantyNotes),
     purchaseDate: toSafeString(data.purchaseDate),
     usefulLifeMonths: toSafeNumber(data.usefulLifeMonths),
-    lifecycleStatus,
+    lifecycleStatus: normalizeLifecycleStatus(data.lifecycleStatus),
     nextServiceDate: toSafeString(data.nextServiceDate),
     lifecycleNotes: toSafeString(data.lifecycleNotes),
     notes: toSafeString(data.notes),
@@ -142,8 +170,7 @@ export function normalizeInventoryItem(
   return {
     id,
     ...itemWithoutSearch,
-    searchText:
-      toSafeString(data.searchText) || buildSearchText(itemWithoutSearch),
+    searchText: toSafeString(data.searchText) || buildSearchText(itemWithoutSearch),
     isDeleted: data.isDeleted === true,
   };
 }

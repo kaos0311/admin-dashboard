@@ -8,8 +8,8 @@ import {
 
 import { auth, db } from "@/lib/firebase";
 import {
-  PATIENTS_COLLECTION,
   type PatientRecord,
+  PATIENTS_COLLECTION,
   type PatientStatus,
 } from "./patient-detail-types";
 

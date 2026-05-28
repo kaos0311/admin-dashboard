@@ -5,8 +5,8 @@ import { doc, onSnapshot } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 import {
-  PATIENTS_COLLECTION,
   type PatientRecord,
+  PATIENTS_COLLECTION,
 } from "./patient-detail-types";
 import { normalizePatient } from "./patient-detail-utils";
 

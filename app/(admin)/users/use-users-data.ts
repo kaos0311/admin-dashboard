@@ -3,14 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   collection,
+  type DocumentData,
   getDocs,
   limit,
   onSnapshot,
   orderBy,
   query,
-  startAfter,
-  type DocumentData,
   type QueryDocumentSnapshot,
+  startAfter,
 } from "firebase/firestore";
 import { unstable_batchedUpdates } from "react-dom";
 import toast from "react-hot-toast";

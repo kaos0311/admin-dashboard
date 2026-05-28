@@ -1,10 +1,12 @@
-"use client";
+﻿"use client";
+
+import { tiles } from "@/theme";
 
 import {
   AlertTriangle,
   CheckCircle2,
-  Clock3,
   ClipboardList,
+  Clock3,
   UserX,
 } from "lucide-react";
 
@@ -73,3 +75,6 @@ export function WipStatGrid({ analytics }: WipStatGridProps) {
     </section>
   );
 }
+
+
+

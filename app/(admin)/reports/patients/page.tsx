@@ -1,14 +1,13 @@
 "use client";
 
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   collection,
+  type DocumentData,
   limit,
   onSnapshot,
-  orderBy,
   query,
-  type DocumentData,
 } from "firebase/firestore";
 import {
   Activity,
@@ -25,144 +24,57 @@ import {
 
 import OpenUploadCenterButton from "@/app/components/reports/OpenUploadCenterButton";
 import { db } from "@/lib/firebase";
+import { colors, glass, typography } from "@/theme";
 
-type FilterMode = "all" | "hospice" | "cpap" | "wip" | "birthday";
-
-type PatientProfile = {
-  patientId?: string;
-  patientKey?: string;
-  accountNumber?: string;
-  sex?: string;
-  height?: string;
-  weight?: string;
-  patientStatus?: string;
-  patientHubStatus?: string;
-  registrationDate?: string;
-  lastLoginDate?: string;
-  primaryDoctor?: string;
-  orderingDoctor?: string;
-  diagnosisCodes?: string[];
-};
-
-type InsuranceSnapshot = {
-  primaryInsurance?: string;
-  secondaryInsurance?: string;
-  policyNumber?: string;
-  insuranceStatus?: string;
-  coverageTypes?: string;
-  payor?: string;
-};
-
-type CpapInfo = {
-  onRecord?: boolean;
-  machine?: string;
-  maskType?: string;
-  humidifier?: string;
-  tubing?: string;
-  filters?: string;
-  headgear?: string;
-  pressure?: string;
-  serialNumber?: string;
-  setupDate?: string;
-  lastServiceDate?: string;
-  complianceStatus?: string;
-};
-
-type WipSnapshot = {
-  status?: string;
-  daysInState?: number;
-  assignedTo?: string;
-  dateNeeded?: string;
-  completed?: boolean;
-  primaryInsuranceVerified?: boolean;
-  secondaryInsuranceVerified?: boolean;
-  createdBy?: string;
-};
-
-type BillingSnapshot = {
-  lastInvoiceDate?: string;
-  lastPaymentDate?: string;
-  totalCharges90Days?: number;
-  totalAllowed90Days?: number;
-  totalPayments90Days?: number;
-  totalAdjustments90Days?: number;
-  openBalanceEstimate?: number;
-  invoiceStatus?: string;
-};
-
-type EquipmentItem = {
-  itemId?: string;
-  itemName?: string;
-  hcpc?: string;
-  category?: string;
-  saleType?: string;
-  qty?: number;
-  serialNumber?: string;
-  lotNumber?: string;
-  status?: string;
-  startDate?: string;
-  sourceReportId?: string;
-  sourceFileName?: string;
-};
-
-type RecentPurchase = {
-  itemId?: string;
-  itemName?: string;
-  hcpc?: string;
-  purchaseDate?: string;
-  quantity?: number;
-  amount?: number;
-  orderId?: string;
-  sourceReportId?: string;
-  sourceFileName?: string;
-};
+type FilterMode =
+  | "all"
+  | "hospice"
+  | "cpap"
+  | "wip"
+  | "birthday";
 
 type Patient = {
   id: string;
-  firstName: string;
-  lastName: string;
   fullName: string;
-  normalizedFullName?: string;
-  sourceFullName?: string;
+  firstName?: string;
+  lastName?: string;
 
   dateOfBirth?: string;
-  dateOfDeath?: string;
-  dob?: string;
-  dod?: string;
-
-  hasBirthday?: boolean;
-  birthMonth?: number;
-  birthDay?: number;
-  birthMonthDay?: string;
   age?: number | null;
-  nextAge?: number | null;
-  nextBirthdayIso?: string;
-  daysUntilBirthday?: number | null;
 
   phone?: string;
   email?: string;
-  address?: string;
+
   city?: string;
   state?: string;
   zip?: string;
 
   hospice?: boolean;
+
   patientSnapshot?: string;
   snapshot?: string;
 
-  profile?: PatientProfile | null;
-  insurance?: InsuranceSnapshot | null;
-  cpap?: CpapInfo | null;
-  wip?: WipSnapshot | null;
-  billing?: BillingSnapshot | null;
-
-  currentEquipment?: EquipmentItem[];
   currentEquipmentCount?: number;
-  purchasesLast90Days?: RecentPurchase[];
   purchasesLast90DaysCount?: number;
 
-  reportTypes?: string[];
-  rowCount?: number;
+  insurance?: {
+    primaryInsurance?: string;
+    payor?: string;
+  } | null;
+
+  billing?: {
+    openBalanceEstimate?: number;
+  } | null;
+
+  cpap?: {
+    onRecord?: boolean;
+  } | null;
+
+  wip?: {
+    status?: string;
+  } | null;
+
+  daysUntilBirthday?: number | null;
 };
 
 function asString(value: unknown): string {
@@ -179,26 +91,19 @@ function asBoolean(value: unknown): boolean {
 
   if (typeof value === "string") {
     const normalized = value.trim().toLowerCase();
-    return normalized === "true" || normalized === "yes" || normalized === "y";
+
+    return (
+      normalized === "true" ||
+      normalized === "yes" ||
+      normalized === "y"
+    );
   }
 
   return false;
 }
 
-function asStringArray(value: unknown): string[] {
-  return Array.isArray(value)
-    ? value.map((item) => asString(item)).filter(Boolean)
-    : [];
-}
-
-function asArray<T>(value: unknown): T[] {
-  return Array.isArray(value) ? (value as T[]) : [];
-}
-
 function money(value: unknown): string {
-  const number = asNumber(value);
-
-  return number.toLocaleString("en-US", {
+  return asNumber(value).toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
   });
@@ -208,60 +113,51 @@ function mapPatientDoc(id: string, data: DocumentData): Patient {
   const firstName = asString(data.firstName);
   const lastName = asString(data.lastName);
 
-  const fullName =
-    asString(data.fullName) ||
-    [firstName, lastName].filter(Boolean).join(" ") ||
-    "Unnamed Patient";
-
   return {
     id,
+
+    fullName:
+      asString(data.fullName) ||
+      [firstName, lastName].filter(Boolean).join(" ") ||
+      "Unnamed Patient",
+
     firstName,
     lastName,
-    fullName,
-    normalizedFullName: asString(data.normalizedFullName),
-    sourceFullName: asString(data.sourceFullName),
 
     dateOfBirth: asString(data.dateOfBirth || data.dob),
-    dateOfDeath: asString(data.dateOfDeath || data.dod),
-    dob: asString(data.dob || data.dateOfBirth),
-    dod: asString(data.dod || data.dateOfDeath),
 
-    hasBirthday: asBoolean(data.hasBirthday),
-    birthMonth: asNumber(data.birthMonth),
-    birthDay: asNumber(data.birthDay),
-    birthMonthDay: asString(data.birthMonthDay),
-    age: typeof data.age === "number" ? data.age : null,
-    nextAge: typeof data.nextAge === "number" ? data.nextAge : null,
-    nextBirthdayIso: asString(data.nextBirthdayIso),
-    daysUntilBirthday:
-      typeof data.daysUntilBirthday === "number"
-        ? data.daysUntilBirthday
+    age:
+      typeof data.age === "number"
+        ? data.age
         : null,
 
     phone: asString(data.phone),
     email: asString(data.email),
-    address: asString(data.address),
+
     city: asString(data.city),
     state: asString(data.state),
     zip: asString(data.zip),
 
     hospice: asBoolean(data.hospice),
+
     patientSnapshot: asString(data.patientSnapshot),
     snapshot: asString(data.snapshot),
 
-    profile: (data.profile ?? null) as PatientProfile | null,
-    insurance: (data.insurance ?? null) as InsuranceSnapshot | null,
-    cpap: (data.cpap ?? null) as CpapInfo | null,
-    wip: (data.wip ?? null) as WipSnapshot | null,
-    billing: (data.billing ?? null) as BillingSnapshot | null,
-
-    currentEquipment: asArray<EquipmentItem>(data.currentEquipment),
     currentEquipmentCount: asNumber(data.currentEquipmentCount),
-    purchasesLast90Days: asArray<RecentPurchase>(data.purchasesLast90Days),
-    purchasesLast90DaysCount: asNumber(data.purchasesLast90DaysCount),
 
-    reportTypes: asStringArray(data.reportTypes),
-    rowCount: asNumber(data.rowCount),
+    purchasesLast90DaysCount: asNumber(
+      data.purchasesLast90DaysCount
+    ),
+
+    insurance: data.insurance ?? null,
+    billing: data.billing ?? null,
+    cpap: data.cpap ?? null,
+    wip: data.wip ?? null,
+
+    daysUntilBirthday:
+      typeof data.daysUntilBirthday === "number"
+        ? data.daysUntilBirthday
+        : null,
   };
 }
 
@@ -277,21 +173,26 @@ function StatCard({
   subtext: string;
 }) {
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-2xl shadow-black/20 backdrop-blur-xl">
+    <div className={glass.card}>
       <div className="flex items-center justify-between gap-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-zinc-500">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-500">
             {title}
           </p>
-          <p className="mt-2 text-2xl font-bold text-white">{value}</p>
+
+          <p className="mt-2 text-2xl font-bold text-white">
+            {value}
+          </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-white/[0.05] p-3 text-zinc-300">
+        <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
           {icon}
         </div>
       </div>
 
-      <p className="mt-3 text-xs text-zinc-500">{subtext}</p>
+      <p className="mt-3 text-xs text-slate-500">
+        {subtext}
+      </p>
     </div>
   );
 }
@@ -303,14 +204,25 @@ function Badge({
   children: ReactNode;
   tone?: "default" | "blue" | "green" | "yellow" | "red";
 }) {
-  const classes: Record<NonNullable<Parameters<typeof Badge>[0]["tone"]>, string> =
-    {
-      default: "border-white/10 bg-white/[0.04] text-zinc-300",
-      blue: "border-blue-400/20 bg-blue-500/10 text-blue-200",
-      green: "border-emerald-400/20 bg-emerald-500/10 text-emerald-200",
-      yellow: "border-yellow-400/20 bg-yellow-500/10 text-yellow-200",
-      red: "border-red-400/20 bg-red-500/10 text-red-200",
-    };
+  const classes: Record<
+    NonNullable<Parameters<typeof Badge>[0]["tone"]>,
+    string
+  > = {
+    default:
+      "border-white/10 bg-white/[0.04] text-slate-300",
+
+    blue:
+      "border-blue-400/20 bg-blue-500/10 text-blue-200",
+
+    green:
+      "border-emerald-400/20 bg-emerald-500/10 text-emerald-200",
+
+    yellow:
+      "border-yellow-400/20 bg-yellow-500/10 text-yellow-200",
+
+    red:
+      "border-red-400/20 bg-red-500/10 text-red-200",
+  };
 
   return (
     <span
@@ -321,86 +233,133 @@ function Badge({
   );
 }
 
-function PatientCard({ patient }: { patient: Patient }) {
+function PatientCard({
+  patient,
+}: {
+  patient: Patient;
+}) {
   const insurance =
     patient.insurance?.primaryInsurance ||
     patient.insurance?.payor ||
     "No insurance listed";
 
-  const location = [patient.city, patient.state].filter(Boolean).join(", ");
-
-  const equipmentCount =
-    patient.currentEquipmentCount || patient.currentEquipment?.length || 0;
-
-  const purchaseCount =
-    patient.purchasesLast90DaysCount || patient.purchasesLast90Days?.length || 0;
+  const location = [
+    patient.city,
+    patient.state,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <Link
       href={`/reports/patients/${patient.id}`}
-      className="group block rounded-3xl border border-white/10 bg-white/[0.035] p-5 shadow-xl shadow-black/20 backdrop-blur-xl transition hover:border-blue-400/40 hover:bg-white/[0.06]"
+      className={`${glass.card} group block transition hover:border-sky-300/25`}
     >
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h3 className="text-lg font-bold text-white group-hover:text-blue-200">
+            <h3 className="text-lg font-bold text-white group-hover:text-sky-100">
               {patient.fullName}
             </h3>
 
-            {patient.hospice && <Badge tone="red">Hospice</Badge>}
-            {patient.cpap?.onRecord && <Badge tone="blue">CPAP/PAP</Badge>}
-            {patient.wip?.status && <Badge tone="yellow">WIP</Badge>}
+            {patient.hospice && (
+              <Badge tone="red">
+                Hospice
+              </Badge>
+            )}
+
+            {patient.cpap?.onRecord && (
+              <Badge tone="blue">
+                CPAP/PAP
+              </Badge>
+            )}
+
+            {patient.wip?.status && (
+              <Badge tone="yellow">
+                WIP
+              </Badge>
+            )}
           </div>
 
-          <p className="mt-1 text-sm text-zinc-500">
+          <p className="mt-1 text-sm text-slate-500">
             DOB: {patient.dateOfBirth || "Unknown"}
-            {patient.age != null ? ` • Age ${patient.age}` : ""}
-            {patient.dateOfDeath ? ` • DOD: ${patient.dateOfDeath}` : ""}
+
+            {patient.age !== null
+              ? ` • Age ${patient.age}`
+              : ""}
           </p>
 
-          <p className="mt-2 max-w-4xl text-sm text-zinc-400">
+          <p className="mt-3 max-w-4xl text-sm leading-6 text-slate-400">
             {patient.patientSnapshot ||
               patient.snapshot ||
               "No patient summary available yet."}
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 text-right text-xs text-zinc-400 lg:min-w-72">
+        <div className="grid grid-cols-2 gap-2 text-right text-xs text-slate-400 lg:min-w-72">
           <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-            <p className="text-zinc-500">Equipment</p>
-            <p className="mt-1 text-lg font-bold text-white">{equipmentCount}</p>
+            <p className="text-slate-500">
+              Equipment
+            </p>
+
+            <p className="mt-1 text-lg font-bold text-white">
+              {patient.currentEquipmentCount || 0}
+            </p>
           </div>
 
           <div className="rounded-2xl border border-white/10 bg-black/20 p-3">
-            <p className="text-zinc-500">Purchases</p>
-            <p className="mt-1 text-lg font-bold text-white">{purchaseCount}</p>
+            <p className="text-slate-500">
+              Purchases
+            </p>
+
+            <p className="mt-1 text-lg font-bold text-white">
+              {patient.purchasesLast90DaysCount || 0}
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-4 grid gap-3 text-sm text-zinc-400 md:grid-cols-3">
+      <div className="mt-5 grid gap-3 text-sm text-slate-400 md:grid-cols-3">
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-zinc-600">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-600">
             Contact
           </p>
-          <p className="mt-1">{patient.phone || "No phone"}</p>
-          <p>{patient.email || "No email"}</p>
+
+          <p className="mt-1">
+            {patient.phone || "No phone"}
+          </p>
+
+          <p>
+            {patient.email || "No email"}
+          </p>
         </div>
 
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-zinc-600">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-600">
             Location
           </p>
-          <p className="mt-1">{location || "No city/state"}</p>
+
+          <p className="mt-1">
+            {location || "No city/state"}
+          </p>
+
           <p>{patient.zip || ""}</p>
         </div>
 
         <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-zinc-600">
+          <p className="text-xs uppercase tracking-[0.2em] text-slate-600">
             Insurance / Balance
           </p>
-          <p className="mt-1">{insurance}</p>
-          <p>{money(patient.billing?.openBalanceEstimate || 0)}</p>
+
+          <p className="mt-1">
+            {insurance}
+          </p>
+
+          <p>
+            {money(
+              patient.billing?.openBalanceEstimate || 0
+            )}
+          </p>
         </div>
       </div>
     </Link>
@@ -410,22 +369,34 @@ function PatientCard({ patient }: { patient: Patient }) {
 export default function PatientsReportPage() {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [search, setSearch] = useState("");
-  const [filterMode, setFilterMode] = useState<FilterMode>("all");
+  const [filterMode, setFilterMode] =
+    useState<FilterMode>("all");
+
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+
+  const [error, setError] =
+    useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
+    let active = true;
+
+    queueMicrotask(() => {
+      if (!active) return;
+
+      setLoading(true);
+      setError(null);
+    });
 
     const patientsQuery = query(
       collection(db, "patients"),
-      orderBy("lastName", "asc"),
       limit(500)
     );
 
     const unsubscribe = onSnapshot(
       patientsQuery,
       (snapshot) => {
+        if (!active) return;
+
         const rows = snapshot.docs.map((doc) =>
           mapPatientDoc(doc.id, doc.data())
         );
@@ -434,14 +405,24 @@ export default function PatientsReportPage() {
         setError(null);
         setLoading(false);
       },
+
       (err: Error) => {
         console.error("Failed to load patients", err);
-        setError(err.message || "Failed to load patients.");
+
+        if (!active) return;
+
+        setError(
+          err.message || "Failed to load patients."
+        );
+
         setLoading(false);
       }
     );
 
-    return () => unsubscribe();
+    return () => {
+      active = false;
+      unsubscribe();
+    };
   }, []);
 
   const filteredPatients = useMemo(() => {
@@ -450,8 +431,6 @@ export default function PatientsReportPage() {
     return patients.filter((patient) => {
       const haystack = [
         patient.fullName,
-        patient.firstName,
-        patient.lastName,
         patient.dateOfBirth,
         patient.phone,
         patient.email,
@@ -466,15 +445,20 @@ export default function PatientsReportPage() {
         .join(" ")
         .toLowerCase();
 
-      const matchesSearch = !needle || haystack.includes(needle);
+      const matchesSearch =
+        !needle || haystack.includes(needle);
 
       const matchesFilter =
         filterMode === "all" ||
-        (filterMode === "hospice" && patient.hospice) ||
-        (filterMode === "cpap" && patient.cpap?.onRecord) ||
-        (filterMode === "wip" && Boolean(patient.wip?.status)) ||
+        (filterMode === "hospice" &&
+          patient.hospice) ||
+        (filterMode === "cpap" &&
+          patient.cpap?.onRecord) ||
+        (filterMode === "wip" &&
+          Boolean(patient.wip?.status)) ||
         (filterMode === "birthday" &&
-          patient.daysUntilBirthday != null &&
+          patient.daysUntilBirthday !== null &&
+          patient.daysUntilBirthday !== undefined &&
           patient.daysUntilBirthday <= 30);
 
       return matchesSearch && matchesFilter;
@@ -482,42 +466,61 @@ export default function PatientsReportPage() {
   }, [patients, search, filterMode]);
 
   const stats = useMemo(() => {
-    const hospice = patients.filter((patient) => patient.hospice).length;
-    const cpap = patients.filter((patient) => patient.cpap?.onRecord).length;
-    const wip = patients.filter((patient) => patient.wip?.status).length;
-    const birthdays = patients.filter(
-      (patient) =>
-        patient.daysUntilBirthday != null && patient.daysUntilBirthday <= 30
-    ).length;
-
     return {
       total: patients.length,
-      hospice,
-      cpap,
-      wip,
-      birthdays,
+
+      hospice: patients.filter(
+        (patient) => patient.hospice
+      ).length,
+
+      cpap: patients.filter(
+        (patient) => patient.cpap?.onRecord
+      ).length,
+
+      wip: patients.filter(
+        (patient) => patient.wip?.status
+      ).length,
+
+      birthdays: patients.filter(
+        (patient) =>
+          patient.daysUntilBirthday !== null &&
+          patient.daysUntilBirthday !== undefined &&
+          patient.daysUntilBirthday <= 30
+      ).length,
     };
   }, [patients]);
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_32%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.12),_transparent_28%),#020617] px-4 py-6 text-white md:px-6">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-6 shadow-2xl shadow-black/30 backdrop-blur-xl">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+    <main className={`${glass.page} ${colors.app}`}>
+      <div
+        className={colors.grid}
+        aria-hidden="true"
+      />
+
+      <div className={`${glass.shell} relative z-10`}>
+        <section className={glass.panel}>
+          <div
+            className={colors.grid}
+            aria-hidden="true"
+          />
+
+          <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-500/10 px-3 py-1 text-xs font-medium text-blue-200">
+              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
                 <Stethoscope className="h-3.5 w-3.5" />
-                Live patient index
+                Live Patient Index
               </div>
 
-              <h1 className="mt-4 text-2xl font-bold text-white md:text-3xl">
+              <h1 className={`${typography.hero} mt-4`}>
                 Patient Reports
               </h1>
 
-              <p className="mt-2 max-w-3xl text-sm text-zinc-400">
-                Indexed patient profiles built from uploads, including
-                demographics, birthdays, equipment, purchases, hospice flags,
-                WIP status, insurance, and billing snapshots.
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
+                Indexed patient profiles built from
+                uploads, including demographics,
+                birthdays, equipment, purchases,
+                hospice flags, WIP status,
+                insurance, and billing snapshots.
               </p>
             </div>
 
@@ -535,24 +538,28 @@ export default function PatientsReportPage() {
             icon={<UserRound className="h-5 w-5" />}
             subtext="Loaded from Firestore"
           />
+
           <StatCard
             title="Hospice"
             value={stats.hospice}
             icon={<HeartPulse className="h-5 w-5" />}
             subtext="Flagged patient records"
           />
+
           <StatCard
             title="CPAP/PAP"
             value={stats.cpap}
             icon={<Activity className="h-5 w-5" />}
             subtext="Sleep equipment on record"
           />
+
           <StatCard
             title="Open WIP"
             value={stats.wip}
             icon={<Truck className="h-5 w-5" />}
             subtext="Work in progress snapshots"
           />
+
           <StatCard
             title="Birthdays"
             value={stats.birthdays}
@@ -561,86 +568,127 @@ export default function PatientsReportPage() {
           />
         </section>
 
-        <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-5 shadow-xl shadow-black/20 backdrop-blur-xl">
-          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <section className={glass.panel}>
+          <div
+            className={colors.grid}
+            aria-hidden="true"
+          />
+
+          <div className="relative z-10 flex flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
             <div className="relative flex-1">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+
               <input
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(event) =>
+                  setSearch(event.target.value)
+                }
                 placeholder="Search patients by name, DOB, phone, city, insurance..."
-                className="w-full rounded-2xl border border-white/10 bg-black/30 px-11 py-3 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-blue-400/50"
+                className={`${"w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none backdrop-blur-xl focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"} w-full pl-11`}
               />
             </div>
 
             <select
               value={filterMode}
               onChange={(event) =>
-                setFilterMode(event.target.value as FilterMode)
+                setFilterMode(
+                  event.target.value as FilterMode
+                )
               }
               aria-label="Filter patients"
-              className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none focus:border-blue-400/50"
+              className={`${"w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none backdrop-blur-xl focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"} lg:w-72`}
             >
-              <option value="all">All Patients</option>
-              <option value="hospice">Hospice</option>
-              <option value="cpap">CPAP/PAP</option>
-              <option value="wip">WIP</option>
-              <option value="birthday">Birthdays Next 30 Days</option>
+              <option value="all">
+                All Patients
+              </option>
+
+              <option value="hospice">
+                Hospice
+              </option>
+
+              <option value="cpap">
+                CPAP/PAP
+              </option>
+
+              <option value="wip">
+                WIP
+              </option>
+
+              <option value="birthday">
+                Birthdays Next 30 Days
+              </option>
             </select>
           </div>
         </section>
 
         {error && (
-          <section className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5 text-red-200">
+          <section className="rounded-3xl border border-red-400/20 bg-red-500/10 p-5 text-red-200 shadow-xl shadow-red-950/20 backdrop-blur-xl">
             <div className="flex items-start gap-3">
               <AlertCircle className="mt-0.5 h-5 w-5" />
+
               <div>
-                <h2 className="font-semibold">Failed to load patients</h2>
-                <p className="mt-1 text-sm text-red-200/80">{error}</p>
+                <h2 className="font-semibold">
+                  Failed to load patients
+                </h2>
+
+                <p className="mt-1 text-sm text-red-200/80">
+                  {error}
+                </p>
               </div>
             </div>
           </section>
         )}
 
         {loading && (
-          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center text-zinc-400 backdrop-blur-xl">
+          <section className={`${glass.panel} p-8 text-center text-slate-400`}>
             Loading patients from Firestore...
           </section>
         )}
 
-        {!loading && !error && filteredPatients.length === 0 && (
-          <section className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center backdrop-blur-xl">
-            <Package className="mx-auto h-8 w-8 text-zinc-600" />
-            <h2 className="mt-3 text-lg font-semibold text-white">
-              No patients found
-            </h2>
-            <p className="mt-2 text-sm text-zinc-500">
-              Upload a patient, PAR, WIP, billing, or item detail report to
-              populate this index.
-            </p>
-          </section>
-        )}
+        {!loading &&
+          !error &&
+          filteredPatients.length === 0 && (
+            <section className={`${glass.panel} p-8 text-center`}>
+              <Package className="mx-auto h-8 w-8 text-slate-600" />
 
-        {!loading && !error && filteredPatients.length > 0 && (
-          <section className="space-y-3">
-            <div className="flex items-center justify-between px-1">
-              <p className="text-sm text-zinc-500">
-                Showing {filteredPatients.length} of {patients.length} patients
+              <h2 className="mt-3 text-lg font-semibold text-white">
+                No patients found
+              </h2>
+
+              <p className="mt-2 text-sm text-slate-500">
+                Upload a patient, PAR, WIP,
+                billing, or item detail report
+                to populate this index.
               </p>
+            </section>
+          )}
 
-              <div className="flex items-center gap-2 text-xs text-zinc-600">
-                <CalendarDays className="h-4 w-4" />
-                Live Firestore updates
+        {!loading &&
+          !error &&
+          filteredPatients.length > 0 && (
+            <section className="space-y-3">
+              <div className="flex items-center justify-between px-1">
+                <p className="text-sm text-slate-500">
+                  Showing {filteredPatients.length} of{" "}
+                  {patients.length} patients
+                </p>
+
+                <div className="flex items-center gap-2 text-xs text-slate-600">
+                  <CalendarDays className="h-4 w-4" />
+                  Live Firestore updates
+                </div>
               </div>
-            </div>
 
-            <div className="grid gap-4">
-              {filteredPatients.map((patient) => (
-                <PatientCard key={patient.id} patient={patient} />
-              ))}
-            </div>
-          </section>
-        )}
+              <div className="grid gap-4">
+                {filteredPatients.map((patient) => (
+                  <PatientCard
+                    key={patient.id}
+                    patient={patient}
+                  />
+                ))}
+              </div>
+            </section>
+          )}
       </div>
     </main>
   );

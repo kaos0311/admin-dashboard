@@ -1,0 +1,24 @@
+export const colors = {
+  app:
+    "bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.13),transparent_34%),radial-gradient(circle_at_0%_20%,rgba(14,165,233,0.10),transparent_28%),radial-gradient(circle_at_100%_18%,rgba(99,102,241,0.12),transparent_30%),linear-gradient(135deg,#020617_0%,#06111f_44%,#020617_100%)]",
+
+  grid:
+    "pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(to_right,rgba(148,163,184,0.095)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.095)_1px,transparent_1px)] bg-[size:48px_48px] opacity-45",
+
+  vignette:
+    "pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.34)_70%,rgba(0,0,0,0.78)_100%)]",
+
+  reactorGlow:
+    "pointer-events-none fixed left-1/2 top-24 -z-10 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(34,211,238,0.20)_0%,rgba(14,165,233,0.09)_30%,rgba(99,102,241,0.045)_48%,transparent_72%)] blur-3xl opacity-70 motion-safe:animate-[reactor-breathe_8s_ease-in-out_infinite]",
+
+  textPrimary: "text-white",
+  textSecondary: "text-slate-300",
+  textMuted: "text-slate-400",
+  textFaint: "text-slate-500",
+
+  border: "border-white/10",
+  borderStrong: "border-white/15",
+
+  glowSoft: "shadow-[0_0_50px_rgba(34,211,238,0.10)]",
+  glowPanel: "shadow-[0_20px_80px_rgba(0,0,0,0.42),0_0_45px_rgba(34,211,238,0.075)]",
+};

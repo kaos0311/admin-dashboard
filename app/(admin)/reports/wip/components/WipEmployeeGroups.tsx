@@ -1,9 +1,7 @@
 "use client";
 
 import { UserCheck } from "lucide-react";
-
-import type { WipRecord } from "@/lib/reports/wip";
-import { groupWipsByEmployee } from "@/lib/reports/wip";
+import { groupWipsByEmployee, type WipRecord } from "@/lib/reports/wip";
 
 type WipEmployeeGroupsProps = {
   records: WipRecord[];

@@ -1,145 +1,136 @@
-"use client";
+import { FirebaseError } from "firebase/app";
+import { getAuth } from "firebase/auth";
+import { getFunctions, httpsCallable } from "firebase/functions";
 
-import {
-  httpsCallable,
-  type HttpsCallableResult,
-} from "firebase/functions";
-
-import {
-  auth,
-  functions,
-} from "@/lib/firebase";
-
-import { getErrorMessage } from "@/lib/getErrorMessage";
+import { app } from "@/lib/firebase";
 
 export type UserRole = "admin" | "staff";
 
-type SuccessResponse = {
-  success: boolean;
-};
-
-type CreateDashboardUserInput = {
+export type CreateDashboardUserPayload = {
   email: string;
   password: string;
-  displayName: string;
+  displayName?: string;
   role: UserRole;
 };
 
-type CreateDashboardUserResponse = SuccessResponse & {
-  uid: string;
-};
-
-type UpdateUserRoleInput = {
+export type UpdateUserRolePayload = {
   uid: string;
   role: UserRole;
 };
 
-type ToggleUserInput = {
+export type UserActionPayload = {
   uid: string;
 };
 
-type DeleteUserResponse = SuccessResponse & {
-  uid: string;
+export type CloudFunctionResult = {
+  success: boolean;
+  message?: string;
 };
 
-/*
-|--------------------------------------------------------------------------
-| HELPERS
-|--------------------------------------------------------------------------
-*/
+export type CreateDashboardUserResult = {
+  success: boolean;
+  uid: string;
+  email: string;
+  displayName?: string;
+  role: UserRole;
+};
 
-async function callFunction<TInput, TResult>(
-  functionName: string,
-  payload: TInput
+const functions = getFunctions(app, "us-central1");
+
+function cleanMessage(message: string): string {
+  return message
+    .replace(/^Firebase:\s*/i, "")
+    .replace(/\s*\(functions\/[a-z-]+\)\.?$/i, "")
+    .trim();
+}
+
+export function getErrorMessage(error: unknown): string {
+  if (error instanceof FirebaseError) {
+    return cleanMessage(error.message);
+  }
+
+  if (error instanceof Error) {
+    return cleanMessage(error.message);
+  }
+
+  return "An unexpected error occurred.";
+}
+
+async function callFunction<TPayload, TResult>(
+  name: string,
+  payload: TPayload
 ): Promise<TResult> {
   try {
-    const fn = httpsCallable<TInput, TResult>(
+    const callable = httpsCallable<TPayload, TResult>(
       functions,
-      functionName
+      name
     );
 
-    const result: HttpsCallableResult<TResult> =
-      await fn(payload);
+    const result = await callable(payload);
 
     return result.data;
-  } catch (error: unknown) {
-    console.error(
-      `[Cloud Function Error] ${functionName}:`,
-      error
-    );
+  } catch (error) {
+    console.error(`[Cloud Function Error] ${name}:`, error);
 
     throw new Error(getErrorMessage(error));
   }
 }
-
-/*
-|--------------------------------------------------------------------------
-| AUTH TOKEN
-|--------------------------------------------------------------------------
-*/
-
-export async function forceRefreshCurrentUserToken(): Promise<void> {
-  if (!auth.currentUser) return;
-
-  try {
-    await auth.currentUser.getIdToken(true);
-  } catch (error: unknown) {
-    console.error(
-      "TOKEN REFRESH ERROR:",
-      error
-    );
-
-    throw new Error(getErrorMessage(error));
-  }
-}
-
-/*
-|--------------------------------------------------------------------------
-| USERS
-|--------------------------------------------------------------------------
-*/
 
 export async function createDashboardUser(
-  input: CreateDashboardUserInput
-): Promise<CreateDashboardUserResponse> {
-  return callFunction<
-    CreateDashboardUserInput,
-    CreateDashboardUserResponse
-  >("createDashboardUser", input);
+  payload: CreateDashboardUserPayload
+): Promise<CreateDashboardUserResult> {
+  return await callFunction<
+    CreateDashboardUserPayload,
+    CreateDashboardUserResult
+  >("createDashboardUser", {
+    ...payload,
+    email: payload.email.trim().toLowerCase(),
+    displayName: payload.displayName?.trim() ?? "",
+  });
 }
 
 export async function updateUserRole(
-  input: UpdateUserRoleInput
-): Promise<SuccessResponse> {
-  return callFunction<
-    UpdateUserRoleInput,
-    SuccessResponse
-  >("updateUserRole", input);
+  payload: UpdateUserRolePayload
+): Promise<CloudFunctionResult> {
+  return await callFunction<
+    UpdateUserRolePayload,
+    CloudFunctionResult
+  >("updateUserRole", payload);
 }
 
 export async function disableDashboardUser(
-  input: ToggleUserInput
-): Promise<SuccessResponse> {
-  return callFunction<
-    ToggleUserInput,
-    SuccessResponse
-  >("disableDashboardUser", input);
+  payload: UserActionPayload
+): Promise<CloudFunctionResult> {
+  return await callFunction<
+    UserActionPayload,
+    CloudFunctionResult
+  >("disableDashboardUser", payload);
 }
 
 export async function enableDashboardUser(
-  input: ToggleUserInput
-): Promise<SuccessResponse> {
-  return callFunction<
-    ToggleUserInput,
-    SuccessResponse
-  >("enableDashboardUser", input);
+  payload: UserActionPayload
+): Promise<CloudFunctionResult> {
+  return await callFunction<
+    UserActionPayload,
+    CloudFunctionResult
+  >("enableDashboardUser", payload);
 }
 
 export async function deleteUserAccount(
-  input: ToggleUserInput
-): Promise<DeleteUserResponse> {
-  return callFunction<
-    ToggleUserInput,
-    DeleteUserResponse
-  >("deleteUserAccount", input);
+  payload: UserActionPayload
+): Promise<CloudFunctionResult> {
+  return await callFunction<
+    UserActionPayload,
+    CloudFunctionResult
+  >("deleteUserAccount", payload);
+}
+
+export async function forceRefreshCurrentUserToken(): Promise<void> {
+  const auth = getAuth(app);
+
+  if (!auth.currentUser) {
+    return;
+  }
+
+  await auth.currentUser.getIdToken(true);
 }

@@ -1,4 +1,8 @@
-import type { BirthdayAnalytics, BirthdayItem } from "../../dashboard-types";
+import type {
+  BirthdayAnalytics,
+  BirthdayItem,
+} from "../../dashboard-types";
+
 import {
   getNullableString,
   getString,
@@ -7,8 +11,12 @@ import {
   safeNumber,
 } from "./core";
 
-function normalizeBirthdayItem(data: unknown): BirthdayItem {
+function normalizeBirthdayItem(
+  data: unknown
+): BirthdayItem {
   const source = isRecord(data) ? data : {};
+
+  const age = safeNumber(source.age);
 
   return {
     id: getString(source, "id"),
@@ -19,27 +27,56 @@ function normalizeBirthdayItem(data: unknown): BirthdayItem {
       getString(source, "name") ||
       "Unknown Patient",
 
-    phone: getString(source, "phone") || undefined,
-    primaryInsurance: getString(source, "primaryInsurance") || undefined,
-
-    birthday:
-      getNullableString(source, "birthday") ||
-      getNullableString(source, "dateOfBirth") ||
+    phone:
+      getString(source, "phone") ||
       undefined,
 
-    age: safeNumber(source.age) || undefined,
+    primaryInsurance:
+      getString(
+        source,
+        "primaryInsurance"
+      ) || undefined,
+
+    birthday:
+      getNullableString(
+        source,
+        "birthday"
+      ) ||
+      getNullableString(
+        source,
+        "dateOfBirth"
+      ) ||
+      undefined,
+
+    age: age > 0 ? age : undefined,
   };
 }
 
 export function normalizeBirthdayAnalytics(
-  data: Partial<BirthdayAnalytics> | undefined
+  data: unknown
 ): BirthdayAnalytics {
   const source = isRecord(data) ? data : {};
 
-  const today = safeArray(source.today, normalizeBirthdayItem);
-  const next7Days = safeArray(source.next7Days, normalizeBirthdayItem);
-  const next30Days = safeArray(source.next30Days, normalizeBirthdayItem);
-  const thisMonth = safeArray(source.thisMonth, normalizeBirthdayItem);
+  const today = safeArray(
+    source.today,
+    normalizeBirthdayItem
+  );
+
+  const next7Days = safeArray(
+    source.next7Days,
+    normalizeBirthdayItem
+  );
+
+  const next30Days = safeArray(
+    source.next30Days,
+    normalizeBirthdayItem
+  );
+
+  const thisMonth = safeArray(
+    source.thisMonth,
+    normalizeBirthdayItem
+  );
+
   const upcomingBirthdays = safeArray(
     source.upcomingBirthdays,
     normalizeBirthdayItem
@@ -52,9 +89,20 @@ export function normalizeBirthdayAnalytics(
     thisMonth,
     upcomingBirthdays,
 
-    todayCount: safeNumber(source.todayCount) || today.length,
-    next7DaysCount: safeNumber(source.next7DaysCount) || next7Days.length,
-    next30DaysCount: safeNumber(source.next30DaysCount) || next30Days.length,
-    thisMonthCount: safeNumber(source.thisMonthCount) || thisMonth.length,
+    todayCount:
+      safeNumber(source.todayCount) ||
+      today.length,
+
+    next7DaysCount:
+      safeNumber(source.next7DaysCount) ||
+      next7Days.length,
+
+    next30DaysCount:
+      safeNumber(source.next30DaysCount) ||
+      next30Days.length,
+
+    thisMonthCount:
+      safeNumber(source.thisMonthCount) ||
+      thisMonth.length,
   };
 }

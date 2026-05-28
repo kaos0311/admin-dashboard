@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 
 import OpenUploadCenterButton from "../components/OpenUploadCenterButton";
+import { colors, glass, typography } from "@/theme";
 
 const insuranceFocusAreas = [
   {
@@ -50,17 +51,20 @@ const insuranceReadinessItems = [
   {
     label: "Coverage Issues",
     value: "Ready",
-    detail: "Reserved for payer mismatch, inactive coverage, and verification gaps.",
+    detail:
+      "Reserved for payer mismatch, inactive coverage, and verification gaps.",
   },
   {
     label: "Missing Documentation",
     value: "Ready",
-    detail: "Reserved for CMN, notes, and insurance-supporting documentation gaps.",
+    detail:
+      "Reserved for CMN, notes, and insurance-supporting documentation gaps.",
   },
   {
     label: "Protected Details",
     value: "Gated",
-    detail: "Full PHI and insurance identifiers should remain behind protected detail views.",
+    detail:
+      "Full PHI and insurance identifiers should remain behind protected detail views.",
   },
 ];
 
@@ -75,34 +79,28 @@ const futureWorkflowItems = [
 
 export default function InsuranceReportPage() {
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(6,182,212,0.18),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.13),_transparent_30%),radial-gradient(circle_at_bottom,_rgba(15,23,42,0.88),_transparent_40%),#020617] px-4 py-6 text-white md:px-6 xl:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl">
-          <div
-            aria-hidden="true"
-            className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/50 to-transparent"
-          />
-          <div
-            aria-hidden="true"
-            className="absolute -right-24 -top-24 h-64 w-64 rounded-full bg-cyan-400/10 blur-3xl"
-          />
+    <main className={`${glass.page} ${colors.app}`}>
+      <div className={colors.grid} aria-hidden="true" />
 
-          <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
+      <div className={`${glass.shell} relative z-10`}>
+        <section className={glass.panel}>
+          <div className={colors.grid} aria-hidden="true" />
+
+          <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div>
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs font-medium text-cyan-200">
+              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
                 Insurance Oversight
               </div>
 
-              <h1 className="text-2xl font-bold tracking-tight text-white md:text-3xl">
+              <h1 className={`${typography.pageTitle} mt-4`}>
                 Insurance Reports
               </h1>
 
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-300">
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
                 Review insurance uploads, payer coverage gaps, authorization
                 readiness, and protected insurance workflows without dumping
-                sensitive policy data onto summary cards like some bargain-bin
-                compliance disaster.
+                sensitive policy data onto summary cards.
               </p>
             </div>
 
@@ -112,10 +110,7 @@ export default function InsuranceReportPage() {
                 label="Upload Insurance Report"
               />
 
-              <a
-                href="/reports/upload"
-                className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:border-cyan-300/30 hover:bg-white/15"
-              >
+              <a href="/reports/upload" className={"inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"}>
                 <UploadCloud className="h-4 w-4" aria-hidden="true" />
                 Upload Center
               </a>
@@ -128,18 +123,13 @@ export default function InsuranceReportPage() {
           className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
         >
           {insuranceReadinessItems.map((item) => (
-            <article
-              key={item.label}
-              className="rounded-[1.75rem] border border-white/10 bg-white/[0.055] p-5 shadow-xl shadow-black/20 backdrop-blur-2xl"
-            >
+            <article key={item.label} className={glass.card}>
               <div className="flex items-start justify-between gap-4">
-                <p className="text-xs uppercase tracking-[0.18em] text-slate-500">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                   {item.label}
                 </p>
 
-                <span className="rounded-full border border-cyan-300/20 bg-cyan-400/10 px-2.5 py-1 text-xs font-semibold text-cyan-200">
-                  {item.value}
-                </span>
+                <span className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>{item.value}</span>
               </div>
 
               <p className="mt-4 text-sm leading-6 text-slate-400">
@@ -157,15 +147,12 @@ export default function InsuranceReportPage() {
             const Icon = area.icon;
 
             return (
-              <article
-                key={area.label}
-                className="group rounded-[1.75rem] border border-white/10 bg-white/[0.055] p-5 shadow-xl shadow-black/20 backdrop-blur-2xl transition hover:-translate-y-0.5 hover:border-cyan-300/25 hover:bg-white/[0.08]"
-              >
-                <div className="mb-4 inline-flex rounded-2xl border border-white/10 bg-white/10 p-3 text-cyan-200 transition group-hover:border-cyan-300/25 group-hover:bg-cyan-400/10">
+              <article key={area.label} className={glass.card}>
+                <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
                   <Icon className="h-5 w-5" aria-hidden="true" />
                 </div>
 
-                <h2 className="text-sm font-semibold text-white">
+                <h2 className="mt-4 text-sm font-semibold text-white">
                   {area.label}
                 </h2>
 
@@ -178,16 +165,16 @@ export default function InsuranceReportPage() {
         </section>
 
         <section className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
-          <article className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-6 shadow-2xl shadow-black/25 backdrop-blur-2xl">
-            <div className="flex items-start gap-4">
-              <div className="rounded-2xl border border-sky-300/20 bg-sky-400/10 p-3 text-sky-200">
+          <article className={glass.panel}>
+            <div className={colors.grid} aria-hidden="true" />
+
+            <div className="relative z-10 flex flex-col gap-4 p-6 sm:flex-row sm:items-start">
+              <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
                 <FileSearch className="h-5 w-5" aria-hidden="true" />
               </div>
 
               <div>
-                <h2 className="text-lg font-semibold text-white">
-                  Insurance Data Layer
-                </h2>
+                <h2 className={typography.sectionTitle}>Insurance Data Layer</h2>
 
                 <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
                   Insurance filters, payer summaries, patient coverage records,
@@ -198,23 +185,24 @@ export default function InsuranceReportPage() {
                   requires a protected detail view.
                 </p>
 
-                <div className="mt-5 rounded-3xl border border-cyan-300/15 bg-cyan-400/[0.06] p-4">
+                <div className={`${glass.card} mt-5`}>
                   <div className="flex items-start gap-3">
-                    <LockKeyhole
-                      className="mt-0.5 h-5 w-5 text-cyan-200"
-                      aria-hidden="true"
-                    />
+                    <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
+                      <LockKeyhole
+                        className="h-5 w-5"
+                        aria-hidden="true"
+                      />
+                    </div>
 
                     <div>
-                      <h3 className="text-sm font-semibold text-cyan-100">
+                      <h3 className="text-sm font-semibold text-sky-100">
                         PHI display rule
                       </h3>
 
                       <p className="mt-1 text-sm leading-6 text-slate-400">
                         Summary pages should show operational status, not raw
-                        insurance identifiers. Detail views should be
-                        role-gated, audit-logged, and limited to the minimum
-                        necessary data. Boring? Yes. Correct? Also yes.
+                        insurance identifiers. Detail views should be role-gated,
+                        audit-logged, and limited to the minimum necessary data.
                       </p>
                     </div>
                   </div>
@@ -223,35 +211,37 @@ export default function InsuranceReportPage() {
             </div>
           </article>
 
-          <article className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-6 shadow-2xl shadow-black/25 backdrop-blur-2xl">
-            <div className="mb-4 flex items-center gap-3">
-              <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-3 text-emerald-200">
-                <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
-              </div>
+          <article className={glass.panel}>
+            <div className={colors.grid} aria-hidden="true" />
 
-              <div>
-                <h2 className="text-lg font-semibold text-white">
-                  Future Workflow
-                </h2>
-                <p className="text-sm text-slate-500">
-                  Reserved build targets.
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              {futureWorkflowItems.map((item) => (
-                <div
-                  key={item}
-                  className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-300"
-                >
-                  <span>{item}</span>
-                  <ArrowRight
-                    className="h-4 w-4 text-slate-500"
-                    aria-hidden="true"
-                  />
+            <div className="relative z-10 p-6">
+              <div className="mb-4 flex items-center gap-3">
+                <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
+                  <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
                 </div>
-              ))}
+
+                <div>
+                  <h2 className={typography.sectionTitle}>Future Workflow</h2>
+                  <p className="text-sm text-slate-500">
+                    Reserved production build targets.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                {futureWorkflowItems.map((item) => (
+                  <div
+                    key={item}
+                    className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-300"
+                  >
+                    <span>{item}</span>
+                    <ArrowRight
+                      className="h-4 w-4 text-slate-500"
+                      aria-hidden="true"
+                    />
+                  </div>
+                ))}
+              </div>
             </div>
           </article>
         </section>
@@ -259,3 +249,4 @@ export default function InsuranceReportPage() {
     </main>
   );
 }
+

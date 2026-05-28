@@ -1,12 +1,12 @@
 import {
   BarChart3,
   HeartPulse,
+  type LucideIcon,
   ShieldCheck,
   Truck,
   Upload,
   Users,
   Wrench,
-  type LucideIcon,
 } from "lucide-react";
 
 export type ReportPageCategory =

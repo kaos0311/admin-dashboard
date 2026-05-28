@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+import { tiles } from "@/theme";
 
 import type { UserStats } from "../users-types";
 
@@ -28,3 +30,6 @@ function Stat({ label, value }: { label: string; value: number }) {
     </div>
   );
 }
+
+
+

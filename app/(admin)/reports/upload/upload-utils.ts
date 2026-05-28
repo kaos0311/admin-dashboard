@@ -2,8 +2,8 @@ import type { DocumentData } from "firebase/firestore";
 
 import {
   DEFAULT_REPORT_TYPE,
-  REPORT_TYPES,
   groupReportOptions,
+  REPORT_TYPES,
   type ReportType,
 } from "@/lib/reportTypes";
 

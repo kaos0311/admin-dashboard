@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+import { tiles } from "@/theme";
 
 import { AlertTriangle, Boxes } from "lucide-react";
 
@@ -70,3 +72,6 @@ function StatCard({
     </div>
   );
 }
+
+
+

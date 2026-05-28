@@ -1,12 +1,12 @@
 "use client";
 
 import {
+  type FormEvent,
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
-  type FormEvent,
 } from "react";
 
 import { useRouter, useSearchParams } from "next/navigation";

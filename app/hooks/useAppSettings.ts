@@ -1,11 +1,7 @@
 "use client";
 
 import { useSyncExternalStore } from "react";
-import {
-  doc,
-  onSnapshot,
-  type Unsubscribe,
-} from "firebase/firestore";
+import { doc, onSnapshot, type Unsubscribe } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 
@@ -60,11 +56,9 @@ function normalizeText(value: unknown, fallback = ""): string {
 }
 
 function normalizeTheme(value: unknown): AppTheme {
-  if (value === "light" || value === "dark" || value === "system") {
-    return value;
-  }
-
-  return DEFAULT_APP_SETTINGS.defaultTheme;
+  return value === "light" || value === "dark" || value === "system"
+    ? value
+    : DEFAULT_APP_SETTINGS.defaultTheme;
 }
 
 function normalizeBoolean(value: unknown, fallback: boolean): boolean {
@@ -73,22 +67,10 @@ function normalizeBoolean(value: unknown, fallback: boolean): boolean {
 
 function normalizeSettings(data: Record<string, unknown>): AppSettings {
   return {
-    companyName: normalizeText(
-      data.companyName,
-      DEFAULT_APP_SETTINGS.companyName
-    ),
-    companyPhone: normalizeText(
-      data.companyPhone,
-      DEFAULT_APP_SETTINGS.companyPhone
-    ),
-    companyEmail: normalizeText(
-      data.companyEmail,
-      DEFAULT_APP_SETTINGS.companyEmail
-    ),
-    companyAddress: normalizeText(
-      data.companyAddress,
-      DEFAULT_APP_SETTINGS.companyAddress
-    ),
+    companyName: normalizeText(data.companyName, DEFAULT_APP_SETTINGS.companyName),
+    companyPhone: normalizeText(data.companyPhone, DEFAULT_APP_SETTINGS.companyPhone),
+    companyEmail: normalizeText(data.companyEmail, DEFAULT_APP_SETTINGS.companyEmail),
+    companyAddress: normalizeText(data.companyAddress, DEFAULT_APP_SETTINGS.companyAddress),
     defaultTheme: normalizeTheme(data.defaultTheme),
     maintenanceMode: normalizeBoolean(
       data.maintenanceMode,
@@ -143,9 +125,7 @@ const appSettingsStore = (() => {
         }
 
         setSnapshot({
-          settings: normalizeSettings(
-            docSnap.data() as Record<string, unknown>
-          ),
+          settings: normalizeSettings(docSnap.data() as Record<string, unknown>),
           loading: false,
           error: "",
         });
@@ -168,11 +148,8 @@ const appSettingsStore = (() => {
   function stopListeningIfUnused() {
     if (listeners.size > 0) return;
 
-    if (unsubscribeFirestore) {
-      unsubscribeFirestore();
-      unsubscribeFirestore = null;
-    }
-
+    unsubscribeFirestore?.();
+    unsubscribeFirestore = null;
     hasStarted = false;
     snapshot = INITIAL_SNAPSHOT;
   }
@@ -198,9 +175,7 @@ const appSettingsStore = (() => {
   };
 })();
 
-export function useAppSettings(
-  enabled: boolean
-): UseAppSettingsResult {
+export function useAppSettings(enabled: boolean): UseAppSettingsResult {
   return useSyncExternalStore(
     enabled ? appSettingsStore.subscribe : subscribeDisabled,
     enabled ? appSettingsStore.getSnapshot : getDisabledSnapshot,

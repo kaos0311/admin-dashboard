@@ -19,11 +19,9 @@ type UseAuthRoleResult = {
   loading: boolean;
   error: string;
   active: boolean | null;
-
   isAdmin: boolean;
   isStaff: boolean;
   isAdminOrStaff: boolean;
-
   canAccessDashboard: boolean;
   canUploadReports: boolean;
   canRefreshImports: boolean;
@@ -32,8 +30,7 @@ type UseAuthRoleResult = {
 };
 
 function parseRole(value: unknown): UserRole {
-  if (value === "admin" || value === "staff") return value;
-  return null;
+  return value === "admin" || value === "staff" ? value : null;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -53,8 +50,6 @@ export function useAuthRole(): UseAuthRoleResult {
     let cancelled = false;
 
     const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-      if (cancelled) return;
-
       setLoading(true);
       setError("");
 
@@ -66,57 +61,60 @@ export function useAuthRole(): UseAuthRoleResult {
         return;
       }
 
-      setUser(currentUser);
-
       try {
+        setUser(currentUser);
+
         let resolvedRole: UserRole = null;
-        let resolvedActive: boolean | null = null;
+        let resolvedActive: boolean | null = true;
 
-        try {
-          const tokenResult = await getIdTokenResult(currentUser, true);
-          resolvedRole = parseRole(tokenResult.claims.role);
-        } catch (tokenError) {
-          console.error("AUTH TOKEN ROLE ERROR:", tokenError);
-        }
+        const tokenResult = await getIdTokenResult(currentUser, true);
+        resolvedRole = parseRole(tokenResult.claims.role);
 
-        try {
-          const userSnap = await getDoc(doc(db, "users", currentUser.uid));
+        const userSnap = await getDoc(doc(db, "users", currentUser.uid));
 
-          if (userSnap.exists()) {
-            const data = userSnap.data() as Record<string, unknown>;
+        if (userSnap.exists()) {
+          const data = userSnap.data() as Record<string, unknown>;
 
-            resolvedActive = data.active !== false;
+          resolvedActive = data.active !== false;
 
-            if (data.active === false) {
-              await signOut(auth);
+          const dbRole = parseRole(data.role);
+          if (dbRole) resolvedRole = dbRole;
 
-              if (!cancelled) {
-                setUser(null);
-                setRole(null);
-                setActive(false);
-                setError("This account has been disabled.");
-              }
+          console.log("AUTH ROLE DEBUG:", {
+            uid: currentUser.uid,
+            email: currentUser.email,
+            userDocExists: true,
+            userDoc: data,
+            tokenClaims: tokenResult.claims,
+            resolvedRole,
+            resolvedActive,
+          });
 
-              return;
+          if (data.active === false) {
+            await signOut(auth);
+
+            if (!cancelled) {
+              setUser(null);
+              setRole(null);
+              setActive(false);
+              setError("This account has been disabled.");
             }
 
-            const dbRole = parseRole(data.role);
-
-            if (dbRole) {
-              resolvedRole = dbRole;
-            }
-          } else {
-            resolvedActive = true;
+            return;
           }
-        } catch (userDocError) {
-          console.error("AUTH USER DOC ROLE ERROR:", userDocError);
+        } else {
+          console.warn("AUTH ROLE DEBUG: user document missing", {
+            uid: currentUser.uid,
+            email: currentUser.email,
+            tokenClaims: tokenResult.claims,
+          });
         }
 
         if (!cancelled) {
           setRole(resolvedRole);
           setActive(resolvedActive);
         }
-      } catch (authRoleError: unknown) {
+      } catch (authRoleError) {
         console.error("AUTH ROLE ERROR:", authRoleError);
 
         if (!cancelled) {
@@ -125,9 +123,7 @@ export function useAuthRole(): UseAuthRoleResult {
           setError(getErrorMessage(authRoleError));
         }
       } finally {
-        if (!cancelled) {
-          setLoading(false);
-        }
+        if (!cancelled) setLoading(false);
       }
     });
 
@@ -137,12 +133,11 @@ export function useAuthRole(): UseAuthRoleResult {
     };
   }, []);
 
-  return useMemo<UseAuthRoleResult>(() => {
+  return useMemo(() => {
     const isAdmin = role === "admin";
     const isStaff = role === "staff";
     const isAdminOrStaff = isAdmin || isStaff;
     const isActiveUser = active !== false;
-
     const canAccessDashboard = Boolean(user && isActiveUser && isAdminOrStaff);
 
     return {
@@ -151,11 +146,9 @@ export function useAuthRole(): UseAuthRoleResult {
       loading,
       error,
       active,
-
       isAdmin,
       isStaff,
       isAdminOrStaff,
-
       canAccessDashboard,
       canUploadReports: canAccessDashboard,
       canRefreshImports: canAccessDashboard,

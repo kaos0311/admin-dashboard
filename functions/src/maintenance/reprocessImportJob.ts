@@ -9,8 +9,8 @@ import { logger } from "firebase-functions";
 
 import {
   FieldValue,
-  Timestamp,
   getFirestore,
+  Timestamp,
 } from "firebase-admin/firestore";
 
 import { getStorage } from "firebase-admin/storage";

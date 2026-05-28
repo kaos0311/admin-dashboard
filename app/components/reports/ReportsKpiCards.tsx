@@ -1,3 +1,4 @@
+﻿import { tiles } from "@/theme";
 "use client";
 
 import {
@@ -5,10 +6,10 @@ import {
   AlertTriangle,
   DollarSign,
   HeartPulse,
+  type LucideIcon,
   PackageCheck,
   Repeat,
   Rows3,
-  type LucideIcon,
 } from "lucide-react";
 
 type Props = {
@@ -180,7 +181,7 @@ export default function ReportsKpiCards({
               card.highlight
             )}`}
           >
-            <div className="flex items-start justify-between gap-3">
+            <div className="flex items-stretch justify-between gap-3">
               <div className="min-w-0">
                 <div className="text-sm text-neutral-400">
                   {card.label}
@@ -210,3 +211,5 @@ export default function ReportsKpiCards({
     </section>
   );
 }
+
+

@@ -1,3 +1,4 @@
+﻿import { tiles } from "@/theme";
 import {
   AlertTriangle,
   BarChart3,
@@ -25,7 +26,7 @@ export function AnalyticsStatGrid({
   knownRows,
 }: AnalyticsStatGridProps) {
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <section className={tiles.gridMetrics}>
       <StatCard
         title={`${selectedTypeLabel} Rows`}
         value={selectedRows}
@@ -80,7 +81,7 @@ function StatCard({
 
           <p className="mt-1 text-2xl font-bold text-white">
             {loading ? (
-              <span className="animate-pulse text-slate-700">████</span>
+              <span className="animate-pulse text-slate-700">â–ˆâ–ˆâ–ˆâ–ˆ</span>
             ) : (
               formatCount(value)
             )}
@@ -90,3 +91,4 @@ function StatCard({
     </div>
   );
 }
+

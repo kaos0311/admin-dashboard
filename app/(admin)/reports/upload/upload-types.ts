@@ -53,24 +53,39 @@ export type QueuedUpload = {
 
 export type RecentImportJob = {
   id: string;
+
   reportType: string;
   reportLabel: string;
+
   originalFileName: string;
+
   status: string;
   processingStatus: string;
+  processingStage: string;
+
   uploadedByEmail: string;
+
   storagePath: string;
   downloadURL: string;
+
   importMode: string;
+
   refreshRequested: boolean;
   forceReprocess: boolean;
+
   reportVersion: number;
   weeklyBatchKey: string;
+
   progressPercent: number;
+
   rowsProcessed: number;
   rowsInserted: number;
+  rowsUpdated?: number;
+  rowsSkipped?: number;
   rowsFailed: number;
-  processingStage: string;
+
+  completedWithErrors?: boolean;
+
   createdAt: TimestampLike;
   updatedAt: TimestampLike;
 };

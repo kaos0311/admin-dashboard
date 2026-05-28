@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+import { tiles } from "@/theme";
 
 import {
   Activity,
@@ -31,7 +33,7 @@ export function DashboardStatGrid({
   products,
 }: DashboardStatGridProps) {
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+    <section className={tiles.gridMetrics}>
       <DashboardStatCard
         title="Total Revenue"
         value={formatMoney(summary.totalRevenue)}
@@ -93,3 +95,6 @@ export function DashboardStatGrid({
     </section>
   );
 }
+
+
+

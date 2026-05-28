@@ -1,11 +1,25 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
-import { Loader2, RefreshCw } from "lucide-react";
+
+import {
+  Loader2,
+  RefreshCw,
+  ShieldCheck,
+  Users,
+  UserCog,
+} from "lucide-react";
+
 import toast from "react-hot-toast";
 
-import { auth } from "@/lib/firebase";
+import { httpsCallable } from "firebase/functions";
+
+import { colors, glass, typography } from "@/theme";
+
+import { auth, functions } from "@/lib/firebase";
+
 import { useAuthRole } from "@/app/hooks/useAuthRole";
+
 import {
   createDashboardUser,
   deleteUserAccount,
@@ -21,14 +35,25 @@ import { UserDirectory } from "./components/UserDirectory";
 import { UsersFilters } from "./components/UsersFilters";
 import { UsersHeader } from "./components/UsersHeader";
 import { UsersStats } from "./components/UsersStats";
-import { emptyCreateForm, type CreateFormState, type UserRow } from "./users-types";
+
+import {
+  emptyCreateForm,
+  type CreateFormState,
+  type UserRow,
+} from "./users-types";
+
 import { getErrorMessage } from "./users-utils";
+
 import { useUsersData } from "./use-users-data";
 
 export default function UsersPage() {
-  const { loading: authLoading, isAdmin } = useAuthRole();
+  const {
+    loading: authLoading,
+    isAdmin,
+  } = useAuthRole();
 
-  const currentUid = auth.currentUser?.uid ?? "";
+  const currentUid =
+    auth.currentUser?.uid ?? "";
 
   const {
     users,
@@ -45,31 +70,105 @@ export default function UsersPage() {
     setRoleFilter,
     statusFilter,
     setStatusFilter,
-  } = useUsersData({ authLoading, isAdmin });
+  } = useUsersData({
+    authLoading,
+    isAdmin,
+  });
 
-  const [showCreateForm, setShowCreateForm] = useState(false);
+  const [
+    showCreateForm,
+    setShowCreateForm,
+  ] = useState(false);
+
   const [createForm, setCreateForm] =
-    useState<CreateFormState>(emptyCreateForm);
-  const [creatingUser, setCreatingUser] = useState(false);
-  const [busyUid, setBusyUid] = useState<string | null>(null);
+    useState<CreateFormState>(
+      emptyCreateForm
+    );
+
+  const [
+    creatingUser,
+    setCreatingUser,
+  ] = useState(false);
+
+  const [busyUid, setBusyUid] =
+    useState<string | null>(
+      null
+    );
+
+  /*
+  |--------------------------------------------------------------------------
+  | Helpers
+  |--------------------------------------------------------------------------
+  */
 
   function resetCreateForm() {
-    setCreateForm(emptyCreateForm);
+    setCreateForm(
+      emptyCreateForm
+    );
+  }
+
+  async function bootstrapAdmin() {
+    try {
+      const fn = httpsCallable(
+        functions,
+        "bootstrapAdminClaim"
+      );
+
+      const result =
+        await fn({});
+
+      console.log(
+        "BOOTSTRAP RESULT:",
+        result.data
+      );
+
+      toast.success(
+        "Admin claim bootstrapped successfully."
+      );
+    } catch (error) {
+      console.error(
+        "BOOTSTRAP ERROR:",
+        error
+      );
+
+      toast.error(
+        "Bootstrap failed."
+      );
+    }
   }
 
   async function handleCreateUser() {
-    const email = createForm.email.trim();
-    const password = createForm.password;
-    const displayName = createForm.displayName.trim();
-    const role = createForm.role;
+    const email =
+      createForm.email.trim();
 
-    if (!email || !password || !displayName) {
-      toast.error("Email, password, and display name are required.");
+    const password =
+      createForm.password;
+
+    const displayName =
+      createForm.displayName.trim();
+
+    const role =
+      createForm.role;
+
+    if (
+      !email ||
+      !password ||
+      !displayName
+    ) {
+      toast.error(
+        "Email, password, and display name are required."
+      );
+
       return;
     }
 
-    if (password.length < 6) {
-      toast.error("Password must be at least 6 characters.");
+    if (
+      password.length < 6
+    ) {
+      toast.error(
+        "Password must be at least 6 characters."
+      );
+
       return;
     }
 
@@ -83,150 +182,300 @@ export default function UsersPage() {
         role,
       });
 
-      toast.success("User created.");
+      toast.success(
+        "User created."
+      );
+
       resetCreateForm();
+
       setShowCreateForm(false);
     } catch (error: unknown) {
-      console.error("CREATE USER ERROR:", error);
-      toast.error(getErrorMessage(error, "Failed to create user."));
+      console.error(
+        "CREATE USER ERROR:",
+        error
+      );
+
+      toast.error(
+        getErrorMessage(
+          error,
+          "Failed to create user."
+        )
+      );
     } finally {
       setCreatingUser(false);
     }
   }
 
-  async function handleRoleChange(user: UserRow, nextRole: UserRole) {
-    if (user.role === nextRole) return;
-
-    if (user.uid === currentUid) {
-      toast.error("You cannot change your own role.");
+  async function handleRoleChange(
+    user: UserRow,
+    nextRole: UserRole
+  ) {
+    if (
+      user.role === nextRole
+    ) {
       return;
     }
 
-    const confirmed = window.confirm(
-      `Change ${user.email || user.uid} to ${nextRole}?`
-    );
+    if (
+      user.uid === currentUid
+    ) {
+      toast.error(
+        "You cannot change your own role."
+      );
 
-    if (!confirmed) return;
+      return;
+    }
 
-    const previousUsers = users;
+    const confirmed =
+      window.confirm(
+        `Change ${
+          user.email ||
+          user.uid
+        } to ${nextRole}?`
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const previousUsers =
+      users;
 
     try {
       setBusyUid(user.uid);
 
       setUsers((current) =>
         current.map((row) =>
-          row.uid === user.uid ? { ...row, role: nextRole } : row
+          row.uid === user.uid
+            ? {
+                ...row,
+                role: nextRole,
+              }
+            : row
         )
       );
 
-      await updateUserRole({ uid: user.uid, role: nextRole });
+      await updateUserRole({
+        uid: user.uid,
+        role: nextRole,
+      });
+
       await forceRefreshCurrentUserToken();
 
-      toast.success("Role updated.");
+      toast.success(
+        "Role updated."
+      );
     } catch (error: unknown) {
       setUsers(previousUsers);
-      console.error("UPDATE ROLE ERROR:", error);
-      toast.error(getErrorMessage(error, "Failed to update role."));
+
+      console.error(
+        "UPDATE ROLE ERROR:",
+        error
+      );
+
+      toast.error(
+        getErrorMessage(
+          error,
+          "Failed to update role."
+        )
+      );
     } finally {
       setBusyUid(null);
     }
   }
 
-  async function handleToggleActive(user: UserRow) {
-    if (user.uid === currentUid) {
-      toast.error("You cannot disable or enable your own account here.");
+  async function handleToggleActive(
+    user: UserRow
+  ) {
+    if (
+      user.uid === currentUid
+    ) {
+      toast.error(
+        "You cannot disable or enable your own account here."
+      );
+
       return;
     }
 
-    const actionText = user.active ? "disable" : "enable";
-    const nextActive = !user.active;
+    const actionText =
+      user.active
+        ? "disable"
+        : "enable";
 
-    const confirmed = window.confirm(
-      `Are you sure you want to ${actionText} ${user.email || user.uid}?`
-    );
+    const nextActive =
+      !user.active;
 
-    if (!confirmed) return;
+    const confirmed =
+      window.confirm(
+        `Are you sure you want to ${actionText} ${
+          user.email ||
+          user.uid
+        }?`
+      );
 
-    const previousUsers = users;
+    if (!confirmed) {
+      return;
+    }
+
+    const previousUsers =
+      users;
 
     try {
       setBusyUid(user.uid);
 
       setUsers((current) =>
         current.map((row) =>
-          row.uid === user.uid ? { ...row, active: nextActive } : row
+          row.uid === user.uid
+            ? {
+                ...row,
+                active:
+                  nextActive,
+              }
+            : row
         )
       );
 
       if (user.active) {
-        await disableDashboardUser({ uid: user.uid });
-        toast.success("User disabled.");
+        await disableDashboardUser({
+          uid: user.uid,
+        });
+
+        toast.success(
+          "User disabled."
+        );
       } else {
-        await enableDashboardUser({ uid: user.uid });
-        toast.success("User enabled.");
+        await enableDashboardUser({
+          uid: user.uid,
+        });
+
+        toast.success(
+          "User enabled."
+        );
       }
     } catch (error: unknown) {
       setUsers(previousUsers);
-      console.error("TOGGLE ACTIVE ERROR:", error);
-      toast.error(getErrorMessage(error, `Failed to ${actionText} user.`));
+
+      console.error(
+        "TOGGLE ACTIVE ERROR:",
+        error
+      );
+
+      toast.error(
+        getErrorMessage(
+          error,
+          `Failed to ${actionText} user.`
+        )
+      );
     } finally {
       setBusyUid(null);
     }
   }
 
-  async function handleDeleteUser(user: UserRow) {
-    if (user.uid === currentUid) {
-      toast.error("You cannot delete your own account.");
+  async function handleDeleteUser(
+    user: UserRow
+  ) {
+    if (
+      user.uid === currentUid
+    ) {
+      toast.error(
+        "You cannot delete your own account."
+      );
+
       return;
     }
 
-    const confirmed = window.confirm(
-      `Delete ${user.email || user.uid}?\n\nThis removes the Auth account and deletes the Firestore user document.`
-    );
+    const confirmed =
+      window.confirm(
+        `Delete ${
+          user.email ||
+          user.uid
+        }?\n\nThis removes the Auth account and deletes the Firestore user document.`
+      );
 
-    if (!confirmed) return;
+    if (!confirmed) {
+      return;
+    }
 
-    const previousUsers = users;
+    const previousUsers =
+      users;
 
     try {
       setBusyUid(user.uid);
 
-      setUsers((current) => current.filter((row) => row.uid !== user.uid));
+      setUsers((current) =>
+        current.filter(
+          (row) =>
+            row.uid !==
+            user.uid
+        )
+      );
 
-      await deleteUserAccount({ uid: user.uid });
+      await deleteUserAccount({
+        uid: user.uid,
+      });
 
-      toast.success("User deleted.");
+      toast.success(
+        "User deleted."
+      );
     } catch (error: unknown) {
       setUsers(previousUsers);
-      console.error("DELETE USER ERROR:", error);
-      toast.error(getErrorMessage(error, "Failed to delete user."));
+
+      console.error(
+        "DELETE USER ERROR:",
+        error
+      );
+
+      toast.error(
+        getErrorMessage(
+          error,
+          "Failed to delete user."
+        )
+      );
     } finally {
       setBusyUid(null);
     }
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Loading State
+  |--------------------------------------------------------------------------
+  */
+
   if (authLoading) {
     return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.12),_transparent_28%),#020617] px-4 py-6 text-white md:px-6 xl:px-8">
-        <div className="w-full max-w-none">
-          <div className="flex items-center gap-3 rounded-3xl border border-white/10 bg-white/[0.06] p-6 text-zinc-300 shadow-2xl shadow-black/30 backdrop-blur-2xl">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            <span>Loading access...</span>
+      <main className={`${glass.page} ${colors.app}`}>
+        <div className={colors.grid} />
+
+        <div className="relative flex min-h-[60vh] items-center justify-center">
+          <div className={glass.panel}>
+            <div className={colors.grid} />
+
+            <div className="relative flex items-center gap-3 p-6 text-slate-300">
+              <Loader2 className="h-5 w-5 animate-spin text-sky-200" />
+
+              Loading admin access...
+            </div>
           </div>
         </div>
       </main>
     );
   }
 
+  /*
+  |--------------------------------------------------------------------------
+  | Permission Gate
+  |--------------------------------------------------------------------------
+  */
+
   if (!isAdmin) {
     return (
-      <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(239,68,68,0.16),_transparent_34%),#020617] px-4 py-6 text-white md:px-6 xl:px-8">
-        <div className="w-full max-w-none">
-          <div className="rounded-3xl border border-red-500/30 bg-red-500/10 p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl">
-            <h1 className="text-2xl font-semibold">Admin access required</h1>
-            <p className="mt-2 text-sm text-zinc-300">
-              You do not have permission to manage users.
-            </p>
+      <main className={`${glass.page} ${colors.app}`}>
+        <div className={colors.grid} />
+
+        <div className="relative flex min-h-[60vh] items-center justify-center">
+          <div className="rounded-3xl border border-red-500/20 bg-red-500/10 px-6 py-5 text-sm text-red-300 shadow-[0_0_35px_rgba(239,68,68,0.18)]">
+            Admin access required.
           </div>
         </div>
       </main>
@@ -234,55 +483,199 @@ export default function UsersPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.18),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(14,165,233,0.12),_transparent_28%),#020617] px-4 py-6 text-white md:px-6 xl:px-8">
-      <div className="w-full max-w-none space-y-6">
+    <main className={`${glass.page} ${colors.app}`}>
+      <div className={colors.grid} />
+
+      <div className={glass.shell}>
+        <section className={glass.panel}>
+          <div className={colors.grid} />
+
+          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+            <div className="space-y-4">
+              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+                <ShieldCheck className="h-3.5 w-3.5" />
+
+                Identity Intelligence
+              </div>
+
+              <div>
+                <h1 className={typography.pageTitle}>
+                  Users Command
+                  Center
+                </h1>
+
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+                  Administrative
+                  control for dashboard
+                  users, role
+                  permissions, access
+                  states, onboarding,
+                  authentication
+                  control, and security
+                  oversight.
+                  Because eventually
+                  someone gives the
+                  intern admin access
+                  and the universe
+                  suffers accordingly.
+                </p>
+              </div>
+            </div>
+
+            <div className={`${glass.card} max-w-sm`}>
+              <div className="flex items-center gap-4">
+                <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
+                  <UserCog className="h-6 w-6" />
+                </div>
+
+                <div>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-semibold text-white">
+                      User System
+                    </p>
+
+                    <span className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-sky-200 shadow-[0_0_10px_rgba(186,230,253,0.9)]" />
+
+                      Active
+                    </span>
+                  </div>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Role and access
+                    management online
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() =>
+                  void bootstrapAdmin()
+                }
+                className={`${"inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"} mt-4 w-full`}
+              >
+                <ShieldCheck className="h-4 w-4" />
+
+                Bootstrap Admin Claim
+              </button>
+            </div>
+          </div>
+        </section>
+
         <UsersHeader
-          showCreateForm={showCreateForm}
-          onToggleCreateForm={() => setShowCreateForm((previous) => !previous)}
+          showCreateForm={
+            showCreateForm
+          }
+          onToggleCreateForm={() =>
+            setShowCreateForm(
+              (previous) =>
+                !previous
+            )
+          }
         />
 
-        <UsersStats stats={stats} />
+        <UsersStats
+          stats={stats}
+        />
 
         {showCreateForm ? (
           <CreateUserPanel
-            createForm={createForm}
-            setCreateForm={setCreateForm}
-            creatingUser={creatingUser}
-            onCreateUser={() => void handleCreateUser()}
+            createForm={
+              createForm
+            }
+            setCreateForm={
+              setCreateForm
+            }
+            creatingUser={
+              creatingUser
+            }
+            onCreateUser={() =>
+              void handleCreateUser()
+            }
             onCancel={() => {
               resetCreateForm();
-              setShowCreateForm(false);
+
+              setShowCreateForm(
+                false
+              );
             }}
           />
         ) : null}
 
         <UsersFilters
-          searchInput={searchInput}
-          setSearchInput={setSearchInput}
-          roleFilter={roleFilter}
-          setRoleFilter={setRoleFilter}
-          statusFilter={statusFilter}
-          setStatusFilter={setStatusFilter}
+          searchInput={
+            searchInput
+          }
+          setSearchInput={
+            setSearchInput
+          }
+          roleFilter={
+            roleFilter
+          }
+          setRoleFilter={
+            setRoleFilter
+          }
+          statusFilter={
+            statusFilter
+          }
+          setStatusFilter={
+            setStatusFilter
+          }
         />
 
         <UserDirectory
-          filteredUsers={filteredUsers}
-          loadingUsers={loadingUsers}
+          filteredUsers={
+            filteredUsers
+          }
+          loadingUsers={
+            loadingUsers
+          }
           hasMore={hasMore}
-          loadingMore={loadingMore}
-          currentUid={currentUid}
+          loadingMore={
+            loadingMore
+          }
+          currentUid={
+            currentUid
+          }
           busyUid={busyUid}
-          onLoadMore={() => void loadMoreUsers()}
-          onRoleChange={(user, nextRole) => void handleRoleChange(user, nextRole)}
-          onToggleActive={(user) => void handleToggleActive(user)}
-          onDeleteUser={(user) => void handleDeleteUser(user)}
+          onLoadMore={() =>
+            void loadMoreUsers()
+          }
+          onRoleChange={(
+            user,
+            nextRole
+          ) =>
+            void handleRoleChange(
+              user,
+              nextRole
+            )
+          }
+          onToggleActive={(
+            user
+          ) =>
+            void handleToggleActive(
+              user
+            )
+          }
+          onDeleteUser={(
+            user
+          ) =>
+            void handleDeleteUser(
+              user
+            )
+          }
         />
 
-        <div className="flex items-center gap-2 text-xs text-zinc-500">
+        <div className="flex items-center gap-2 text-xs text-slate-500">
           <RefreshCw className="h-3.5 w-3.5" />
-          Role changes may require the affected user to sign out and back in.
+
+          Role changes may require affected users to sign out and back in.
         </div>
       </div>
     </main>
   );
 }
+
+
+

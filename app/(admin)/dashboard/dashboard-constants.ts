@@ -4,23 +4,46 @@ import type {
   InventoryAnalytics,
 } from "./dashboard-types";
 
-export const EMPTY_SUMMARY = {} as unknown as DashboardSummary;
+export const EMPTY_SUMMARY: DashboardSummary = {
+  totalRevenue: 0,
+  outstandingBalance: 0,
 
-export const EMPTY_BIRTHDAYS = {
+  totalWips: 0,
+  openWips: 0,
+  completedWips: 0,
+
+  activeOrders: 0,
+  deliveredOrders: 0,
+  cancelledOrders: 0,
+  archivedOrders: 0,
+
+  activeRentals: 0,
+  monthlyRentalRevenue: 0,
+
+  lowStockAlerts: 0,
+
+  importedReportRows: 0,
+  importedReportFiles: 0,
+};
+
+export const EMPTY_BIRTHDAYS: BirthdayAnalytics = {
   today: [],
-  upcoming: [],
-  next7Days: 0,
-  next30Days: 0,
-  thisMonth: 0,
+  next7Days: [],
+  next30Days: [],
+  thisMonth: [],
   upcomingBirthdays: [],
-  birthdayPatients: [],
-  overdueBirthdays: [],
-  totalBirthdays: 0,
-  lastUpdated: null,
-} as unknown as BirthdayAnalytics;
 
-export const EMPTY_INVENTORY_ANALYTICS = {
-  lowStock: [],
-  expiringSoon: [],
-  movement: [],
-} as unknown as InventoryAnalytics;
+  todayCount: 0,
+  next7DaysCount: 0,
+  next30DaysCount: 0,
+  thisMonthCount: 0,
+};
+
+export const EMPTY_INVENTORY_ANALYTICS: InventoryAnalytics = {
+  totalInventoryItems: 0,
+  totalInventoryValue: 0,
+  totalInventoryOnRent: 0,
+  totalInventoryCommitted: 0,
+
+  lowStockItems: [],
+};

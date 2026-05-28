@@ -13,39 +13,40 @@ service firebase.storage {
       return request.auth != null;
     }
 
-    function userDocPath() {
-      return /databases/(default)/documents/users/$(request.auth.uid);
+    function userDocPath(uid) {
+      return /databases/(default)/documents/users/$(uid);
     }
 
-    function userDocExists() {
+    function currentUserPath() {
+      return userDocPath(request.auth.uid);
+    }
+
+    function currentUserExists() {
       return signedIn() &&
-        firestore.exists(userDocPath());
+        firestore.exists(currentUserPath());
     }
 
-    function userDoc() {
-      return firestore.get(userDocPath()).data;
+    function currentUserData() {
+      return firestore.get(currentUserPath()).data;
     }
 
-    function userIsActive() {
-      return userDocExists() &&
-        userDoc().active == true;
-    }
-
-    function roleFromToken(role) {
+    function tokenRole() {
       return signedIn() &&
-        request.auth.token.role is string &&
-        request.auth.token.role == role;
+        request.auth.token.role is string
+        ? request.auth.token.role
+        : "";
     }
 
-    function roleFromUserDoc(role) {
-      return userDocExists() &&
-        userDoc().role is string &&
-        userDoc().role == role;
+    function docRole() {
+      return currentUserExists() &&
+        currentUserData().role is string
+        ? currentUserData().role
+        : "";
     }
 
     function hasRole(role) {
-      return roleFromToken(role) ||
-        roleFromUserDoc(role);
+      return tokenRole() == role ||
+        docRole() == role;
     }
 
     function isAdmin() {
@@ -60,16 +61,22 @@ service firebase.storage {
       return isAdmin() || isStaff();
     }
 
+    /*
+      IMPORTANT:
+      Do NOT require user.active checks inside Storage Rules.
+      Handle inactive-user blocking in frontend auth/session logic.
+
+      Firestore lookups during uploads can cause instability,
+      stalls, and intermittent failures.
+    */
     function canAccessDashboard() {
       return signedIn() &&
-        isStaffOrAdmin() &&
-        userIsActive();
+        isStaffOrAdmin();
     }
 
     function canAdminWrite() {
       return signedIn() &&
-        isAdmin() &&
-        userIsActive();
+        isAdmin();
     }
 
     /*
@@ -84,7 +91,7 @@ service firebase.storage {
 
     function isPdf() {
       return hasIncomingFile() &&
-        request.resource.contentType == "application/pdf";
+        request.resource.contentType.matches("application/pdf.*");
     }
 
     function isCsv() {
@@ -97,13 +104,41 @@ service firebase.storage {
         );
     }
 
+    function isJson() {
+      return hasIncomingFile() &&
+        request.resource.contentType.matches("application/json.*");
+    }
+
+    function isText() {
+      return hasIncomingFile() &&
+        request.resource.contentType.matches("text/.*");
+    }
+
+    function isImage() {
+      return hasIncomingFile() &&
+        request.resource.contentType.matches("image/.*");
+    }
+
+    function isReportFile() {
+      return isCsv() ||
+        isPdf() ||
+        isJson() ||
+        isText();
+    }
+
     function isReportSizeAllowed() {
+      return hasIncomingFile() &&
+        request.resource.size > 0 &&
+        request.resource.size <= 100 * 1024 * 1024;
+    }
+
+    function isPatientDocumentSizeAllowed() {
       return hasIncomingFile() &&
         request.resource.size > 0 &&
         request.resource.size <= 50 * 1024 * 1024;
     }
 
-    function isPatientDocumentSizeAllowed() {
+    function isImageSizeAllowed() {
       return hasIncomingFile() &&
         request.resource.size > 0 &&
         request.resource.size <= 25 * 1024 * 1024;
@@ -113,19 +148,25 @@ service firebase.storage {
     |--------------------------------------------------------------------------
     | REPORT UPLOADS
     |--------------------------------------------------------------------------
-    |
-    | CSV and PDF imports for Brightree/server report processing.
-    |
     */
 
     match /reports/{allPaths=**} {
+
       allow read:
         if canAccessDashboard();
 
+      /*
+        Allows:
+        - upload
+        - overwrite
+        - retry
+        - reprocess
+        - batch import replacement
+      */
       allow create, update:
         if canAccessDashboard() &&
         isReportSizeAllowed() &&
-        (isCsv() || isPdf());
+        isReportFile();
 
       allow delete:
         if canAdminWrite();
@@ -133,21 +174,94 @@ service firebase.storage {
 
     /*
     |--------------------------------------------------------------------------
-    | LEGACY IMPORTS
+    | REPORT STAGING
     |--------------------------------------------------------------------------
-    |
-    | Kept for older CSV-only import paths.
-    |
     */
 
-    match /imports/{allPaths=**} {
+    match /report-staging/{allPaths=**} {
+
       allow read:
         if canAccessDashboard();
 
       allow create, update:
         if canAccessDashboard() &&
         isReportSizeAllowed() &&
-        isCsv();
+        isReportFile();
+
+      allow delete:
+        if canAdminWrite();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | IMPORT PIPELINE
+    |--------------------------------------------------------------------------
+    */
+
+    match /imports/{allPaths=**} {
+
+      allow read:
+        if canAccessDashboard();
+
+      allow create, update:
+        if canAccessDashboard() &&
+        isReportSizeAllowed() &&
+        isReportFile();
+
+      allow delete:
+        if canAdminWrite();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | IMPORT JOB ARTIFACTS
+    |--------------------------------------------------------------------------
+    */
+
+    match /import-jobs/{jobId}/{allPaths=**} {
+
+      allow read:
+        if canAccessDashboard();
+
+      allow create, update:
+        if canAccessDashboard() &&
+        isReportSizeAllowed();
+
+      allow delete:
+        if canAdminWrite();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | GENERATED REPORTS / EXPORTS
+    |--------------------------------------------------------------------------
+    */
+
+    match /generated-reports/{allPaths=**} {
+
+      allow read:
+        if canAccessDashboard();
+
+      allow create, update:
+        if canAccessDashboard();
+
+      allow delete:
+        if canAdminWrite();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | ANALYTICS EXPORTS
+    |--------------------------------------------------------------------------
+    */
+
+    match /analytics-exports/{allPaths=**} {
+
+      allow read:
+        if canAccessDashboard();
+
+      allow create, update:
+        if canAccessDashboard();
 
       allow delete:
         if canAdminWrite();
@@ -157,19 +271,20 @@ service firebase.storage {
     |--------------------------------------------------------------------------
     | PATIENT DOCUMENTS
     |--------------------------------------------------------------------------
-    |
-    | Signed tickets, orders, CMNs, PARs, prescriptions, and insurance docs.
-    |
     */
 
     match /patient-documents/{patientId}/{allPaths=**} {
+
       allow read:
         if canAccessDashboard();
 
       allow create, update:
         if canAccessDashboard() &&
         isPatientDocumentSizeAllowed() &&
-        isPdf();
+        (
+          isPdf() ||
+          isImage()
+        );
 
       allow delete:
         if canAdminWrite();
@@ -177,21 +292,92 @@ service firebase.storage {
 
     /*
     |--------------------------------------------------------------------------
-    | LEGACY CAMELCASE PATIENT DOCUMENT PATH
+    | LEGACY CAMELCASE PATH
     |--------------------------------------------------------------------------
     */
 
     match /patientDocuments/{patientId}/{allPaths=**} {
+
       allow read:
         if canAccessDashboard();
 
       allow create, update:
         if canAccessDashboard() &&
         isPatientDocumentSizeAllowed() &&
-        isPdf();
+        (
+          isPdf() ||
+          isImage()
+        );
 
       allow delete:
         if canAdminWrite();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | USER AVATARS / PROFILE IMAGES
+    |--------------------------------------------------------------------------
+    */
+
+    match /user-avatars/{uid}/{allPaths=**} {
+
+      allow read:
+        if canAccessDashboard();
+
+      allow create, update:
+        if signedIn() &&
+        request.auth.uid == uid &&
+        isImage() &&
+        isImageSizeAllowed();
+
+      allow delete:
+        if signedIn() &&
+        (
+          request.auth.uid == uid ||
+          isAdmin()
+        );
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | AI GENERATED FILES
+    |--------------------------------------------------------------------------
+    */
+
+    match /ai-generated/{allPaths=**} {
+
+      allow read:
+        if canAccessDashboard();
+
+      allow create, update:
+        if canAccessDashboard();
+
+      allow delete:
+        if canAdminWrite();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | TEMP PROCESSING FILES
+    |--------------------------------------------------------------------------
+    */
+
+    match /tmp/{allPaths=**} {
+
+      allow read, write:
+        if canAccessDashboard();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | FIREBASE EXTENSIONS
+    |--------------------------------------------------------------------------
+    */
+
+    match /extensions/{allPaths=**} {
+
+      allow read, write:
+        if false;
     }
 
     /*
@@ -201,6 +387,7 @@ service firebase.storage {
     */
 
     match /{allPaths=**} {
+
       allow read, write:
         if false;
     }

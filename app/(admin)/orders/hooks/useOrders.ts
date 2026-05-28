@@ -4,14 +4,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
 import {
   collection,
+  type DocumentData,
   getDocs,
   limit,
   orderBy,
   query,
+  type QueryDocumentSnapshot,
   startAfter,
   where,
-  type DocumentData,
-  type QueryDocumentSnapshot,
 } from "firebase/firestore";
 import toast from "react-hot-toast";
 

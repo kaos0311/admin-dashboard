@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+import { tiles } from "@/theme";
 
 import {
   AlertTriangle,
@@ -72,3 +74,6 @@ function StatCard({
     </div>
   );
 }
+
+
+
