@@ -1,10 +1,6 @@
 ﻿"use client";
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   PackageSearch,
@@ -55,11 +51,8 @@ export default function ProductsPage() {
     user,
   } = useAuthRole();
 
-  const canRead =
-    isAdmin || isStaff;
-
-  const canWrite =
-    isAdmin || isStaff;
+  const canRead = isAdmin || isStaff;
+  const canWrite = isAdmin || isStaff;
 
   const {
     products,
@@ -260,17 +253,25 @@ export default function ProductsPage() {
   ) {
     event.preventDefault();
 
-    const success =
-      await saveProduct(form);
+    try {
+      const success =
+        await saveProduct(form);
 
-    if (success) {
-      resetForm();
+      if (success) {
+        resetForm();
+      }
+    } catch {
+      toast.error(
+        "Failed to save product."
+      );
     }
   }
 
   function handleScanDetected(
     code: string
   ) {
+    if (!scannerOpen) return;
+
     const clean =
       normalizeBarcode(code);
 
@@ -287,6 +288,8 @@ export default function ProductsPage() {
     toast.success(
       "UPC captured."
     );
+
+    setScannerOpen(false);
   }
 
   function toggleSelectVisible() {
@@ -320,13 +323,17 @@ export default function ProductsPage() {
     !canRead
   ) {
     return (
-      <main className={`${glass.page} ${colors.app}`}>
-        <div className={colors.grid} />
+      <main
+        className={`${glass.page} ${colors.app} relative min-h-screen overflow-x-hidden`}
+      >
+        <div
+          aria-hidden="true"
+          className={colors.grid}
+        />
 
-        <div className="relative flex min-h-[60vh] items-center justify-center">
+        <div className="relative z-10 flex min-h-[60vh] items-center justify-center">
           <div className="rounded-3xl border border-red-500/20 bg-red-500/10 px-6 py-5 text-sm text-red-300 shadow-[0_0_35px_rgba(239,68,68,0.18)]">
-            Product catalog access
-            denied.
+            Product catalog access denied.
           </div>
         </div>
       </main>
@@ -334,16 +341,28 @@ export default function ProductsPage() {
   }
 
   return (
-    <main className={`${glass.page} ${colors.app}`}>
-      <div className={colors.grid} />
+    <main
+      className={`${glass.page} ${colors.app} relative min-h-screen overflow-x-hidden`}
+    >
+      <div
+        aria-hidden="true"
+        className={colors.grid}
+      />
 
-      <div className={glass.shell}>
-        <section className={glass.panel}>
-          <div className={colors.grid} />
+      <div
+        className={`${glass.shell} relative z-10`}
+      >
+        <section
+          className={`${glass.panel} relative overflow-hidden`}
+        >
+          <div
+            aria-hidden="true"
+            className={colors.grid}
+          />
 
-          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+          <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="space-y-4">
-              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl">
                 <ShieldCheck className="h-3.5 w-3.5" />
 
                 Product Intelligence
@@ -351,34 +370,22 @@ export default function ProductsPage() {
 
               <div>
                 <h1 className={typography.pageTitle}>
-                  Product Command
-                  Center
+                  Product Command Center
                 </h1>
 
                 <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-                  Operational product
-                  catalog management
-                  for inventory
-                  routing, HCPCS
-                  mapping, vendor
-                  tracking, pricing,
-                  warranty oversight,
-                  barcode intake,
-                  reorder monitoring,
-                  and lifecycle
-                  visibility.
-                  Because eventually
-                  somebody uploads 400
-                  duplicate walkers
-                  and calls it â€œan
-                  import issue.â€
+                  Operational product catalog management for inventory routing,
+                  HCPCS mapping, vendor tracking, pricing, warranty oversight,
+                  barcode intake, reorder monitoring, and lifecycle visibility.
+                  Because eventually somebody uploads 400 duplicate walkers and
+                  calls it “an import issue.”
                 </p>
               </div>
             </div>
 
             <div className={`${glass.card} max-w-sm`}>
               <div className="flex items-center gap-4">
-                <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl">
                   <PackageSearch className="h-6 w-6" />
                 </div>
 
@@ -388,7 +395,7 @@ export default function ProductsPage() {
                       Product System
                     </p>
 
-                    <span className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl">
                       <span className="h-2 w-2 animate-pulse rounded-full bg-sky-200 shadow-[0_0_10px_rgba(186,230,253,0.9)]" />
 
                       Online
@@ -396,8 +403,7 @@ export default function ProductsPage() {
                   </div>
 
                   <p className="mt-1 text-xs text-slate-500">
-                    HCPCS + vendor
-                    intelligence active
+                    HCPCS + vendor intelligence active
                   </p>
                 </div>
               </div>
@@ -405,8 +411,7 @@ export default function ProductsPage() {
               <div className="mt-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-400">
                 <ScanLine className="h-3.5 w-3.5 text-sky-200" />
 
-                Barcode intake system
-                operational
+                Barcode intake system operational
               </div>
             </div>
           </div>
@@ -443,8 +448,7 @@ export default function ProductsPage() {
 
               <div>
                 <h2 className="font-semibold">
-                  Catalog cleanup
-                  required
+                  Catalog cleanup required
                 </h2>
 
                 <p className="mt-1 text-sm text-amber-100/80">
@@ -505,10 +509,15 @@ export default function ProductsPage() {
             }
           />
 
-          <section className={glass.panel}>
-            <div className={colors.grid} />
+          <section
+            className={`${glass.panel} relative overflow-hidden`}
+          >
+            <div
+              aria-hidden="true"
+              className={colors.grid}
+            />
 
-            <div className="relative min-w-0 p-6">
+            <div className="relative z-10 min-w-0 p-6">
               <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
                 <div>
                   <h2 className={typography.sectionTitle}>
@@ -545,7 +554,7 @@ export default function ProductsPage() {
                         })
                       )
                     }
-                    className={`${"w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none backdrop-blur-xl focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20"} w-full py-3 pl-10 pr-10 xl:w-[420px]`}
+                    className="w-full rounded-2xl border border-white/10 bg-black/20 py-3 pl-10 pr-10 text-sm text-slate-100 outline-none backdrop-blur-xl focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20 xl:w-[420px]"
                     placeholder="Search name, SKU, UPC, HCPCS..."
                     aria-label="Search products"
                   />
@@ -677,5 +686,3 @@ export default function ProductsPage() {
     </main>
   );
 }
-
-

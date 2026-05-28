@@ -1,5 +1,7 @@
 "use client";
 
+import { colors, glass } from "@/theme";
+
 import { AnalyticsBreakdownTable } from "./components/AnalyticsBreakdownTable";
 import { AnalyticsFilterCard } from "./components/AnalyticsFilterCard";
 import { AnalyticsHealthBanner } from "./components/AnalyticsHealthBanner";
@@ -25,8 +27,12 @@ export default function ReportsAnalyticsPage() {
   } = useReportsAnalytics();
 
   return (
-    <main className="min-h-screen bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_34%),radial-gradient(circle_at_top_right,_rgba(34,211,238,0.12),_transparent_30%),#020617] px-4 py-6 text-white md:px-6 xl:px-8">
-      <div className="mx-auto max-w-7xl space-y-6">
+    <main
+      className={`${glass.page} ${colors.app} relative min-h-screen overflow-x-hidden`}
+    >
+      <div aria-hidden="true" className={colors.grid} />
+
+      <div className={`${glass.shell} relative z-10`}>
         <AnalyticsHero
           generatedAtLabel={analytics.generatedAtLabel}
           lastRebuiltByEmail={analytics.lastRebuiltByEmail}
@@ -54,7 +60,7 @@ export default function ReportsAnalyticsPage() {
           )}
         />
 
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
+        <section className="grid w-full min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_360px]">
           <AnalyticsBreakdownTable
             loading={loading}
             rows={visibleBreakdownRows}

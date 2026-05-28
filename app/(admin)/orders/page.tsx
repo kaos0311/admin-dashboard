@@ -1,20 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 
-import {
-  ClipboardList,
-  Loader2,
-  ShieldCheck,
-  Truck,
-} from "lucide-react";
-
+import { ClipboardList, Loader2, ShieldCheck, Truck } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { colors, glass, typography } from "@/theme";
 
 import BarcodeScannerModal from "@/app/components/barcode-scanner/BarcodeScannerModal";
-
 import { normalizeBarcode } from "@/lib/barcode";
 
 import { ImportPanel } from "./components/ImportPanel";
@@ -33,10 +26,7 @@ import { useOrders } from "./hooks/useOrders";
 
 import { initialFormState } from "./lib/orderConstants";
 
-import type {
-  FilterTab,
-  OrderFormState,
-} from "./lib/orderTypes";
+import type { FilterTab, OrderFormState } from "./lib/orderTypes";
 
 export default function OrdersPage() {
   const {
@@ -61,9 +51,7 @@ export default function OrdersPage() {
     resetFilters,
     filterOptions,
     filteredOrders,
-  } = useOrderFilters(
-    orders
-  );
+  } = useOrderFilters(orders);
 
   const {
     importType,
@@ -90,91 +78,63 @@ export default function OrdersPage() {
     loadOrders,
   });
 
-  const [savingId, setSavingId] =
-    useState<string | null>(
-      null
-    );
+  const [savingId, setSavingId] = useState<string | null>(null);
 
-  const [
-    showCreateModal,
-    setShowCreateModal,
-  ] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState("");
+  const [form, setForm] = useState<OrderFormState>(initialFormState);
 
-  const [creating, setCreating] =
-    useState(false);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [editError, setEditError] = useState("");
+  const [editingOrderId, setEditingOrderId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<OrderFormState>(initialFormState);
 
-  const [
-    createError,
-    setCreateError,
-  ] = useState("");
+  const [scannerOpen, setScannerOpen] = useState(false);
 
-  const [form, setForm] =
-    useState<OrderFormState>(
-      initialFormState
-    );
-
-  const [
-    showEditModal,
-    setShowEditModal,
-  ] = useState(false);
-
-  const [editing, setEditing] =
-    useState(false);
-
-  const [editError, setEditError] =
-    useState("");
-
-  const [
-    editingOrderId,
-    setEditingOrderId,
-  ] = useState<string | null>(
-    null
+  const tabs = useMemo<Array<{ key: FilterTab; label: string; count?: number }>>(
+    () => [
+      {
+        key: "processing",
+        label: "Processing",
+        count: summary.processing,
+      },
+      {
+        key: "ready",
+        label: "Ready",
+        count: summary.ready,
+      },
+      {
+        key: "delivered",
+        label: "Delivered",
+        count: summary.delivered,
+      },
+      {
+        key: "cancelled",
+        label: "Cancelled",
+        count: summary.cancelled,
+      },
+      {
+        key: "archived",
+        label: "Archived",
+        count: summary.archived,
+      },
+      {
+        key: "all",
+        label: "All Loaded",
+        count: orders.length,
+      },
+    ],
+    [
+      orders.length,
+      summary.archived,
+      summary.cancelled,
+      summary.delivered,
+      summary.processing,
+      summary.ready,
+    ]
   );
-
-  const [editForm, setEditForm] =
-    useState<OrderFormState>(
-      initialFormState
-    );
-
-  const [scannerOpen, setScannerOpen] =
-    useState(false);
-
-  const tabs: Array<{
-    key: FilterTab;
-    label: string;
-    count?: number;
-  }> = [
-    {
-      key: "processing",
-      label: "Processing",
-      count: summary.processing,
-    },
-    {
-      key: "ready",
-      label: "Ready",
-      count: summary.ready,
-    },
-    {
-      key: "delivered",
-      label: "Delivered",
-      count: summary.delivered,
-    },
-    {
-      key: "cancelled",
-      label: "Cancelled",
-      count: summary.cancelled,
-    },
-    {
-      key: "archived",
-      label: "Archived",
-      count: summary.archived,
-    },
-    {
-      key: "all",
-      label: "All Loaded",
-      count: orders.length,
-    },
-  ];
 
   function resetCreateForm() {
     setForm(initialFormState);
@@ -187,20 +147,14 @@ export default function OrdersPage() {
     setEditingOrderId(null);
   }
 
-  function handleCreateChange(
-    field: keyof OrderFormState,
-    value: string
-  ) {
+  function handleCreateChange(field: keyof OrderFormState, value: string) {
     setForm((prev) => ({
       ...prev,
       [field]: value,
     }));
   }
 
-  function handleEditChange(
-    field: keyof OrderFormState,
-    value: string
-  ) {
+  function handleEditChange(field: keyof OrderFormState, value: string) {
     setEditForm((prev) => ({
       ...prev,
       [field]: value,
@@ -216,52 +170,28 @@ export default function OrdersPage() {
     if (creating) return;
 
     setShowCreateModal(false);
-
     resetCreateForm();
   }
 
-  function openEditModal(
-    orderId: string
-  ) {
-    const order =
-      orders.find(
-        (item) =>
-          item.id === orderId
-      );
+  function openEditModal(orderId: string) {
+    const order = orders.find((item) => item.id === orderId);
 
     if (!order) return;
 
     setEditingOrderId(order.id);
-
     setEditError("");
 
     setEditForm({
-      patientName:
-        order.patientName,
-      patientAddress:
-        order.patientAddress,
-      productId:
-        order.productId,
-      productType:
-        order.productType,
-      purchaseCost:
-        order.purchaseCost
-          ? String(
-              order.purchaseCost
-            )
-          : "",
-      quantity: String(
-        order.quantity || 1
-      ),
+      patientName: order.patientName,
+      patientAddress: order.patientAddress,
+      productId: order.productId,
+      productType: order.productType,
+      purchaseCost: order.purchaseCost ? String(order.purchaseCost) : "",
+      quantity: String(order.quantity || 1),
       barcode: order.barcode,
       phone: order.phone,
-      facilityName:
-        order.facilityName,
-      status:
-        order.status ===
-        "archived"
-          ? "processing"
-          : order.status,
+      facilityName: order.facilityName,
+      status: order.status === "archived" ? "processing" : order.status,
       notes: order.notes,
     });
 
@@ -272,67 +202,49 @@ export default function OrdersPage() {
     if (editing) return;
 
     setShowEditModal(false);
-
     resetEditForm();
   }
 
   async function handleStatusUpdate(
     orderId: string,
-    status: Parameters<
-      typeof updateStatus
-    >[1]
+    status: Parameters<typeof updateStatus>[1]
   ) {
     try {
       setSavingId(orderId);
-
-      await updateStatus(
-        orderId,
-        status
-      );
+      await updateStatus(orderId, status);
     } finally {
       setSavingId(null);
     }
   }
 
-  async function handleArchive(
-    orderId: string
-  ) {
+  async function handleArchive(orderId: string) {
     try {
       setSavingId(orderId);
-
       await archiveOrder(orderId);
     } finally {
       setSavingId(null);
     }
   }
 
-  async function handleRestore(
-    orderId: string
-  ) {
+  async function handleRestore(orderId: string) {
     try {
       setSavingId(orderId);
-
       await restoreOrder(orderId);
     } finally {
       setSavingId(null);
     }
   }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Permission Gate
-  |--------------------------------------------------------------------------
-  */
-
   if (!isAuthed && !loading) {
     return (
-      <main className={`${glass.page} ${colors.app}`}>
-        <div className={colors.grid} />
+      <main
+        className={`${glass.page} ${colors.app} relative min-h-screen overflow-x-hidden`}
+      >
+        <div aria-hidden="true" className={colors.grid} />
 
-        <div className="relative flex min-h-[60vh] items-center justify-center">
+        <div className="relative z-10 flex min-h-[60vh] items-center justify-center">
           <div className="rounded-3xl border border-red-500/20 bg-red-500/10 px-6 py-5 text-sm text-red-300 shadow-[0_0_35px_rgba(239,68,68,0.18)]">
-            Authentication required
-            to access orders.
+            Authentication required to access orders.
           </div>
         </div>
       </main>
@@ -340,51 +252,38 @@ export default function OrdersPage() {
   }
 
   return (
-    <main className={`${glass.page} ${colors.app}`}>
-      <div className={colors.grid} />
+    <main
+      className={`${glass.page} ${colors.app} relative min-h-screen overflow-x-hidden`}
+    >
+      <div aria-hidden="true" className={colors.grid} />
 
-      <div className={glass.shell}>
-        <section className={glass.panel}>
-          <div className={colors.grid} />
+      <div className={`${glass.shell} relative z-10`}>
+        <section className={`${glass.panel} relative overflow-hidden`}>
+          <div aria-hidden="true" className={colors.grid} />
 
-          <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
+          <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="space-y-4">
-              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl">
                 <ShieldCheck className="h-3.5 w-3.5" />
-
                 Orders Intelligence
               </div>
 
               <div>
-                <h1 className={typography.pageTitle}>
-                  Orders Command
-                  Center
-                </h1>
+                <h1 className={typography.pageTitle}>Orders Command Center</h1>
 
                 <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-                  Operational order
-                  management for
-                  routing, imports,
-                  inventory matching,
-                  hospice review,
-                  barcode intake,
-                  smart filtering,
-                  delivery tracking,
-                  and escalation
-                  monitoring.
-                  Because somebody
-                  always forgets to
-                  assign a product and
-                  then acts surprised
-                  when the warehouse
-                  catches fire.
+                  Operational order management for routing, imports, inventory
+                  matching, hospice review, barcode intake, smart filtering,
+                  delivery tracking, and escalation monitoring. Because somebody
+                  always forgets to assign a product and then acts surprised
+                  when the warehouse catches fire.
                 </p>
               </div>
             </div>
 
             <div className={`${glass.card} max-w-sm`}>
               <div className="flex items-center gap-4">
-                <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl">
                   <Truck className="h-6 w-6" />
                 </div>
 
@@ -394,229 +293,125 @@ export default function OrdersPage() {
                       Orders System
                     </p>
 
-                    <span className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl">
                       <span className="h-2 w-2 animate-pulse rounded-full bg-sky-200 shadow-[0_0_10px_rgba(186,230,253,0.9)]" />
-
                       Active
                     </span>
                   </div>
 
                   <p className="mt-1 text-xs text-slate-500">
-                    Smart routing +
-                    inventory matching
-                    online
+                    Smart routing + inventory matching online
                   </p>
                 </div>
               </div>
 
               <div className="mt-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-400">
                 <ClipboardList className="h-3.5 w-3.5 text-sky-200" />
-
-                Operational order
-                intelligence active
+                Operational order intelligence active
               </div>
             </div>
           </div>
         </section>
 
         <OrdersHeader
-          loadedCount={
-            orders.length
-          }
+          loadedCount={orders.length}
           search={search}
-          refreshing={
-            refreshing
-          }
-          onSearchChange={
-            setSearch
-          }
-          onRefresh={() =>
-            void loadOrders(
-              "refresh"
-            )
-          }
-          onCreate={
-            openCreateModal
-          }
+          refreshing={refreshing}
+          onSearchChange={setSearch}
+          onRefresh={() => void loadOrders("refresh")}
+          onCreate={openCreateModal}
         />
 
         <SmartCommandStrip
-          needsReview={
-            summary.needsReview
-          }
-          inventoryIssues={
-            summary.inventoryIssues
-          }
-          hospiceRisks={
-            summary.hospiceRisks
-          }
-          missingProduct={
-            summary.missingProduct
-          }
-          archiveReady={
-            summary.archiveReady
-          }
+          needsReview={summary.needsReview}
+          inventoryIssues={summary.inventoryIssues}
+          hospiceRisks={summary.hospiceRisks}
+          missingProduct={summary.missingProduct}
+          archiveReady={summary.archiveReady}
           onReviewOnly={() =>
-            setSmartFilters(
-              (prev) => ({
-                ...prev,
-                reviewOnly: true,
-              })
-            )
+            setSmartFilters((prev) => ({
+              ...prev,
+              reviewOnly: true,
+            }))
           }
           onInventoryOnly={() =>
-            setSmartFilters(
-              (prev) => ({
-                ...prev,
-                inventoryOnly: true,
-              })
-            )
+            setSmartFilters((prev) => ({
+              ...prev,
+              inventoryOnly: true,
+            }))
           }
           onHospiceOnly={() =>
-            setSmartFilters(
-              (prev) => ({
-                ...prev,
-                hospiceRiskOnly: true,
-              })
-            )
+            setSmartFilters((prev) => ({
+              ...prev,
+              hospiceRiskOnly: true,
+            }))
           }
           onMissingProductOnly={() =>
-            setSmartFilters(
-              (prev) => ({
-                ...prev,
-                missingProductOnly:
-                  true,
-              })
-            )
+            setSmartFilters((prev) => ({
+              ...prev,
+              missingProductOnly: true,
+            }))
           }
           onArchiveReadyOnly={() =>
-            setSmartFilters(
-              (prev) => ({
-                ...prev,
-                archiveReadyOnly:
-                  true,
-              })
-            )
+            setSmartFilters((prev) => ({
+              ...prev,
+              archiveReadyOnly: true,
+            }))
           }
         />
 
         <ImportPanel
-          importType={
-            importType
-          }
-          detectedImport={
-            detectedImport
-          }
-          importing={
-            importing
-          }
-          importMessage={
-            importMessage
-          }
-          importInputRef={
-            importInputRef
-          }
-          onImportTypeChange={
-            setImportType
-          }
-          onDetectFile={(
-            file
-          ) =>
-            void handleDetectImportFile(
-              file
-            )
-          }
-          onImportFile={(file) =>
-            void handleImportFile(
-              file
-            )
-          }
+          importType={importType}
+          detectedImport={detectedImport}
+          importing={importing}
+          importMessage={importMessage}
+          importInputRef={importInputRef}
+          onImportTypeChange={setImportType}
+          onDetectFile={(file) => void handleDetectImportFile(file)}
+          onImportFile={(file) => void handleImportFile(file)}
         />
 
         <OrdersSummaryGrid
-          processing={
-            summary.processing
-          }
+          processing={summary.processing}
           ready={summary.ready}
-          delivered={
-            summary.delivered
-          }
-          cancelled={
-            summary.cancelled
-          }
-          archived={
-            summary.archived
-          }
+          delivered={summary.delivered}
+          cancelled={summary.cancelled}
+          archived={summary.archived}
         />
 
         <SmartFiltersPanel
-          filters={
-            smartFilters
-          }
-          options={
-            filterOptions
-          }
-          resultCount={
-            filteredOrders.length
-          }
-          onChange={
-            setSmartFilters
-          }
-          onReset={
-            resetFilters
-          }
+          filters={smartFilters}
+          options={filterOptions}
+          resultCount={filteredOrders.length}
+          onChange={setSmartFilters}
+          onReset={resetFilters}
         />
 
-        <OrdersTabs
-          tab={tab}
-          tabs={tabs}
-          onTabChange={setTab}
-        />
+        <OrdersTabs tab={tab} tabs={tabs} onTabChange={setTab} />
 
         <OrdersTable
           loading={loading}
-          orders={
-            filteredOrders
-          }
+          orders={filteredOrders}
           savingId={savingId}
-          onEdit={(order) =>
-            openEditModal(
-              order.id
-            )
-          }
-          onUpdateStatus={
-            handleStatusUpdate
-          }
-          onArchive={
-            handleArchive
-          }
-          onRestore={
-            handleRestore
-          }
+          onEdit={(order) => openEditModal(order.id)}
+          onUpdateStatus={handleStatusUpdate}
+          onArchive={handleArchive}
+          onRestore={handleRestore}
         />
 
-        {!loading &&
-        hasMore ? (
+        {!loading && hasMore ? (
           <div className="flex justify-center">
             <button
               type="button"
-              onClick={() =>
-                void loadOrders(
-                  "more"
-                )
-              }
-              disabled={
-                loadingMore
-              }
-              className={"inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"}
+              onClick={() => void loadOrders("more")}
+              disabled={loadingMore}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loadingMore ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
               ) : null}
 
-              {loadingMore
-                ? "Loading..."
-                : "Load More Orders"}
+              {loadingMore ? "Loading Orders..." : "Load More Orders"}
             </button>
           </div>
         ) : null}
@@ -629,32 +424,20 @@ export default function OrdersPage() {
             busy={creating}
             error={createError}
             mode="create"
-            onClose={
-              closeCreateModal
-            }
-            onChange={
-              handleCreateChange
-            }
+            onClose={closeCreateModal}
+            onChange={handleCreateChange}
             onSave={() =>
               void createOrder({
                 form,
                 setCreating,
                 setCreateError,
-                onComplete:
-                  () => {
-                    setShowCreateModal(
-                      false
-                    );
-
-                    resetCreateForm();
-                  },
+                onComplete: () => {
+                  setShowCreateModal(false);
+                  resetCreateForm();
+                },
               })
             }
-            onScan={() =>
-              setScannerOpen(
-                true
-              )
-            }
+            onScan={() => setScannerOpen(true)}
             onLoadBarcode={() =>
               void fillProductFromBarcode(
                 form.barcode,
@@ -674,26 +457,18 @@ export default function OrdersPage() {
             busy={editing}
             error={editError}
             mode="edit"
-            onClose={
-              closeEditModal
-            }
-            onChange={
-              handleEditChange
-            }
+            onClose={closeEditModal}
+            onChange={handleEditChange}
             onSave={() =>
               void saveEditOrder({
                 editingOrderId,
                 editForm,
                 setEditing,
                 setEditError,
-                onComplete:
-                  () => {
-                    setShowEditModal(
-                      false
-                    );
-
-                    resetEditForm();
-                  },
+                onComplete: () => {
+                  setShowEditModal(false);
+                  resetEditForm();
+                },
               })
             }
             onScan={undefined}
@@ -710,38 +485,19 @@ export default function OrdersPage() {
 
         <BarcodeScannerModal
           open={scannerOpen}
-          onClose={() =>
-            setScannerOpen(
-              false
-            )
-          }
-          onDetected={(
-            code
-          ) => {
-            const clean =
-              normalizeBarcode(
-                code
-              );
+          onClose={() => setScannerOpen(false)}
+          onDetected={(code) => {
+            if (!scannerOpen) return;
 
-            handleCreateChange(
-              "barcode",
-              clean
-            );
+            const clean = normalizeBarcode(code);
 
-            toast.success(
-              "Barcode captured."
-            );
+            handleCreateChange("barcode", clean);
 
-            void fillProductFromBarcode(
-              clean,
-              "create",
-              setForm,
-              setEditForm
-            );
+            toast.success("Barcode captured.");
 
-            setScannerOpen(
-              false
-            );
+            void fillProductFromBarcode(clean, "create", setForm, setEditForm);
+
+            setScannerOpen(false);
           }}
           title="Scan Order Inventory Barcode"
         />
@@ -749,4 +505,3 @@ export default function OrdersPage() {
     </main>
   );
 }
-

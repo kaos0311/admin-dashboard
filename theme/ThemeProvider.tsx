@@ -1,7 +1,14 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 
 type Theme = "light" | "dark";
 
@@ -15,7 +22,31 @@ const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 const STORAGE_KEY = "ahm-theme";
 
+function isTheme(value: string | null): value is Theme {
+  return value === "light" || value === "dark";
+}
+
+function getSystemTheme(): Theme {
+  if (typeof window === "undefined") return "dark";
+
+  return window.matchMedia("(prefers-color-scheme: dark)").matches
+    ? "dark"
+    : "light";
+}
+
+function getInitialTheme(): Theme {
+  if (typeof window === "undefined") return "dark";
+
+  const stored = window.localStorage.getItem(STORAGE_KEY);
+
+  if (isTheme(stored)) return stored;
+
+  return getSystemTheme();
+}
+
 function applyTheme(theme: Theme) {
+  if (typeof document === "undefined") return;
+
   const root = document.documentElement;
 
   root.classList.remove("light", "dark");
@@ -24,32 +55,35 @@ function applyTheme(theme: Theme) {
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>("dark");
+  const [theme, setThemeState] = useState<Theme>(() => getInitialTheme());
 
   useEffect(() => {
-    const stored = window.localStorage.getItem(STORAGE_KEY) as Theme | null;
-    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    applyTheme(theme);
+  }, [theme]);
 
-    const resolvedTheme: Theme =
-      stored === "light" || stored === "dark"
-        ? stored
-        : prefersDark
-          ? "dark"
-          : "light";
+  const setTheme = useCallback((nextTheme: Theme) => {
+    setThemeState(nextTheme);
 
-    setThemeState(resolvedTheme);
-    applyTheme(resolvedTheme);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem(STORAGE_KEY, nextTheme);
+    }
+
+    applyTheme(nextTheme);
   }, []);
 
-  function setTheme(nextTheme: Theme) {
-    setThemeState(nextTheme);
-    window.localStorage.setItem(STORAGE_KEY, nextTheme);
-    applyTheme(nextTheme);
-  }
+  const toggleTheme = useCallback(() => {
+    setThemeState((currentTheme) => {
+      const nextTheme = currentTheme === "dark" ? "light" : "dark";
 
-  function toggleTheme() {
-    setTheme(theme === "dark" ? "light" : "dark");
-  }
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(STORAGE_KEY, nextTheme);
+      }
+
+      applyTheme(nextTheme);
+
+      return nextTheme;
+    });
+  }, []);
 
   const value = useMemo(
     () => ({
@@ -57,10 +91,14 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setTheme,
       toggleTheme,
     }),
-    [theme]
+    [theme, setTheme, toggleTheme]
   );
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  return (
+    <ThemeContext.Provider value={value}>
+      {children}
+    </ThemeContext.Provider>
+  );
 }
 
 export function useTheme() {

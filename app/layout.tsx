@@ -1,10 +1,11 @@
-
 "use client";
 
 import "./globals.css";
 
+import { Inter } from "next/font/google";
 import type { ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged, signOut, type User } from "firebase/auth";
 
@@ -16,6 +17,12 @@ import StaffOrAdmin from "@/app/components/auth/StaffOrAdmin";
 import MaintenanceGate from "@/app/components/MaintenanceGate";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 import { ThemeProvider } from "@/theme/ThemeProvider";
+
+const inter = Inter({
+  subsets: ["latin"],
+  variable: "--font-inter",
+  display: "swap",
+});
 
 type RootLayoutProps = {
   children: ReactNode;
@@ -89,7 +96,7 @@ function AppShell({ children }: RootLayoutProps) {
 
   if (!authChecked) {
     return (
-      <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#020617] px-4 text-white">
+      <div className="relative isolate flex min-h-screen items-center justify-center overflow-x-hidden bg-[#020617] px-4 text-white">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.16),transparent_30%),radial-gradient(circle_at_top_right,rgba(99,102,241,0.14),transparent_32%),linear-gradient(to_bottom,rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(to_right,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:100%_100%,100%_100%,48px_48px,48px_48px]" />
 
         <div className="pointer-events-none absolute left-1/2 top-24 h-[420px] w-[420px] -translate-x-1/2 rounded-full bg-cyan-400/20 blur-3xl animate-[reactor-breathe_8s_ease-in-out_infinite]" />
@@ -112,17 +119,13 @@ function AppShell({ children }: RootLayoutProps) {
   return (
     <StaffOrAdmin>
       <MaintenanceGate>
-        <div className="relative min-h-screen overflow-hidden bg-[#020617] text-white">
-          {/* Atmospheric Background */}
+        <div className="relative isolate min-h-screen overflow-x-hidden bg-[#020617] text-white">
           <div className="pointer-events-none fixed inset-0 -z-30 bg-[radial-gradient(circle_at_top_left,rgba(34,211,238,0.12),transparent_28%),radial-gradient(circle_at_top_right,rgba(99,102,241,0.12),transparent_30%),linear-gradient(135deg,#020617_0%,#06111f_45%,#020617_100%)]" />
 
-          {/* Grid */}
-          <div className="pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(to_right,rgba(148,163,184,0.08)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.08)_1px,transparent_1px)] bg-[size:48px_48px]" />
+          <div className="pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(to_right,rgba(148,163,184,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.07)_1px,transparent_1px)] bg-[size:48px_48px] opacity-30" />
 
-          {/* Arc Reactor Glow */}
-          <div className="pointer-events-none fixed left-1/2 top-20 -z-10 h-[540px] w-[540px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(34,211,238,0.20)_0%,rgba(14,165,233,0.10)_30%,rgba(99,102,241,0.05)_48%,transparent_72%)] blur-3xl opacity-70 animate-[reactor-breathe_8s_ease-in-out_infinite]" />
+          <div className="pointer-events-none fixed left-1/2 top-20 -z-10 h-[540px] w-[540px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(34,211,238,0.18)_0%,rgba(14,165,233,0.09)_30%,rgba(99,102,241,0.045)_48%,transparent_72%)] blur-3xl opacity-60 animate-[reactor-breathe_8s_ease-in-out_infinite]" />
 
-          {/* Vignette */}
           <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.30)_72%,rgba(0,0,0,0.78)_100%)]" />
 
           <a
@@ -132,12 +135,9 @@ function AppShell({ children }: RootLayoutProps) {
             Skip to main content
           </a>
 
-          <AdminSidebar
-            mobileOpen={mobileOpen}
-            onClose={handleCloseMobileMenu}
-          />
+          <AdminSidebar mobileOpen={mobileOpen} onClose={handleCloseMobileMenu} />
 
-          <div className="flex min-h-screen min-w-0 flex-col lg:pl-64">
+          <div className="flex min-h-screen min-w-0 flex-1 flex-col lg:pl-64">
             <AdminShellTopbar
               userEmail={userEmail}
               isAdmin={isAdmin}
@@ -152,7 +152,7 @@ function AppShell({ children }: RootLayoutProps) {
               id="admin-main-content"
               className="relative min-w-0 flex-1 px-4 py-5 md:px-6 md:py-6"
             >
-              <div className="mx-auto w-full max-w-7xl">
+              <div className="mx-auto w-full min-w-0 max-w-7xl">
                 {children}
               </div>
             </main>
@@ -170,7 +170,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
       suppressHydrationWarning
       data-scroll-behavior="smooth"
     >
-      <body className="min-h-screen bg-black text-white antialiased">
+      <body
+        className={`${inter.variable} min-h-screen overflow-x-hidden bg-black text-white antialiased`}
+      >
         <ThemeProvider>
           <AppShell>{children}</AppShell>
         </ThemeProvider>
