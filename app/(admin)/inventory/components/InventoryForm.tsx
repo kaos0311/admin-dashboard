@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Loader2, PackagePlus, Pencil, Save } from "lucide-react";
 import type { FormEvent } from "react";
@@ -383,7 +383,7 @@ export function InventoryForm({
             {available.toLocaleString()}
           </span>
 
-          {" • "}
+          {" â€¢ "}
 
           Total Value:{" "}
           <span className="font-bold text-white">
@@ -418,3 +418,5 @@ export function InventoryForm({
     </form>
   );
 }
+
+

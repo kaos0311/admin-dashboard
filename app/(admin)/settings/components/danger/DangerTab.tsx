@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { glassPanel } from "../../styles/glass";
 import { InfoCard } from "../shared/InfoCard";
@@ -25,3 +25,5 @@ export function DangerTab() {
     </section>
   );
 }
+
+

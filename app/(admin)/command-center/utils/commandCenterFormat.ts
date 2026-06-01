@@ -1,4 +1,4 @@
-export function formatIssueType(value?: string) {
+﻿export function formatIssueType(value?: string) {
   if (!value) return "Unknown Issue";
 
   return value
@@ -32,3 +32,5 @@ export function badgeClass(value?: string) {
       return "border-white/10 bg-white/5 text-neutral-300";
   }
 }
+
+

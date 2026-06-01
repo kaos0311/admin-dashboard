@@ -1,4 +1,4 @@
-import type { CommandTask, Severity } from "../types";
+﻿import type { CommandTask, Severity } from "../types";
 
 export function severityRank(severity?: Severity) {
   switch (severity) {
@@ -29,3 +29,5 @@ export function priorityRank(priority?: CommandTask["priority"]) {
       return 0;
   }
 }
+
+

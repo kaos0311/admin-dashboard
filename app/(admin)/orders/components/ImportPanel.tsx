@@ -1,16 +1,11 @@
-"use client";
+﻿"use client";
 
 import { type RefObject, useState } from "react";
 import { FileSearch, FileUp, ShieldCheck } from "lucide-react";
 
+import { buttons, colors, glass, spacing, typography } from "@/theme";
+
 import { getReportTypeLabel } from "../lib/orderImportDetection";
-import {
-  glassButton,
-  glassPanel,
-  glassSelect,
-  labelText,
-  primaryButton,
-} from "../lib/orderUi";
 import type { ImportReportType, SmartDetectionResult } from "../lib/orderTypes";
 
 export function ImportPanel({
@@ -35,22 +30,26 @@ export function ImportPanel({
   const [pendingFile, setPendingFile] = useState<File | null>(null);
 
   return (
-    <section className={`${glassPanel} p-5`}>
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
-        <div>
-          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-white">
-            <ShieldCheck className="h-5 w-5 text-cyan-200" aria-hidden={true} />
-            Smart Import Orders From Report
+    <section className={`${glass.card} ${spacing.section}`}>
+      <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+        <div className="min-w-0">
+          <h2
+            className={`inline-flex min-w-0 items-center gap-2 ${typography.sectionTitle}`}
+          >
+            <ShieldCheck className="h-5 w-5 shrink-0 text-cyan-200" aria-hidden />
+            <span className="min-w-0 break-words">
+              Smart Import Orders From Report
+            </span>
           </h2>
 
-          <p className="mt-1 max-w-3xl text-sm text-zinc-400">
+          <p className={`${typography.bodyMuted} mt-1 max-w-3xl`}>
             Upload CSV/PDF reports. This creates a protected import job for
             Cloud Functions. Raw report history stays off this page because PHI
             is not decorative confetti.
           </p>
 
           {detectedImport ? (
-            <div className="mt-3 rounded-2xl border border-cyan-400/25 bg-cyan-400/10 p-3 text-sm text-cyan-100 shadow-inner shadow-cyan-950/20 backdrop-blur-xl">
+            <div className={`${glass.inset} ${colors.infoBadge} mt-3 p-3 text-sm`}>
               <div className="font-medium">
                 Detected: {getReportTypeLabel(detectedImport.reportType)}{" "}
                 <span className="text-cyan-300">
@@ -67,7 +66,7 @@ export function ImportPanel({
           ) : null}
 
           {pendingFile ? (
-            <p className="mt-2 text-xs text-zinc-500">
+            <p className={`${typography.caption} mt-2 normal-case tracking-normal`}>
               Selected: {pendingFile.name}
             </p>
           ) : null}
@@ -79,9 +78,9 @@ export function ImportPanel({
           ) : null}
         </div>
 
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-          <div>
-            <label htmlFor="orders-report-type" className={labelText}>
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="min-w-0">
+            <label htmlFor="orders-report-type" className={typography.formLabel}>
               Report type
             </label>
 
@@ -92,7 +91,7 @@ export function ImportPanel({
                 onImportTypeChange(event.target.value as ImportReportType)
               }
               disabled={importing}
-              className={glassSelect}
+              className="mt-2 w-full min-w-[230px] rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-sm text-white outline-none"
             >
               <option value="deliveryTickets">Delivery Tickets PDF</option>
               <option value="outstandingSalesOrders">
@@ -121,9 +120,9 @@ export function ImportPanel({
             type="button"
             onClick={() => importInputRef.current?.click()}
             disabled={importing}
-            className={glassButton}
+            className={buttons.secondary}
           >
-            <FileSearch className="h-4 w-4" aria-hidden={true} />
+            <FileSearch className="h-4 w-4" aria-hidden />
             Choose File
           </button>
 
@@ -131,9 +130,9 @@ export function ImportPanel({
             type="button"
             onClick={() => onImportFile(pendingFile)}
             disabled={importing || !pendingFile}
-            className={primaryButton}
+            className={buttons.primary}
           >
-            <FileUp className="h-4 w-4" aria-hidden={true} />
+            <FileUp className="h-4 w-4" aria-hidden />
             {importing ? "Uploading..." : "Upload"}
           </button>
         </div>
@@ -141,3 +140,5 @@ export function ImportPanel({
     </section>
   );
 }
+
+

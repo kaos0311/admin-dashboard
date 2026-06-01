@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { AlertTriangle } from "lucide-react";
 
@@ -30,3 +30,5 @@ export function WipErrorState({ message, onRetry }: WipErrorStateProps) {
     </main>
   );
 }
+
+

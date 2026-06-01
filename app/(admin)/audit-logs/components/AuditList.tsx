@@ -1,4 +1,4 @@
-import { Filter } from "lucide-react";
+﻿import { Filter } from "lucide-react";
 
 import { formatTimestamp } from "../utils/auditFormat";
 import { actionIcon } from "../utils/auditNormalize";
@@ -95,11 +95,11 @@ export function AuditList({
                   </div>
 
                   <div className="mt-2 truncate text-xs text-slate-600 dark:text-slate-400">
-                    Actor: {log.actorEmail ?? log.actorUid ?? "—"}
+                    Actor: {log.actorEmail ?? log.actorUid ?? "â€”"}
                   </div>
 
                   <div className="truncate text-xs text-slate-500">
-                    Target: {log.targetEmail ?? log.targetUid ?? "—"}
+                    Target: {log.targetEmail ?? log.targetUid ?? "â€”"}
                   </div>
 
                   <div className="mt-2 text-[10px] uppercase tracking-[0.15em] text-slate-500">
@@ -128,3 +128,5 @@ export function AuditList({
     </section>
   );
 }
+
+

@@ -1,37 +1,71 @@
-import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
+﻿import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
+
+import { glass, tiles, typography } from "@/theme";
 
 import type { AnalyticsHealth } from "../analytics-types";
 
-export function AnalyticsHealthBanner({
-  health,
-}: {
+type AnalyticsHealthBannerProps = {
   health: AnalyticsHealth;
-}) {
-  const toneClass =
-    health.tone === "success"
-      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-300"
-      : health.tone === "warning"
-        ? "border-amber-500/20 bg-amber-500/10 text-amber-300"
-        : health.tone === "danger"
-          ? "border-red-500/20 bg-red-500/10 text-red-300"
-          : "border-white/10 bg-white/[0.055] text-slate-300";
+};
 
+function getHealthToneClass(tone: AnalyticsHealth["tone"]) {
+  switch (tone) {
+    case "success":
+      return "border-emerald-400/25 bg-emerald-500/10 text-emerald-200";
+    case "warning":
+      return "border-amber-400/25 bg-amber-500/10 text-amber-200";
+    case "danger":
+      return "border-red-400/25 bg-red-500/10 text-red-200";
+    default:
+      return "border-white/10 bg-white/[0.055] text-slate-300";
+  }
+}
+
+function HealthIcon({ tone }: { tone: AnalyticsHealth["tone"] }) {
+  const iconClass = "mt-0.5 h-5 w-5 shrink-0";
+
+  if (tone === "success") {
+    return <CheckCircle2 className={iconClass} aria-hidden="true" />;
+  }
+
+  if (tone === "warning" || tone === "danger") {
+    return <AlertTriangle className={iconClass} aria-hidden="true" />;
+  }
+
+  return <ShieldCheck className={iconClass} aria-hidden="true" />;
+}
+
+export function AnalyticsHealthBanner({ health }: AnalyticsHealthBannerProps) {
   return (
-    <section className={`rounded-[2rem] border p-5 ${toneClass}`}>
-      <div className="flex items-start gap-3">
-        {health.tone === "success" ? (
-          <CheckCircle2 className="mt-0.5 h-5 w-5" />
-        ) : health.tone === "danger" || health.tone === "warning" ? (
-          <AlertTriangle className="mt-0.5 h-5 w-5" />
-        ) : (
-          <ShieldCheck className="mt-0.5 h-5 w-5" />
-        )}
+    <section
+      className={[
+        glass.panel,
+        tiles.base,
+        getHealthToneClass(health.tone),
+        "min-w-0 overflow-hidden",
+      ].join(" ")}
+      role="status"
+      aria-live="polite"
+      aria-labelledby="analytics-health-title"
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        <HealthIcon tone={health.tone} />
 
-        <div>
-          <h2 className="font-semibold">{health.label}</h2>
-          <p className="mt-1 text-sm opacity-90">{health.detail}</p>
+        <div className="min-w-0 flex-1">
+          <h2
+            id="analytics-health-title"
+            className={[typography.cardTitle, "break-words"].join(" ")}
+          >
+            {health.label}
+          </h2>
+
+          <p className={[typography.bodyMuted, "mt-1 break-words"].join(" ")}>
+            {health.detail}
+          </p>
         </div>
       </div>
     </section>
   );
 }
+
+

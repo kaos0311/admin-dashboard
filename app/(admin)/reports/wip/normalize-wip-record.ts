@@ -1,4 +1,4 @@
-import type { WipRecord } from "./wip-types";
+﻿import type { WipRecord } from "./wip-types";
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -145,3 +145,5 @@ export function normalizeWipRecord(input: unknown): WipRecord {
     searchText,
   } as WipRecord;
 }
+
+

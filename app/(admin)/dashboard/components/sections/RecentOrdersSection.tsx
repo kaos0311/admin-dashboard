@@ -1,6 +1,8 @@
-"use client";
+﻿"use client";
 
 import { ClipboardList } from "lucide-react";
+
+import { glass, tiles } from "@/theme";
 
 import type { OrderRow } from "../../dashboard-types";
 import { EmptyState } from "../../shared/EmptyState";
@@ -10,9 +12,7 @@ type RecentOrdersSectionProps = {
   orders: OrderRow[];
 };
 
-export function RecentOrdersSection({
-  orders,
-}: RecentOrdersSectionProps) {
+export function RecentOrdersSection({ orders }: RecentOrdersSectionProps) {
   return (
     <GlassPanel
       title="Recent Orders"
@@ -22,22 +22,19 @@ export function RecentOrdersSection({
       <div className="space-y-3">
         {orders.length > 0 ? (
           orders.slice(0, 8).map((order) => (
-            <div
-              key={order.id}
-              className="rounded-2xl border border-white/10 bg-black/20 p-4"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-white">
+            <div key={order.id} className={`${glass.inset} p-4`}>
+              <div className="flex min-w-0 items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <p className={tiles.title}>
                     {order.patientName || "Unknown Patient"}
                   </p>
 
-                  <p className="text-xs text-white/50">
+                  <p className={tiles.helper}>
                     {order.orderNumber || order.id}
                   </p>
                 </div>
 
-                <span className="rounded-full bg-white/10 px-3 py-1 text-xs text-white/70">
+                <span className={tiles.badge}>
                   {order.status || "pending"}
                 </span>
               </div>
@@ -50,3 +47,5 @@ export function RecentOrdersSection({
     </GlassPanel>
   );
 }
+
+

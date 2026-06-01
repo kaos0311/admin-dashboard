@@ -1,4 +1,4 @@
-import type { ProductRow } from "../../dashboard-types";
+﻿import type { ProductRow } from "../../dashboard-types";
 import {
   getString,
   isRecord,
@@ -42,3 +42,5 @@ export function normalizeProduct(data: unknown): ProductRow {
     committed,
   };
 }
+
+

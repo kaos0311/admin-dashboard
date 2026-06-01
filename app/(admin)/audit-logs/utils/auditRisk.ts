@@ -1,4 +1,4 @@
-import type { AuditCategory, AuditLogRow, AuditSeverity } from "./auditTypes";
+﻿import type { AuditCategory, AuditLogRow, AuditSeverity } from "./auditTypes";
 
 export function getCategory(action: string, detailsText: string): AuditCategory {
   const text = `${action} ${detailsText}`.toLowerCase();
@@ -107,3 +107,5 @@ export function isSuspiciousAuditEvent(log: AuditLogRow): boolean {
     text.includes("unauthorized")
   );
 }
+
+

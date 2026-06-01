@@ -1,4 +1,4 @@
-export type SettingsTabKey =
+﻿export type SettingsTabKey =
   | "company"
   | "preferences"
   | "users"
@@ -116,3 +116,5 @@ export type SettingsMessage = {
   type: "success" | "error" | "info";
   text: string;
 };
+
+

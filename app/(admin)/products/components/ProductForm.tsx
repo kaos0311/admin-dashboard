@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   AlertTriangle,
@@ -10,17 +10,17 @@ import {
   Plus,
   Save,
 } from "lucide-react";
+
 import type { FormEvent } from "react";
 
-import type {
-  ProductForm as ProductFormType,
-  ProductStatus,
-  ProductType,
-} from "../utils/productTypes";
 import {
   PRODUCT_STATUS_OPTIONS,
   PRODUCT_TYPE_OPTIONS,
+  type ProductForm as ProductFormType,
+  type ProductStatus,
+  type ProductType,
 } from "../utils/productTypes";
+
 import { productFormWarnings } from "../utils/productValidation";
 
 import {
@@ -502,3 +502,5 @@ export function ProductForm({
     </form>
   );
 }
+
+

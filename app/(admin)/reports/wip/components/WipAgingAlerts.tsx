@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { AlertTriangle } from "lucide-react";
 
@@ -57,3 +57,5 @@ export function WipAgingAlerts({ records }: WipAgingAlertsProps) {
     </section>
   );
 }
+
+

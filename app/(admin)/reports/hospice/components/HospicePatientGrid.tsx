@@ -2,17 +2,21 @@
 
 import { HospicePatientCard } from "./HospicePatientCard";
 
-export function HospicePatientGrid({
-  patients,
-}: {
-  patients: HospicePatient[];
-}) {
+type HospicePatientGridProps = {
+  patients: readonly HospicePatient[];
+};
+
+export function HospicePatientGrid({ patients }: HospicePatientGridProps) {
   return (
-    <div className="grid gap-4 xl:grid-cols-2">
+    <div className="grid min-w-0 gap-4 xl:grid-cols-2">
       {patients.map((patient) => (
-        <HospicePatientCard key={patient.id} patient={patient} />
+        <HospicePatientCard
+          key={patient.patientId ?? patient.id}
+          patient={patient}
+        />
       ))}
     </div>
   );
 }
+
 

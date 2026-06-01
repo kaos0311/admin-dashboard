@@ -1,4 +1,4 @@
-export * from "./dashboard-constants";
+﻿export * from "./dashboard-constants";
 export * from "./dashboard-normalizers";
 
 export function safeNumber(
@@ -62,3 +62,5 @@ export function normalizeSearchText(
     .replace(/\s+/g, " ")
     .trim();
 }
+
+

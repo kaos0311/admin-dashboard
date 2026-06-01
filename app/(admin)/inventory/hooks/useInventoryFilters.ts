@@ -1,4 +1,4 @@
-
+﻿
 "use client";
 
 import { useDeferredValue, useMemo, useState } from "react";
@@ -125,3 +125,5 @@ export function useInventoryFilters(items: InventoryItem[]) {
     resetFilters,
   };
 }
+
+

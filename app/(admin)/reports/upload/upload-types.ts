@@ -1,117 +1,155 @@
-import type { ReactNode } from "react";
-import type { ReportType } from "@/lib/reportTypes";
+﻿import type { Timestamp } from "firebase/firestore";
 
-export type UploadStep =
-  | "idle"
-  | "creating_job"
-  | "uploading_cloud"
-  | "marking_uploaded"
-  | "queued"
-  | "complete"
-  | "failed";
+export type ImportMode = "append" | "overwrite_report_type";
 
 export type QueueFilter =
   | "all"
-  | "ready"
-  | "active"
+  | "queued"
+  | "processing"
+  | "completed"
+  | "failed"
+  | "deleted";
+
+export type UploadStatus =
+  | "idle"
+  | "validating"
+  | "creating_job"
+  | "uploading"
+  | "finalizing"
   | "complete"
   | "failed";
 
-export type ImportMode =
-  | "append"
-  | "overwrite_report_type";
+export type UploadStep = UploadStatus;
 
-export type TimestampLike = {
-  toDate?: () => Date;
-} | null;
+export type ImportJobStatus =
+  | "queued"
+  | "uploaded"
+  | "processing"
+  | "completed"
+  | "completed_with_errors"
+  | "failed"
+  | "deleted"
+  | "unknown";
 
-export type PatientIndexStats = {
-  patients: number;
-  hospicePatients: number;
-  wipTotal: number;
-  wipOpen: number;
-  wipCompleted: number;
-  hospiceLiving: number;
-  hospiceDeceased: number;
-  lastUpdatedAt: TimestampLike;
-  lastIndexedReportId: string;
-  lastIndexedReportType: string;
-  indexVersion: string;
-};
+export type ReportType =
+  | "auto"
+  | "patients"
+  | "orders"
+  | "hospice"
+  | "insurance"
+  | "wip"
+  | "rentals"
+  | "generic";
 
-export type QueuedUpload = {
-  localId: string;
-  file: File;
-  reportType: ReportType;
-  step: UploadStep;
-  progress: number;
-  jobId: string;
-  storagePath: string;
-  downloadURL: string;
-  error: string;
-};
+export type FirestoreDateValue =
+  | Timestamp
+  | Date
+  | string
+  | number
+  | null
+  | undefined;
 
 export type RecentImportJob = {
   id: string;
+  fileName: string;
+  originalName?: string;
+  originalFileName?: string;
 
-  reportType: string;
-  reportLabel: string;
+  reportType: ReportType | string;
+  importMode: ImportMode | string;
+  status: ImportJobStatus;
 
-  originalFileName: string;
+  storagePath?: string;
+  contentType?: string;
+  sizeBytes?: number;
+  progress?: number;
 
-  status: string;
-  processingStatus: string;
-  processingStage: string;
+  totalRows?: number;
 
-  uploadedByEmail: string;
-
-  storagePath: string;
-  downloadURL: string;
-
-  importMode: string;
-
-  refreshRequested: boolean;
-  forceReprocess: boolean;
-
-  reportVersion: number;
-  weeklyBatchKey: string;
-
-  progressPercent: number;
-
-  rowsProcessed: number;
-  rowsInserted: number;
+  rowsProcessed?: number;
+  rowsInserted?: number;
   rowsUpdated?: number;
   rowsSkipped?: number;
-  rowsFailed: number;
+  rowsFailed?: number;
+
+  processedRows?: number;
+  processedCount?: number;
+
+  insertedRows?: number;
+  insertedCount?: number;
+
+  updatedRows?: number;
+  updatedCount?: number;
+
+  skippedRows?: number;
+  skippedCount?: number;
+
+  failedRows?: number;
+  failedCount?: number;
 
   completedWithErrors?: boolean;
+  errorMessage?: string;
 
-  createdAt: TimestampLike;
-  updatedAt: TimestampLike;
+  createdByUid?: string;
+  createdByEmail?: string;
+
+  createdAt?: FirestoreDateValue;
+  updatedAt?: FirestoreDateValue;
+  completedAt?: FirestoreDateValue;
 };
 
-export type ReportOptionLike = {
-  value: ReportType;
-  label: string;
-  category?: string;
+export type PatientIndexStats = {
+  patients?: number;
+  totalPatients?: number;
+  activePatients?: number;
+  inactivePatients?: number;
+  hospicePatients?: number;
+  indexedPatients?: number;
+  searchablePatients?: number;
+  insuranceRecords?: number;
+
+  wipOpen?: number;
+  wipCompleted?: number;
+  hospiceLiving?: number;
+  hospiceDeceased?: number;
+
+  missingDob?: number;
+  missingPhone?: number;
+  missingAddress?: number;
+  missingInsurance?: number;
+
+  lastIndexedAt?: FirestoreDateValue;
+  lastUpdated?: FirestoreDateValue;
+  updatedAt?: FirestoreDateValue;
+  lastUpdatedAt?: FirestoreDateValue;
+
+  lastImportJobId?: string;
 };
 
-export type GroupedReportOption = {
-  category: string;
-  options: ReportOptionLike[];
+export type PatientIndexAnalytics = PatientIndexStats;
+
+export type UploadQueueItem = {
+  id: string;
+  file: File;
+  status: UploadStatus;
+  progress: number;
+  jobId?: string;
+  error?: string;
 };
 
-export type StatCardTone =
-  | "neutral"
-  | "blue"
-  | "amber"
-  | "rose"
-  | "emerald";
-
-export type StatCardProps = {
-  icon: ReactNode;
-  label: string;
-  value: string;
-  helper: string;
-  tone?: StatCardTone;
+export type AuthRoleUser = {
+  uid?: string;
+  email?: string | null;
+  displayName?: string | null;
 };
+
+export type AuthRoleState = {
+  user?: AuthRoleUser | null;
+  role?: string | null;
+  loading?: boolean;
+  isAdmin?: boolean;
+  isStaff?: boolean;
+  error?: string | Error | null;
+};
+
+

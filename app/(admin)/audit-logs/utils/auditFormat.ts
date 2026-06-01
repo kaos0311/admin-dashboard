@@ -1,4 +1,4 @@
-import type { Timestamp } from "firebase/firestore";
+﻿import type { Timestamp } from "firebase/firestore";
 
 export function safeJson(value: unknown): string {
   try {
@@ -13,12 +13,12 @@ export function humanAction(action: string): string {
 }
 
 export function formatTimestamp(value: Timestamp | null): string {
-  if (!value) return "—";
+  if (!value) return "â€”";
 
   try {
     return value.toDate().toLocaleString();
   } catch {
-    return "—";
+    return "â€”";
   }
 }
 
@@ -28,3 +28,5 @@ export function sanitizeCsvCell(value: unknown): string {
 
   return `"${guarded.replaceAll('"', '""')}"`;
 }
+
+

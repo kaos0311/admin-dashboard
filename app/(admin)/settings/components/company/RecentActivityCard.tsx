@@ -1,4 +1,4 @@
-import { Clock3 } from "lucide-react";
+﻿import { Clock3 } from "lucide-react";
 import { glassPanelSoft } from "../../styles/glass";
 
 export function RecentActivityCard() {
@@ -24,3 +24,5 @@ export function RecentActivityCard() {
     </aside>
   );
 }
+
+

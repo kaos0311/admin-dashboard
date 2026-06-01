@@ -1,13 +1,13 @@
-import { Timestamp } from "firebase/firestore";
+﻿import { Timestamp } from "firebase/firestore";
 import type { UserRow, UserTheme } from "./users-types";
 
 export function formatTimestamp(value?: Timestamp | null): string {
-  if (!value) return "—";
+  if (!value) return "â€”";
 
   try {
     return value.toDate().toLocaleString();
   } catch {
-    return "—";
+    return "â€”";
   }
 }
 
@@ -102,3 +102,5 @@ export function mergeUsers(previous: UserRow[], incoming: UserRow[]): UserRow[] 
     return bSeconds - aSeconds;
   });
 }
+
+

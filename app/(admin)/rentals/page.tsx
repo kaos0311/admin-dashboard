@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 
@@ -207,3 +207,5 @@ export default function RentalsPage() {
     </main>
   );
 }
+
+

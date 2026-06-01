@@ -1,4 +1,4 @@
-import { Search, X } from "lucide-react";
+﻿import { Search, X } from "lucide-react";
 
 import { humanAction } from "../utils/auditFormat";
 import type { AuditCategory, AuditSeverity, DateFilter } from "../utils/auditTypes";
@@ -126,3 +126,5 @@ export function AuditFilters({
     </section>
   );
 }
+
+

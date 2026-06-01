@@ -1,4 +1,4 @@
-import type { Timestamp } from "firebase/firestore";
+﻿import type { Timestamp } from "firebase/firestore";
 
 export type AuditSeverity = "info" | "warning" | "critical";
 export type DateFilter = "all" | "today" | "7d" | "30d";
@@ -36,3 +36,5 @@ export type AuditLogRow = {
 
   searchableText: string;
 };
+
+

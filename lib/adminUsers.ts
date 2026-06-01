@@ -1,4 +1,4 @@
-import { FirebaseError } from "firebase/app";
+﻿import { FirebaseError } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -79,7 +79,7 @@ async function callFunction<TPayload, TResult>(
 export async function createDashboardUser(
   payload: CreateDashboardUserPayload
 ): Promise<CreateDashboardUserResult> {
-  return await callFunction<
+  return callFunction<
     CreateDashboardUserPayload,
     CreateDashboardUserResult
   >("createDashboardUser", {
@@ -92,7 +92,7 @@ export async function createDashboardUser(
 export async function updateUserRole(
   payload: UpdateUserRolePayload
 ): Promise<CloudFunctionResult> {
-  return await callFunction<
+  return callFunction<
     UpdateUserRolePayload,
     CloudFunctionResult
   >("updateUserRole", payload);
@@ -101,7 +101,7 @@ export async function updateUserRole(
 export async function disableDashboardUser(
   payload: UserActionPayload
 ): Promise<CloudFunctionResult> {
-  return await callFunction<
+  return callFunction<
     UserActionPayload,
     CloudFunctionResult
   >("disableDashboardUser", payload);
@@ -110,7 +110,7 @@ export async function disableDashboardUser(
 export async function enableDashboardUser(
   payload: UserActionPayload
 ): Promise<CloudFunctionResult> {
-  return await callFunction<
+  return callFunction<
     UserActionPayload,
     CloudFunctionResult
   >("enableDashboardUser", payload);
@@ -119,7 +119,7 @@ export async function enableDashboardUser(
 export async function deleteUserAccount(
   payload: UserActionPayload
 ): Promise<CloudFunctionResult> {
-  return await callFunction<
+  return callFunction<
     UserActionPayload,
     CloudFunctionResult
   >("deleteUserAccount", payload);
@@ -134,3 +134,4 @@ export async function forceRefreshCurrentUserToken(): Promise<void> {
 
   await auth.currentUser.getIdToken(true);
 }
+

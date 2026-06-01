@@ -1,4 +1,4 @@
-import type { ComplianceIssue } from "../types";
+﻿import type { ComplianceIssue } from "../types";
 import { badgeClass, formatIssueType } from "../utils/commandCenterFormat";
 import { EmptyState } from "./EmptyState";
 
@@ -28,7 +28,7 @@ export function IssueList({ issues }: IssueListProps) {
 
               <p className="mt-1 text-sm text-neutral-400">
                 {issue.patientName || "Unknown patient"}
-                {issue.dob ? ` • DOB: ${issue.dob}` : ""}
+                {issue.dob ? ` â€¢ DOB: ${issue.dob}` : ""}
               </p>
             </div>
 
@@ -51,3 +51,5 @@ export function IssueList({ issues }: IssueListProps) {
     </div>
   );
 }
+
+

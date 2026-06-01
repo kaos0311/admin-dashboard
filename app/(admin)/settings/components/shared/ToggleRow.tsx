@@ -1,4 +1,4 @@
-type ToggleRowProps = {
+﻿type ToggleRowProps = {
   title: string;
   description: string;
   checked: boolean;
@@ -45,3 +45,5 @@ export function ToggleRow({
     </div>
   );
 }
+
+

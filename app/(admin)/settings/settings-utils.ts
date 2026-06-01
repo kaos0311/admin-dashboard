@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   AdminUser,
   AppSettings,
   CompanySettings,
@@ -230,3 +230,5 @@ export function hasSettingsChanged(
 ): boolean {
   return stableSettingsString(current) !== stableSettingsString(saved);
 }
+
+

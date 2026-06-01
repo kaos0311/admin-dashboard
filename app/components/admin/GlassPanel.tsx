@@ -1,4 +1,4 @@
-import type { ElementType, ReactNode } from "react";
+﻿import type { ElementType, ReactNode } from "react";
 import { glass } from "@/theme";
 
 type GlassPanelProps = {
@@ -22,3 +22,5 @@ export function GlassPanel({
     </Component>
   );
 }
+
+

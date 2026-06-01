@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { InventoryItem } from "../lib/inventoryTypes";
 
@@ -63,3 +63,5 @@ export function InventoryTable({
     </div>
   );
 }
+
+

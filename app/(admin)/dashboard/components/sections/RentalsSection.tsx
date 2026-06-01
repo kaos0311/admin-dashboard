@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Truck } from "lucide-react";
 
@@ -41,3 +41,5 @@ export function RentalsSection({ rentals }: RentalsSectionProps) {
     </GlassPanel>
   );
 }
+
+

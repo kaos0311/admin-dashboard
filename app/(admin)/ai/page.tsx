@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 
@@ -143,7 +143,7 @@ export default function AdminAiPage() {
                   compliance risk, hospice oversight, report health,
                   recalls, WIP bottlenecks, and system diagnostics.
                   Because staring at spreadsheets until your soul leaves
-                  your body is apparently still considered “workflow.”
+                  your body is apparently still considered â€œworkflow.â€
                 </p>
               </div>
             </div>
@@ -167,7 +167,7 @@ export default function AdminAiPage() {
                   </div>
 
                   <p className="mt-1 text-xs text-slate-500">
-                    Firebase Callable • OpenAI Connected
+                    Firebase Callable â€¢ OpenAI Connected
                   </p>
                 </div>
               </div>
@@ -190,7 +190,7 @@ export default function AdminAiPage() {
                   </label>
 
                   <p className="mt-2 text-sm text-slate-400">
-                    Use Ctrl/⌘ + Enter to send.
+                    Use Ctrl/âŒ˜ + Enter to send.
                   </p>
                 </div>
 
@@ -316,6 +316,8 @@ export default function AdminAiPage() {
     </main>
   );
 }
+
+
 
 
 

@@ -1,6 +1,8 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
+
+import { glass, spacing, tiles } from "@/theme";
 
 type GlassPanelProps = {
   title?: string;
@@ -16,18 +18,12 @@ export function GlassPanel({
   className = "",
 }: GlassPanelProps) {
   return (
-    <section
-      className={`rounded-3xl border border-white/10 bg-white/[0.08] p-5 shadow-xl backdrop-blur-2xl ${className}`}
-    >
+    <section className={`${glass.card} ${spacing.section} ${className}`}>
       {title ? (
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white">{title}</h2>
+        <div className={`${tiles.header} mb-4`}>
+          <h2 className={tiles.title}>{title}</h2>
 
-          {icon ? (
-            <div className="text-white/50">
-              {icon}
-            </div>
-          ) : null}
+          {icon ? <div className={tiles.icon}>{icon}</div> : null}
         </div>
       ) : null}
 
@@ -35,3 +31,5 @@ export function GlassPanel({
     </section>
   );
 }
+
+

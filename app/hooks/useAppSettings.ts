@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useSyncExternalStore } from "react";
 import { doc, onSnapshot, type Unsubscribe } from "firebase/firestore";
@@ -182,3 +182,5 @@ export function useAppSettings(enabled: boolean): UseAppSettingsResult {
     enabled ? appSettingsStore.getServerSnapshot : getDisabledSnapshot
   );
 }
+
+

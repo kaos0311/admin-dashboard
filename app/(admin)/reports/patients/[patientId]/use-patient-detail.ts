@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
@@ -62,3 +62,4 @@ export function usePatientDetail(patientId?: string) {
     setMessage,
   };
 }
+

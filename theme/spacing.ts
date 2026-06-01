@@ -15,14 +15,14 @@ export const spacing = {
     "space-y-4",
 
   gridCards:
-    "grid min-w-0 auto-rows-fr gap-4 md:grid-cols-2 xl:grid-cols-4",
+    "grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4",
 
   gridCardsThree:
-    "grid min-w-0 auto-rows-fr gap-4 md:grid-cols-3",
+    "grid min-w-0 gap-4 md:grid-cols-3",
 
   gridCardsTwo:
-    "grid min-w-0 auto-rows-fr gap-4 md:grid-cols-2",
+    "grid min-w-0 gap-4 md:grid-cols-2",
 
   gridResponsive:
-    "grid min-w-0 auto-rows-fr gap-4 sm:grid-cols-2 xl:grid-cols-4",
+    "grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4",
 };

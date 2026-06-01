@@ -1,4 +1,4 @@
-import type { Product, ProductForm } from "./productTypes";
+﻿import type { Product, ProductForm } from "./productTypes";
 import { toSafeNumber } from "./productNormalize";
 
 export function productRiskScore(product: Product): number {
@@ -62,3 +62,5 @@ export function productFormWarnings(form: ProductForm): string[] {
 
   return warnings;
 }
+
+

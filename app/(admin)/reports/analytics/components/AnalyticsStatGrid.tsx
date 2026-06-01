@@ -1,10 +1,13 @@
-﻿import { tiles } from "@/theme";
+﻿import type { ReactNode } from "react";
+
 import {
   AlertTriangle,
   BarChart3,
   CheckCircle2,
   FileText,
 } from "lucide-react";
+
+import { tiles, typography } from "@/theme";
 
 import { formatCount } from "../analytics-utils";
 
@@ -26,69 +29,83 @@ export function AnalyticsStatGrid({
   knownRows,
 }: AnalyticsStatGridProps) {
   return (
-    <section className={tiles.gridMetrics}>
+    <section
+      className={[tiles.gridMetrics, "min-w-0"].join(" ")}
+      aria-label="Analytics summary metrics"
+    >
       <StatCard
         title={`${selectedTypeLabel} Rows`}
         value={selectedRows}
         loading={loading}
-        icon={<BarChart3 className="h-5 w-5" />}
+        icon={<BarChart3 className="h-5 w-5" aria-hidden="true" />}
       />
 
       <StatCard
         title="Source Files"
         value={totalFiles}
         loading={loading}
-        icon={<FileText className="h-5 w-5" />}
+        icon={<FileText className="h-5 w-5" aria-hidden="true" />}
       />
 
       <StatCard
         title="Unknown Rows"
         value={unknownRows}
         loading={loading}
-        icon={<AlertTriangle className="h-5 w-5" />}
+        icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
       />
 
       <StatCard
         title="Known Rows"
         value={knownRows}
         loading={loading}
-        icon={<CheckCircle2 className="h-5 w-5" />}
+        icon={<CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
       />
     </section>
   );
 }
 
-function StatCard({
-  title,
-  value,
-  loading,
-  icon,
-}: {
+type StatCardProps = {
   title: string;
   value: number;
   loading: boolean;
-  icon: React.ReactNode;
-}) {
+  icon: ReactNode;
+};
+
+function StatCard({ title, value, loading, icon }: StatCardProps) {
   return (
-    <div className="rounded-[1.75rem] border border-white/10 bg-white/[0.055] p-5 shadow-xl shadow-black/20 backdrop-blur-2xl">
-      <div className="flex items-center gap-3">
-        <div className="rounded-2xl border border-white/10 bg-white/10 p-3 text-cyan-200">
+    <article className={[tiles.base, "min-w-0 p-5"].join(" ")}>
+      <div className="flex min-w-0 items-center gap-3">
+        <div
+          className="shrink-0 rounded-2xl border border-white/10 bg-white/10 p-3 text-cyan-200"
+          aria-hidden="true"
+        >
           {icon}
         </div>
 
-        <div>
-          <p className="text-sm text-slate-400">{title}</p>
+        <div className="min-w-0 flex-1">
+          <p className={[typography.bodyMuted, "truncate"].join(" ")}>
+            {title}
+          </p>
 
-          <p className="mt-1 text-2xl font-bold text-white">
+          <p
+            className={[
+              typography.metricCompact,
+              "mt-1 min-w-0 truncate",
+            ].join(" ")}
+          >
             {loading ? (
-              <span className="animate-pulse text-slate-700">â–ˆâ–ˆâ–ˆâ–ˆ</span>
+              <span
+                className="inline-block h-7 w-24 animate-pulse rounded-lg bg-white/10 align-middle"
+                aria-label="Loading metric"
+              />
             ) : (
               formatCount(value)
             )}
           </p>
         </div>
       </div>
-    </div>
+    </article>
   );
 }
+
 

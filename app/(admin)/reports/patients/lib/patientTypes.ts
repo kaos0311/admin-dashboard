@@ -1,4 +1,4 @@
-export const PATIENTS_COLLECTION = "patients";
+﻿export const PATIENTS_COLLECTION = "patients";
 export const PATIENT_TIMELINE_SUBCOLLECTION = "timeline";
 
 export type PatientStatus = "active" | "archived" | "destroyed";
@@ -280,3 +280,5 @@ export type PatientStats = {
   openTasks: number;
   poorData: number;
 };
+
+

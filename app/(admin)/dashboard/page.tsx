@@ -1,6 +1,6 @@
-"use client";
+﻿"use client";
 
-import { colors, glass } from "@/theme";
+import { colors, glass, spacing } from "@/theme";
 
 import { DashboardHero } from "./components/DashboardHero";
 import { DashboardStatGrid } from "./components/DashboardStatGrid";
@@ -26,10 +26,11 @@ export default function DashboardPage() {
   } = useDashboardData();
 
   return (
-    <main className={`${glass.page} ${colors.app} relative min-h-screen overflow-x-hidden`}>
+    <main className={`${glass.page} ${colors.app}`}>
       <div aria-hidden="true" className={colors.grid} />
+      <div aria-hidden="true" className={colors.vignette} />
 
-      <div className={`${glass.shell} relative z-10`}>
+      <div className={`${glass.shell} ${spacing.page} ${spacing.stack}`}>
         <DashboardHero
           loading={loading}
           refreshing={refreshing}
@@ -62,3 +63,5 @@ export default function DashboardPage() {
     </main>
   );
 }
+
+

@@ -1,4 +1,4 @@
-import type { WipEmployeeSummary } from "../../dashboard-types";
+﻿import type { WipEmployeeSummary } from "../../dashboard-types";
 
 import { getString, isRecord, safeNumber } from "./core";
 
@@ -38,3 +38,5 @@ export function normalizeWipEmployee(
     ),
   };
 }
+
+

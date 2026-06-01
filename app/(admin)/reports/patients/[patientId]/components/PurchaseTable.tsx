@@ -1,4 +1,4 @@
-import type { RecentPurchaseItem } from "../patient-detail-types";
+﻿import type { RecentPurchaseItem } from "../patient-detail-types";
 
 import { formatDate, formatMoney } from "../patient-detail-utils";
 
@@ -36,11 +36,11 @@ export function PurchaseTable({
               className="border-t border-white/10 transition hover:bg-white/[0.04]"
             >
               <td className="px-4 py-3 font-medium text-zinc-100">
-                {item.itemName || "—"}
+                {item.itemName || "â€”"}
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
-                {item.hcpc || item.itemId || "—"}
+                {item.hcpc || item.itemId || "â€”"}
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
@@ -48,7 +48,7 @@ export function PurchaseTable({
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
-                {item.quantity ?? "—"}
+                {item.quantity ?? "â€”"}
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
@@ -56,7 +56,7 @@ export function PurchaseTable({
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
-                {item.orderId || "—"}
+                {item.orderId || "â€”"}
               </td>
             </tr>
           ))}
@@ -65,3 +65,4 @@ export function PurchaseTable({
     </div>
   );
 }
+

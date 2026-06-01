@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { Product, ProductStatus } from "../utils/productTypes";
 import { productRiskScore, qualityWarnings } from "../utils/productValidation";
@@ -75,12 +75,9 @@ export function ProductRiskBadge({ product }: { product: Product }) {
 
 export function StatusBadge({ status }: { status: ProductStatus }) {
   const styles: Record<ProductStatus, string> = {
-    active:
-      "border-emerald-300/20 bg-emerald-300/10 text-emerald-200",
-    inactive:
-      "border-slate-300/20 bg-slate-300/10 text-slate-200",
-    discontinued:
-      "border-red-400/20 bg-red-400/10 text-red-200",
+    active: "border-emerald-300/20 bg-emerald-300/10 text-emerald-200",
+    inactive: "border-slate-300/20 bg-slate-300/10 text-slate-200",
+    discontinued: "border-red-400/20 bg-red-400/10 text-red-200",
   };
 
   return (
@@ -91,3 +88,5 @@ export function StatusBadge({ status }: { status: ProductStatus }) {
     </span>
   );
 }
+
+

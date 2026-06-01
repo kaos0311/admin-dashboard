@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -163,3 +163,5 @@ export default function AuthGuard({
 
   return <>{children}</>;
 }
+
+

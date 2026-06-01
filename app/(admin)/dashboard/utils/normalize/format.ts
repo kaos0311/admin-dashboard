@@ -1,4 +1,4 @@
-import { safeNumber } from "./core";
+﻿import { safeNumber } from "./core";
 
 export function formatMoney(value: unknown): string {
   const amount = safeNumber(value);
@@ -12,13 +12,13 @@ export function formatMoney(value: unknown): string {
 
 export function formatDate(value?: string | number | Date | null): string {
   if (!value) {
-    return "—";
+    return "â€”";
   }
 
   const date = new Date(value);
 
   if (Number.isNaN(date.getTime())) {
-    return "—";
+    return "â€”";
   }
 
   return new Intl.DateTimeFormat("en-US", {
@@ -27,3 +27,5 @@ export function formatDate(value?: string | number | Date | null): string {
     year: "numeric",
   }).format(date);
 }
+
+

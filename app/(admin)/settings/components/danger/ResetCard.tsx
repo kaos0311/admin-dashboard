@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useState } from "react";
 import { getApp } from "firebase/app";
@@ -125,3 +125,5 @@ export function ResetCard() {
     </InfoCard>
   );
 }
+
+

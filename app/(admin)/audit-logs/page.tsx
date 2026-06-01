@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   useCallback,
@@ -473,6 +473,8 @@ export default function AuditLogsPage() {
     </main>
   );
 }
+
+
 
 
 

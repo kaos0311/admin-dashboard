@@ -2,9 +2,9 @@ import {
   DocumentReference,
   FieldValue,
   Firestore,
+  getFirestore,
   SetOptions,
   WriteBatch,
-  getFirestore,
 } from "firebase-admin/firestore";
 
 export const db: Firestore = getFirestore();

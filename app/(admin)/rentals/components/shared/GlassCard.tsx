@@ -1,20 +1,29 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 
 type GlassCardProps = {
   children: ReactNode;
   className?: string;
+  as?: "section" | "div" | "article";
 };
 
-export function GlassCard({ children, className = "" }: GlassCardProps) {
+export function GlassCard({
+  children,
+  className = "",
+  as: Component = "section",
+}: GlassCardProps) {
   return (
-    <section
+    <Component
       className={[
-        "rounded-3xl border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/30 backdrop-blur-2xl",
+        "min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/30 backdrop-blur-2xl",
         "supports-[backdrop-filter]:bg-white/[0.045]",
         className,
-      ].join(" ")}
+      ]
+        .filter(Boolean)
+        .join(" ")}
     >
       {children}
-    </section>
+    </Component>
   );
 }
+
+

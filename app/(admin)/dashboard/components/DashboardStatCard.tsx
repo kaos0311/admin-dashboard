@@ -1,7 +1,9 @@
-"use client";
+﻿"use client";
 
 import type { ElementType } from "react";
 import { motion } from "framer-motion";
+
+import { tiles } from "@/theme";
 
 type DashboardStatCardProps = {
   title: string;
@@ -18,30 +20,26 @@ export function DashboardStatCard({
 }: DashboardStatCardProps) {
   return (
     <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.25 }}
-      className="rounded-3xl border border-white/10 bg-white/[0.08] p-5 shadow-xl backdrop-blur-2xl"
+      initial={{ opacity: 0, y: 8, scale: 0.985 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ duration: 0.2, ease: "easeOut" }}
+      className={`${tiles.base} ${tiles.metric} ${tiles.hover}`}
     >
-      <div className="flex items-center justify-between gap-4">
-        <div>
-          <p className="text-sm text-white/60">{title}</p>
+      <div className={tiles.header}>
+        <div className="min-w-0 flex-1">
+          <p className={tiles.label}>{title}</p>
 
-          <p className="mt-2 text-3xl font-bold text-white">
-            {value}
-          </p>
+          <p className={tiles.value}>{value}</p>
 
-          {description ? (
-            <p className="mt-2 text-xs text-white/50">
-              {description}
-            </p>
-          ) : null}
+          {description ? <p className={tiles.helper}>{description}</p> : null}
         </div>
 
-        <div className="rounded-2xl bg-white/10 p-3 text-white">
-          <Icon className="h-6 w-6" />
+        <div className={tiles.icon}>
+          <Icon className="h-6 w-6" aria-hidden="true" />
         </div>
       </div>
     </motion.div>
   );
 }
+
+

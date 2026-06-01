@@ -1,4 +1,4 @@
-import { USER_ROLE_OPTIONS, USER_STATUS_OPTIONS } from "../../settings-constants";
+﻿import { USER_ROLE_OPTIONS, USER_STATUS_OPTIONS } from "../../settings-constants";
 import type { AdminUser, UserRole, UserStatus } from "../../settings-types";
 import { StatusPill } from "../shared/StatusPill";
 
@@ -76,3 +76,5 @@ export function UserRow({
     </tr>
   );
 }
+
+

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import { glass } from "@/theme/glass";
 
 type GlassPanelProps = {
@@ -9,3 +9,5 @@ type GlassPanelProps = {
 export default function GlassPanel({ children, className = "" }: GlassPanelProps) {
   return <section className={`${glass.panel} ${className}`}>{children}</section>;
 }
+
+

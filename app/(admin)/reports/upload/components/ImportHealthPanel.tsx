@@ -1,10 +1,12 @@
-"use client";
+﻿"use client";
 
 import {
   AlertTriangle,
   Database,
   ShieldCheck,
 } from "lucide-react";
+
+import { glass } from "@/theme";
 
 import type { PatientIndexStats } from "../upload-types";
 import { formatTimestamp } from "../upload-utils";
@@ -14,14 +16,21 @@ type ImportHealthPanelProps = {
   stats: PatientIndexStats;
 };
 
+function formatStat(value: number | null | undefined): string {
+  return (value ?? 0).toLocaleString();
+}
+
 export function ImportHealthPanel({
   stats,
 }: ImportHealthPanelProps) {
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-6 shadow-2xl shadow-black/20 backdrop-blur-2xl">
+    <section className={glass.card}>
       <div className="flex items-start gap-4">
-        <div className="rounded-2xl border border-cyan-300/20 bg-cyan-500/10 p-3 text-cyan-200">
-          <Database className="h-5 w-5" aria-hidden="true" />
+        <div
+          className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-slate-300"
+          aria-hidden="true"
+        >
+          <Database className="h-5 w-5" />
         </div>
 
         <div>
@@ -29,7 +38,7 @@ export function ImportHealthPanel({
             Import Index Health
           </h2>
 
-          <p className="mt-1 text-sm leading-6 text-neutral-500">
+          <p className="mt-1 text-sm leading-6 text-slate-400">
             Snapshot of indexed operational data available to reporting and
             analytics layers.
           </p>
@@ -39,32 +48,32 @@ export function ImportHealthPanel({
       <div className="mt-6 grid gap-3 md:grid-cols-2">
         <MiniStat
           label="Patients"
-          value={stats.patients.toLocaleString()}
+          value={formatStat(stats.patients ?? stats.totalPatients)}
         />
 
         <MiniStat
           label="Hospice Patients"
-          value={stats.hospicePatients.toLocaleString()}
+          value={formatStat(stats.hospicePatients)}
         />
 
         <MiniStat
           label="Open WIP"
-          value={stats.wipOpen.toLocaleString()}
+          value={formatStat(stats.wipOpen)}
         />
 
         <MiniStat
           label="Completed WIP"
-          value={stats.wipCompleted.toLocaleString()}
+          value={formatStat(stats.wipCompleted)}
         />
 
         <MiniStat
           label="Hospice Living"
-          value={stats.hospiceLiving.toLocaleString()}
+          value={formatStat(stats.hospiceLiving)}
         />
 
         <MiniStat
           label="Hospice Deceased"
-          value={stats.hospiceDeceased.toLocaleString()}
+          value={formatStat(stats.hospiceDeceased)}
         />
       </div>
 
@@ -82,7 +91,12 @@ export function ImportHealthPanel({
               </p>
 
               <p className="mt-1 text-sm text-emerald-50/80">
-                {formatTimestamp(stats.lastUpdatedAt)}
+                {formatTimestamp(
+                  stats.lastUpdatedAt ??
+                    stats.lastUpdated ??
+                    stats.updatedAt ??
+                    stats.lastIndexedAt,
+                )}
               </p>
             </div>
           </div>
@@ -112,3 +126,5 @@ export function ImportHealthPanel({
     </section>
   );
 }
+
+

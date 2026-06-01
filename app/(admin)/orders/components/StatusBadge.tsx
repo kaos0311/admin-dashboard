@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { OrderStatus } from "../lib/orderTypes";
 
@@ -27,3 +27,5 @@ export function StatusBadge({ status }: { status: OrderStatus }) {
     </span>
   );
 }
+
+

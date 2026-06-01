@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 
 type PanelProps = {
   title: string;
@@ -25,3 +25,5 @@ export function Panel({ title, subtitle, icon, children }: PanelProps) {
     </section>
   );
 }
+
+

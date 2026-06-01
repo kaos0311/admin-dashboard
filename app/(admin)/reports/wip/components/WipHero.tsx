@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { RefreshCcw, Wrench } from "lucide-react";
 
@@ -47,3 +47,5 @@ export function WipHero({ onRefresh }: WipHeroProps) {
     </section>
   );
 }
+
+

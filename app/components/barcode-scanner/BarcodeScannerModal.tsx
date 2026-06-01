@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Camera, Keyboard, ScanLine, ShieldCheck, Wifi, X } from "lucide-react";
@@ -233,3 +233,5 @@ export default function BarcodeScannerModal({
     </div>
   );
 }
+
+

@@ -1,19 +1,26 @@
 ﻿import { badgeClass } from "../hospice-utils";
 
+type HospiceBadgeProps = {
+  value: string;
+  label: string;
+};
+
 export function HospiceBadge({
   value,
   label,
-}: {
-  value: string;
-  label: string;
-}) {
+}: HospiceBadgeProps) {
+  const badgeStyles = badgeClass(value);
+
   return (
     <span
-      className={`rounded-full border px-3 py-1 text-xs font-semibold ${badgeClass(
-        value
-      )}`}
+      aria-label={label}
+      className={`inline-flex min-w-0 max-w-full items-center rounded-full border px-3 py-1 text-xs font-semibold leading-none ${badgeStyles}`}
     >
-      {label}
+      <span className="truncate">
+        {label}
+      </span>
     </span>
   );
 }
+
+

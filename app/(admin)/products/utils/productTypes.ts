@@ -1,4 +1,4 @@
-export type ProductStatus = "active" | "inactive" | "discontinued";
+﻿export type ProductStatus = "active" | "inactive" | "discontinued";
 
 export type ProductType =
   | "resale"
@@ -148,3 +148,5 @@ export const initialProductFilters: ProductFiltersState = {
   issueFilter: "all",
   sortMode: "name-asc",
 };
+
+

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 
 import {
   CheckCircle2,
@@ -56,7 +56,7 @@ export function Info({ label, value }: { label: string; value?: string }) {
     <div className="rounded-2xl border border-white/10 bg-black/25 p-3 backdrop-blur-xl">
       <p className="text-xs text-zinc-500">{label}</p>
       <p className="mt-1 break-words text-sm font-medium text-white">
-        {value || "—"}
+        {value || "â€”"}
       </p>
     </div>
   );
@@ -271,3 +271,4 @@ export function ActionButton({
 export function SuccessIcon() {
   return <CheckCircle2 className="h-4 w-4" />;
 }
+

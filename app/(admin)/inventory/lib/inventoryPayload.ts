@@ -1,4 +1,4 @@
-import type { InventoryItem } from "./inventoryTypes";
+﻿import type { InventoryItem } from "./inventoryTypes";
 import { buildSearchText, toSafeNumber, toSafeString } from "./inventoryUtils";
 
 type InventoryPayloadInput = Partial<InventoryItem>;
@@ -61,3 +61,5 @@ export function buildInventoryPayload(input: InventoryPayloadInput): InventoryPa
     isDeleted: input.isDeleted === true,
   };
 }
+
+

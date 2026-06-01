@@ -8,9 +8,6 @@ export const colors = {
   vignette:
     "pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.34)_70%,rgba(0,0,0,0.78)_100%)]",
 
-  reactorGlow:
-    "pointer-events-none fixed left-1/2 top-24 -z-10 h-[520px] w-[520px] -translate-x-1/2 rounded-full bg-[radial-gradient(circle,rgba(34,211,238,0.20)_0%,rgba(14,165,233,0.09)_30%,rgba(99,102,241,0.045)_48%,transparent_72%)] blur-3xl opacity-70 motion-safe:animate-[reactor-breathe_8s_ease-in-out_infinite]",
-
   textPrimary: "text-white",
   textSecondary: "text-slate-300",
   textMuted: "text-slate-400",
@@ -19,9 +16,17 @@ export const colors = {
   border: "border-white/10",
   borderStrong: "border-white/15",
 
-  glowSoft:
-    "shadow-[0_0_50px_rgba(34,211,238,0.10)]",
+  successBadge:
+    "border-emerald-400/25 bg-emerald-400/10 text-emerald-100",
 
-  glowPanel:
-    "shadow-[0_20px_80px_rgba(0,0,0,0.42),0_0_45px_rgba(34,211,238,0.075)]",
-};
+  warningBadge:
+    "border-amber-400/25 bg-amber-400/10 text-amber-100",
+
+  dangerBadge:
+    "border-rose-400/25 bg-rose-400/10 text-rose-100",
+
+  infoBadge:
+    "border-cyan-400/25 bg-cyan-400/10 text-cyan-100",
+} as const;
+
+export type ColorKey = keyof typeof colors;

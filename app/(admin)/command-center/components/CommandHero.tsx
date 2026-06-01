@@ -1,4 +1,4 @@
-import { Loader2 } from "lucide-react";
+﻿import { Loader2 } from "lucide-react";
 
 type CommandHeroProps = {
   loading: boolean;
@@ -42,3 +42,5 @@ export function CommandHero({ loading, openIssues }: CommandHeroProps) {
     </section>
   );
 }
+
+

@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 
 type StatCardProps = {
   title: string;
@@ -30,3 +30,5 @@ export function StatCard({ title, value, icon, tone }: StatCardProps) {
     </div>
   );
 }
+
+

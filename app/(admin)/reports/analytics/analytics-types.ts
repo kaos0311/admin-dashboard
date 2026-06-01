@@ -1,10 +1,13 @@
-export type ReportType =
-  | "patients"
-  | "demographics"
-  | "items"
-  | "purchases"
-  | "rentals"
-  | "unknown";
+﻿export const REPORT_TYPES = [
+  "patients",
+  "demographics",
+  "items",
+  "purchases",
+  "rentals",
+  "unknown",
+] as const;
+
+export type ReportType = (typeof REPORT_TYPES)[number];
 
 export type SelectedReportType = ReportType | "all";
 
@@ -38,3 +41,5 @@ export type AnalyticsHealth = {
   detail: string;
   tone: HealthTone;
 };
+
+

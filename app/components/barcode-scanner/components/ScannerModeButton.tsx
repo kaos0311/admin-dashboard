@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ScannerModeButtonProps } from "../types";
 
@@ -24,3 +24,5 @@ export default function ScannerModeButton({
     </button>
   );
 }
+
+

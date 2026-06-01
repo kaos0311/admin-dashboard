@@ -33,7 +33,10 @@ export function DashboardStatGrid({
   products,
 }: DashboardStatGridProps) {
   return (
-    <section className={tiles.gridMetrics}>
+    <section
+      aria-label="Dashboard performance summary"
+      className={tiles.gridMetrics}
+    >
       <DashboardStatCard
         title="Total Revenue"
         value={formatMoney(summary.totalRevenue)}
@@ -95,6 +98,5 @@ export function DashboardStatGrid({
     </section>
   );
 }
-
 
 

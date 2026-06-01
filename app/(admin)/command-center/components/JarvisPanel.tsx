@@ -1,13 +1,17 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useRef } from "react";
 import {
-  Bot,
+  ClipboardCheck,
+  FileSearch,
   Loader2,
   RotateCcw,
   Send,
+  ShieldAlert,
   Sparkles,
   UserRound,
+  Wrench,
+  Zap,
 } from "lucide-react";
 
 import type { JarvisMessage } from "../hooks/useJarvis";
@@ -21,18 +25,66 @@ type JarvisPanelProps = {
   remainingCharacters?: number;
   canAskJarvis?: boolean;
   setJarvisPrompt: (value: string) => void;
-  handleAskJarvis: () => void;
+  handleAskJarvis: (promptOverride?: string) => void;
   clearJarvisMessages?: () => void;
 };
 
+const QUICK_ACTIONS = [
+  {
+    label: "Analyze Latest Import",
+    icon: FileSearch,
+    prompt:
+      "Analyze the latest import. Summarize issues, chunks, warnings, failed rows, stuck work, and recommended next actions.",
+  },
+  {
+    label: "Find Stuck Work",
+    icon: Wrench,
+    prompt:
+      "Find stuck or stalled work across imports, importQueue, tasks, WIP records, CMN queue, and PAR alerts. Prioritize urgent items.",
+  },
+  {
+    label: "Compliance Risk",
+    icon: ShieldAlert,
+    prompt:
+      "Summarize current compliance risks across CMN queue, PAR alerts, recalls, hospice oversight, audit logs, and open tasks.",
+  },
+  {
+    label: "Daily Ops Brief",
+    icon: ClipboardCheck,
+    prompt:
+      "Give me a concise command center operations brief. Include imports, issues, tasks, CMNs, PAR alerts, recalls, hospice oversight, and next actions.",
+  },
+];
+
 const SUGGESTED_PROMPTS = [
   "What needs immediate attention?",
-  "Summarize current compliance risks.",
-  "Show operational bottlenecks.",
-  "What imports failed recently?",
-  "Which tasks are escalated?",
-  "Summarize hospice oversight.",
+  "What were the latest import issues?",
+  "Which queues look risky?",
+  "What should I fix first?",
 ];
+
+function JarvisCoreIcon({ size = "md" }: { size?: "sm" | "md" }) {
+  const outerSize = size === "sm" ? "h-7 w-7" : "h-10 w-10";
+  const ringSize = size === "sm" ? "h-6 w-6" : "h-9 w-9";
+  const innerSize = size === "sm" ? "h-2.5 w-2.5" : "h-3.5 w-3.5";
+  const boltSize = size === "sm" ? "h-3 w-3" : "h-4 w-4";
+
+  return (
+    <div
+      className={`relative flex ${outerSize} shrink-0 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-400/10 text-cyan-200 shadow-lg shadow-cyan-500/20`}
+      aria-hidden="true"
+    >
+      <div
+        className={`absolute ${ringSize} rounded-full border border-cyan-200/40 bg-cyan-300/10`}
+      />
+      <div className="absolute h-full w-full rounded-2xl bg-cyan-300/5 blur-md" />
+      <div
+        className={`${innerSize} rounded-full bg-cyan-200 shadow-[0_0_18px_rgba(125,211,252,0.85)]`}
+      />
+      <Zap className={`absolute ${boltSize} text-slate-950/80`} />
+    </div>
+  );
+}
 
 export function JarvisPanel({
   jarvisPrompt,
@@ -40,7 +92,7 @@ export function JarvisPanel({
   jarvisLoading,
   jarvisMessages = [],
   jarvisErrorMessage = "",
-  remainingCharacters = 4000 - jarvisPrompt.length,
+  remainingCharacters = 8000 - jarvisPrompt.length,
   canAskJarvis,
   setJarvisPrompt,
   handleAskJarvis,
@@ -85,33 +137,39 @@ export function JarvisPanel({
     }
   }
 
+  function sendQuickPrompt(prompt: string) {
+    if (jarvisLoading) return;
+    handleAskJarvis(prompt);
+  }
+
   return (
-    <section className="relative overflow-hidden rounded-[2rem] border border-sky-200/20 bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.18),transparent_34%),radial-gradient(circle_at_top_right,rgba(125,211,252,0.20),transparent_38%),linear-gradient(135deg,rgba(15,23,42,0.88),rgba(2,6,23,0.94))] shadow-[0_0_55px_rgba(125,211,252,0.18)] backdrop-blur-2xl">
-      <div className="pointer-events-none absolute inset-0 opacity-[0.08] [background-image:linear-gradient(rgba(255,255,255,0.8)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.8)_1px,transparent_1px)] [background-size:34px_34px]" />
-      <div className="pointer-events-none absolute -left-20 top-10 h-64 w-64 rounded-full bg-sky-200/10 blur-3xl" />
-      <div className="pointer-events-none absolute -right-20 bottom-10 h-64 w-64 rounded-full bg-white/10 blur-3xl" />
+    <section className="relative mx-auto w-full max-w-5xl min-w-0 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/90 shadow-2xl shadow-black/30 backdrop-blur-xl">
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-0 opacity-[0.035] [background-image:linear-gradient(rgba(255,255,255,0.8)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.8)_1px,transparent_1px)] [background-size:34px_34px]"
+      />
 
-      <div className="relative border-b border-white/10 px-5 py-4">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex items-start gap-3">
-            <div className="rounded-2xl border border-sky-200/20 bg-white/10 p-2 text-sky-100 shadow-[0_0_25px_rgba(186,230,253,0.35)]">
-              <Bot className="h-6 w-6" />
-            </div>
+      <header className="relative border-b border-white/10 px-4 py-3 sm:px-5">
+        <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
+            <JarvisCoreIcon />
 
-            <div>
-              <h2 className="flex flex-wrap items-center gap-2 text-xl font-bold text-white">
-                Jarvis
-                <Sparkles className="h-4 w-4 text-sky-100" />
-                <span className="inline-flex items-center gap-1 rounded-full border border-sky-200/20 bg-sky-100/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-sky-100 shadow-[0_0_18px_rgba(186,230,253,0.35)]">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-sky-200 shadow-[0_0_10px_rgba(186,230,253,0.9)]" />
-                  Online
+            <div className="min-w-0">
+              <h2 className="flex min-w-0 flex-wrap items-center gap-2 text-lg font-bold leading-7 text-white">
+                <span className="min-w-0 break-words">Jarvis</span>
+
+                <Sparkles className="h-4 w-4 shrink-0 text-sky-100" />
+
+                <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase leading-4 tracking-wider text-cyan-100">
+                  <span className="h-2 w-2 shrink-0 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(125,211,252,0.9)]" />
+                  Core Online
                 </span>
               </h2>
 
-              <p className="mt-1 max-w-3xl text-sm leading-6 text-slate-300">
-                Stark-style operational intelligence for imports, compliance,
-                audit activity, task escalation, recalls, hospice oversight, and
-                dashboard health.
+              <p className="mt-1 max-w-2xl break-words text-xs leading-5 text-slate-400">
+                Database-aware Stark-style operations intelligence for imports,
+                queues, compliance, recalls, hospice oversight, audit activity,
+                and dashboard health.
               </p>
             </div>
           </div>
@@ -120,172 +178,177 @@ export function JarvisPanel({
             <button
               type="button"
               onClick={clearJarvisMessages}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-2 text-xs font-semibold text-slate-300 transition hover:bg-white/[0.12] hover:text-white"
+              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/[0.12] hover:text-white focus:outline-none focus:ring-2 focus:ring-sky-200/30"
             >
-              <RotateCcw className="h-3.5 w-3.5" />
+              <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               Clear
             </button>
           ) : null}
         </div>
-      </div>
+      </header>
 
-      <div className="relative grid min-h-[540px] gap-0 lg:grid-cols-[minmax(0,1fr)_400px]">
-        <div className="flex min-h-[440px] flex-col bg-black/20">
-          <div
-            ref={scrollRef}
-            className="flex-1 space-y-4 overflow-y-auto px-4 py-5 sm:px-5"
-          >
-            {visibleMessages.length > 0 ? (
-              visibleMessages.map((message) => {
-                const isUser = message.role === "user";
+      <div className="relative flex h-[520px] min-w-0 flex-col bg-black/20">
+        <div className="border-b border-white/10 bg-slate-950/50 px-4 py-3 sm:px-5">
+          <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            {QUICK_ACTIONS.map((action) => {
+              const Icon = action.icon;
 
-                return (
+              return (
+                <button
+                  key={action.label}
+                  type="button"
+                  disabled={jarvisLoading}
+                  onClick={() => sendQuickPrompt(action.prompt)}
+                  className="inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-sky-200/30 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+                  <span className="truncate">{action.label}</span>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div
+          ref={scrollRef}
+          className="min-w-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5"
+        >
+          {visibleMessages.length > 0 ? (
+            visibleMessages.map((message) => {
+              const isUser = message.role === "user";
+
+              return (
+                <div
+                  key={message.id}
+                  className={`flex min-w-0 gap-2 ${
+                    isUser ? "justify-end" : "justify-start"
+                  }`}
+                >
+                  {!isUser ? <JarvisCoreIcon size="sm" /> : null}
+
                   <div
-                    key={message.id}
-                    className={`flex gap-3 ${
-                      isUser ? "justify-end" : "justify-start"
+                    className={`min-w-0 max-w-[86%] break-words rounded-[1.25rem] px-4 py-2.5 text-sm leading-6 shadow-sm sm:max-w-[72%] ${
+                      isUser
+                        ? "rounded-br-md bg-sky-200 text-slate-950"
+                        : "rounded-bl-md border border-white/10 bg-slate-900/95 text-slate-100"
                     }`}
                   >
-                    {!isUser ? (
-                      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-sky-200/20 bg-white/10 text-sky-100 shadow-[0_0_18px_rgba(186,230,253,0.22)]">
-                        <Bot className="h-4 w-4" />
-                      </div>
-                    ) : null}
+                    <p className="min-w-0 whitespace-pre-wrap break-words">
+                      {message.content}
+                    </p>
+                  </div>
 
-                    <div
-                      className={`max-w-[82%] rounded-[1.35rem] px-4 py-3 text-sm leading-6 shadow-lg ${
-                        isUser
-                          ? "rounded-br-md bg-gradient-to-br from-sky-100 to-sky-300 text-slate-950 shadow-[0_0_25px_rgba(186,230,253,0.18)]"
-                          : "rounded-bl-md border border-white/10 bg-slate-950/80 text-slate-100 shadow-[0_0_25px_rgba(125,211,252,0.08)] backdrop-blur-xl"
-                      }`}
-                    >
-                      <p className="whitespace-pre-wrap">{message.content}</p>
+                  {isUser ? (
+                    <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-slate-300">
+                      <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
                     </div>
+                  ) : null}
+                </div>
+              );
+            })
+          ) : (
+            <div className="flex h-full min-h-[260px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-slate-950/50 p-6 text-center">
+              <div className="min-w-0">
+                <div className="mx-auto flex justify-center">
+                  <JarvisCoreIcon />
+                </div>
 
-                    {isUser ? (
-                      <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-slate-300">
-                        <UserRound className="h-4 w-4" />
-                      </div>
-                    ) : null}
-                  </div>
-                );
-              })
-            ) : (
-              <div className="flex min-h-[320px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-slate-950/50 p-6 text-center">
-                <div>
-                  <Bot className="mx-auto h-9 w-9 text-slate-500" />
-                  <p className="mt-3 text-sm font-semibold text-slate-300">
-                    No messages yet.
-                  </p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">
-                    Ask something useful before the spreadsheet gods start
-                    collecting souls again.
-                  </p>
+                <p className="mt-3 text-sm font-semibold text-slate-300">
+                  Jarvis core standing by.
+                </p>
+
+                <p className="mt-1 max-w-md text-xs leading-5 text-slate-500">
+                  Ask something useful before the spreadsheet gods start
+                  collecting souls again.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {jarvisLoading ? (
+            <div className="flex min-w-0 justify-start gap-2">
+              <JarvisCoreIcon size="sm" />
+
+              <div className="min-w-0 rounded-[1.25rem] rounded-bl-md border border-white/10 bg-slate-900/95 px-4 py-3 text-sm leading-6 text-slate-300">
+                <div className="flex min-w-0 items-center gap-2">
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-200" />
+                  <span className="min-w-0 break-words">
+                    Jarvis is checking the database...
+                  </span>
                 </div>
               </div>
-            )}
-
-            {jarvisLoading ? (
-              <div className="flex justify-start gap-3">
-                <div className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full border border-sky-200/20 bg-white/10 text-sky-100 shadow-[0_0_18px_rgba(186,230,253,0.22)]">
-                  <Bot className="h-4 w-4" />
-                </div>
-
-                <div className="rounded-[1.35rem] rounded-bl-md border border-white/10 bg-slate-950/85 px-4 py-3 text-sm text-slate-300 shadow-[0_0_20px_rgba(186,230,253,0.25)]">
-                  <div className="flex items-center gap-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-sky-200" />
-                    Jarvis is thinking...
-                  </div>
-                </div>
-              </div>
-            ) : null}
-          </div>
-
-          {jarvisErrorMessage ? (
-            <div className="mx-5 mb-4 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-200">
-              {jarvisErrorMessage}
             </div>
           ) : null}
         </div>
 
-        <aside className="border-t border-white/10 bg-slate-950/60 p-4 backdrop-blur-xl lg:border-l lg:border-t-0">
-          <div className="mb-4">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Suggested Prompts
-            </p>
+        {jarvisErrorMessage ? (
+          <div className="mx-4 mb-3 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-200 sm:mx-5">
+            {jarvisErrorMessage}
+          </div>
+        ) : null}
 
-            <div className="flex flex-wrap gap-2">
-              {SUGGESTED_PROMPTS.map((prompt) => (
-                <button
-                  key={prompt}
-                  type="button"
-                  onClick={() => setJarvisPrompt(prompt)}
-                  className="rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs text-slate-300 transition hover:border-sky-200/30 hover:bg-sky-100/10 hover:text-white hover:shadow-[0_0_18px_rgba(186,230,253,0.18)]"
-                >
-                  {prompt}
-                </button>
-              ))}
-            </div>
+        <div className="border-t border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur-xl sm:px-5">
+          <div className="mb-2 flex min-w-0 flex-wrap gap-2">
+            {SUGGESTED_PROMPTS.map((prompt) => (
+              <button
+                key={prompt}
+                type="button"
+                disabled={jarvisLoading}
+                onClick={() => setJarvisPrompt(prompt)}
+                className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs leading-5 text-slate-400 transition-colors hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-sky-200/30 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {prompt}
+              </button>
+            ))}
           </div>
 
-          <label
-            htmlFor="jarvis-prompt"
-            className="mb-2 block text-xs font-semibold uppercase tracking-[0.2em] text-sky-100"
-          >
-            Message Jarvis
-          </label>
+          <div className="flex min-w-0 items-end gap-3">
+            <label htmlFor="jarvis-prompt" className="sr-only">
+              Message Jarvis
+            </label>
 
-          <textarea
-            id="jarvis-prompt"
-            value={jarvisPrompt}
-            onChange={(event) => setJarvisPrompt(event.target.value)}
-            onKeyDown={handleKeyDown}
-            placeholder="Example: What command center issues need attention first?"
-            className="min-h-[210px] w-full resize-none rounded-2xl border border-white/10 bg-black/40 p-4 text-sm leading-6 text-white outline-none transition placeholder:text-slate-600 focus:border-sky-200/50 focus:ring-2 focus:ring-sky-100/20"
-          />
+            <textarea
+              id="jarvis-prompt"
+              value={jarvisPrompt}
+              onChange={(event) => setJarvisPrompt(event.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              placeholder="Message Jarvis..."
+              className="max-h-32 min-h-[46px] flex-1 resize-none rounded-3xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm leading-6 text-white outline-none transition-colors placeholder:text-slate-500 focus:border-sky-300/40 focus:ring-2 focus:ring-sky-100/20"
+            />
 
-          <div className="mt-2 flex items-center justify-between gap-3">
+            <button
+              type="button"
+              onClick={() => handleAskJarvis()}
+              disabled={submitDisabled}
+              aria-label={jarvisLoading ? "Sending message" : "Send message"}
+              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-200 text-slate-950 transition-colors hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-200/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {jarvisLoading ? (
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+              ) : (
+                <Send className="h-4 w-4" aria-hidden="true" />
+              )}
+            </button>
+          </div>
+
+          <div className="mt-1.5 flex min-w-0 flex-col gap-1 text-[11px] sm:flex-row sm:items-center sm:justify-between sm:gap-3">
             <p
-              className={`text-xs ${
-                remainingCharacters < 0 ? "text-red-300" : "text-slate-500"
-              }`}
+              className={
+                remainingCharacters < 0 ? "text-red-300" : "text-slate-600"
+              }
             >
               {remainingCharacters} characters left
             </p>
 
-            <p className="text-xs text-slate-600">
-              Enter sends. Shift+Enter breaks line.
+            <p className="text-slate-600">
+              Enter sends. Shift+Enter starts a new line.
             </p>
           </div>
-
-          <button
-            type="button"
-            onClick={handleAskJarvis}
-            disabled={submitDisabled}
-            className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-br from-sky-100 to-sky-300 px-5 py-3 text-sm font-bold text-slate-950 shadow-[0_0_35px_rgba(186,230,253,0.35)] transition hover:from-white hover:to-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {jarvisLoading ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-
-            {jarvisLoading ? "Sending..." : "Send Message"}
-          </button>
-
-          <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
-            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
-              Guardrails
-            </p>
-
-            <p className="mt-2 text-xs leading-5 text-slate-500">
-              Keep prompts operational. Do not paste PHI unless your backend is
-              explicitly built and approved for it. HIPAA paperwork remains a
-              cursed national monument.
-            </p>
-          </div>
-        </aside>
+        </div>
       </div>
     </section>
   );
 }
+
+

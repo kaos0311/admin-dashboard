@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+﻿import type { Dispatch, SetStateAction } from "react";
 import type { AppSettings, SecuritySettings } from "../../settings-types";
 import { glassPanel } from "../../styles/glass";
 import { Field } from "../shared/Field";
@@ -108,3 +108,5 @@ export function SecurityTab({ settings, setSettings }: SecurityTabProps) {
     </section>
   );
 }
+
+

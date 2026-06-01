@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   DashboardSummary,
   InventoryAnalytics,
 } from "../../dashboard-types";
@@ -67,3 +67,5 @@ export function normalizeInventoryAnalytics(
     ),
   };
 }
+
+

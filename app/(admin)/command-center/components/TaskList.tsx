@@ -1,4 +1,4 @@
-import type { CommandTask } from "../types";
+﻿import type { CommandTask } from "../types";
 import { badgeClass } from "../utils/commandCenterFormat";
 import { EmptyState } from "./EmptyState";
 
@@ -28,7 +28,7 @@ export function TaskList({ tasks }: TaskListProps) {
 
               <p className="mt-1 text-sm text-neutral-400">
                 {task.assignedTo || "Unassigned"}
-                {task.department ? ` • ${task.department}` : ""}
+                {task.department ? ` â€¢ ${task.department}` : ""}
               </p>
             </div>
 
@@ -57,3 +57,5 @@ export function TaskList({ tasks }: TaskListProps) {
     </div>
   );
 }
+
+

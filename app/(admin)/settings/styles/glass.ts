@@ -1,4 +1,4 @@
-export const glassPanel =
+﻿export const glassPanel =
   "rounded-3xl border border-white/10 bg-white/[0.055] shadow-2xl shadow-black/30 backdrop-blur-2xl supports-[backdrop-filter]:bg-white/[0.045]";
 
 export const glassPanelSoft =
@@ -18,3 +18,5 @@ export const primaryButton =
 
 export const dangerButton =
   "inline-flex h-10 items-center justify-center gap-2 rounded-2xl border border-red-300/20 bg-red-500/10 px-4 text-sm font-semibold text-red-100 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50";
+
+

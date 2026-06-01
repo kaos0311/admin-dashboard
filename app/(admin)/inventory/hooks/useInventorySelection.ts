@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useMemo, useState } from "react";
 
@@ -141,3 +141,5 @@ export function useInventorySelection(
     removeSelectedId,
   };
 }
+
+

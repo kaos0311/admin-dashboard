@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import { glass } from "@/theme";
 
 type AdminContentShellProps = {
@@ -25,3 +25,5 @@ export function AdminContentShell({
     </main>
   );
 }
+
+

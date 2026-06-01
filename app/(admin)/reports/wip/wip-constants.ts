@@ -1,4 +1,4 @@
-import type { WipStatus } from "./wip-types";
+﻿import type { WipStatus } from "./wip-types";
 
 export const STATUS_LABELS: Record<WipStatus, string> = {
   open: "Open",
@@ -25,10 +25,12 @@ export const AGING_LABELS: Record<string, string> = {
   "90+": "90+ days",
 };
 
-export const EMPTY_VALUE = "—";
+export const EMPTY_VALUE = "â€”";
 
 export const DATE_FORMAT: Intl.DateTimeFormatOptions = {
   month: "short",
   day: "numeric",
   year: "numeric",
 };
+
+

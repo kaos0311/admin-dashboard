@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { UserCheck } from "lucide-react";
 import { groupWipsByEmployee, type WipRecord } from "@/lib/reports/wip";
@@ -53,3 +53,5 @@ export function WipEmployeeGroups({ records }: WipEmployeeGroupsProps) {
     </section>
   );
 }
+
+

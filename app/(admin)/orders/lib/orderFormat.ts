@@ -1,4 +1,4 @@
-export function formatCurrency(amount: number): string {
+﻿export function formatCurrency(amount: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
@@ -6,7 +6,7 @@ export function formatCurrency(amount: number): string {
 }
 
 export function formatDate(date: Date | null): string {
-  if (!date) return "—";
+  if (!date) return "â€”";
 
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -14,3 +14,5 @@ export function formatDate(date: Date | null): string {
     year: "numeric",
   }).format(date);
 }
+
+

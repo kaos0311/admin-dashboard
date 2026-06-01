@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   type Dispatch,
@@ -874,3 +874,5 @@ export function useSettingsPage() {
     runDatabaseReset,
   };
 }
+
+

@@ -1,11 +1,13 @@
-import type { Dispatch, SetStateAction } from "react";
+﻿import type { Dispatch, SetStateAction } from "react";
 import { Loader2, Search } from "lucide-react";
+
 import { RENTAL_STATUSES } from "../rentals-constants";
 import type {
   RentalFilters,
   RentalRecord,
   RentalStatus,
 } from "../rentals-types";
+
 import { RentalMobileCard } from "./RentalMobileCard";
 import { RentalTableRow } from "./RentalTableRow";
 import { EmptyState } from "./shared/EmptyState";
@@ -36,20 +38,25 @@ export function RentalRecords({
   onMarkReturned,
 }: RentalRecordsProps) {
   return (
-    <GlassCard>
+    <GlassCard className="min-w-0">
       <SectionHeader
         eyebrow="Live records"
         title="Rental Inventory Records"
-        description="Search, filter, return, edit, or delete rental records. Try not to delete production evidence unless you enjoy audit pain."
+        description="Search, filter, return, edit, or delete rental records. Keep the asset trail clean unless you enjoy audit pain."
       />
 
-      <div className="mt-6 grid gap-3 lg:grid-cols-[1fr_220px_auto]">
-        <label className="relative block" htmlFor="rental-search">
+      <div className="mt-6 grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto]">
+        <label className="relative block min-w-0" htmlFor="rental-search">
           <span className="sr-only">Search rentals</span>
-          <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+
+          <Search
+            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+            aria-hidden="true"
+          />
 
           <input
             id="rental-search"
+            name="rental-search"
             value={filters.search}
             onChange={(event) =>
               setFilters((current) => ({
@@ -58,15 +65,17 @@ export function RentalRecords({
               }))
             }
             placeholder="Search product, serial, asset tag, patient, location..."
-            className="h-11 w-full rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60 focus:bg-black/40 focus:ring-4 focus:ring-cyan-400/10"
+            aria-label="Search rentals"
+            className="h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60 focus:bg-black/40 focus:ring-4 focus:ring-cyan-400/10"
           />
         </label>
 
-        <label className="block" htmlFor="rental-status-filter">
+        <label className="block min-w-0" htmlFor="rental-status-filter">
           <span className="sr-only">Filter rental status</span>
 
           <select
             id="rental-status-filter"
+            name="rental-status-filter"
             value={filters.status}
             onChange={(event) =>
               setFilters((current) => ({
@@ -75,7 +84,7 @@ export function RentalRecords({
               }))
             }
             aria-label="Filter rental status"
-            className="h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:bg-black/40 focus:ring-4 focus:ring-cyan-400/10"
+            className="h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:bg-black/40 focus:ring-4 focus:ring-cyan-400/10"
           >
             <option value="all" className="bg-slate-950">
               All statuses
@@ -97,18 +106,22 @@ export function RentalRecords({
           type="button"
           onClick={onClearFilters}
           disabled={!hasActiveFilters}
-          className="h-11 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] disabled:cursor-not-allowed disabled:opacity-40"
+          aria-label="Clear rental filters"
+          className="h-11 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-40"
         >
           Clear
         </button>
       </div>
 
-      <div className="mt-6">
+      <div className="mt-6 min-w-0">
         {loading ? (
-          <div className="flex min-h-48 items-center justify-center rounded-3xl border border-white/10 bg-black/20">
-            <div className="flex items-center gap-3 text-sm text-slate-300">
-              <Loader2 className="h-5 w-5 animate-spin text-cyan-200" />
-              Loading rentals...
+          <div className="flex min-h-[220px] items-center justify-center rounded-3xl border border-white/10 bg-black/20 backdrop-blur-xl">
+            <div className="flex min-w-0 items-center gap-3 text-sm text-slate-300">
+              <Loader2
+                className="h-5 w-5 shrink-0 animate-spin text-cyan-200"
+                aria-hidden="true"
+              />
+              <span>Loading rentals...</span>
             </div>
           </div>
         ) : records.length === 0 ? (
@@ -124,7 +137,7 @@ export function RentalRecords({
                 <button
                   type="button"
                   onClick={onClearFilters}
-                  className="rounded-2xl bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200"
+                  className="rounded-2xl bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
                 >
                   Clear Filters
                 </button>
@@ -133,36 +146,38 @@ export function RentalRecords({
           />
         ) : (
           <>
-            <div className="hidden overflow-hidden rounded-3xl border border-white/10 lg:block">
-              <table className="w-full border-collapse text-left">
-                <thead className="bg-white/[0.045] text-xs uppercase tracking-[0.16em] text-slate-500">
-                  <tr>
-                    <th className="px-4 py-3 font-semibold">Asset</th>
-                    <th className="px-4 py-3 font-semibold">Patient</th>
-                    <th className="px-4 py-3 font-semibold">Status</th>
-                    <th className="px-4 py-3 font-semibold">Condition</th>
-                    <th className="px-4 py-3 font-semibold">Location</th>
-                    <th className="px-4 py-3 font-semibold">Dates</th>
-                    <th className="px-4 py-3 font-semibold">Rate</th>
-                    <th className="px-4 py-3 font-semibold">Actions</th>
-                  </tr>
-                </thead>
+            <div className="hidden min-w-0 overflow-hidden rounded-3xl border border-white/10 lg:block">
+              <div className="min-w-0 overflow-x-auto">
+                <table className="w-full min-w-[1200px] border-collapse text-left">
+                  <thead className="bg-white/[0.045] text-xs uppercase tracking-[0.16em] text-slate-500">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Asset</th>
+                      <th className="px-4 py-3 font-semibold">Patient</th>
+                      <th className="px-4 py-3 font-semibold">Status</th>
+                      <th className="px-4 py-3 font-semibold">Condition</th>
+                      <th className="px-4 py-3 font-semibold">Location</th>
+                      <th className="px-4 py-3 font-semibold">Dates</th>
+                      <th className="px-4 py-3 font-semibold">Rate</th>
+                      <th className="px-4 py-3 font-semibold">Actions</th>
+                    </tr>
+                  </thead>
 
-                <tbody>
-                  {records.map((record) => (
-                    <RentalTableRow
-                      key={record.id}
-                      record={record}
-                      onEdit={onEdit}
-                      onDelete={onDelete}
-                      onMarkReturned={onMarkReturned}
-                    />
-                  ))}
-                </tbody>
-              </table>
+                  <tbody className="divide-y divide-white/10">
+                    {records.map((record) => (
+                      <RentalTableRow
+                        key={record.id}
+                        record={record}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                        onMarkReturned={onMarkReturned}
+                      />
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
 
-            <div className="grid gap-4 lg:hidden">
+            <div className="grid min-w-0 gap-4 lg:hidden">
               {records.map((record) => (
                 <RentalMobileCard
                   key={record.id}
@@ -179,3 +194,5 @@ export function RentalRecords({
     </GlassCard>
   );
 }
+
+

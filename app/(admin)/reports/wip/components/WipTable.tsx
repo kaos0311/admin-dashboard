@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { ClipboardList } from "lucide-react";
 
@@ -44,7 +44,7 @@ export function WipTable({ records }: WipTableProps) {
                 <td className="px-4 py-4">
                   <p className="font-medium text-white">{record.patientName}</p>
                   <p className="text-xs text-slate-500">
-                    {record.orderNumber ?? "No order"} · {record.issue}
+                    {record.orderNumber ?? "No order"} Â· {record.issue}
                   </p>
                 </td>
                 <td className="px-4 py-4 text-slate-300">{record.assignedTo}</td>
@@ -72,3 +72,5 @@ export function WipTable({ records }: WipTableProps) {
     </section>
   );
 }
+
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Suspense } from "react";
 import LoginClient from "./LoginClient";
@@ -16,3 +16,5 @@ export default function LoginPage() {
     </Suspense>
   );
 }
+
+

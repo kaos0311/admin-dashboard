@@ -1,4 +1,4 @@
-import { FileText } from "lucide-react";
+﻿import { FileText } from "lucide-react";
 
 export function PatientReportSources({
   reportTypes,
@@ -31,3 +31,4 @@ export function PatientReportSources({
     </section>
   );
 }
+

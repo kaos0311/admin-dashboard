@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   RentalCondition,
   RentalProductOption,
   RentalRecord,
@@ -101,3 +101,5 @@ export function normalizeRentalProductOption(
       readString(data.category).toLowerCase().includes("rental"),
   };
 }
+
+

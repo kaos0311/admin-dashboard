@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+﻿import type { Dispatch, SetStateAction } from "react";
 import { Loader2, Plus, Save, X } from "lucide-react";
 import {
   RENTAL_CONDITIONS,
@@ -89,7 +89,7 @@ export function RentalForm({
                 className="bg-slate-950"
               >
                 {product.name}
-                {product.hcpcs ? ` • ${product.hcpcs}` : ""}
+                {product.hcpcs ? ` â€¢ ${product.hcpcs}` : ""}
               </option>
             ))}
           </select>
@@ -238,3 +238,5 @@ export function RentalForm({
     </GlassCard>
   );
 }
+
+

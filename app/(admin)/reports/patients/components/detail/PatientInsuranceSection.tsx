@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Stethoscope } from "lucide-react";
 
@@ -66,3 +66,5 @@ export function PatientInsuranceSection({
     </Section>
   );
 }
+
+

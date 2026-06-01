@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type {
   CurrentEquipmentItem,
@@ -41,22 +41,22 @@ export function EquipmentTable({ items }: { items: CurrentEquipmentItem[] }) {
               key={`${item.itemName}-${item.serialNumber}-${index}`}
               className="border-t border-white/10"
             >
-              <td className="px-3 py-2 text-zinc-100">{item.itemName || "—"}</td>
+              <td className="px-3 py-2 text-zinc-100">{item.itemName || "â€”"}</td>
               <td className="px-3 py-2 text-zinc-400">
-                {item.hcpc || item.itemId || "—"}
+                {item.hcpc || item.itemId || "â€”"}
               </td>
-              <td className="px-3 py-2 text-zinc-400">{item.saleType || "—"}</td>
-              <td className="px-3 py-2 text-zinc-400">{item.qty ?? "—"}</td>
-              <td className="px-3 py-2 text-zinc-400">{item.status || "—"}</td>
+              <td className="px-3 py-2 text-zinc-400">{item.saleType || "â€”"}</td>
+              <td className="px-3 py-2 text-zinc-400">{item.qty ?? "â€”"}</td>
+              <td className="px-3 py-2 text-zinc-400">{item.status || "â€”"}</td>
               <td className="px-3 py-2 text-zinc-400">
-                {item.serialNumber || "—"}
+                {item.serialNumber || "â€”"}
               </td>
-              <td className="px-3 py-2 text-zinc-400">{item.lotNumber || "—"}</td>
+              <td className="px-3 py-2 text-zinc-400">{item.lotNumber || "â€”"}</td>
               <td className="px-3 py-2 text-zinc-400">
                 {formatDate(item.startDate)}
               </td>
               <td className="px-3 py-2 text-zinc-400">
-                {item.maintenanceStatus || "—"}
+                {item.maintenanceStatus || "â€”"}
               </td>
               <td className="px-3 py-2 text-zinc-400">
                 {formatDate(item.replacementDueDate)}
@@ -97,18 +97,18 @@ export function PurchaseTable({ items }: { items: RecentPurchaseItem[] }) {
               key={`${item.itemName}-${item.orderId}-${index}`}
               className="border-t border-white/10"
             >
-              <td className="px-3 py-2 text-zinc-100">{item.itemName || "—"}</td>
+              <td className="px-3 py-2 text-zinc-100">{item.itemName || "â€”"}</td>
               <td className="px-3 py-2 text-zinc-400">
-                {item.hcpc || item.itemId || "—"}
+                {item.hcpc || item.itemId || "â€”"}
               </td>
               <td className="px-3 py-2 text-zinc-400">
                 {formatDate(item.purchaseDate)}
               </td>
-              <td className="px-3 py-2 text-zinc-400">{item.quantity ?? "—"}</td>
+              <td className="px-3 py-2 text-zinc-400">{item.quantity ?? "â€”"}</td>
               <td className="px-3 py-2 text-zinc-400">
                 {formatMoney(item.amount)}
               </td>
-              <td className="px-3 py-2 text-zinc-400">{item.orderId || "—"}</td>
+              <td className="px-3 py-2 text-zinc-400">{item.orderId || "â€”"}</td>
             </tr>
           ))}
         </tbody>
@@ -116,3 +116,5 @@ export function PurchaseTable({ items }: { items: RecentPurchaseItem[] }) {
     </div>
   );
 }
+
+

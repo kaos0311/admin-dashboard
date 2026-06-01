@@ -1,4 +1,4 @@
-type EmptyStateProps = {
+﻿type EmptyStateProps = {
   text: string;
 };
 
@@ -9,3 +9,5 @@ export function EmptyState({ text }: EmptyStateProps) {
     </div>
   );
 }
+
+

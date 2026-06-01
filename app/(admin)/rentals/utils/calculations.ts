@@ -1,4 +1,4 @@
-import type { RentalRecord, RentalStats } from "../rentals-types";
+﻿import type { RentalRecord, RentalStats } from "../rentals-types";
 
 export function isRentalOverdue(record: RentalRecord): boolean {
   if (record.status !== "checked_out") return false;
@@ -41,3 +41,5 @@ export function calculateRentalStats(records: RentalRecord[]): RentalStats {
     }
   );
 }
+
+

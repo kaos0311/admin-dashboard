@@ -1,4 +1,4 @@
-import Link from "next/link";
+﻿import Link from "next/link";
 import { Upload } from "lucide-react";
 
 type OpenUploadCenterButtonProps = {
@@ -24,3 +24,5 @@ export default function OpenUploadCenterButton({
     </Link>
   );
 }
+
+

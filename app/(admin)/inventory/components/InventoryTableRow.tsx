@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   CalendarClock,
@@ -204,3 +204,5 @@ export function InventoryTableRow({
     </tr>
   );
 }
+
+

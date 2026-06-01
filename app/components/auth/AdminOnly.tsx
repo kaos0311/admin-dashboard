@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 
@@ -20,3 +20,5 @@ export default function AdminOnly({
     </AuthGuard>
   );
 }
+
+

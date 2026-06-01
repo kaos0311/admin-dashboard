@@ -1,4 +1,4 @@
-import type { InventoryForm } from "./inventoryTypes";
+﻿import type { InventoryForm } from "./inventoryTypes";
 
 export const INVENTORY_LIMIT = 750;
 export const FIRESTORE_BATCH_LIMIT = 450;
@@ -35,3 +35,5 @@ export const initialInventoryForm: InventoryForm = {
   lifecycleNotes: "",
   notes: "",
 };
+
+

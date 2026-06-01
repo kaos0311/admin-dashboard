@@ -1,17 +1,38 @@
-﻿import { glass } from "@/theme";
+﻿import { glass, typography } from "@/theme";
 
 import type { HospiceStats } from "../hospice-types";
 
+type HospiceSystemStatsProps = {
+  stats: HospiceStats;
+};
+
+type MiniStatProps = {
+  title: string;
+  value: number;
+};
+
 export function HospiceSystemStats({
   stats,
-}: {
-  stats: HospiceStats;
-}) {
+}: HospiceSystemStatsProps) {
   return (
-    <section className="grid gap-4 md:grid-cols-3">
-      <MiniStat title="Deceased" value={stats.deceased} />
-      <MiniStat title="Missing Nurse" value={stats.missingNurse} />
-      <MiniStat title="Missing Payor" value={stats.missingPayor} />
+    <section
+      aria-label="Hospice operational statistics"
+      className="grid min-w-0 gap-4 md:grid-cols-3"
+    >
+      <MiniStat
+        title="Deceased"
+        value={stats.deceased}
+      />
+
+      <MiniStat
+        title="Missing Nurse"
+        value={stats.missingNurse}
+      />
+
+      <MiniStat
+        title="Missing Payor"
+        value={stats.missingPayor}
+      />
     </section>
   );
 }
@@ -19,15 +40,24 @@ export function HospiceSystemStats({
 function MiniStat({
   title,
   value,
-}: {
-  title: string;
-  value: number;
-}) {
+}: MiniStatProps) {
   return (
-    <div className={glass.card}>
-      <p className="text-sm text-slate-500">{title}</p>
-      <p className="mt-1 text-2xl font-bold text-white">{value}</p>
-    </div>
+    <article
+      className={`${glass.card} min-w-0 overflow-hidden`}
+    >
+      <p
+        className={`${typography.caption} break-words text-slate-500`}
+      >
+        {title}
+      </p>
+
+      <p
+        className={`${typography.metricCompact} mt-1 break-words text-white`}
+      >
+        {value.toLocaleString()}
+      </p>
+    </article>
   );
 }
+
 

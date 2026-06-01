@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useState } from "react";
 import { collection, onSnapshot, orderBy, query } from "firebase/firestore";
@@ -43,3 +43,5 @@ export function useRentalProducts() {
 
   return { products, loading };
 }
+
+

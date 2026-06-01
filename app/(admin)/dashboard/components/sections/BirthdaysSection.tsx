@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { CalendarDays } from "lucide-react";
 
@@ -56,3 +56,5 @@ export function BirthdaysSection({
     </GlassPanel>
   );
 }
+
+

@@ -1,14 +1,17 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   collection,
+  type CollectionReference,
+  type DocumentData,
   getCountFromServer,
   getDocs,
   limit,
   orderBy,
   query,
+  type QueryConstraint,
   Timestamp,
   where,
 } from "firebase/firestore";
@@ -36,6 +39,11 @@ type UsePatientIndexStatsResult = {
   refresh: () => Promise<void>;
 };
 
+const PATIENTS_INDEX_COLLECTION = "patients_index";
+
+const ACTIVE_STATUSES = ["active", "Active", "ACTIVE"];
+const INACTIVE_STATUSES = ["inactive", "Inactive", "INACTIVE"];
+
 const EMPTY_STATS: PatientIndexStats = {
   totalPatients: 0,
   activePatients: 0,
@@ -49,37 +57,74 @@ const EMPTY_STATS: PatientIndexStats = {
   lastIndexedAt: null,
 };
 
+function getPatientsRef(): CollectionReference<DocumentData> {
+  return collection(db, PATIENTS_INDEX_COLLECTION);
+}
+
 function toDate(value: unknown): Date | null {
-  if (value instanceof Timestamp) return value.toDate();
-  if (value instanceof Date) return value;
-  if (typeof value === "string") {
+  if (!value) return null;
+
+  if (value instanceof Timestamp) {
+    return value.toDate();
+  }
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
     const parsed = new Date(value);
+
     return Number.isNaN(parsed.getTime()) ? null : parsed;
   }
 
   return null;
 }
 
-async function countPatientsWithField(fieldName: string): Promise<number> {
-  const snapshot = await getCountFromServer(
-    query(collection(db, "patients_index"), where(fieldName, "!=", null)),
-  );
+async function getPatientCount(
+  patientsRef: CollectionReference<DocumentData>,
+  ...constraints: QueryConstraint[]
+): Promise<number> {
+  const targetQuery =
+    constraints.length > 0
+      ? query(patientsRef, ...constraints)
+      : patientsRef;
+
+  const snapshot = await getCountFromServer(targetQuery);
 
   return snapshot.data().count;
 }
 
-async function countPatientsByStatus(statuses: string[]): Promise<number> {
-  let total = 0;
+async function countPatientsWithField(
+  patientsRef: CollectionReference<DocumentData>,
+  fieldName: string,
+): Promise<number> {
+  return getPatientCount(patientsRef, where(fieldName, "!=", null));
+}
 
-  for (const status of statuses) {
-    const snapshot = await getCountFromServer(
-      query(collection(db, "patients_index"), where("status", "==", status)),
-    );
+async function countPatientsByStatus(
+  patientsRef: CollectionReference<DocumentData>,
+  statuses: string[],
+): Promise<number> {
+  const counts = await Promise.all(
+    statuses.map((status) =>
+      getPatientCount(patientsRef, where("status", "==", status)),
+    ),
+  );
 
-    total += snapshot.data().count;
-  }
+  return counts.reduce((total, count) => total + count, 0);
+}
 
-  return total;
+async function getLastIndexedAt(
+  patientsRef: CollectionReference<DocumentData>,
+): Promise<Date | null> {
+  const snapshot = await getDocs(
+    query(patientsRef, orderBy("updatedAt", "desc"), limit(1)),
+  );
+
+  const newestDoc = snapshot.docs[0]?.data();
+
+  return newestDoc ? toDate(newestDoc.updatedAt) : null;
 }
 
 export function usePatientIndexStats(): UsePatientIndexStatsResult {
@@ -93,63 +138,48 @@ export function usePatientIndexStats(): UsePatientIndexStatsResult {
     setRefreshing(true);
 
     try {
-      const patientsRef = collection(db, "patients_index");
+      const patientsRef = getPatientsRef();
 
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
       const [
-        totalSnapshot,
+        totalPatients,
         activePatients,
         inactivePatients,
-        hospiceSnapshot,
+        hospicePatients,
         insuranceLinkedPatients,
         dobLinkedPatients,
         phoneLinkedPatients,
         addressLinkedPatients,
-        recentlyUpdatedSnapshot,
-        newestSnapshot,
+        recentlyUpdated,
+        lastIndexedAt,
       ] = await Promise.all([
-        getCountFromServer(patientsRef),
-
-        countPatientsByStatus(["active", "Active", "ACTIVE"]),
-
-        countPatientsByStatus(["inactive", "Inactive", "INACTIVE"]),
-
-        getCountFromServer(
-          query(patientsRef, where("hospiceName", "!=", null)),
+        getPatientCount(patientsRef),
+        countPatientsByStatus(patientsRef, ACTIVE_STATUSES),
+        countPatientsByStatus(patientsRef, INACTIVE_STATUSES),
+        getPatientCount(patientsRef, where("hospiceName", "!=", null)),
+        countPatientsWithField(patientsRef, "insuranceName"),
+        countPatientsWithField(patientsRef, "dateOfBirth"),
+        countPatientsWithField(patientsRef, "phone"),
+        countPatientsWithField(patientsRef, "address"),
+        getPatientCount(
+          patientsRef,
+          where("updatedAt", ">=", Timestamp.fromDate(sevenDaysAgo)),
         ),
-
-        countPatientsWithField("insuranceName"),
-
-        countPatientsWithField("dateOfBirth"),
-
-        countPatientsWithField("phone"),
-
-        countPatientsWithField("address"),
-
-        getCountFromServer(
-          query(patientsRef, where("updatedAt", ">=", Timestamp.fromDate(sevenDaysAgo))),
-        ),
-
-        getDocs(query(patientsRef, orderBy("updatedAt", "desc"), limit(1))),
+        getLastIndexedAt(patientsRef),
       ]);
-
-      const totalPatients = totalSnapshot.data().count;
-
-      const newestDoc = newestSnapshot.docs[0]?.data();
-      const lastIndexedAt = newestDoc ? toDate(newestDoc.updatedAt) : null;
 
       setStats({
         totalPatients,
         activePatients,
         inactivePatients,
-        hospicePatients: hospiceSnapshot.data().count,
+        hospicePatients,
         insuranceLinkedPatients,
         missingDob: Math.max(totalPatients - dobLinkedPatients, 0),
         missingPhone: Math.max(totalPatients - phoneLinkedPatients, 0),
         missingAddress: Math.max(totalPatients - addressLinkedPatients, 0),
-        recentlyUpdated: recentlyUpdatedSnapshot.data().count,
+        recentlyUpdated,
         lastIndexedAt,
       });
     } catch (caughtError) {
@@ -181,3 +211,5 @@ export function usePatientIndexStats(): UsePatientIndexStatsResult {
     [stats, loading, refreshing, error, loadStats],
   );
 }
+
+

@@ -1,4 +1,4 @@
-import {
+﻿import {
   Banknote,
   ClipboardCheck,
   HeartPulse,
@@ -221,3 +221,4 @@ export function PatientInfoSections({ patient }: { patient: PatientRecord }) {
     </>
   );
 }
+

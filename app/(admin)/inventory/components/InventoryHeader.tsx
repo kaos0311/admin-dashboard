@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Boxes, Filter, RefreshCcw } from "lucide-react";
 
@@ -60,3 +60,5 @@ export function InventoryHeader({
     </section>
   );
 }
+
+

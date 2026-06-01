@@ -5,6 +5,31 @@ setGlobalOptions({
   maxInstances: 10,
 });
 
+// User management
 export { createDashboardUser } from "./adminUsers";
-export { importFileFromStorage } from "./imports/importFileFromStorage";
+
+// Core app functions
 export { askAdminAi } from "./ai/askAdminAi";
+
+// Import pipeline
+export { importFileFromStorage } from "./imports/importFileFromStorage";
+export { processImportWorkerQueue } from "./imports/workers/processImportWorkerQueue";
+export { reprocessImportJobFromFirestore } from "./imports/reprocessImportJobFromFirestore";
+
+// Maintenance / rebuild tools
+export { cleanDatabase } from "./maintenance/cleanDatabase";
+export { rebuildEverything } from "./maintenance/rebuildEverything";
+export { rebuildPatientsIndex } from "./maintenance/rebuildPatientsIndex";
+export { rebuildReportsAnalytics } from "./maintenance/rebuildReportsAnalytics";
+export { reprocessImportJob } from "./maintenance/reprocessImportJob";
+export { softResetReports } from "./maintenance/softResetReports";
+
+// Admin / reset tools
+export { bootstrapAdminClaim } from "./bootstrapAdmin";
+export { resetOperationalDatabase } from "./resetOperationalDatabase";
+export {
+  updateUserRole,
+  disableDashboardUser,
+  enableDashboardUser,
+  deleteUserAccount,
+} from "./adminUserManagement";

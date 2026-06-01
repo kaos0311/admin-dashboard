@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { RefObject } from "react";
 import { Camera } from "lucide-react";
@@ -64,3 +64,5 @@ export default function CameraScannerPanel({
     </section>
   );
 }
+
+

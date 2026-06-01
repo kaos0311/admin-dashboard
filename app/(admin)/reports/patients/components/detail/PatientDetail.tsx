@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { PatientDetailProps } from "./patient-detail-types";
 
@@ -42,3 +42,5 @@ export function PatientDetail(
     </div>
   );
 }
+
+

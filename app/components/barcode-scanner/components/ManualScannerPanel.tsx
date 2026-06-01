@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Keyboard } from "lucide-react";
 
@@ -56,3 +56,5 @@ export default function ManualScannerPanel({
     </section>
   );
 }
+
+

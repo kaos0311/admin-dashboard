@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { ClipboardList } from "lucide-react";
 
@@ -17,3 +17,5 @@ export function InventoryEmptyState() {
     </div>
   );
 }
+
+

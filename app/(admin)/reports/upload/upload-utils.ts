@@ -1,366 +1,442 @@
-import type { DocumentData } from "firebase/firestore";
-
-import {
-  DEFAULT_REPORT_TYPE,
-  groupReportOptions,
-  REPORT_TYPES,
-  type ReportType,
-} from "@/lib/reportTypes";
-
-import {
-  MAX_FILE_SIZE_BYTES,
-  STUCK_AFTER_MS,
-} from "./upload-constants";
+﻿import type { Timestamp } from "firebase/firestore";
 
 import type {
-  GroupedReportOption,
-  PatientIndexStats,
-  QueuedUpload,
+  ImportJobStatus,
+  ImportMode,
+  PatientIndexAnalytics,
   RecentImportJob,
-  TimestampLike,
+  ReportType,
+  UploadQueueItem,
+  UploadStatus,
   UploadStep,
 } from "./upload-types";
 
-export const EMPTY_STATS: PatientIndexStats = {
-  patients: 0,
-  hospicePatients: 0,
-  wipTotal: 0,
-  wipOpen: 0,
-  wipCompleted: 0,
-  hospiceLiving: 0,
-  hospiceDeceased: 0,
-  lastUpdatedAt: null,
-  lastIndexedReportId: "",
-  lastIndexedReportType: "",
-  indexVersion: "",
+type TimestampLike = {
+  toDate: () => Date;
 };
 
-export function makeLocalId(): string {
-  return `upload-${Date.now()}-${Math.random()
-    .toString(36)
-    .slice(2, 9)}`;
-}
+type ClassValue = string | false | null | undefined;
 
-export function cleanFileName(name: string): string {
-  return name
-    .trim()
-    .replace(/[^\w.\-]+/g, "_")
-    .replace(/_+/g, "_")
-    .slice(0, 120);
-}
+export type UploadValidationResult = {
+  valid: boolean;
+  error?: string;
+};
 
-export function getFileExtension(
-  fileName: string
-): "csv" | "pdf" | null {
-  const lower = fileName.toLowerCase();
+const MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
 
-  if (lower.endsWith(".csv")) return "csv";
-  if (lower.endsWith(".pdf")) return "pdf";
+const ALLOWED_UPLOAD_EXTENSIONS = new Set(["csv", "pdf", "xlsx", "xls"]);
 
-  return null;
-}
+const ACTIVE_UPLOAD_STATUSES = new Set<UploadStatus | UploadStep>([
+  "validating",
+  "creating_job",
+  "uploading",
+  "finalizing",
+]);
 
-export function getMimeType(
-  file: File,
-  extension: "csv" | "pdf"
-): string {
+function isTimestampLike(value: unknown): value is TimestampLike {
   return (
-    file.type ||
-    (extension === "pdf"
-      ? "application/pdf"
-      : "text/csv")
-  );
-}
-
-export function formatBytes(bytes: number): string {
-  if (!bytes) return "0 B";
-
-  const units = ["B", "KB", "MB", "GB"];
-
-  const index = Math.min(
-    Math.floor(Math.log(bytes) / Math.log(1024)),
-    units.length - 1
-  );
-
-  return `${(
-    bytes /
-    1024 ** index
-  ).toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
-}
-
-export function safeNumber(value: unknown): number {
-  const numberValue = Number(value);
-
-  return Number.isFinite(numberValue)
-    ? numberValue
-    : 0;
-}
-
-export function safeString(value: unknown): string {
-  return typeof value === "string"
-    ? value.trim()
-    : "";
-}
-
-export function safeBoolean(value: unknown): boolean {
-  return value === true;
-}
-
-export function toTimestampLike(
-  value: unknown
-): TimestampLike {
-  if (
     typeof value === "object" &&
     value !== null &&
     "toDate" in value &&
-    typeof (value as { toDate?: unknown }).toDate ===
-      "function"
-  ) {
-    return value as TimestampLike;
+    typeof (value as TimestampLike).toDate === "function"
+  );
+}
+
+function readNumber(
+  source: Record<string, unknown>,
+  keys: string[],
+  fallback = 0,
+): number {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      return value;
+    }
+
+    if (typeof value === "string") {
+      const parsed = Number(value.trim());
+
+      if (Number.isFinite(parsed)) {
+        return parsed;
+      }
+    }
+  }
+
+  return fallback;
+}
+
+function readBoolean(
+  source: Record<string, unknown>,
+  keys: string[],
+  fallback = false,
+): boolean {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (typeof value === "boolean") {
+      return value;
+    }
+
+    if (typeof value === "string") {
+      const normalized = value.trim().toLowerCase();
+
+      if (normalized === "true") return true;
+      if (normalized === "false") return false;
+    }
+  }
+
+  return fallback;
+}
+
+function readString(
+  source: Record<string, unknown>,
+  keys: string[],
+): string | undefined {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (typeof value === "string") {
+      const trimmed = value.trim();
+
+      if (trimmed.length > 0) {
+        return trimmed;
+      }
+    }
+  }
+
+  return undefined;
+}
+
+function readDateValue(
+  source: Record<string, unknown>,
+  keys: string[],
+): Timestamp | Date | string | null {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (value === null) return null;
+
+    if (value instanceof Date || typeof value === "string") {
+      return value;
+    }
+
+    if (isTimestampLike(value)) {
+      return value.toDate();
+    }
   }
 
   return null;
 }
 
-export function formatTimestamp(
-  value: TimestampLike
-): string {
-  if (!value?.toDate) return "Never";
+export function cn(...classes: ClassValue[]): string {
+  return classes.filter(Boolean).join(" ");
+}
 
-  try {
-    return value.toDate().toLocaleString();
-  } catch {
-    return "Never";
+export function formatTimestamp(
+  value: Timestamp | Date | string | number | null | undefined,
+  fallback = "Not available",
+): string {
+  if (!value) return fallback;
+
+  const date =
+    value instanceof Date
+      ? value
+      : isTimestampLike(value)
+        ? value.toDate()
+        : new Date(value);
+
+  return Number.isNaN(date.getTime()) ? fallback : date.toLocaleString();
+}
+
+export function formatBytes(bytes = 0): string {
+  if (!Number.isFinite(bytes) || bytes <= 0) {
+    return "0 B";
+  }
+
+  const units = ["B", "KB", "MB", "GB", "TB"];
+  const index = Math.min(
+    Math.floor(Math.log(bytes) / Math.log(1024)),
+    units.length - 1,
+  );
+
+  const value = bytes / 1024 ** index;
+
+  return `${value.toFixed(index === 0 ? 0 : 1)} ${units[index]}`;
+}
+
+export function getFileExtension(fileName: string): string {
+  const normalized = fileName.trim();
+  const lastDotIndex = normalized.lastIndexOf(".");
+
+  if (lastDotIndex === -1 || lastDotIndex === normalized.length - 1) {
+    return "";
+  }
+
+  return normalized.slice(lastDotIndex + 1).toLowerCase();
+}
+
+export function sanitizeFileName(fileName: string): string {
+  const sanitized = fileName
+    .trim()
+    .replace(/[^\w.\- ]/g, "")
+    .replace(/\s+/g, "_")
+    .replace(/_+/g, "_");
+
+  return sanitized || `upload-${Date.now()}`;
+}
+
+export function isActiveUpload(
+  statusOrItem: UploadStatus | UploadQueueItem,
+): boolean {
+  const status =
+    typeof statusOrItem === "string"
+      ? statusOrItem
+      : statusOrItem.status;
+
+  return ACTIVE_UPLOAD_STATUSES.has(status);
+}
+
+export function uploadStatusLabel(status: UploadStatus): string {
+  switch (status) {
+    case "idle":
+      return "Ready";
+    case "validating":
+      return "Validating";
+    case "creating_job":
+      return "Creating Job";
+    case "uploading":
+      return "Uploading";
+    case "finalizing":
+      return "Finalizing";
+    case "complete":
+      return "Complete";
+    case "failed":
+      return "Failed";
+    default:
+      return status;
   }
 }
 
-export function makeWeeklyBatchKey(
-  date = new Date()
-): string {
-  return date.toISOString().slice(0, 10);
+export function getStepLabel(step: UploadStep): string {
+  return uploadStatusLabel(step);
 }
 
-export function fileSignature(file: File): string {
-  return `${file.name}-${file.size}-${file.lastModified}`;
+export function isActiveStep(step: UploadStep): boolean {
+  return isActiveUpload(step);
 }
 
-export function isActiveStep(
-  step: UploadStep
-): boolean {
-  return [
-    "creating_job",
-    "uploading_cloud",
-    "marking_uploaded",
-    "queued",
-  ].includes(step);
-}
+export function validateUploadFile(file: File): UploadValidationResult {
+  if (!file) {
+    return {
+      valid: false,
+      error: "No file selected.",
+    };
+  }
 
-export function getStepLabel(
-  step: UploadStep
-): string {
-  if (step === "idle") return "Ready";
-  if (step === "creating_job") return "Creating Job";
-  if (step === "uploading_cloud") return "Uploading";
-  if (step === "marking_uploaded") return "Verifying";
-  if (step === "queued") return "Queued";
-  if (step === "complete") return "Complete";
+  if (file.size <= 0) {
+    return {
+      valid: false,
+      error: "File is empty.",
+    };
+  }
 
-  return "Failed";
-}
+  if (file.size > MAX_UPLOAD_SIZE_BYTES) {
+    return {
+      valid: false,
+      error: "File exceeds the 100 MB limit.",
+    };
+  }
 
-export function validateFile(file: File): string {
   const extension = getFileExtension(file.name);
 
-  if (!extension) {
-    return "Only CSV and PDF files are supported.";
-  }
-
-  if (file.size > MAX_FILE_SIZE_BYTES) {
-    return `File too large. Max allowed is ${formatBytes(
-      MAX_FILE_SIZE_BYTES
-    )}.`;
-  }
-
-  return "";
-}
-
-export function isReportType(
-  value: string | null
-): value is ReportType {
-  if (!value) return false;
-
-  return REPORT_TYPES.some((option) => {
-    const raw = option as unknown as {
-      value?: string;
-      type?: string;
-      id?: string;
+  if (!ALLOWED_UPLOAD_EXTENSIONS.has(extension)) {
+    return {
+      valid: false,
+      error: "Only CSV, PDF, XLS, and XLSX files are supported.",
     };
-
-    return (
-      raw.value === value ||
-      raw.type === value ||
-      raw.id === value
-    );
-  });
-}
-
-export function readPatientIndexStats(
-  data: DocumentData | undefined
-): PatientIndexStats {
-  if (!data) return EMPTY_STATS;
+  }
 
   return {
-    patients: safeNumber(
-      data.totalPatients ?? data.patients
-    ),
-    hospicePatients: safeNumber(
-      data.hospicePatients
-    ),
-    wipTotal: safeNumber(
-      data.wipTotal ?? data.totalWips
-    ),
-    wipOpen: safeNumber(
-      data.wipOpen ?? data.openWips
-    ),
-    wipCompleted: safeNumber(
-      data.wipCompleted ?? data.completedWips
-    ),
-    hospiceLiving: safeNumber(
-      data.hospiceLiving
-    ),
-    hospiceDeceased: safeNumber(
-      data.hospiceDeceased
-    ),
-    lastUpdatedAt: toTimestampLike(
-      data.lastUpdatedAt ?? data.updatedAt
-    ),
-    lastIndexedReportId: safeString(
-      data.lastIndexedReportId
-    ),
-    lastIndexedReportType: safeString(
-      data.lastIndexedReportType
-    ),
-    indexVersion: safeString(data.indexVersion),
+    valid: true,
   };
 }
 
-export function normalizeRecentJob(
-  id: string,
-  data: DocumentData
-): RecentImportJob {
+export function readPatientIndex(value: unknown): PatientIndexAnalytics {
+  if (!value || typeof value !== "object") {
+    return {};
+  }
+
+  const source = value as Record<string, unknown>;
+
+  const patients = readNumber(source, [
+    "patients",
+    "totalPatients",
+    "total",
+    "patientCount",
+    "count",
+  ]);
+
+  const indexedPatients = readNumber(source, [
+    "indexedPatients",
+    "indexed",
+    "searchablePatients",
+    "searchable",
+  ]);
+
+  const searchablePatients = readNumber(source, [
+    "searchablePatients",
+    "searchable",
+    "indexedPatients",
+    "indexed",
+  ]);
+
+  const lastIndexedAt = readDateValue(source, [
+    "lastIndexedAt",
+    "lastUpdated",
+    "updatedAt",
+  ]);
+
+  const lastUpdated = readDateValue(source, [
+    "lastUpdated",
+    "updatedAt",
+    "lastIndexedAt",
+  ]);
+
+  const updatedAt = readDateValue(source, [
+    "updatedAt",
+    "lastUpdated",
+    "lastIndexedAt",
+  ]);
+
+  const lastUpdatedAt = readDateValue(source, [
+    "lastUpdatedAt",
+    "lastUpdated",
+    "updatedAt",
+    "lastIndexedAt",
+  ]);
+
+  return {
+    patients,
+    totalPatients: patients,
+    activePatients: readNumber(source, ["activePatients", "active"]),
+    inactivePatients: readNumber(source, ["inactivePatients", "inactive"]),
+    hospicePatients: readNumber(source, ["hospicePatients", "hospice"]),
+    insuranceRecords: readNumber(source, ["insuranceRecords", "insurance"]),
+    indexedPatients,
+    searchablePatients,
+    lastIndexedAt,
+    lastUpdated,
+    updatedAt,
+    lastUpdatedAt,
+    lastImportJobId: readString(source, [
+      "lastImportJobId",
+      "importJobId",
+      "jobId",
+    ]),
+  };
+}
+
+export function readJob(id: string, value: unknown): RecentImportJob {
+  const source =
+    value && typeof value === "object"
+      ? (value as Record<string, unknown>)
+      : {};
+
+  const fileName =
+    readString(source, [
+      "fileName",
+      "filename",
+      "originalName",
+      "originalFileName",
+      "name",
+    ]) ?? "Unnamed import";
+
+  const originalName =
+    readString(source, ["originalName", "originalFileName"]) ?? fileName;
+
+  const rowsProcessed = readNumber(source, [
+    "rowsProcessed",
+    "processedRows",
+    "processedCount",
+  ]);
+
+  const rowsInserted = readNumber(source, [
+    "rowsInserted",
+    "insertedRows",
+    "insertedCount",
+  ]);
+
+  const rowsUpdated = readNumber(source, [
+    "rowsUpdated",
+    "updatedRows",
+    "updatedCount",
+  ]);
+
+  const rowsSkipped = readNumber(source, [
+    "rowsSkipped",
+    "skippedRows",
+    "skippedCount",
+  ]);
+
+  const rowsFailed = readNumber(source, [
+    "rowsFailed",
+    "failedRows",
+    "failedCount",
+  ]);
+
   return {
     id,
-    reportType: safeString(data.reportType),
-    reportLabel: safeString(data.reportLabel),
-    originalFileName: safeString(
-      data.originalFileName
-    ),
-    status: safeString(data.status),
-    processingStatus: safeString(
-      data.processingStatus
-    ),
-    uploadedByEmail: safeString(
-      data.uploadedByEmail
-    ),
-    storagePath: safeString(data.storagePath),
-    downloadURL: safeString(data.downloadURL),
-    importMode: safeString(data.importMode),
-    refreshRequested: safeBoolean(
-      data.refreshRequested
-    ),
-    forceReprocess: safeBoolean(
-      data.forceReprocess
-    ),
-    reportVersion: safeNumber(
-      data.reportVersion
-    ),
-    weeklyBatchKey: safeString(
-      data.weeklyBatchKey
-    ),
-    progressPercent: safeNumber(
-      data.progressPercent
-    ),
-    rowsProcessed: safeNumber(
-      data.rowsProcessed
-    ),
-    rowsInserted: safeNumber(
-      data.rowsInserted
-    ),
-    rowsFailed: safeNumber(
-      data.rowsFailed
-    ),
-    processingStage: safeString(
-      data.processingStage
-    ),
-    createdAt: toTimestampLike(data.createdAt),
-    updatedAt: toTimestampLike(data.updatedAt),
+    fileName,
+    originalName,
+    originalFileName: originalName,
+
+    reportType:
+      (readString(source, ["reportType", "type"]) as ReportType | string) ??
+      "generic",
+
+    importMode:
+      (readString(source, ["importMode", "mode"]) as ImportMode | string) ??
+      "append",
+
+    status:
+      (readString(source, ["status"]) as ImportJobStatus) ?? "unknown",
+
+    storagePath: readString(source, ["storagePath", "path"]),
+    contentType: readString(source, ["contentType", "mimeType"]),
+    sizeBytes: readNumber(source, ["sizeBytes", "size"]),
+    progress: readNumber(source, ["progress"]),
+    totalRows: readNumber(source, ["totalRows", "rowCount"]),
+
+    rowsProcessed,
+    rowsInserted,
+    rowsUpdated,
+    rowsSkipped,
+    rowsFailed,
+
+    processedRows: rowsProcessed,
+    processedCount: rowsProcessed,
+
+    failedRows: rowsFailed,
+    failedCount: rowsFailed,
+
+    skippedRows: rowsSkipped,
+    skippedCount: rowsSkipped,
+
+    completedWithErrors: readBoolean(source, ["completedWithErrors"]),
+    errorMessage: readString(source, ["errorMessage", "error"]),
+
+    createdByUid: readString(source, ["createdByUid", "uid"]),
+    createdByEmail: readString(source, [
+      "createdByEmail",
+      "email",
+      "userEmail",
+    ]),
+
+    createdAt: readDateValue(source, ["createdAt"]),
+    updatedAt: readDateValue(source, ["updatedAt"]),
+    completedAt: readDateValue(source, ["completedAt"]),
   };
 }
 
-export function isJobStuck(
-  job: RecentImportJob
-): boolean {
-  if (!job.createdAt?.toDate) return false;
 
-  const ageMs =
-    Date.now() -
-    job.createdAt.toDate().getTime();
-
-  const combined =
-    `${job.status} ${job.processingStatus}`.toLowerCase();
-
-  return (
-    ageMs > STUCK_AFTER_MS &&
-    (combined.includes("waiting") ||
-      combined.includes("queued") ||
-      combined.includes("created"))
-  );
-}
-
-export function normalizeGroupedReportOptions(): GroupedReportOption[] {
-  const grouped = groupReportOptions(REPORT_TYPES) as unknown;
-
-  if (Array.isArray(grouped)) {
-    return grouped.map((group) => {
-      const raw = group as {
-        category?: unknown;
-        options?: unknown;
-      };
-
-      return {
-        category:
-          typeof raw.category === "string"
-            ? raw.category
-            : "Reports",
-        options: Array.isArray(raw.options)
-          ? raw.options
-          : [],
-      };
-    });
-  }
-
-  return [
-    {
-      category: "Reports",
-      options: REPORT_TYPES.map((option) => {
-        const raw = option as unknown as {
-          value?: ReportType;
-          type?: ReportType;
-          id?: ReportType;
-          label?: string;
-        };
-
-        const value =
-          raw.value ??
-          raw.type ??
-          raw.id ??
-          DEFAULT_REPORT_TYPE;
-
-        return {
-          value,
-          label: raw.label ?? String(value),
-        };
-      }),
-    },
-  ];
-}

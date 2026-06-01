@@ -1,4 +1,4 @@
-import { AlertTriangle } from "lucide-react";
+﻿import { AlertTriangle } from "lucide-react";
 
 import { formatTimestamp, safeJson } from "../utils/auditFormat";
 import { isSuspiciousAuditEvent } from "../utils/auditRisk";
@@ -71,18 +71,18 @@ export function AuditDetails({ selectedLog }: { selectedLog: AuditLogRow | null 
             <InfoCard title="Risk Score" value={`${selectedLog.riskScore}/100`} />
             <InfoCard
               title="Actor"
-              value={selectedLog.actorEmail ?? selectedLog.actorUid ?? "—"}
+              value={selectedLog.actorEmail ?? selectedLog.actorUid ?? "â€”"}
             />
             <InfoCard
               title="Target"
-              value={selectedLog.targetEmail ?? selectedLog.targetUid ?? "—"}
+              value={selectedLog.targetEmail ?? selectedLog.targetUid ?? "â€”"}
             />
-            <InfoCard title="Actor UID" value={selectedLog.actorUid ?? "—"} />
-            <InfoCard title="Target UID" value={selectedLog.targetUid ?? "—"} />
-            <InfoCard title="IP Address" value={selectedLog.ipAddress ?? "—"} />
+            <InfoCard title="Actor UID" value={selectedLog.actorUid ?? "â€”"} />
+            <InfoCard title="Target UID" value={selectedLog.targetUid ?? "â€”"} />
+            <InfoCard title="IP Address" value={selectedLog.ipAddress ?? "â€”"} />
           </div>
 
-          <InfoCard title="Device / User Agent" value={selectedLog.userAgent ?? "—"} />
+          <InfoCard title="Device / User Agent" value={selectedLog.userAgent ?? "â€”"} />
 
           <div className="rounded-2xl border border-white/50 bg-white/50 p-4 backdrop-blur-xl dark:border-white/10 dark:bg-black/20">
             <p className="text-xs uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">
@@ -100,3 +100,5 @@ export function AuditDetails({ selectedLog }: { selectedLog: AuditLogRow | null 
     </section>
   );
 }
+
+

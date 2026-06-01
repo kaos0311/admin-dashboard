@@ -1,4 +1,4 @@
-import type { ImportReportType } from "./orderTypes";
+﻿import type { ImportReportType } from "./orderTypes";
 
 export function normalizeSearchText(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
@@ -69,3 +69,5 @@ export function makeDuplicateImportKey(
 ): string {
   return normalizeSearchText(`${reportType}_${file.name}_${file.size}`);
 }
+
+

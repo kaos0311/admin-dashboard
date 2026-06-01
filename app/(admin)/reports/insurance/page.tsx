@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   AlertTriangle,
@@ -77,6 +77,15 @@ const futureWorkflowItems = [
   "Audit-logged insurance record views",
 ];
 
+const badgeClass =
+  "inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl";
+
+const iconTileClass =
+  "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-slate-200 shadow-sm backdrop-blur-xl";
+
+const secondaryButtonClass =
+  "inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-slate-300 shadow-sm backdrop-blur-xl transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/20";
+
 export default function InsuranceReportPage() {
   return (
     <main className={`${glass.page} ${colors.app}`}>
@@ -84,11 +93,9 @@ export default function InsuranceReportPage() {
 
       <div className={`${glass.shell} relative z-10`}>
         <section className={glass.panel}>
-          <div className={colors.grid} aria-hidden="true" />
-
           <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
-            <div>
-              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+            <div className="min-w-0">
+              <div className={badgeClass}>
                 <ShieldCheck className="h-3.5 w-3.5" aria-hidden="true" />
                 Insurance Oversight
               </div>
@@ -104,13 +111,13 @@ export default function InsuranceReportPage() {
               </p>
             </div>
 
-            <div className="flex flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
+            <div className="flex shrink-0 flex-col gap-3 sm:flex-row lg:flex-col xl:flex-row">
               <OpenUploadCenterButton
                 reportType="insurance"
                 label="Upload Insurance Report"
               />
 
-              <a href="/reports/upload" className={"inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"}>
+              <a href="/reports/upload" className={secondaryButtonClass}>
                 <UploadCloud className="h-4 w-4" aria-hidden="true" />
                 Upload Center
               </a>
@@ -124,12 +131,14 @@ export default function InsuranceReportPage() {
         >
           {insuranceReadinessItems.map((item) => (
             <article key={item.label} className={glass.card}>
-              <div className="flex items-start justify-between gap-4">
-                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+              <div className="flex min-w-0 items-start justify-between gap-4">
+                <p className="min-w-0 break-words text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
                   {item.label}
                 </p>
 
-                <span className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>{item.value}</span>
+                <span className={`${badgeClass} shrink-0`}>
+                  {item.value}
+                </span>
               </div>
 
               <p className="mt-4 text-sm leading-6 text-slate-400">
@@ -148,7 +157,7 @@ export default function InsuranceReportPage() {
 
             return (
               <article key={area.label} className={glass.card}>
-                <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
+                <div className={iconTileClass}>
                   <Icon className="h-5 w-5" aria-hidden="true" />
                 </div>
 
@@ -164,17 +173,17 @@ export default function InsuranceReportPage() {
           })}
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[1.25fr_0.75fr]">
+        <section className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
           <article className={glass.panel}>
-            <div className={colors.grid} aria-hidden="true" />
-
             <div className="relative z-10 flex flex-col gap-4 p-6 sm:flex-row sm:items-start">
-              <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
+              <div className={iconTileClass}>
                 <FileSearch className="h-5 w-5" aria-hidden="true" />
               </div>
 
-              <div>
-                <h2 className={typography.sectionTitle}>Insurance Data Layer</h2>
+              <div className="min-w-0">
+                <h2 className={typography.sectionTitle}>
+                  Insurance Data Layer
+                </h2>
 
                 <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
                   Insurance filters, payer summaries, patient coverage records,
@@ -186,15 +195,12 @@ export default function InsuranceReportPage() {
                 </p>
 
                 <div className={`${glass.card} mt-5`}>
-                  <div className="flex items-start gap-3">
-                    <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
-                      <LockKeyhole
-                        className="h-5 w-5"
-                        aria-hidden="true"
-                      />
+                  <div className="flex min-w-0 items-start gap-3">
+                    <div className={iconTileClass}>
+                      <LockKeyhole className="h-5 w-5" aria-hidden="true" />
                     </div>
 
-                    <div>
+                    <div className="min-w-0">
                       <h3 className="text-sm font-semibold text-sky-100">
                         PHI display rule
                       </h3>
@@ -212,15 +218,13 @@ export default function InsuranceReportPage() {
           </article>
 
           <article className={glass.panel}>
-            <div className={colors.grid} aria-hidden="true" />
-
             <div className="relative z-10 p-6">
-              <div className="mb-4 flex items-center gap-3">
-                <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
+              <div className="mb-4 flex min-w-0 items-center gap-3">
+                <div className={iconTileClass}>
                   <ClipboardCheck className="h-5 w-5" aria-hidden="true" />
                 </div>
 
-                <div>
+                <div className="min-w-0">
                   <h2 className={typography.sectionTitle}>Future Workflow</h2>
                   <p className="text-sm text-slate-500">
                     Reserved production build targets.
@@ -232,11 +236,12 @@ export default function InsuranceReportPage() {
                 {futureWorkflowItems.map((item) => (
                   <div
                     key={item}
-                    className="flex items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-300"
+                    className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-300"
                   >
-                    <span>{item}</span>
+                    <span className="min-w-0 break-words">{item}</span>
+
                     <ArrowRight
-                      className="h-4 w-4 text-slate-500"
+                      className="h-4 w-4 shrink-0 text-slate-500"
                       aria-hidden="true"
                     />
                   </div>
@@ -249,4 +254,5 @@ export default function InsuranceReportPage() {
     </main>
   );
 }
+
 

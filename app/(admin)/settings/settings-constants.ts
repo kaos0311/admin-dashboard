@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   AppSettings,
   CreateUserForm,
   IdentityForm,
@@ -181,3 +181,5 @@ export const SETTINGS_SUCCESS_TIMEOUT = 2500;
 export const SETTINGS_ERROR_TIMEOUT = 5000;
 
 export const SETTINGS_SEARCH_DEBOUNCE = 250;
+
+

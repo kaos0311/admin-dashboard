@@ -1,4 +1,4 @@
-import type { InventoryItem } from "./inventoryTypes";
+﻿import type { InventoryItem } from "./inventoryTypes";
 import { normalizeSearchText } from "./inventoryUtils";
 
 export type InventorySearchFilters = {
@@ -133,3 +133,5 @@ export function sortInventoryItems(
     return 0;
   });
 }
+
+

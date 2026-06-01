@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import type { SettingsTabKey } from "../settings-types";
 import { glassPanel } from "../styles/glass";
 
@@ -42,3 +42,5 @@ export function TabBar({ tabs, activeTab, onChange }: TabBarProps) {
     </nav>
   );
 }
+
+

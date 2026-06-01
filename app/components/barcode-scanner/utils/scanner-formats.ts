@@ -1,4 +1,4 @@
-import { BarcodeFormat } from "@zxing/library";
+﻿import { BarcodeFormat } from "@zxing/library";
 
 export const NATIVE_FORMATS = [
   "aztec",
@@ -35,3 +35,5 @@ export const ZXING_FORMATS = [
   BarcodeFormat.UPC_E,
   BarcodeFormat.UPC_EAN_EXTENSION,
 ];
+
+

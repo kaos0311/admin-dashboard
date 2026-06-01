@@ -1,4 +1,4 @@
-import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
+﻿import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { createHash } from "crypto";
 
 const db = getFirestore();
@@ -196,7 +196,7 @@ type PatientRollup = {
 };
 
 function normalizeString(value: unknown): string {
-  return value == null ? "" : String(value).trim();
+  return value === null ? "" : String(value).trim();
 }
 
 function normalizeKey(value: string): string {
@@ -1387,7 +1387,7 @@ function buildPatientSnapshot(params: {
     pieces.push(`estimated open balance $${params.openBalanceEstimate.toFixed(2)}`);
   }
 
-  return pieces.join(" • ");
+  return pieces.join(" â€¢ ");
 }
 
 function createEmptyRollup(): PatientRollup {
@@ -1421,7 +1421,7 @@ async function rebuildBirthdayAnalyticsFromPatients(): Promise<void> {
       const daysUntilBirthday =
         typeof data.daysUntilBirthday === "number" ? data.daysUntilBirthday : null;
 
-      if (daysUntilBirthday == null) return null;
+      if (daysUntilBirthday === null) return null;
 
       return {
         id: docSnap.id,
@@ -1874,3 +1874,4 @@ export async function updatePatientIndexFromRows(args: {
     { merge: true }
   );
 }
+

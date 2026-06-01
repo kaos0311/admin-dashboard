@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import { glassPanel } from "../styles/glass";
 
 type PageHeaderProps = {
@@ -30,3 +30,5 @@ export function PageHeader({ title, description, action }: PageHeaderProps) {
     </header>
   );
 }
+
+

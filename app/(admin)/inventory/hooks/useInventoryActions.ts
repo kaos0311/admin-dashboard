@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { FormEvent } from "react";
 import { deleteDoc, doc, serverTimestamp, updateDoc, writeBatch } from "firebase/firestore";
@@ -450,3 +450,5 @@ export function useInventoryActions({
     handleBatchDiscontinue,
   };
 }
+
+

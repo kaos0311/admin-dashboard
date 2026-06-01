@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   InventoryItem,
   InventoryStatus,
   LifecycleStatus,
@@ -174,3 +174,5 @@ export function normalizeInventoryItem(
     isDeleted: data.isDeleted === true,
   };
 }
+
+

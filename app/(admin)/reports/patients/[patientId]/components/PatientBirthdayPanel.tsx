@@ -1,4 +1,4 @@
-import { Cake } from "lucide-react";
+﻿import { Cake } from "lucide-react";
 
 import { Panel } from "./PatientDetailPrimitives";
 
@@ -19,7 +19,8 @@ export function PatientBirthdayPanel({
 
   return (
     <Panel icon={<Cake className="h-5 w-5" />} title="Birthday Reminder" tone="amber">
-      {fullName} turns {ageTurning ?? "—"} on {birthday}.
+      {fullName} turns {ageTurning ?? "â€”"} on {birthday}.
     </Panel>
   );
 }
+

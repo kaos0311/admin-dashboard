@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import { glassPanelSoft } from "../../styles/glass";
 
 type InfoCardProps = {
@@ -20,3 +20,5 @@ export function InfoCard({ title, description, children }: InfoCardProps) {
     </div>
   );
 }
+
+

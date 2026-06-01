@@ -1,4 +1,4 @@
-import type { RentalRecord } from "../rentals-types";
+﻿import type { RentalRecord } from "../rentals-types";
 
 export function normalizeSearch(value: string): string {
   return value.toLowerCase().replace(/\s+/g, " ").trim();
@@ -27,3 +27,5 @@ export function rentalMatchesSearch(
 
   return haystack.includes(query);
 }
+
+

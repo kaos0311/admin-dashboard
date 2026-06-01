@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   PatientIndex,
   PatientTaskPriority,
   PatientTaskStatus,
@@ -48,3 +48,5 @@ export interface PatientDetailProps {
 
   destroyPatient: (patient: PatientIndex) => Promise<void>;
 }
+
+

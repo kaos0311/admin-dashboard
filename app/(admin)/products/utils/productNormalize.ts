@@ -1,11 +1,11 @@
-import type { Product, ProductStatus, ProductType } from "./productTypes";
+﻿import type { Product, ProductStatus, ProductType } from "./productTypes";
 
 export function toSafeString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
 export function toSafeNumber(value: unknown): number {
-  if (value === "" || value == null) return 0;
+  if (value === "" || value === null) return 0;
 
   const parsed = Number(String(value).replace(/[$,]/g, "").trim());
 
@@ -92,3 +92,6 @@ export function normalizeProduct(
     deleted: Boolean(data.deleted),
   };
 }
+
+
+

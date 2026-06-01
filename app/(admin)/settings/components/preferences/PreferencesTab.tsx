@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+﻿import type { Dispatch, SetStateAction } from "react";
 import type { AppSettings, PreferenceSettings } from "../../settings-types";
 import { glassPanel } from "../../styles/glass";
 import { Field } from "../shared/Field";
@@ -112,3 +112,5 @@ export function PreferencesTab({
     </section>
   );
 }
+
+

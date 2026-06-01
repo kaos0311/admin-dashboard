@@ -1,16 +1,10 @@
-"use client";
+﻿"use client";
 
+import type { HTMLAttributes } from "react";
 import { Loader2, ScanLine, X } from "lucide-react";
 
-import {
-  dangerButton,
-  glassButton,
-  glassInput,
-  glassPanel,
-  glassSelect,
-  labelText,
-  primaryButton,
-} from "../lib/orderUi";
+import { buttons, colors, glass, spacing, typography } from "@/theme";
+
 import type { OrderFormState, OrderStatus } from "../lib/orderTypes";
 
 const statusOptions: Array<{ value: OrderStatus; label: string }> = [
@@ -52,33 +46,36 @@ export function OrderModal({
       aria-labelledby="order-modal-title"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-xl"
     >
-      <div className={`${glassPanel} max-h-[92vh] w-full max-w-5xl overflow-hidden`}>
-        <div className="flex items-start justify-between gap-4 border-b border-white/10 p-5">
-          <div>
-            <h2
-              id="order-modal-title"
-              className="text-xl font-bold tracking-tight text-white"
-            >
+      <div
+        className={`${glass.panel} max-h-[92vh] w-full max-w-5xl overflow-hidden`}
+      >
+        <div
+          className={`flex items-start justify-between gap-4 border-b ${glass.divider} ${spacing.section}`}
+        >
+          <div className="min-w-0">
+            <h2 id="order-modal-title" className={typography.sectionTitle}>
               {title}
             </h2>
 
-            <p className="mt-1 text-sm text-zinc-400">{description}</p>
+            <p className={`${typography.bodyMuted} mt-1`}>{description}</p>
           </div>
 
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-2xl border border-white/10 bg-white/[0.06] p-2 text-zinc-300 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+            className={buttons.icon}
             aria-label="Close order modal"
           >
-            <X className="h-5 w-5" aria-hidden={true} />
+            <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
 
         <div className="max-h-[calc(92vh-150px)] overflow-y-auto p-5">
           {error ? (
-            <div className="mb-4 rounded-2xl border border-rose-400/25 bg-rose-500/10 p-3 text-sm font-medium text-rose-100">
+            <div
+              className={`${glass.inset} ${colors.dangerBadge} mb-4 p-3 text-sm font-medium`}
+            >
               {error}
             </div>
           ) : null}
@@ -117,7 +114,7 @@ export function OrderModal({
             />
 
             <div>
-              <label htmlFor={`${mode}-status`} className={labelText}>
+              <label htmlFor={`${mode}-status`} className={typography.formLabel}>
                 Status
               </label>
 
@@ -127,7 +124,7 @@ export function OrderModal({
                 onChange={(event) =>
                   onChange("status", event.target.value as OrderStatus)
                 }
-                className={glassSelect}
+                className={`${glass.select} mt-2`}
               >
                 {statusOptions.map((status) => (
                   <option key={status.value} value={status.value}>
@@ -138,16 +135,16 @@ export function OrderModal({
             </div>
 
             <div>
-              <label htmlFor={`${mode}-barcode`} className={labelText}>
+              <label htmlFor={`${mode}-barcode`} className={typography.formLabel}>
                 Barcode
               </label>
 
-              <div className="flex gap-2">
+              <div className="mt-2 flex gap-2">
                 <input
                   id={`${mode}-barcode`}
                   value={form.barcode}
                   onChange={(event) => onChange("barcode", event.target.value)}
-                  className={glassInput}
+                  className={`${glass.input} px-4 py-3`}
                   placeholder="Scan or enter barcode"
                 />
 
@@ -156,10 +153,10 @@ export function OrderModal({
                     type="button"
                     onClick={onScan}
                     disabled={busy}
-                    className={glassButton}
+                    className={buttons.icon}
                     aria-label="Open barcode scanner"
                   >
-                    <ScanLine className="h-4 w-4" aria-hidden={true} />
+                    <ScanLine className="h-4 w-4" aria-hidden />
                   </button>
                 ) : null}
               </div>
@@ -168,7 +165,7 @@ export function OrderModal({
                 type="button"
                 onClick={onLoadBarcode}
                 disabled={busy || !form.barcode.trim()}
-                className="mt-2 rounded-xl border border-cyan-400/25 bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-400/15 disabled:cursor-not-allowed disabled:opacity-50"
+                className={`${buttons.secondary} mt-2 px-3 py-1.5 text-xs`}
               >
                 Load inventory from barcode
               </button>
@@ -209,7 +206,7 @@ export function OrderModal({
             />
 
             <div className="md:col-span-2">
-              <label htmlFor={`${mode}-notes`} className={labelText}>
+              <label htmlFor={`${mode}-notes`} className={typography.formLabel}>
                 Notes
               </label>
 
@@ -217,26 +214,33 @@ export function OrderModal({
                 id={`${mode}-notes`}
                 value={form.notes}
                 onChange={(event) => onChange("notes", event.target.value)}
-                className={`${glassInput} min-h-28 resize-y`}
+                className={`${glass.input} mt-2 min-h-28 resize-y px-4 py-3`}
                 placeholder="Internal order notes"
               />
             </div>
           </div>
         </div>
 
-        <div className="flex flex-col-reverse gap-3 border-t border-white/10 p-5 sm:flex-row sm:justify-end">
+        <div
+          className={`flex flex-col-reverse gap-3 border-t ${glass.divider} ${spacing.section} sm:flex-row sm:justify-end`}
+        >
           <button
             type="button"
             onClick={onClose}
             disabled={busy}
-            className={dangerButton}
+            className={buttons.danger}
           >
             Cancel
           </button>
 
-          <button type="button" onClick={onSave} disabled={busy} className={primaryButton}>
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={busy}
+            className={buttons.primary}
+          >
             {busy ? (
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden={true} />
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
             ) : null}
             {busy ? "Saving..." : "Save Order"}
           </button>
@@ -259,11 +263,11 @@ function TextField({
   value: string;
   onChange: (value: string) => void;
   required?: boolean;
-  inputMode?: React.HTMLAttributes<HTMLInputElement>["inputMode"];
+  inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"];
 }) {
   return (
     <div>
-      <label htmlFor={id} className={labelText}>
+      <label htmlFor={id} className={typography.formLabel}>
         {label}
         {required ? <span className="text-rose-300"> *</span> : null}
       </label>
@@ -272,9 +276,11 @@ function TextField({
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={glassInput}
+        className={`${glass.input} mt-2 px-4 py-3`}
         inputMode={inputMode}
       />
     </div>
   );
 }
+
+

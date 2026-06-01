@@ -2,8 +2,8 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
   FieldPath,
   FieldValue,
-  QueryDocumentSnapshot,
   getFirestore,
+  QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 

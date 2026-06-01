@@ -1,4 +1,4 @@
-import type { OrderFormState, SmartFilters } from "./orderTypes";
+﻿import type { OrderFormState, SmartFilters } from "./orderTypes";
 
 export const ORDERS_PAGE_SIZE = 75;
 
@@ -28,3 +28,5 @@ export const initialSmartFilters: SmartFilters = {
   missingProductOnly: false,
   archiveReadyOnly: false,
 };
+
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 type MiniStatProps = {
   label: string;
@@ -13,3 +13,5 @@ export function MiniStat({ label, value }: MiniStatProps) {
     </div>
   );
 }
+
+

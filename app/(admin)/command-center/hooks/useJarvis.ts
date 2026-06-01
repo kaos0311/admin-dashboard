@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 import {
@@ -22,20 +22,25 @@ export type JarvisMessage = {
   createdAt: number;
 };
 
-type UseJarvisOptions = {
-  commandContext?: unknown;
-};
-
 type AskAdminAiRequest = {
   prompt: string;
 };
 
 type AskAdminAiResponse = {
   answer?: string;
+  contextUsed?: {
+    imports: number;
+    issues: number;
+    tasks: number;
+    recalls: number;
+    hospice: number;
+    auditLogs: number;
+    reports: number;
+  };
 };
 
-const MAX_PROMPT_LENGTH = 4000;
-const MAX_HISTORY_MESSAGES = 12;
+const MAX_PROMPT_LENGTH = 8000;
+const MAX_HISTORY_MESSAGES = 10;
 
 const askAdminAi = httpsCallable<AskAdminAiRequest, AskAdminAiResponse>(
   functions,
@@ -43,21 +48,16 @@ const askAdminAi = httpsCallable<AskAdminAiRequest, AskAdminAiResponse>(
 );
 
 function createId(): string {
-  return crypto.randomUUID();
-}
-
-function compactJson(value: unknown): string {
-  try {
-    return JSON.stringify(value, null, 2).slice(0, 6000);
-  } catch {
-    return "Context unavailable.";
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
   }
+
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
 function buildJarvisPrompt(params: {
   userPrompt: string;
   history: JarvisMessage[];
-  commandContext?: unknown;
 }) {
   const historyText = params.history
     .slice(-MAX_HISTORY_MESSAGES)
@@ -68,15 +68,6 @@ function buildJarvisPrompt(params: {
     .join("\n\n");
 
   return [
-    "You are Jarvis inside the Advanced Home Medical Command Center.",
-    "You help with imports, compliance issues, task escalation, hospice oversight, recalls, audit activity, WIP bottlenecks, and dashboard health.",
-    "Do not invent data. If information is missing, say what is missing.",
-    "Do not expose PHI unless it was explicitly provided in the safe operational context.",
-    "Be direct, operational, and useful.",
-    "",
-    "CURRENT SAFE COMMAND CENTER CONTEXT:",
-    compactJson(params.commandContext ?? {}),
-    "",
     historyText ? `RECENT CHAT HISTORY:\n${historyText}` : "",
     "",
     `CURRENT USER QUESTION:\n${params.userPrompt}`,
@@ -85,7 +76,7 @@ function buildJarvisPrompt(params: {
     .join("\n");
 }
 
-export function useJarvis(options: UseJarvisOptions = {}) {
+export function useJarvis() {
   const [jarvisPrompt, setJarvisPrompt] = useState("");
   const [jarvisAnswer, setJarvisAnswer] = useState("");
   const [jarvisLoading, setJarvisLoading] = useState(false);
@@ -114,7 +105,6 @@ export function useJarvis(options: UseJarvisOptions = {}) {
     const user = auth.currentUser;
 
     if (!user) return null;
-
     if (conversationId) return conversationId;
 
     const conversationRef = doc(collection(db, "aiConversations"));
@@ -179,9 +169,7 @@ export function useJarvis(options: UseJarvisOptions = {}) {
       createdAt: Date.now(),
     };
 
-    const nextMessages = [...jarvisMessages, userMessage];
-
-    setJarvisMessages(nextMessages);
+    setJarvisMessages((current) => [...current, userMessage]);
     setJarvisPrompt("");
     setJarvisAnswer("");
     setJarvisErrorMessage("");
@@ -195,14 +183,13 @@ export function useJarvis(options: UseJarvisOptions = {}) {
       const prompt = buildJarvisPrompt({
         userPrompt: rawPrompt,
         history: jarvisMessages,
-        commandContext: options.commandContext,
       });
 
       const result = await askAdminAi({ prompt });
 
       const answer =
         result.data?.answer?.trim() ||
-        "Jarvis returned an empty response. Very helpful. Very machine-like.";
+        "Jarvis returned an empty response. Somehow the machine found a way to shrug.";
 
       const assistantMessage: JarvisMessage = {
         id: createId(),
@@ -232,7 +219,7 @@ export function useJarvis(options: UseJarvisOptions = {}) {
           id: createId(),
           role: "assistant",
           content:
-            "I could not complete that request. Check the callable logs, auth, App Check, and OpenAI secret. The usual digital dumpster fire checklist.",
+            "I could not complete that request. Check the callable logs, auth, App Check, OpenAI secret, and Firestore permissions. The usual digital dumpster fire checklist.",
           createdAt: Date.now(),
         },
       ]);
@@ -269,3 +256,5 @@ export function useJarvis(options: UseJarvisOptions = {}) {
     clearJarvisMessages,
   };
 }
+
+

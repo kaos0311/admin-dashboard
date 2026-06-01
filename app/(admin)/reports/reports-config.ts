@@ -1,4 +1,4 @@
-import {
+﻿import {
   BarChart3,
   HeartPulse,
   type LucideIcon,
@@ -102,3 +102,5 @@ export const reportPages: readonly ReportPageConfig[] = [
     category: "operations",
   },
 ] as const;
+
+

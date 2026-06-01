@@ -1,4 +1,4 @@
-import { emptyCounts } from "./analytics-constants";
+﻿import { emptyCounts } from "./analytics-constants";
 import type {
   AnalyticsHealth,
   CountsByType,
@@ -7,6 +7,13 @@ import type {
   ReportType,
   SelectedReportType,
 } from "./analytics-types";
+
+const VALID_ANALYTICS_STATUSES = new Set<ReportsAnalyticsStatus>([
+  "ready",
+  "missing",
+  "stale",
+  "error",
+]);
 
 export function safeNumber(value: unknown): number {
   const parsed = Number(value);
@@ -34,16 +41,11 @@ export function normalizeCountsByType(value: unknown): CountsByType {
 }
 
 export function normalizeStatus(value: unknown): ReportsAnalyticsStatus {
-  if (
-    value === "ready" ||
-    value === "missing" ||
-    value === "stale" ||
-    value === "error"
-  ) {
-    return value;
+  if (typeof value === "string" && VALID_ANALYTICS_STATUSES.has(value as ReportsAnalyticsStatus)) {
+    return value as ReportsAnalyticsStatus;
   }
 
-  return "ready";
+  return "missing";
 }
 
 export function normalizeTimestampMillis(value: unknown): number {
@@ -54,7 +56,7 @@ export function normalizeTimestampMillis(value: unknown): number {
     typeof (value as { toMillis?: unknown }).toMillis === "function"
   ) {
     try {
-      return (value as { toMillis: () => number }).toMillis();
+      return safeNumber((value as { toMillis: () => number }).toMillis());
     } catch {
       return 0;
     }
@@ -63,31 +65,40 @@ export function normalizeTimestampMillis(value: unknown): number {
   return safeNumber(value);
 }
 
-export function normalizeAnalyticsDoc(
-  data: Record<string, unknown>
-): ReportsAnalyticsDoc {
+export function normalizeAnalyticsDoc(data: unknown): ReportsAnalyticsDoc {
+  const input =
+    typeof data === "object" && data !== null
+      ? (data as Record<string, unknown>)
+      : {};
+
   return {
-    totalRows: safeNumber(data.totalRows),
-    totalFiles: safeNumber(data.totalFiles),
-    countsByType: normalizeCountsByType(data.countsByType),
-    generatedAtLabel: safeString(data.generatedAtLabel),
+    totalRows: safeNumber(input.totalRows),
+    totalFiles: safeNumber(input.totalFiles),
+    countsByType: normalizeCountsByType(input.countsByType),
+    generatedAtLabel: safeString(input.generatedAtLabel),
     generatedAtMillis: normalizeTimestampMillis(
-      data.generatedAt ?? data.generatedAtMillis
+      input.generatedAt ?? input.generatedAtMillis
     ),
-    lastRebuiltByEmail: safeString(data.lastRebuiltByEmail),
-    lastRebuiltByUid: safeString(data.lastRebuiltByUid),
-    source: safeString(data.source),
-    status: normalizeStatus(data.status),
+    lastRebuiltByEmail: safeString(input.lastRebuiltByEmail),
+    lastRebuiltByUid: safeString(input.lastRebuiltByUid),
+    source: safeString(input.source),
+    status: normalizeStatus(input.status),
   };
 }
 
 export function formatCount(value: number): string {
-  return value.toLocaleString();
+  return safeNumber(value).toLocaleString();
 }
 
 export function formatPercent(value: number, total: number): string {
-  if (!total) return "0%";
-  return `${((value / total) * 100).toFixed(1)}%`;
+  const safeValue = safeNumber(value);
+  const safeTotal = safeNumber(total);
+
+  if (safeTotal <= 0) {
+    return "0%";
+  }
+
+  return `${((safeValue / safeTotal) * 100).toFixed(1)}%`;
 }
 
 export function reportTypeLabel(type: SelectedReportType): string {
@@ -166,6 +177,30 @@ export function getAnalyticsHealth({
     };
   }
 
+  if (analytics.status === "error") {
+    return {
+      label: "Analytics Error",
+      detail: "The analytics document reports an error. Rebuild analytics and check Cloud Function logs if it persists.",
+      tone: "danger",
+    };
+  }
+
+  if (analytics.status === "missing") {
+    return {
+      label: "Not Built",
+      detail: "No analytics summary document was found. Run rebuild after importing files.",
+      tone: "warning",
+    };
+  }
+
+  if (analytics.status === "stale") {
+    return {
+      label: "Stale Data",
+      detail: "Analytics may be outdated. Rebuild analytics to refresh imported report totals.",
+      tone: "warning",
+    };
+  }
+
   if (!hasRows && !hasFiles) {
     return {
       label: "Not Built",
@@ -177,7 +212,9 @@ export function getAnalyticsHealth({
   if (hasUnknown) {
     return {
       label: "Review Needed",
-      detail: `${formatCount(analytics.countsByType.unknown)} rows are classified as unknown.`,
+      detail: `${formatCount(
+        analytics.countsByType.unknown
+      )} rows are classified as unknown.`,
       tone: "warning",
     };
   }
@@ -188,3 +225,5 @@ export function getAnalyticsHealth({
     tone: "success",
   };
 }
+
+

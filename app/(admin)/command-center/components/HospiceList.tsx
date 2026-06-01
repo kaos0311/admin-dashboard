@@ -1,4 +1,4 @@
-import type { HospiceRecord } from "../types";
+﻿import type { HospiceRecord } from "../types";
 import { EmptyState } from "./EmptyState";
 
 type HospiceListProps = {
@@ -36,3 +36,5 @@ export function HospiceList({ records }: HospiceListProps) {
     </div>
   );
 }
+
+

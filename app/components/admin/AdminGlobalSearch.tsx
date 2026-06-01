@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { Search } from "lucide-react";
@@ -80,3 +80,5 @@ export function AdminGlobalSearch() {
     </div>
   );
 }
+
+

@@ -1,4 +1,4 @@
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+﻿import { addDoc, collection, serverTimestamp } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 
 export type ProductAuditAction =
@@ -37,3 +37,5 @@ export async function writeProductAuditLog(args: {
     console.warn("PRODUCT AUDIT LOG WRITE FAILED:", error);
   }
 }
+
+

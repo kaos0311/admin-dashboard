@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type {
   AlertFilter,
@@ -137,3 +137,5 @@ export function InventoryFilters({
     </div>
   );
 }
+
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { type ReactNode, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -10,6 +10,7 @@ import StaffOrAdmin from "@/app/components/auth/StaffOrAdmin";
 import MaintenanceGate from "@/app/components/MaintenanceGate";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 import { auth } from "@/lib/firebase";
+import { colors, glass, spacing, typography } from "@/theme";
 
 type AdminLayoutProps = {
   children: ReactNode;
@@ -31,9 +32,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   }, []);
 
   const handleLogout = useCallback(async () => {
-    if (loggingOut) {
-      return;
-    }
+    if (loggingOut) return;
 
     setLoggingOut(true);
 
@@ -49,9 +48,9 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#07090d] px-4 text-white">
-        <div className="rounded-2xl border border-white/10 bg-[#0b1220] px-6 py-4 text-sm text-zinc-300 shadow-2xl shadow-black/30">
-          Loading dashboard...
+      <div className={`${colors.app} flex min-h-screen items-center justify-center px-4`}>
+        <div className={`${glass.card} ${spacing.section}`}>
+          <p className={typography.bodyMuted}>Loading dashboard...</p>
         </div>
       </div>
     );
@@ -60,7 +59,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   return (
     <StaffOrAdmin>
       <MaintenanceGate>
-        <div className="min-h-screen bg-[#07090d] text-white">
+        <div className={`${colors.app} min-h-screen ${colors.textPrimary}`}>
+          <div className={colors.grid} />
+          <div className={colors.vignette} />
+
           <a
             href="#admin-main-content"
             className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-black"
@@ -68,12 +70,12 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             Skip to main content
           </a>
 
-          <div className="flex min-h-screen">
+          <div className="flex min-h-screen min-w-0">
             <AdminSidebar mobileOpen={mobileOpen} onClose={closeMobileMenu} />
 
             <div className="flex min-w-0 flex-1 flex-col lg:ml-64">
-              <header className="sticky top-0 z-30 border-b border-white/10 bg-[#07090d]/95 backdrop-blur">
-                <div className="grid grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-3">
+              <header className={`${glass.toolbar} sticky top-0 z-30 rounded-none border-x-0 border-t-0`}>
+                <div className="grid min-w-0 grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-3">
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
@@ -81,7 +83,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                       aria-label="Open admin navigation menu"
                       aria-expanded={mobileOpen}
                       aria-controls="admin-sidebar"
-                      className="inline-flex items-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30 lg:hidden"
+                      className={`${glass.focus} inline-flex items-center gap-2 rounded-xl border ${colors.border} bg-white/5 px-3 py-2 text-sm font-medium ${colors.textPrimary} transition hover:bg-white/10 lg:hidden`}
                     >
                       <Menu className="h-4 w-4" />
                       Menu
@@ -89,11 +91,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                   </div>
 
                   <div className="min-w-0">
-                    <div className="text-sm font-medium text-white">
+                    <div className={`text-sm font-medium ${colors.textPrimary}`}>
                       Welcome
                     </div>
 
-                    <div className="truncate text-sm text-white/65">
+                    <div className={`truncate text-sm ${colors.textMuted}`}>
                       {user?.email ?? "Signed in"}
                     </div>
                   </div>
@@ -103,7 +105,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                       type="button"
                       onClick={handleLogout}
                       disabled={loggingOut}
-                      className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30 disabled:cursor-not-allowed disabled:opacity-60"
+                      className={`${glass.focus} inline-flex items-center gap-2 rounded-xl border ${colors.borderStrong} bg-white/5 px-4 py-2 text-sm font-medium ${colors.textPrimary} transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       <LogOut className="h-4 w-4" />
                       {loggingOut ? "Logging out..." : "Log out"}
@@ -114,9 +116,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
               <main
                 id="admin-main-content"
-                className="min-w-0 flex-1 px-3 py-4 sm:px-4 lg:px-5 lg:py-5"
+                className="min-w-0 flex-1 overflow-x-hidden"
               >
-                {children}
+                <div className={`${glass.shellFull} ${spacing.page}`}>
+                  {children}
+                </div>
               </main>
             </div>
           </div>
@@ -125,3 +129,5 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     </StaffOrAdmin>
   );
 }
+
+

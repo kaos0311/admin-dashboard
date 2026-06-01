@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
@@ -224,3 +224,5 @@ export function useOrders() {
     isAuthed,
   };
 }
+
+

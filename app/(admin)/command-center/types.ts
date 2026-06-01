@@ -1,4 +1,4 @@
-import type { Timestamp } from "firebase/firestore";
+﻿import type { Timestamp } from "firebase/firestore";
 
 export type Severity = "low" | "medium" | "high" | "critical";
 export type IssueStatus = "open" | "reviewed" | "resolved";
@@ -60,3 +60,5 @@ export type CommandCenterStats = {
   hospiceRecords: number;
   activeRecalls: number;
 };
+
+

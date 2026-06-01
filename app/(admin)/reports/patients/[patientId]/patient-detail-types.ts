@@ -1,4 +1,4 @@
-export const PATIENTS_COLLECTION = "patients";
+﻿export const PATIENTS_COLLECTION = "patients";
 
 export type PatientStatus = "active" | "archived" | "destroyed";
 export type PatientTaskStatus = "open" | "done";
@@ -119,3 +119,4 @@ export type BirthdayParts = {
   day: number;
   year: number | null;
 };
+

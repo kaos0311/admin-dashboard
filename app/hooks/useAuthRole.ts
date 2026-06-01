@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -157,3 +157,5 @@ export function useAuthRole(): UseAuthRoleResult {
     };
   }, [user, role, loading, error, active]);
 }
+
+

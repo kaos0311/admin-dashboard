@@ -1,4 +1,4 @@
-type UnknownRecord = Record<string, unknown>;
+﻿type UnknownRecord = Record<string, unknown>;
 
 export function isRecord(
   value: unknown
@@ -145,3 +145,5 @@ export function normalizeStatus(
     ? normalized
     : fallback;
 }
+
+

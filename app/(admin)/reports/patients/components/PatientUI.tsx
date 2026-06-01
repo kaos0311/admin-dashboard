@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 
@@ -168,7 +168,7 @@ export function Info({ label, value }: { label: string; value?: string }) {
   return (
     <div className="rounded-xl border border-white/10 bg-black/30 p-3">
       <p className="text-xs text-zinc-500">{label}</p>
-      <p className="mt-1 break-words text-white">{value || "—"}</p>
+      <p className="mt-1 break-words text-white">{value || "â€”"}</p>
     </div>
   );
 }
@@ -269,3 +269,5 @@ export function ActionButton({
     </button>
   );
 }
+
+

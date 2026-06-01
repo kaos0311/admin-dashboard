@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { humanize } from "../lib/inventoryNormalize";
 
@@ -17,3 +17,5 @@ export function WarningPill({ label }: { label: string }) {
     </span>
   );
 }
+
+

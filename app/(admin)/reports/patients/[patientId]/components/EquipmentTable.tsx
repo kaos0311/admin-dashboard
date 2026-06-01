@@ -1,4 +1,4 @@
-import type { CurrentEquipmentItem } from "../patient-detail-types";
+﻿import type { CurrentEquipmentItem } from "../patient-detail-types";
 
 import { formatDate } from "../patient-detail-utils";
 
@@ -40,31 +40,31 @@ export function EquipmentTable({
               className="border-t border-white/10 transition hover:bg-white/[0.04]"
             >
               <td className="px-4 py-3 font-medium text-zinc-100">
-                {item.itemName || "—"}
+                {item.itemName || "â€”"}
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
-                {item.hcpc || item.itemId || "—"}
+                {item.hcpc || item.itemId || "â€”"}
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
-                {item.saleType || "—"}
+                {item.saleType || "â€”"}
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
-                {item.qty ?? "—"}
+                {item.qty ?? "â€”"}
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
-                {item.status || "—"}
+                {item.status || "â€”"}
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
-                {item.serialNumber || "—"}
+                {item.serialNumber || "â€”"}
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
-                {item.lotNumber || "—"}
+                {item.lotNumber || "â€”"}
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
@@ -72,7 +72,7 @@ export function EquipmentTable({
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
-                {item.maintenanceStatus || "—"}
+                {item.maintenanceStatus || "â€”"}
               </td>
 
               <td className="px-4 py-3 text-zinc-400">
@@ -85,3 +85,4 @@ export function EquipmentTable({
     </div>
   );
 }
+

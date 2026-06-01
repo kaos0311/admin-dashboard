@@ -1,4 +1,4 @@
-import {
+﻿import {
   collection,
   collectionGroup,
   doc,
@@ -104,7 +104,7 @@ function sleep(ms: number): Promise<void> {
 }
 
 function normalizeString(value: unknown): string {
-  if (value == null) return "";
+  if (value === null) return "";
   return String(value).trim();
 }
 
@@ -416,7 +416,7 @@ function toPrimitiveRecord(
       typeof value === "string" ||
       typeof value === "number" ||
       typeof value === "boolean" ||
-      value == null
+      value === null
     ) {
       normalized[normalizeFieldKey(key)] = value;
     }
@@ -912,3 +912,4 @@ export async function runPatientIndexer(
 
   return result;
 }
+

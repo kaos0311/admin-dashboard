@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Search } from "lucide-react";
 
@@ -23,3 +23,5 @@ export function SearchInput({ value, onChange }: SearchInputProps) {
     </div>
   );
 }
+
+

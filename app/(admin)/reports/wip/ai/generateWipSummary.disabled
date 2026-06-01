@@ -1,0 +1,186 @@
+﻿
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
+
+type CallableContext = functions.https.CallableContext;
+
+type WipSummary = {
+  total: number;
+  open: number;
+  completed: number;
+  delayed: number;
+  missingAssignee: number;
+  missingStatus: number;
+  byStatus: Record<string, number>;
+  byAssignee: Record<string, number>;
+  generatedAt: FirebaseFirestore.FieldValue;
+};
+
+type GenerateWipSummaryResponse = {
+  ok: true;
+  summary: Omit<WipSummary, "generatedAt"> & {
+    generatedAt: string;
+  };
+};
+
+function normalizeText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function normalizeKey(value: unknown, fallback = "Unknown"): string {
+  const text = normalizeText(value);
+  return text || fallback;
+}
+
+function isCompletedStatus(status: string): boolean {
+  const normalized = status.trim().toLowerCase();
+
+  return [
+    "complete",
+    "completed",
+    "done",
+    "closed",
+    "resolved",
+    "finished",
+  ].includes(normalized);
+}
+
+function coerceDate(value: unknown): Date | null {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (
+    typeof value === "object" &&
+    value !== null &&
+    "toDate" in value &&
+    typeof (value as { toDate: () => Date }).toDate === "function"
+  ) {
+    const date = (value as { toDate: () => Date }).toDate();
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  if (typeof value === "string" || typeof value === "number") {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  return null;
+}
+
+function isDelayed(row: Record<string, unknown>): boolean {
+  const status = normalizeText(row.status).toLowerCase();
+
+  if (
+    status.includes("delay") ||
+    status.includes("late") ||
+    status.includes("overdue")
+  ) {
+    return true;
+  }
+
+  const dueDate = coerceDate(
+    row.dueDate ??
+      row.followUpDate ??
+      row.expectedDate ??
+      row.targetDate ??
+      null,
+  );
+
+  if (!dueDate) return false;
+
+  return dueDate.getTime() < Date.now() && !isCompletedStatus(status);
+}
+
+export const generateWipSummary = functions.https.onCall(
+  async (
+    _data: Record<string, never>,
+    context: CallableContext,
+  ): Promise<GenerateWipSummaryResponse> => {
+    const role = context.auth?.token?.role;
+
+    if (!context.auth || (role !== "admin" && role !== "staff")) {
+      throw new functions.https.HttpsError(
+        "permission-denied",
+        "Only staff or admin users can generate WIP summaries.",
+      );
+    }
+
+    const db = getFirestore();
+    const snapshot = await db.collection("wip").get();
+
+    const summary: WipSummary = {
+      total: 0,
+      open: 0,
+      completed: 0,
+      delayed: 0,
+      missingAssignee: 0,
+      missingStatus: 0,
+      byStatus: {},
+      byAssignee: {},
+      generatedAt: FieldValue.serverTimestamp(),
+    };
+
+    for (const docSnap of snapshot.docs) {
+      const row = docSnap.data();
+
+      summary.total += 1;
+
+      const status = normalizeKey(row.status, "Missing Status");
+
+      const assignee = normalizeKey(
+        row.assignee ?? row.assignedTo ?? row.owner ?? row.employee,
+        "Unassigned",
+      );
+
+      summary.byStatus[status] = (summary.byStatus[status] ?? 0) + 1;
+      summary.byAssignee[assignee] = (summary.byAssignee[assignee] ?? 0) + 1;
+
+      if (status === "Missing Status") {
+        summary.missingStatus += 1;
+      }
+
+      if (assignee === "Unassigned") {
+        summary.missingAssignee += 1;
+      }
+
+      if (isCompletedStatus(status)) {
+        summary.completed += 1;
+      } else {
+        summary.open += 1;
+      }
+
+      if (isDelayed(row)) {
+        summary.delayed += 1;
+      }
+    }
+
+    await db.collection("analytics").doc("wipSummary").set(
+      {
+        ...summary,
+        generatedByUid: context.auth.uid,
+        generatedByEmail: context.auth.token.email ?? null,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+
+    return {
+      ok: true,
+      summary: {
+        total: summary.total,
+        open: summary.open,
+        completed: summary.completed,
+        delayed: summary.delayed,
+        missingAssignee: summary.missingAssignee,
+        missingStatus: summary.missingStatus,
+        byStatus: summary.byStatus,
+        byAssignee: summary.byAssignee,
+        generatedAt: new Date().toISOString(),
+      },
+    };
+  },
+);
+
+

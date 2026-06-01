@@ -1,23 +1,22 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
+
+import { glass, spacing, tiles } from "@/theme";
 
 type FieldGroupProps = {
   title: string;
   children: ReactNode;
 };
 
-export function FieldGroup({
-  title,
-  children,
-}: FieldGroupProps) {
+export function FieldGroup({ title, children }: FieldGroupProps) {
   return (
-    <section className="space-y-3 rounded-2xl border border-white/10 bg-black/30 p-4 shadow-inner shadow-black/20 backdrop-blur-xl">
-      <h3 className="text-sm font-semibold text-white">
-        {title}
-      </h3>
+    <section className={`${glass.inset} ${spacing.card} space-y-3`}>
+      <h3 className={tiles.title}>{title}</h3>
 
       {children}
     </section>
   );
 }
+
+

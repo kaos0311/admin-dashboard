@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { UserRound } from "lucide-react";
 
@@ -46,3 +46,5 @@ export function PatientStats({ stats }: { stats: PatientStatsType }) {
     </header>
   );
 }
+
+

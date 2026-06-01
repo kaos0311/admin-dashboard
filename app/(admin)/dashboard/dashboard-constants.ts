@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   BirthdayAnalytics,
   DashboardSummary,
   InventoryAnalytics,
@@ -47,3 +47,5 @@ export const EMPTY_INVENTORY_ANALYTICS: InventoryAnalytics = {
 
   lowStockItems: [],
 };
+
+

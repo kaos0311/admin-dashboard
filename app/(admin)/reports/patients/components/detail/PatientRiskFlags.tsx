@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   Cake,
@@ -83,7 +83,7 @@ export function PatientRiskFlags({
             <span className="font-semibold text-white">
               {getAgeTurning(
                 selected.dateOfBirth
-              ) ?? "—"}
+              ) ?? "â€”"}
             </span>{" "}
             on{" "}
             <span className="font-semibold text-white">
@@ -98,3 +98,5 @@ export function PatientRiskFlags({
     </div>
   );
 }
+
+

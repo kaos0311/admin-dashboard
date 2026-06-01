@@ -1,4 +1,4 @@
-import type { AdminUser, UserRole, UserStatus } from "../../settings-types";
+﻿import type { AdminUser, UserRole, UserStatus } from "../../settings-types";
 import { UserRow } from "./UserRow";
 
 type UsersTableProps = {
@@ -50,3 +50,5 @@ export function UsersTable({
     </div>
   );
 }
+
+

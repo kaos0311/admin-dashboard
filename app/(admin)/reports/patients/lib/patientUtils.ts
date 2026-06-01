@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   BirthdayParts,
   PatientIndex,
   PatientTask,
@@ -99,7 +99,7 @@ export function parseDate(value?: string): Date | null {
 
 export function formatDate(value?: string): string {
   const parts = getLocalDateParts(value);
-  if (!parts) return "—";
+  if (!parts) return "â€”";
 
   const displayDate = new Date(parts.year ?? 2000, parts.month - 1, parts.day);
 
@@ -149,7 +149,7 @@ export function getAgeTurning(dateOfBirth: string): number | null {
 
 export function formatBirthday(dateOfBirth: string): string {
   const birthday = getLocalDateParts(dateOfBirth);
-  if (!birthday) return "—";
+  if (!birthday) return "â€”";
 
   const displayDate = new Date(2000, birthday.month - 1, birthday.day);
 
@@ -508,7 +508,7 @@ export function buildSearchBlob(patient: PatientWithDerived): string {
     textField(patient.authorization, "parStatus"),
     textField(patient.cmn, "status"),
     textField(patient.wip, "assignedTo"),
-    
+
     (patient.sources ?? [])
   .map(
     (source) =>
@@ -522,7 +522,7 @@ export function buildSearchBlob(patient: PatientWithDerived): string {
       `${purchase.itemName} ${purchase.hcpc} ${purchase.orderId}`
   )
   .join(" "),
-    
+
     (patient.tasks ?? [])
       .map((task) => `${task.title} ${task.assignedTo} ${task.priority}`)
       .join(" "),
@@ -612,3 +612,5 @@ export function patientNeedsAttention(
       .includes("expired")
   );
 }
+
+

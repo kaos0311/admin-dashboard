@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   Loader2,
@@ -70,7 +70,7 @@ export function UserRowCard({
         </div>
 
         <p className="mt-2 break-all text-sm text-zinc-300">
-          {user.email || "—"}
+          {user.email || "â€”"}
         </p>
 
         <p className="mt-1 break-all text-xs text-zinc-500">UID: {user.uid}</p>
@@ -79,7 +79,7 @@ export function UserRowCard({
           <p>Created: {formatTimestamp(user.createdAt)}</p>
           <p>Updated: {formatTimestamp(user.updatedAt)}</p>
           <p>Theme: {user.theme}</p>
-          <p>Phone: {user.phone || "—"}</p>
+          <p>Phone: {user.phone || "â€”"}</p>
         </div>
       </div>
 
@@ -194,3 +194,5 @@ export function UserRowCard({
     </article>
   );
 }
+
+

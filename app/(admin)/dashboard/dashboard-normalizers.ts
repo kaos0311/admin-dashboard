@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   BirthdayAnalytics,
   BirthdayItem,
   DashboardSummary,
@@ -336,3 +336,5 @@ export function normalizeRental(value: unknown): RentalRow {
     ),
   };
 }
+
+

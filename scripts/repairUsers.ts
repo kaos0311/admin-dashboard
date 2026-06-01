@@ -1,4 +1,4 @@
-import { cert, getApps, initializeApp } from "firebase-admin/app";
+﻿import { cert, getApps, initializeApp } from "firebase-admin/app";
 
 import {
   FieldValue,
@@ -390,15 +390,13 @@ async function main() {
     }
 
     if (
-      !(
-        "createdAt" in data
-      ) ||
-      data.createdAt ==
-        null
-    ) {
-      updates.createdAt =
-        FieldValue.serverTimestamp();
-    }
+  !("createdAt" in data) ||
+  data.createdAt === null ||
+data.createdAt === undefined
+) {
+  updates.createdAt =
+    FieldValue.serverTimestamp();
+}
 
     if (
       Object.keys(updates)
@@ -479,3 +477,4 @@ main().catch(
     process.exitCode = 1;
   },
 );
+

@@ -1,4 +1,4 @@
-import type { InventoryItem } from "./inventoryTypes";
+﻿import type { InventoryItem } from "./inventoryTypes";
 
 export function parseInventoryDate(value: string): Date | null {
   if (!value) return null;
@@ -26,3 +26,5 @@ export function isLowStock(item: InventoryItem): boolean {
 
   return item.available <= item.reorderLevel;
 }
+
+

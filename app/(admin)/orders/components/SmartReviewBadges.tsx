@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 
@@ -37,3 +37,5 @@ export function SmartReviewBadges({ order }: { order: OrderRow }) {
     </div>
   );
 }
+
+

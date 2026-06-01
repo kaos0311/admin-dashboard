@@ -1,4 +1,4 @@
-import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
+﻿import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
 import type { SettingsMessage } from "../settings-types";
 
 type MessageCardProps = {
@@ -33,3 +33,5 @@ export function MessageCard({ message }: MessageCardProps) {
     </div>
   );
 }
+
+

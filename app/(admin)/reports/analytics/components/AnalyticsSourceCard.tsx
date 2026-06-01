@@ -1,4 +1,8 @@
+﻿"use client";
+
 import { Database } from "lucide-react";
+
+import { tiles, typography } from "@/theme";
 
 type AnalyticsSourceCardProps = {
   loading: boolean;
@@ -16,25 +20,40 @@ export function AnalyticsSourceCard({
   lastRebuiltByEmail,
 }: AnalyticsSourceCardProps) {
   return (
-    <aside className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-6 shadow-xl shadow-black/20 backdrop-blur-2xl">
-      <div className="mb-5 flex items-center gap-3">
-        <div className="rounded-2xl border border-white/10 bg-white/10 p-3 text-cyan-200">
+    <aside
+      className={[
+        tiles.base,
+        "min-w-0 overflow-hidden p-6",
+      ].join(" ")}
+      aria-labelledby="analytics-source-title"
+    >
+      <div className="mb-5 flex min-w-0 items-center gap-3">
+        <div
+          className="shrink-0 rounded-2xl border border-white/10 bg-white/10 p-3 text-cyan-200"
+          aria-hidden="true"
+        >
           <Database className="h-5 w-5" />
         </div>
 
-        <div>
-          <h2 className="text-lg font-bold text-white">
+        <div className="min-w-0">
+          <h2
+            id="analytics-source-title"
+            className={typography.cardTitle}
+          >
             Analytics Source
           </h2>
 
-          <p className="text-sm text-slate-400">
+          <p className={typography.bodyMuted}>
             Firestore summary document.
           </p>
         </div>
       </div>
 
-      <div className="space-y-3 text-sm">
-        <InfoRow label="Document" value="analytics/reports" />
+      <div className="min-w-0 space-y-3">
+        <InfoRow
+          label="Document"
+          value="analytics/reports"
+        />
 
         <InfoRow
           label="Status"
@@ -57,29 +76,47 @@ export function AnalyticsSourceCard({
         />
       </div>
 
-      <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-4 text-xs leading-5 text-slate-400">
-        This screen should stay read-heavy and cheap. Large report parsing
-        belongs in Cloud Functions. Frontend collection scans are where
-        dashboards go to die clutching a CPU graph.
+      <div className="mt-5 rounded-2xl border border-white/10 bg-black/30 p-4">
+        <p className={typography.bodyMuted}>
+          This screen should stay read-heavy and cheap. Large report parsing
+          belongs in Cloud Functions. Frontend collection scans are where
+          dashboards go to die clutching a CPU graph.
+        </p>
       </div>
     </aside>
   );
 }
 
+type InfoRowProps = {
+  label: string;
+  value: string;
+};
+
 function InfoRow({
   label,
   value,
-}: {
-  label: string;
-  value: string;
-}) {
+}: InfoRowProps) {
   return (
-    <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-3 last:border-b-0 last:pb-0">
-      <span className="text-slate-500">{label}</span>
+    <div className="flex min-w-0 items-start justify-between gap-4 border-b border-white/10 pb-3 last:border-b-0 last:pb-0">
+      <span
+        className={[
+          typography.label,
+          "shrink-0",
+        ].join(" ")}
+      >
+        {label}
+      </span>
 
-      <span className="max-w-[190px] text-right text-slate-200">
+      <span
+        className={[
+          typography.body,
+          "min-w-0 flex-1 break-words text-right text-slate-200",
+        ].join(" ")}
+      >
         {value}
       </span>
     </div>
   );
 }
+
+

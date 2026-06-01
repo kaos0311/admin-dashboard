@@ -1,4 +1,4 @@
-import type { OrderRow } from "../../dashboard-types";
+﻿import type { OrderRow } from "../../dashboard-types";
 import {
   getNullableString,
   getString,
@@ -53,3 +53,5 @@ export function privateOrderLabel(value?: string | null): string {
 
   return `#${trimmed.slice(-4)}`;
 }
+
+

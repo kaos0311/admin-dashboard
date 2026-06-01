@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 
 export type ScannerMode = "camera" | "hardware" | "manual";
 
@@ -17,3 +17,5 @@ export type ScannerModeButtonProps = {
   icon: ReactNode;
   onClick: () => void;
 };
+
+

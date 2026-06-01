@@ -1,4 +1,4 @@
-import type { Product, ProductFiltersState } from "./productTypes";
+﻿import type { Product, ProductFiltersState } from "./productTypes";
 import { normalizeSearchText } from "./productNormalize";
 import { productRiskScore, qualityWarnings } from "./productValidation";
 
@@ -130,3 +130,5 @@ export function productStats(products: Product[]) {
     highRisk: highRisk.length,
   };
 }
+
+

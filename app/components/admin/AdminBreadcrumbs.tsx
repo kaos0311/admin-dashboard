@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { ChevronRight, Home } from "lucide-react";
@@ -45,3 +45,5 @@ export function AdminBreadcrumbs() {
     </nav>
   );
 }
+
+

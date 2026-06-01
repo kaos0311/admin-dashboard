@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 
 type SectionHeaderProps = {
   eyebrow?: string;
@@ -37,3 +37,5 @@ export function SectionHeader({
     </div>
   );
 }
+
+

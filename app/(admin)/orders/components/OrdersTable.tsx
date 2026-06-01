@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   Archive,
@@ -96,7 +96,7 @@ export function OrdersTable({
                           </div>
 
                           <div className="mt-1 text-xs text-zinc-500">
-                            DOB: {order.dob || "—"}
+                            DOB: {order.dob || "â€”"}
                           </div>
 
                           {order.facilityName ? (
@@ -113,11 +113,11 @@ export function OrdersTable({
                     </td>
 
                     <td className="px-4 py-4 text-zinc-300">
-                      {order.salesOrderNumber || "—"}
+                      {order.salesOrderNumber || "â€”"}
                     </td>
 
                     <td className="max-w-xs px-4 py-4 text-zinc-300">
-                      {order.patientAddress || "—"}
+                      {order.patientAddress || "â€”"}
                     </td>
 
                     <td className="px-4 py-4">
@@ -129,11 +129,11 @@ export function OrdersTable({
 
                         <div>
                           <div className="text-zinc-200">
-                            {order.productType || "—"}
+                            {order.productType || "â€”"}
                           </div>
 
                           <div className="mt-1 text-xs text-zinc-500">
-                            ID: {order.productId || "—"}
+                            ID: {order.productId || "â€”"}
                           </div>
 
                           {order.barcode ? (
@@ -154,7 +154,7 @@ export function OrdersTable({
                     </td>
 
                     <td className="px-4 py-4 text-zinc-300">
-                      {order.phone || "—"}
+                      {order.phone || "â€”"}
                     </td>
 
                     <td className="px-4 py-4">
@@ -295,3 +295,5 @@ function ActionButton({
     </button>
   );
 }
+
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { Search, UserRound } from "lucide-react";
 
@@ -227,3 +227,5 @@ export function PatientList({
     </aside>
   );
 }
+
+

@@ -1,4 +1,4 @@
-import type { EquipmentRecall } from "../types";
+﻿import type { EquipmentRecall } from "../types";
 import { badgeClass } from "../utils/commandCenterFormat";
 import { EmptyState } from "./EmptyState";
 
@@ -26,7 +26,7 @@ export function RecallList({ recalls }: RecallListProps) {
 
               <p className="mt-1 text-sm text-neutral-400">
                 {recall.manufacturer || "Unknown manufacturer"}
-                {recall.model ? ` • ${recall.model}` : ""}
+                {recall.model ? ` â€¢ ${recall.model}` : ""}
               </p>
             </div>
 
@@ -43,3 +43,5 @@ export function RecallList({ recalls }: RecallListProps) {
     </div>
   );
 }
+
+

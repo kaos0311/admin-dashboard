@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { NotebookPen } from "lucide-react";
 
@@ -79,3 +79,5 @@ export function PatientNotesSection({
     </Section>
   );
 }
+
+

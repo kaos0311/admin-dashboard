@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   InventoryItem,
   SortDirection,
   SortKey,
@@ -48,3 +48,5 @@ export function sortInventoryItems(
     );
   });
 }
+
+

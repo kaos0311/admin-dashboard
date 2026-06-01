@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { CheckCircle2, ClipboardCheck, Plus } from "lucide-react";
 
@@ -82,7 +82,7 @@ function TaskList({
             </div>
 
             <p className="mt-1 text-xs text-zinc-400">
-              Assigned: {task.assignedTo || "—"} | Due:{" "}
+              Assigned: {task.assignedTo || "â€”"} | Due:{" "}
               {formatDate(task.dueDate)}
             </p>
           </div>
@@ -223,3 +223,4 @@ export function PatientTasksSection(props: Props) {
     </div>
   );
 }
+

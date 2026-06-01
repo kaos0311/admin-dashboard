@@ -1,4 +1,4 @@
-import type { RentalRow } from "../../dashboard-types";
+﻿import type { RentalRow } from "../../dashboard-types";
 import {
   getNullableString,
   getString,
@@ -37,3 +37,5 @@ export function normalizeRental(data: unknown): RentalRow {
       getNullableString(source, "createdAt"),
   };
 }
+
+

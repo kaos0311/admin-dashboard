@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   BirthdayParts,
   PatientRecord,
   PatientTask,
@@ -97,7 +97,7 @@ export function parseDate(value?: string): Date | null {
 
 export function formatDate(value?: string): string {
   const parts = getLocalDateParts(value);
-  if (!parts) return "—";
+  if (!parts) return "â€”";
 
   const displayDate = new Date(parts.year ?? 2000, parts.month - 1, parts.day);
 
@@ -133,7 +133,7 @@ export function getAgeTurning(dateOfBirth: string): number | null {
 
 export function formatBirthday(dateOfBirth: string): string {
   const birthday = getLocalDateParts(dateOfBirth);
-  if (!birthday) return "—";
+  if (!birthday) return "â€”";
 
   const displayDate = new Date(2000, birthday.month - 1, birthday.day);
 
@@ -376,3 +376,4 @@ export function getRiskFlags(patient: PatientRecord): string[] {
 
   return flags;
 }
+

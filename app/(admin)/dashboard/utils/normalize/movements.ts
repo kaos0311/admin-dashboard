@@ -1,4 +1,4 @@
-import type { MovementRow } from "../../dashboard-types";
+﻿import type { MovementRow } from "../../dashboard-types";
 import { getNullableString, getString, isRecord, safeNumber } from "./core";
 
 export function normalizeMovement(data: unknown): MovementRow {
@@ -31,3 +31,5 @@ export function normalizeMovement(data: unknown): MovementRow {
       getNullableString(source, "date"),
   };
 }
+
+

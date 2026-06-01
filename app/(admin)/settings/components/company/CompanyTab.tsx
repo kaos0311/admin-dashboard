@@ -1,4 +1,4 @@
-import type { Dispatch, SetStateAction } from "react";
+﻿import type { Dispatch, SetStateAction } from "react";
 import type { AppSettings, CompanySettings } from "../../settings-types";
 import { glassPanel } from "../../styles/glass";
 import { Field } from "../shared/Field";
@@ -30,7 +30,7 @@ export function CompanyTab({ settings, setSettings }: CompanyTabProps) {
       <SectionHeader
         eyebrow="Company"
         title="Company Defaults"
-        description="Set business identity, contact information, and location defaults used across operational pages. Boring stuff, until it’s wrong on paperwork and everyone starts acting surprised."
+        description="Set business identity, contact information, and location defaults used across operational pages. Boring stuff, until itâ€™s wrong on paperwork and everyone starts acting surprised."
       />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-3">
@@ -167,3 +167,5 @@ export function CompanyTab({ settings, setSettings }: CompanyTabProps) {
     </section>
   );
 }
+
+

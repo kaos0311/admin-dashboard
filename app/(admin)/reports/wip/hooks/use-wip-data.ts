@@ -1,10 +1,12 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { subscribeWipRecords } from "@/lib/firestore/wip";
-import type { WipRecord } from "@/lib/reports/wip";
-import { buildWipAnalytics } from "@/lib/reports/wip";
+import {
+  buildWipAnalytics,
+  type WipRecord,
+} from "@/lib/reports/wip";
 
 export function useWipData() {
   const [records, setRecords] = useState<WipRecord[]>([]);
@@ -44,3 +46,6 @@ export function useWipData() {
     refresh,
   };
 }
+
+
+

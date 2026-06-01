@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useCallback, useRef, useState } from "react";
 import {
@@ -232,3 +232,5 @@ export function useBarcodeScanner({
     cleanupCameraOnly,
   };
 }
+
+

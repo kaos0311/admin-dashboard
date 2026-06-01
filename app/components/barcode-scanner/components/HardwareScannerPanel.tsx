@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { RefObject } from "react";
 import { Wifi } from "lucide-react";
@@ -68,3 +68,5 @@ export default function HardwareScannerPanel({
     </section>
   );
 }
+
+

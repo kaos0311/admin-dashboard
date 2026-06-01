@@ -1,4 +1,4 @@
-export type WipStatus =
+﻿export type WipStatus =
   | "Open"
   | "Pending"
   | "Completed"
@@ -38,3 +38,5 @@ export type WipRecord = {
 
   [key: string]: unknown;
 };
+
+

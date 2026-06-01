@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { Loader2, LogOut, Settings, UserCircle } from "lucide-react";
@@ -70,3 +70,5 @@ export function AdminProfileMenu({
     </div>
   );
 }
+
+

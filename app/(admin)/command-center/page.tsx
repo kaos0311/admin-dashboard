@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   AlertTriangle,
@@ -39,26 +39,7 @@ export default function CommandCenterPage() {
     canAskJarvis,
     handleAskJarvis,
     clearJarvisMessages,
-  } = useJarvis({
-    commandContext: {
-      stats,
-      topIssues: topIssues.map((issue) => ({
-        id: issue.id,
-        issueType: issue.issueType,
-        severity: issue.severity,
-        status: issue.status,
-      })),
-      topTasks: topTasks.map((task) => ({
-        id: task.id,
-        title: task.title,
-        status: task.status,
-        priority: task.priority,
-        escalationLevel: task.escalationLevel ?? 0,
-      })),
-      hospiceCount: hospice.length,
-      recallCount: recalls.length,
-    },
-  });
+  } = useJarvis();
 
   return (
     <main className={`${glass.page} ${colors.app}`}>
@@ -67,18 +48,20 @@ export default function CommandCenterPage() {
       <div className={glass.shell}>
         <CommandHero loading={loading} openIssues={stats.openIssues} />
 
-        <JarvisPanel
-          jarvisPrompt={jarvisPrompt}
-          jarvisAnswer={jarvisAnswer}
-          jarvisLoading={jarvisLoading}
-          jarvisMessages={jarvisMessages}
-          jarvisErrorMessage={jarvisErrorMessage}
-          remainingCharacters={remainingCharacters}
-          canAskJarvis={canAskJarvis}
-          setJarvisPrompt={setJarvisPrompt}
-          handleAskJarvis={handleAskJarvis}
-          clearJarvisMessages={clearJarvisMessages}
-        />
+        <section aria-label="Jarvis command intelligence" className="mx-auto w-full max-w-5xl">
+          <JarvisPanel
+            jarvisPrompt={jarvisPrompt}
+            jarvisAnswer={jarvisAnswer}
+            jarvisLoading={jarvisLoading}
+            jarvisMessages={jarvisMessages}
+            jarvisErrorMessage={jarvisErrorMessage}
+            remainingCharacters={remainingCharacters}
+            canAskJarvis={canAskJarvis}
+            setJarvisPrompt={setJarvisPrompt}
+            handleAskJarvis={handleAskJarvis}
+            clearJarvisMessages={clearJarvisMessages}
+          />
+        </section>
 
         <section
           aria-label="Command center primary statistics"
@@ -169,4 +152,5 @@ export default function CommandCenterPage() {
     </main>
   );
 }
+
 

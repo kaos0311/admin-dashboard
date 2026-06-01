@@ -1,4 +1,4 @@
-type StatusPillProps = {
+﻿type StatusPillProps = {
   label: string;
   tone?: "neutral" | "success" | "warning" | "danger";
 };
@@ -22,3 +22,5 @@ export function StatusPill({ label, tone = "neutral" }: StatusPillProps) {
     </span>
   );
 }
+
+

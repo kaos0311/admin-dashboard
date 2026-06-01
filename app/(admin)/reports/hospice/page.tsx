@@ -1,7 +1,7 @@
-"use client";
+﻿"use client";
 
 import OpenUploadCenterButton from "@/app/components/reports/OpenUploadCenterButton";
-import { colors, glass } from "@/theme";
+import { colors, glass, typography } from "@/theme";
 
 import { HospiceEmptyState } from "./components/HospiceEmptyState";
 import { HospiceFilters } from "./components/HospiceFilters";
@@ -28,13 +28,15 @@ export default function HospiceReportPage() {
     setSortMode,
   } = useHospiceReport();
 
+  const hasPatients = filteredPatients.length > 0;
+
   return (
     <main
       className={`${glass.page} ${colors.app} relative min-h-screen overflow-x-hidden`}
     >
       <div aria-hidden="true" className={colors.grid} />
 
-      <div className={`${glass.shell} relative z-10`}>
+      <div className={`${glass.shell} relative z-10 min-w-0`}>
         <HospiceHero
           action={
             <OpenUploadCenterButton
@@ -45,8 +47,12 @@ export default function HospiceReportPage() {
         />
 
         {loadError ? (
-          <section className="rounded-3xl border border-red-500/30 bg-red-500/10 p-5 text-sm text-red-200 shadow-xl shadow-red-950/20 backdrop-blur-xl">
-            {loadError}
+          <section
+            role="alert"
+            aria-live="polite"
+            className="min-w-0 overflow-hidden rounded-3xl border border-red-500/30 bg-red-500/10 p-5 text-sm leading-6 text-red-200 shadow-xl shadow-red-950/20 backdrop-blur-xl"
+          >
+            <p className="break-words">{loadError}</p>
           </section>
         ) : null}
 
@@ -65,32 +71,44 @@ export default function HospiceReportPage() {
           onSortChange={setSortMode}
         />
 
-        <section className={`${glass.panel} relative overflow-hidden`}>
-          <div aria-hidden="true" className={colors.grid} />
-
-          <div className="relative z-10 p-6">
-            <div className="mb-5 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-              <div>
-                <h2 className="text-xl font-bold tracking-tight text-white">
+        <section
+          aria-labelledby="hospice-data-heading"
+          className={`${glass.panel} relative min-w-0 overflow-hidden`}
+        >
+          <div className="relative z-10 min-w-0 p-4 sm:p-6">
+            <div className="mb-5 flex min-w-0 flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="min-w-0">
+                <h2
+                  id="hospice-data-heading"
+                  className={`${typography.sectionTitle} min-w-0 break-words`}
+                >
                   Hospice Data
                 </h2>
 
-                <p className="mt-1 text-sm text-slate-500">
+                <p className={`${typography.bodyMuted} mt-1`}>
                   Showing {filteredPatients.length} of {patients.length} records.
                 </p>
               </div>
 
               {loading ? (
-                <div className="text-sm text-slate-400">
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className={`${typography.caption} shrink-0 text-slate-400`}
+                >
                   Loading hospice records...
                 </div>
               ) : null}
             </div>
 
-            {filteredPatients.length === 0 ? (
+            {!loading && !hasPatients ? (
               <HospiceEmptyState />
-            ) : (
+            ) : hasPatients ? (
               <HospicePatientGrid patients={filteredPatients} />
+            ) : (
+              <div className={`${typography.bodyMuted} rounded-2xl border border-white/10 bg-white/[0.04] p-5`}>
+                Loading records...
+              </div>
             )}
           </div>
         </section>
@@ -98,3 +116,5 @@ export default function HospiceReportPage() {
     </main>
   );
 }
+
+

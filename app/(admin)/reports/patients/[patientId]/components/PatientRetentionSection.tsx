@@ -1,4 +1,4 @@
-import { Clock, ShieldAlert } from "lucide-react";
+﻿import { Clock, ShieldAlert } from "lucide-react";
 
 import type { PatientRecord } from "../patient-detail-types";
 
@@ -60,3 +60,4 @@ export function PatientRetentionSection({
     </Section>
   );
 }
+

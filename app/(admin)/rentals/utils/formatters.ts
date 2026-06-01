@@ -1,4 +1,4 @@
-import type { RentalCondition, RentalStatus } from "../rentals-types";
+﻿import type { RentalCondition, RentalStatus } from "../rentals-types";
 
 export function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -9,10 +9,10 @@ export function formatCurrency(value: number): string {
 }
 
 export function formatDate(value: string): string {
-  if (!value) return "—";
+  if (!value) return "â€”";
 
   const date = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(date.getTime())) return "—";
+  if (Number.isNaN(date.getTime())) return "â€”";
 
   return new Intl.DateTimeFormat("en-US", {
     month: "short",
@@ -44,3 +44,5 @@ export function formatCondition(condition: RentalCondition): string {
 
   return map[condition] ?? "Unknown";
 }
+
+

@@ -1,4 +1,5 @@
 ﻿import type { ReactNode } from "react";
+
 import { tiles } from "@/theme";
 
 type StatCardProps = {
@@ -8,13 +9,19 @@ type StatCardProps = {
   icon?: ReactNode;
 };
 
-export default function StatCard({ label, value, helper, icon }: StatCardProps) {
+export default function StatCard({
+  label,
+  value,
+  helper,
+  icon,
+}: StatCardProps) {
   return (
     <div className={`${tiles.base} ${tiles.metric} ${tiles.hover}`}>
-      <div className="flex h-full items-stretch justify-between gap-4">
+      <div className="flex min-w-0 items-stretch justify-between gap-4">
         <div className="min-w-0">
           <p className={tiles.label}>{label}</p>
           <p className={tiles.value}>{value}</p>
+
           {helper ? <p className={tiles.helper}>{helper}</p> : null}
         </div>
 
@@ -23,4 +30,5 @@ export default function StatCard({ label, value, helper, icon }: StatCardProps) 
     </div>
   );
 }
+
 

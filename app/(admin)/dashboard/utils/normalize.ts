@@ -1,4 +1,4 @@
-export function safeString(value: unknown): string {
+﻿export function safeString(value: unknown): string {
   if (typeof value === "string") {
     return value.trim();
   }
@@ -83,3 +83,5 @@ export function normalizeSearchText(
     .replace(/\s+/g, " ")
     .trim();
 }
+
+

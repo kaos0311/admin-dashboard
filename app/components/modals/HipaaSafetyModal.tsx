@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 
@@ -185,3 +185,5 @@ export default function HipaaSafetyModal({
     </ModalShell>
   );
 }
+
+

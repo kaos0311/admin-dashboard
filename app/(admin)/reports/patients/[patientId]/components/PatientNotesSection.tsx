@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 function NoteBox({
   id,
@@ -92,3 +92,4 @@ export function PatientNotesSection(props: Props) {
     </>
   );
 }
+

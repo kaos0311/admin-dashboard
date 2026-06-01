@@ -1,4 +1,4 @@
-import {
+﻿import {
   DATE_FORMAT,
   EMPTY_VALUE,
   STATUS_LABELS,
@@ -92,3 +92,5 @@ export function formatWipPhone(phone?: string | null): string {
 
   return `(${digits.slice(0, 3)}) ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
+
+

@@ -1,4 +1,4 @@
-import type { RentalFilters, RentalRecord } from "../rentals-types";
+﻿import type { RentalFilters, RentalRecord } from "../rentals-types";
 import { rentalMatchesSearch } from "./search";
 
 export function filterRentalRecords(
@@ -12,3 +12,5 @@ export function filterRentalRecords(
     return statusMatch && rentalMatchesSearch(record, filters.search);
   });
 }
+
+

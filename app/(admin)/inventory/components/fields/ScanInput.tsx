@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useId } from "react";
 import { Barcode } from "lucide-react";
@@ -48,3 +48,5 @@ export function ScanInput({
     </div>
   );
 }
+
+

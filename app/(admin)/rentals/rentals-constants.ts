@@ -1,4 +1,4 @@
-import type {
+﻿import type {
   RentalCondition,
   RentalFilters,
   RentalFormState,
@@ -51,3 +51,5 @@ export const RENTAL_CONDITIONS: Array<{
   { label: "Poor", value: "poor" },
   { label: "Damaged", value: "damaged" },
 ];
+
+

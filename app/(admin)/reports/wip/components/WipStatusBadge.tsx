@@ -1,7 +1,11 @@
-"use client";
+﻿"use client";
 
-import type { WipPriority, WipStatus } from "@/lib/reports/wip";
-import { formatWipPriority, formatWipStatus } from "@/lib/reports/wip";
+import {
+  formatWipPriority,
+  formatWipStatus,
+  type WipPriority,
+  type WipStatus,
+} from "@/lib/reports/wip";
 
 type BadgeProps =
   | {
@@ -58,3 +62,6 @@ function getPriorityClass(priority: WipPriority) {
       return "border-slate-300/20 bg-slate-400/10 text-slate-300";
   }
 }
+
+
+

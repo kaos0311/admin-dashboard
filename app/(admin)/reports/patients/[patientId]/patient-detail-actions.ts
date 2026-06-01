@@ -1,4 +1,4 @@
-import {
+﻿import {
   addDoc,
   collection,
   doc,
@@ -59,3 +59,4 @@ export async function addTimelineEntry(params: {
     }
   );
 }
+

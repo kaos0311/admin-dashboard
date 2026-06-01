@@ -1,4 +1,4 @@
-import type { WipRecord } from "./wip-types";
+﻿import type { WipRecord } from "./wip-types";
 
 export type WipAgingBucket =
   | "0-7"
@@ -36,16 +36,16 @@ export function getWipAgingBucket(daysOld: number): WipAgingBucket {
 export function getWipAgingLabel(bucket: WipAgingBucket): string {
   switch (bucket) {
     case "0-7":
-      return "0–7 Days";
+      return "0â€“7 Days";
 
     case "8-14":
-      return "8–14 Days";
+      return "8â€“14 Days";
 
     case "15-30":
-      return "15–30 Days";
+      return "15â€“30 Days";
 
     case "31-60":
-      return "31–60 Days";
+      return "31â€“60 Days";
 
     case "60+":
       return "60+ Days";
@@ -76,3 +76,5 @@ export function summarizeWipAging(records: WipRecord[]): WipAgingSummary[] {
     count,
   }));
 }
+
+

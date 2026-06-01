@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useRef, useState } from "react";
 import { collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
@@ -153,10 +153,10 @@ export default function ReportUploadCard({
         cloudUploadVerified: false,
 
         status: "created",
-        processingStatus: "waiting_for_cloud_upload",
+
 
         uploadedByUid: user.uid,
-        uploadedByEmail: user.email ?? null,
+        createdByEmail: user.email ?? null,
 
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
@@ -173,7 +173,7 @@ export default function ReportUploadCard({
           reportTypes: reportType,
           originalFileName: selectedFile.name,
           uploadedByUid: user.uid,
-          uploadedByEmail: user.email ?? "",
+          createdByEmail: user.email ?? "",
         },
       });
 
@@ -200,8 +200,7 @@ export default function ReportUploadCard({
       await setDoc(
         jobRef,
         {
-          status: "uploaded",
-          processingStatus: "queued_for_cloud_function",
+          status: "queued_for_cloud_function",
 
           downloadURL,
           storagePath,
@@ -355,3 +354,5 @@ export default function ReportUploadCard({
     </section>
   );
 }
+
+

@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -78,7 +78,7 @@ const DOCUMENT_TYPE_OPTIONS = [
 const MAX_UPLOAD_MB = 25;
 
 function normalizeString(value: unknown): string {
-  if (value == null) return "";
+  if (value === null) return "";
   return String(value).trim();
 }
 
@@ -127,7 +127,7 @@ function detectHospicePatient(data: Record<string, unknown>): PatientSummary {
 }
 
 function formatDateLabel(value: unknown): string {
-  if (!value) return "—";
+  if (!value) return "â€”";
 
   if (
     typeof value === "object" &&
@@ -496,7 +496,7 @@ export default function PatientDocumentsPanel({
             />
 
             <div className="mt-2 text-xs text-zinc-500">
-              PDF only · Max {MAX_UPLOAD_MB}MB
+              PDF only Â· Max {MAX_UPLOAD_MB}MB
             </div>
           </div>
         </div>
@@ -683,8 +683,11 @@ function InfoRow({
       </div>
 
       <div className="mt-1 break-all text-zinc-200">
-        {value || "—"}
+        {value || "â€”"}
       </div>
     </div>
   );
 }
+
+
+

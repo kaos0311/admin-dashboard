@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   CheckSquare,
@@ -235,3 +235,5 @@ export function ProductFilters({
     </>
   );
 }
+
+

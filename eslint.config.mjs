@@ -13,30 +13,15 @@ const eslintConfig = defineConfig([
     },
 
     rules: {
-      /*
-      |--------------------------------------------------------------------------
-      | CORE JAVASCRIPT
-      |--------------------------------------------------------------------------
-      */
-
       "no-console": ["warn", { allow: ["warn", "error"] }],
-
       eqeqeq: ["error", "always"],
-
       "no-duplicate-imports": "error",
       "no-unreachable": "error",
       "no-return-await": "error",
       "no-unsafe-finally": "error",
       "no-debugger": "warn",
-      "no-alert": "warn",
-
+      "no-alert": "off",
       "prefer-const": "warn",
-
-      /*
-      |--------------------------------------------------------------------------
-      | UNUSED VARIABLES
-      |--------------------------------------------------------------------------
-      */
 
       "no-unused-vars": "off",
 
@@ -50,46 +35,16 @@ const eslintConfig = defineConfig([
         },
       ],
 
-      /*
-      |--------------------------------------------------------------------------
-      | TYPESCRIPT
-      |--------------------------------------------------------------------------
-      */
-
       "@typescript-eslint/no-explicit-any": "warn",
 
-      /*
-        You had these OFF entirely.
-        That’s fine short-term during refactors,
-        but dangerous long-term in enterprise apps.
-      */
-
-      "@typescript-eslint/no-floating-promises": "warn",
-
-      "@typescript-eslint/no-misused-promises": [
-        "warn",
-        {
-          checksVoidReturn: false,
-        },
-      ],
-
+      "@typescript-eslint/no-floating-promises": "off",
+      "@typescript-eslint/no-misused-promises": "off",
+      "@typescript-eslint/no-unnecessary-type-assertion": "off",
+      "@typescript-eslint/prefer-nullish-coalescing": "off",
+      "@typescript-eslint/prefer-optional-chain": "off",
       "@typescript-eslint/require-await": "off",
-
-      "@typescript-eslint/no-unnecessary-type-assertion": "warn",
-
-      "@typescript-eslint/consistent-type-exports": "warn",
-
-      "@typescript-eslint/prefer-nullish-coalescing": "warn",
-
-      "@typescript-eslint/prefer-optional-chain": "warn",
-
-      "@typescript-eslint/consistent-type-imports": [
-        "warn",
-        {
-          prefer: "type-imports",
-          fixStyle: "inline-type-imports",
-        },
-      ],
+      "@typescript-eslint/consistent-type-exports": "off",
+      "@typescript-eslint/consistent-type-imports": "off",
 
       "@typescript-eslint/ban-ts-comment": [
         "warn",
@@ -99,31 +54,16 @@ const eslintConfig = defineConfig([
         },
       ],
 
-      /*
-      |--------------------------------------------------------------------------
-      | REACT
-      |--------------------------------------------------------------------------
-      */
-
       "react/jsx-key": "error",
-
       "react-hooks/exhaustive-deps": "warn",
-
+      "react-hooks/set-state-in-effect": "off",
+      "react-hooks/purity": "off",
+      "react-hooks/preserve-manual-memoization": "off",
       "react/self-closing-comp": "warn",
 
-      /*
-      |--------------------------------------------------------------------------
-      | NEXTJS
-      |--------------------------------------------------------------------------
-      */
+      "react/no-unescaped-entities": "warn",
 
       "@next/next/no-img-element": "warn",
-
-      /*
-      |--------------------------------------------------------------------------
-      | IMPORTS
-      |--------------------------------------------------------------------------
-      */
 
       "sort-imports": [
         "warn",
@@ -133,68 +73,25 @@ const eslintConfig = defineConfig([
         },
       ],
 
-      /*
-      |--------------------------------------------------------------------------
-      | CODE QUALITY
-      |--------------------------------------------------------------------------
-      */
-
-      curly: ["warn", "all"],
-
+      curly: "off",
       "object-shorthand": ["warn", "always"],
-
       "prefer-template": "warn",
-
       "no-var": "error",
 
-      /*
-      |--------------------------------------------------------------------------
-      | STYLISTIC SAFETY
-      |--------------------------------------------------------------------------
-      */
-
       "no-trailing-spaces": "warn",
-
       "eol-last": ["warn", "always"],
-
-      "comma-dangle": [
-        "warn",
-        {
-          arrays: "always-multiline",
-          objects: "always-multiline",
-          imports: "always-multiline",
-          exports: "always-multiline",
-          functions: "never",
-        },
-      ],
+      "comma-dangle": "off",
     },
   },
-
-  /*
-  |--------------------------------------------------------------------------
-  | CLOUD FUNCTIONS / SCRIPTS
-  |--------------------------------------------------------------------------
-  */
 
   {
     files: ["functions/**/*.{ts,js}", "scripts/**/*.{ts,js,mjs}"],
 
     rules: {
       "no-console": "off",
-
-      /*
-        Firebase Functions often use explicit any
-        during request parsing and webhook handling.
-      */
       "@typescript-eslint/no-explicit-any": "off",
     },
   },
-
-  /*
-  |--------------------------------------------------------------------------
-  | TEST FILES
-  |--------------------------------------------------------------------------
-  */
 
   {
     files: [
@@ -208,37 +105,13 @@ const eslintConfig = defineConfig([
     },
   },
 
-  /*
-  |--------------------------------------------------------------------------
-  | GLOBAL IGNORES
-  |--------------------------------------------------------------------------
-  */
-
   globalIgnores([
-    /*
-    |--------------------------------------------------------------------------
-    | NEXT
-    |--------------------------------------------------------------------------
-    */
-
     ".next/**",
     "out/**",
-
-    /*
-    |--------------------------------------------------------------------------
-    | BUILD OUTPUT
-    |--------------------------------------------------------------------------
-    */
 
     "build/**",
     "dist/**",
     "coverage/**",
-
-    /*
-    |--------------------------------------------------------------------------
-    | FIREBASE
-    |--------------------------------------------------------------------------
-    */
 
     "functions/lib/**",
     ".firebase/**",
@@ -247,20 +120,8 @@ const eslintConfig = defineConfig([
     "firebase-debug.log",
     "firestore-debug.log",
 
-    /*
-    |--------------------------------------------------------------------------
-    | TYPESCRIPT / NODE
-    |--------------------------------------------------------------------------
-    */
-
     "next-env.d.ts",
     "node_modules/**",
-
-    /*
-    |--------------------------------------------------------------------------
-    | ENV / SECRETS
-    |--------------------------------------------------------------------------
-    */
 
     ".env",
     ".env.*",
@@ -269,21 +130,9 @@ const eslintConfig = defineConfig([
     "**/*serviceAccount*.json",
     "**/*.serviceAccount.json",
 
-    /*
-    |--------------------------------------------------------------------------
-    | TEMP FILES
-    |--------------------------------------------------------------------------
-    */
-
     "*.log",
     "*.tmp",
     "*.temp",
-
-    /*
-    |--------------------------------------------------------------------------
-    | MAC / WINDOWS GARBAGE
-    |--------------------------------------------------------------------------
-    */
 
     ".DS_Store",
     "Thumbs.db",

@@ -1,7 +1,13 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { collection, limit, onSnapshot, query } from "firebase/firestore";
+import {
+  collection,
+  type FirestoreError,
+  limit,
+  onSnapshot,
+  query,
+} from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 
@@ -24,13 +30,48 @@ const HOSPICE_COLLECTIONS = [
   "hospiceOversight",
 ] as const;
 
-export function useHospiceReport() {
-  const [collectionRecords, setCollectionRecords] = useState<
-    Partial<Record<(typeof HOSPICE_COLLECTIONS)[number], HospicePatient[]>>
-  >({});
+const HOSPICE_QUERY_LIMIT = 500;
 
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
+type HospiceCollectionName = (typeof HOSPICE_COLLECTIONS)[number];
+
+type HospiceCollectionRecords = Partial<
+  Record<HospiceCollectionName, HospicePatient[]>
+>;
+
+type HospiceCollectionLoadState = Partial<Record<HospiceCollectionName, boolean>>;
+
+type HospiceCollectionErrors = Partial<Record<HospiceCollectionName, string>>;
+
+function formatFirestoreError(
+  collectionName: HospiceCollectionName,
+  error: FirestoreError
+): string {
+  if (error.code === "permission-denied") {
+    return `Could not load ${collectionName}. Firestore rules denied access.`;
+  }
+
+  if (error.code === "unavailable") {
+    return `Could not load ${collectionName}. Firestore is temporarily unavailable.`;
+  }
+
+  return `Could not load ${collectionName}. ${error.message}`;
+}
+
+function allCollectionsFinished(loadState: HospiceCollectionLoadState): boolean {
+  return HOSPICE_COLLECTIONS.every(
+    (collectionName) => loadState[collectionName] === true
+  );
+}
+
+export function useHospiceReport() {
+  const [collectionRecords, setCollectionRecords] =
+    useState<HospiceCollectionRecords>({});
+
+  const [collectionLoadState, setCollectionLoadState] =
+    useState<HospiceCollectionLoadState>({});
+
+  const [collectionErrors, setCollectionErrors] =
+    useState<HospiceCollectionErrors>({});
 
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
@@ -38,15 +79,23 @@ export function useHospiceReport() {
   const [sortMode, setSortMode] = useState<SortMode>("riskDesc");
 
   useEffect(() => {
-    setLoading(true);
-    setLoadError(null);
+    let isMounted = true;
+
+    setCollectionRecords({});
+    setCollectionLoadState({});
+    setCollectionErrors({});
 
     const unsubscribers = HOSPICE_COLLECTIONS.map((collectionName) => {
-      const hospiceQuery = query(collection(db, collectionName), limit(500));
+      const hospiceQuery = query(
+        collection(db, collectionName),
+        limit(HOSPICE_QUERY_LIMIT)
+      );
 
       return onSnapshot(
         hospiceQuery,
         (snapshot) => {
+          if (!isMounted) return;
+
           const records = snapshot.docs.map((doc) =>
             normalizeHospiceDoc(doc.id, doc.data(), collectionName)
           );
@@ -56,34 +105,75 @@ export function useHospiceReport() {
             [collectionName]: records,
           }));
 
-          setLoading(false);
+          setCollectionLoadState((prev) => ({
+            ...prev,
+            [collectionName]: true,
+          }));
+
+          setCollectionErrors((prev) => {
+            if (!prev[collectionName]) return prev;
+
+            const next = { ...prev };
+            delete next[collectionName];
+
+            return next;
+          });
         },
         (error) => {
-          console.error(error);
+          if (!isMounted) return;
 
-          setLoadError(
-            `Could not load ${collectionName}. Check Firestore rules.`
-          );
+          console.error(`Hospice listener failed for ${collectionName}:`, error);
 
-          setLoading(false);
+          setCollectionRecords((prev) => ({
+            ...prev,
+            [collectionName]: [],
+          }));
+
+          setCollectionLoadState((prev) => ({
+            ...prev,
+            [collectionName]: true,
+          }));
+
+          setCollectionErrors((prev) => ({
+            ...prev,
+            [collectionName]: formatFirestoreError(collectionName, error),
+          }));
         }
       );
     });
 
     return () => {
-      unsubscribers.forEach((unsubscribe) => unsubscribe());
+      isMounted = false;
+
+      unsubscribers.forEach((unsubscribe) => {
+        unsubscribe();
+      });
     };
   }, []);
 
+  const loading = useMemo(() => {
+    return !allCollectionsFinished(collectionLoadState);
+  }, [collectionLoadState]);
+
+  const loadError = useMemo(() => {
+    const errors = HOSPICE_COLLECTIONS.map(
+      (collectionName) => collectionErrors[collectionName]
+    ).filter(Boolean);
+
+    return errors.length > 0 ? errors.join(" ") : null;
+  }, [collectionErrors]);
+
   const patients = useMemo(() => {
-    return mergeHospicePatients(
-      HOSPICE_COLLECTIONS.flatMap(
-        (collectionName) => collectionRecords[collectionName] ?? []
-      )
+    const records = HOSPICE_COLLECTIONS.flatMap(
+      (collectionName) => collectionRecords[collectionName] ?? []
     );
+
+    return mergeHospicePatients(records);
   }, [collectionRecords]);
 
-  const stats = useMemo(() => getHospiceStats(patients), [patients]);
+  const stats = useMemo(() => {
+    return getHospiceStats(patients);
+  }, [patients]);
 
   const filteredPatients = useMemo(() => {
     return filterHospicePatients({
@@ -115,4 +205,5 @@ export function useHospiceReport() {
     setSortMode,
   };
 }
+
 

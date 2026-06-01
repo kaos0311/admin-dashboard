@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+﻿import type { ReactNode } from "react";
 import { typography } from "@/theme";
 
 type AdminPageHeaderProps = {
@@ -39,3 +39,5 @@ export function AdminPageHeader({
     </header>
   );
 }
+
+

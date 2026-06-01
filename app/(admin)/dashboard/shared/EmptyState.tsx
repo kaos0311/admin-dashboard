@@ -1,4 +1,6 @@
-"use client";
+﻿"use client";
+
+import { glass, tiles } from "@/theme";
 
 type EmptyStateProps = {
   text: string;
@@ -6,8 +8,10 @@ type EmptyStateProps = {
 
 export function EmptyState({ text }: EmptyStateProps) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/50">
-      {text}
+    <div className={`${glass.inset} p-4`}>
+      <p className={tiles.helper}>{text}</p>
     </div>
   );
 }
+
+

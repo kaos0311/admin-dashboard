@@ -1,4 +1,4 @@
-type SearchTextInput =
+﻿type SearchTextInput =
   | unknown[]
   | Record<string, unknown>
   | string
@@ -51,3 +51,5 @@ export function buildSearchText(input: SearchTextInput): string {
 
   return normalizeSearchText(values.filter(Boolean).join(" "));
 }
+
+

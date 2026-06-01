@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   Archive,
@@ -63,7 +63,7 @@ export function PatientHeader({
           <div className="flex flex-wrap gap-6 text-sm text-zinc-400">
             <div>
               <span className="text-zinc-500">DOB:</span>{" "}
-              {selected.dateOfBirth || "—"}
+              {selected.dateOfBirth || "â€”"}
             </div>
 
             <div>
@@ -147,3 +147,5 @@ export function PatientHeader({
     </div>
   );
 }
+
+

@@ -1,4 +1,4 @@
-export function SummaryCard({
+﻿export function SummaryCard({
   label,
   value,
   critical = false,
@@ -23,3 +23,5 @@ export function SummaryCard({
     </div>
   );
 }
+
+

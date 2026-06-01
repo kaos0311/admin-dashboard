@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { Bell, CircleAlert } from "lucide-react";
@@ -67,3 +67,5 @@ export function AdminNotifications() {
     </div>
   );
 }
+
+

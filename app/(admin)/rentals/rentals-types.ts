@@ -1,4 +1,4 @@
-export type RentalStatus =
+﻿export type RentalStatus =
   | "available"
   | "checked_out"
   | "overdue"
@@ -55,3 +55,5 @@ export type RentalFilters = {
   search: string;
   status: "all" | RentalStatus;
 };
+
+

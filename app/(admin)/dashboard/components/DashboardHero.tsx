@@ -1,6 +1,8 @@
-"use client";
+﻿"use client";
 
 import { RefreshCcw } from "lucide-react";
+
+import { buttons, glass, spacing, typography } from "@/theme";
 
 type DashboardHeroProps = {
   loading: boolean;
@@ -18,21 +20,20 @@ export function DashboardHero({
   const isBusy = loading || refreshing;
 
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-gradient-to-br from-slate-900 via-slate-950 to-black p-6 shadow-2xl">
-      <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
-        <div>
-          <p className="text-sm font-medium uppercase tracking-[0.3em] text-blue-300">
+    <section className={`${glass.panel} ${glass.panelBefore} ${spacing.section}`}>
+      <div className="relative z-10 flex min-w-0 flex-col justify-between gap-4 md:flex-row md:items-center">
+        <div className="min-w-0">
+          <p className={typography.caption}>
             Advanced Home Medical
           </p>
 
-          <h1 className="mt-3 text-4xl font-black tracking-tight text-white">
+          <h1 className={`${typography.hero} mt-3`}>
             Command Dashboard
           </h1>
 
-          <p className="mt-2 max-w-2xl text-sm text-white/60">
-            Live operational overview for orders, rentals,
-            inventory, reports, WIP activity, and patient
-            birthday tracking.
+          <p className={`${typography.bodyMuted} mt-2 max-w-2xl`}>
+            Live operational overview for orders, rentals, inventory, reports,
+            WIP activity, and patient birthday tracking.
           </p>
         </div>
 
@@ -40,23 +41,20 @@ export function DashboardHero({
           type="button"
           onClick={() => void onRefresh()}
           disabled={isBusy}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-50"
+          className={buttons.secondary}
         >
-          <RefreshCcw
-            className={`h-4 w-4 ${
-              isBusy ? "animate-spin" : ""
-            }`}
-          />
-
+          <RefreshCcw className={`h-4 w-4 ${isBusy ? "animate-spin" : ""}`} />
           {isBusy ? "Refreshing..." : "Refresh"}
         </button>
       </div>
 
       {error ? (
-        <div className="mt-5 rounded-2xl border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-200">
+        <div className={`${glass.inset} relative z-10 mt-5 p-4 text-sm text-rose-200`}>
           {error}
         </div>
       ) : null}
     </section>
   );
 }
+
+

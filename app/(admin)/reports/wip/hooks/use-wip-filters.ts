@@ -1,13 +1,13 @@
-"use client";
+﻿"use client";
 
 import { useMemo, useState } from "react";
 
-import type {
-  WipAgingBucket,
-  WipRecord,
-  WipStatusFilter,
+import {
+  filterByAging,
+  type WipAgingBucket,
+  type WipRecord,
+  type WipStatusFilter,
 } from "@/lib/reports/wip";
-import { filterByAging } from "@/lib/reports/wip";
 
 export function useWipFilters(records: WipRecord[]) {
   const [search, setSearch] = useState("");
@@ -52,3 +52,6 @@ export function useWipFilters(records: WipRecord[]) {
     filteredRecords,
   };
 }
+
+
+

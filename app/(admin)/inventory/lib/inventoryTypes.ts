@@ -1,4 +1,4 @@
-export const INVENTORY_STATUSES = [
+﻿export const INVENTORY_STATUSES = [
   "available",
   "inactive",
   "damaged",
@@ -128,3 +128,5 @@ export type MovementPayload = {
   notes: string;
   affectedIds?: string[];
 };
+
+

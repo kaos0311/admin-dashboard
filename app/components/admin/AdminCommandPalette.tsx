@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import Link from "next/link";
 import { Command, X } from "lucide-react";
@@ -112,3 +112,5 @@ export function AdminCommandPalette() {
     </>
   );
 }
+
+

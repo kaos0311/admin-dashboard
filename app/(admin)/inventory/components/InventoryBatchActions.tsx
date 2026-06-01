@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { CheckSquare } from "lucide-react";
 
@@ -55,3 +55,5 @@ export function InventoryBatchActions({
     </div>
   );
 }
+
+
