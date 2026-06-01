@@ -1,7 +1,7 @@
 ﻿import { ArrowDownAZ, Search } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { glass, typography } from "@/theme";
+import { glass } from "@/theme";
 
 import {
   RISK_OPTIONS,
@@ -136,5 +136,6 @@ function SelectField<TValue extends string>({
     </label>
   );
 }
+
 
 

@@ -1,7 +1,5 @@
 ﻿"use client";
 
-import { tiles } from "@/theme";
-
 import { AlertTriangle, Boxes } from "lucide-react";
 
 type InventoryStatsProps = {
@@ -72,6 +70,7 @@ function StatCard({
     </div>
   );
 }
+
 
 
 

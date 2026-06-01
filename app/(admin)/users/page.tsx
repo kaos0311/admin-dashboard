@@ -7,8 +7,7 @@ import {
   RefreshCw,
   ShieldCheck,
   UserCog,
-  Users,
-} from "lucide-react";
+  } from "lucide-react";
 
 import toast from "react-hot-toast";
 
@@ -56,24 +55,24 @@ export default function UsersPage() {
     auth.currentUser?.uid ?? "";
 
   const {
-    users,
-    setUsers,
-    filteredUsers,
-    stats,
-    loadingUsers,
-    loadingMore,
-    hasMore,
-    loadMoreUsers,
-    searchInput,
-    setSearchInput,
-    roleFilter,
-    setRoleFilter,
-    statusFilter,
-    setStatusFilter,
-  } = useUsersData({
-    authLoading,
-    isAdmin,
-  });
+  users,
+  setUsers,
+  filteredUsers,
+  stats,
+  loadingUsers,
+  loadingMore,
+  hasMore,
+  loadMoreUsers,
+  searchInput,
+  setSearchInput,
+  roleFilter,
+  setRoleFilter,
+  statusFilter,
+  setStatusFilter,
+} = useUsersData({
+  authLoading,
+  isAdmin,
+});
 
   const [
     showCreateForm,
@@ -117,7 +116,7 @@ export default function UsersPage() {
       const result =
         await fn({});
 
-      console.log(
+      console.warn(
         "BOOTSTRAP RESULT:",
         result.data
       );
@@ -507,7 +506,7 @@ export default function UsersPage() {
                 <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
                   Administrative
                   control for dashboard
-                  users, role
+                  role
                   permissions, access
                   states, onboarding,
                   authentication
@@ -676,6 +675,13 @@ export default function UsersPage() {
     </main>
   );
 }
+
+
+
+
+
+
+
 
 
 

@@ -4,7 +4,6 @@ import { useMemo, useState } from "react";
 
 import {
   Boxes,
-  Loader2,
   ScanLine,
   ShieldCheck,
 } from "lucide-react";
@@ -474,6 +473,7 @@ export default function InventoryPage() {
     </main>
   );
 }
+
 
 
 

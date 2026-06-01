@@ -14,10 +14,6 @@ function setThemeAttribute(theme: Exclude<ThemeMode, "system">) {
   }
 }
 
-function clearThemeAttribute() {
-  document.documentElement.removeAttribute("data-theme");
-}
-
 function getSystemTheme(): "light" | "dark" {
   return window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
@@ -78,5 +74,8 @@ export default function ThemeController() {
 
   return null;
 }
+
+
+
 
 

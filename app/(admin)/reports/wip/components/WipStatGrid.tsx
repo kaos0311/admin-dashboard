@@ -1,7 +1,5 @@
 ﻿"use client";
 
-import { tiles } from "@/theme";
-
 import {
   AlertTriangle,
   CheckCircle2,
@@ -75,6 +73,7 @@ export function WipStatGrid({ analytics }: WipStatGridProps) {
     </section>
   );
 }
+
 
 
 

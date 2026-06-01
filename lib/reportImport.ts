@@ -1,4 +1,4 @@
-import {
+﻿import {
   addDoc,
   arrayUnion,
   collection,
@@ -13,7 +13,6 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 
 import { db, storage } from "@/lib/firebase";
 import type { ReportType } from "@/lib/reportTypes";
-import { indexInsurancePatientsFromRows } from "@/lib/insuranceIndex";
 export type RawCsvRow = Record<string, unknown>;
 export type FirestoreRow = Record<string, string | number | boolean | null>;
 
@@ -860,3 +859,7 @@ export async function importReportFile({
     rowCount: normalizedRows.length,
   };
 }
+
+
+
+

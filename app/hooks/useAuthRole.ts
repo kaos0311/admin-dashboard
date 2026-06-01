@@ -80,7 +80,7 @@ export function useAuthRole(): UseAuthRoleResult {
           const dbRole = parseRole(data.role);
           if (dbRole) resolvedRole = dbRole;
 
-          console.log("AUTH ROLE DEBUG:", {
+          console.warn("AUTH ROLE DEBUG:", {
             uid: currentUser.uid,
             email: currentUser.email,
             userDocExists: true,
@@ -157,5 +157,6 @@ export function useAuthRole(): UseAuthRoleResult {
     };
   }, [user, role, loading, error, active]);
 }
+
 
 

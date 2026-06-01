@@ -13,8 +13,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
-  updateDoc,
-} from "firebase/firestore";
+  } from "firebase/firestore";
 
 import {
   deleteObject,
@@ -24,13 +23,11 @@ import {
 } from "firebase/storage";
 
 import {
-  AlertTriangle,
   Download,
   ExternalLink,
   FileText,
   HeartPulse,
   Loader2,
-  ShieldAlert,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -688,6 +685,7 @@ function InfoRow({
     </div>
   );
 }
+
 
 
 

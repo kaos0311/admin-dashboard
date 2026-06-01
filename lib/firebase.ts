@@ -1,4 +1,4 @@
-import { type FirebaseApp, getApp, getApps, initializeApp } from "firebase/app";
+﻿import { type FirebaseApp, getApp, getApps, initializeApp } from "firebase/app";
 import {
   initializeAppCheck,
   ReCaptchaEnterpriseProvider,
@@ -69,7 +69,7 @@ function initAppCheck(): void {
 
   appCheckStarted = true;
 
-  console.log("App Check initialized");
+  console.warn("App Check initialized");
 }
 
 initAppCheck();
@@ -86,3 +86,4 @@ if (typeof window !== "undefined") {
 }
 
 export default app;
+

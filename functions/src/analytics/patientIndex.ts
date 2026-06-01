@@ -6,8 +6,6 @@ const db = getFirestore();
 const INDEX_VERSION = "patient-index-v6-subcollections";
 const MAX_BULK_RETRY_ATTEMPTS = 3;
 const MAX_BIRTHDAY_ANALYTICS_ROWS = 500;
-const MAX_SOURCE_LABELS_ON_ROOT = 25;
-
 type PatientIndexSource = {
   reportId: string;
   reportType: string;
@@ -1874,4 +1872,5 @@ export async function updatePatientIndexFromRows(args: {
     { merge: true }
   );
 }
+
 

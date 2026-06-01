@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import {
   collection,
@@ -58,7 +58,7 @@ export async function commitChunkedSets(
     }
 
     if (process.env.NODE_ENV !== "production") {
-      console.log(
+      console.warn(
         `[Firestore Queue] committing chunk ${i + 1}/${chunks.length} for ${debugLabel} (${chunk.length} docs)`
       );
     }
@@ -100,7 +100,7 @@ export async function commitChunkedWithCustomBuilder<T>(
     }
 
     if (process.env.NODE_ENV !== "production") {
-      console.log(
+      console.warn(
         `[Firestore Queue] committing chunk ${i + 1}/${chunks.length} for ${debugLabel} (${chunk.length} ops)`
       );
     }
@@ -115,3 +115,4 @@ export async function commitChunkedWithCustomBuilder<T>(
 
   return { written };
 }
+

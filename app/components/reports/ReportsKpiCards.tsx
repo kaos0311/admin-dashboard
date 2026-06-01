@@ -1,5 +1,4 @@
-﻿import { tiles } from "@/theme";
-"use client";
+﻿"use client";
 
 import {
   Activity,
@@ -211,6 +210,7 @@ export default function ReportsKpiCards({
     </section>
   );
 }
+
 
 
 

@@ -22,10 +22,11 @@ export function HospiceEmptyState() {
         Upload hospice reports or verify your importer is writing data to
         hospicePatients, hospiceCare, or hospiceOversight. Empty pages look fine
         in design mockups. In operations, they usually mean missing data,
-        broken imports, or a Firestore problem waiting to ruin someone's day.
+        broken imports, or a Firestore problem waiting to ruin someone&apos;s day.
       </p>
     </div>
   );
 }
+
 
 

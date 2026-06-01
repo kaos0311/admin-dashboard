@@ -1,5 +1,4 @@
-﻿import { tiles } from "@/theme";
-import { useMemo } from "react";
+﻿import { useMemo } from "react";
 
 import { isSuspiciousAuditEvent } from "../utils/auditRisk";
 import type { AuditLogRow } from "../utils/auditTypes";
@@ -44,6 +43,7 @@ export function AuditStats({ logs }: { logs: AuditLogRow[] }) {
     </section>
   );
 }
+
 
 
 

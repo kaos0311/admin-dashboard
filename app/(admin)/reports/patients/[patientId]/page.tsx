@@ -5,7 +5,6 @@ import { useParams, useRouter } from "next/navigation";
 import {
   ArrowLeft,
   CalendarClock,
-  ClipboardCheck,
   NotebookPen,
   X,
 } from "lucide-react";
@@ -70,21 +69,27 @@ export default function PatientDetailPage() {
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
   const [newTaskPriority, setNewTaskPriority] =
     useState<PatientTaskPriority>("routine");
-
   useEffect(() => {
-    if (!patient) {
-      setNotesDraft("");
-      setCareNotesDraft("");
-      setEquipmentNotesDraft("");
-      setBillingNotesDraft("");
-      return;
-    }
+  if (!patient) {
+    setNotesDraft("");
+    setCareNotesDraft("");
+    setEquipmentNotesDraft("");
+    setBillingNotesDraft("");
+    return;
+  }
 
-    setNotesDraft(patient.notes ?? "");
-    setCareNotesDraft(patient.careNotes ?? "");
-    setEquipmentNotesDraft(patient.equipmentNotes ?? "");
-    setBillingNotesDraft(patient.billingNotes ?? "");
-  }, [patient?.id]);
+  setNotesDraft(patient.notes ?? "");
+  setCareNotesDraft(patient.careNotes ?? "");
+  setEquipmentNotesDraft(patient.equipmentNotes ?? "");
+  setBillingNotesDraft(patient.billingNotes ?? "");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    patient?.id,
+  patient?.notes,
+  patient?.careNotes,
+  patient?.equipmentNotes,
+  patient?.billingNotes,
+]);
 
   const birthdayInfo = useMemo(() => {
     if (!patient?.dateOfBirth) return null;
@@ -466,4 +471,7 @@ export default function PatientDetailPage() {
     </PageShell>
   );
 }
+
+
+
 

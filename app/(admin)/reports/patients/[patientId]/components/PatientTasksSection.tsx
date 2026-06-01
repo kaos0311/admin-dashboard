@@ -11,7 +11,6 @@ import type {
 import {
   EmptyState,
   StatusSmall,
-  SuccessIcon,
   TaskPriorityPill,
 } from "./PatientDetailPrimitives";
 
@@ -223,4 +222,5 @@ export function PatientTasksSection(props: Props) {
     </div>
   );
 }
+
 
