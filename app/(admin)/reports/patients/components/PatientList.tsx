@@ -2,11 +2,14 @@
 
 import { Search, UserRound } from "lucide-react";
 
+import { badges, forms, glass, spacing, typography } from "@/theme";
+
 import type {
   PatientTab,
   PatientWithDerived,
   SortMode,
 } from "../lib/patientTypes";
+
 import {
   formatBirthday,
   formatDate,
@@ -27,15 +30,33 @@ type PatientListProps = {
 };
 
 function getStatusBadgeClass(status: PatientWithDerived["status"]): string {
-  if (status === "active") {
-    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-300";
-  }
+  if (status === "active") return badges.success;
+  if (status === "archived") return badges.warning;
 
-  if (status === "archived") {
-    return "border-amber-500/30 bg-amber-500/10 text-amber-300";
-  }
+  return badges.danger;
+}
 
-  return "border-red-500/30 bg-red-500/10 text-red-300";
+function MetricBox({ label, value }: { label: string; value: string | number }) {
+  return (
+    <div className={glass.insetPadded}>
+      <p className={typography.caption}>{label}</p>
+      <p className={`mt-1 ${typography.bodyStrong}`}>{value}</p>
+    </div>
+  );
+}
+
+function SmallBadge({
+  label,
+  tone = "neutral",
+}: {
+  label: string;
+  tone?: "neutral" | "info";
+}) {
+  return (
+    <span className={`${glass.chip} ${tone === "info" ? badges.info : badges.neutral}`}>
+      {label}
+    </span>
+  );
 }
 
 export function PatientList({
@@ -53,44 +74,44 @@ export function PatientList({
   const activeSelectedId = selectedId || selectedFallbackId;
 
   return (
-    <aside className="rounded-3xl border border-white/10 bg-neutral-950 p-4">
-      <div className="mb-4 space-y-3">
+    <aside className={glass.cardPadded}>
+      <div className={`mb-4 ${spacing.stackTight}`}>
         <div>
-          <h2 className="text-lg font-semibold text-white">Patients</h2>
-          <p className="text-sm text-zinc-400">
+          <h2 className={typography.cardTitle}>Patients</h2>
+
+          <p className={typography.bodyMuted}>
             Showing {filtered.length.toLocaleString()} record
             {filtered.length === 1 ? "" : "s"} for{" "}
-            <span className="text-zinc-300">{tab}</span>.
+            <span className={typography.bodyStrong}>{tab}</span>.
           </p>
         </div>
 
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Search patients
-          </span>
+        <label className={forms.field}>
+          <span className={forms.label}>Search patients</span>
 
-          <div className="flex items-center gap-2 rounded-2xl border border-white/10 bg-black px-3 py-2">
-            <Search className="h-4 w-4 text-zinc-500" aria-hidden="true" />
+          <div className={`${glass.insetPadded} flex items-center gap-2`}>
+            <Search
+              className="h-4 w-4 shrink-0 text-slate-500"
+              aria-hidden="true"
+            />
 
             <input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Name, DOB, phone, equipment..."
-              className="w-full bg-transparent text-sm text-white outline-none placeholder:text-zinc-600"
+              className="w-full bg-transparent text-sm text-white outline-none placeholder:text-slate-600"
               type="search"
             />
           </div>
         </label>
 
-        <label className="block">
-          <span className="mb-1 block text-xs font-medium uppercase tracking-wide text-zinc-500">
-            Sort records
-          </span>
+        <label className={forms.field}>
+          <span className={forms.label}>Sort records</span>
 
           <select
             value={sortMode}
             onChange={(event) => setSortMode(event.target.value as SortMode)}
-            className="w-full rounded-2xl border border-white/10 bg-black px-3 py-2 text-sm text-white outline-none"
+            className={forms.select}
             title="Sort patient records"
           >
             <option value="nameAsc">Name A-Z</option>
@@ -106,12 +127,14 @@ export function PatientList({
 
       <div className="max-h-[720px] space-y-2 overflow-y-auto pr-1">
         {loading ? (
-          <div className="rounded-2xl border border-white/10 bg-black/40 p-4 text-sm text-zinc-400">
-            Loading patient list...
+          <div className={glass.emptyState}>
+            <p className={typography.bodyMuted}>Loading patient list...</p>
           </div>
         ) : filtered.length === 0 ? (
-          <div className="rounded-2xl border border-white/10 bg-black/40 p-4 text-sm text-zinc-400">
-            No patients match the current filters.
+          <div className={glass.emptyState}>
+            <p className={typography.bodyMuted}>
+              No patients match the current filters.
+            </p>
           </div>
         ) : (
           filtered.map((patient: PatientWithDerived) => {
@@ -123,100 +146,76 @@ export function PatientList({
                 key={patient.id}
                 type="button"
                 onClick={() => setSelectedId(patient.id)}
+                aria-pressed={isSelected}
                 className={[
-                  "w-full rounded-2xl border p-4 text-left transition",
-                  isSelected
-                    ? "border-blue-400/50 bg-blue-500/10"
-                    : "border-white/10 bg-black/40 hover:border-white/20 hover:bg-white/[0.03]",
+                  glass.listItem,
+                  "w-full text-left",
+                  isSelected ? "border-cyan-300/35 bg-cyan-300/10" : "",
                 ].join(" ")}
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2">
+                    <div className={spacing.inline}>
                       <UserRound
-                        className="h-4 w-4 shrink-0 text-zinc-500"
+                        className="h-4 w-4 shrink-0 text-slate-500"
                         aria-hidden="true"
                       />
 
-                      <h3 className="truncate text-sm font-semibold text-white">
+                      <h3 className={`truncate ${typography.bodyStrong}`}>
                         {patient.fullName || "Unnamed Patient"}
                       </h3>
                     </div>
 
-                    <p className="mt-1 text-xs text-zinc-500">
+                    <p className={`mt-1 ${typography.smallMuted}`}>
                       DOB:{" "}
-                      <span className="text-zinc-300">
+                      <span className={typography.small}>
                         {formatDate(patient.dateOfBirth)}
                       </span>
                       {ageTurning !== null ? (
                         <>
                           {" "}
                           | Turns{" "}
-                          <span className="text-zinc-300">{ageTurning}</span>
+                          <span className={typography.small}>
+                            {ageTurning}
+                          </span>
                         </>
                       ) : null}
                     </p>
                   </div>
 
                   <span
-                    className={[
-                      "shrink-0 rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide",
-                      getStatusBadgeClass(patient.status),
-                    ].join(" ")}
+                    className={`${glass.chip} ${getStatusBadgeClass(
+                      patient.status,
+                    )}`}
                   >
                     {patient.status}
                   </span>
                 </div>
 
                 <div className="mt-3 grid grid-cols-3 gap-2 text-xs">
-                  <div className="rounded-xl bg-white/[0.03] p-2">
-                    <p className="text-zinc-500">Risk</p>
-                    <p className="font-semibold text-white">
-                      {patient.riskScore}
-                    </p>
-                  </div>
-
-                  <div className="rounded-xl bg-white/[0.03] p-2">
-                    <p className="text-zinc-500">Tasks</p>
-                    <p className="font-semibold text-white">
-                      {patient.openTaskCount}
-                    </p>
-                  </div>
-
-                  <div className="rounded-xl bg-white/[0.03] p-2">
-                    <p className="text-zinc-500">Data</p>
-                    <p className="font-semibold text-white">
-                      {patient.dataCompletenessScore}%
-                    </p>
-                  </div>
+                  <MetricBox label="Risk" value={patient.riskScore} />
+                  <MetricBox label="Tasks" value={patient.openTaskCount} />
+                  <MetricBox
+                    label="Data"
+                    value={`${patient.dataCompletenessScore}%`}
+                  />
                 </div>
 
                 <div className="mt-3 flex flex-wrap gap-2">
                   {patient.cpap?.onRecord ? (
-                    <span className="rounded-full border border-cyan-500/30 bg-cyan-500/10 px-2 py-1 text-[10px] font-medium text-cyan-300">
-                      CPAP
-                    </span>
+                    <SmallBadge label="CPAP" tone="info" />
                   ) : null}
 
                   {(patient.currentEquipment ?? []).length > 0 ? (
-                    <span className="rounded-full border border-purple-500/30 bg-purple-500/10 px-2 py-1 text-[10px] font-medium text-purple-300">
-                      Equipment
-                    </span>
+                    <SmallBadge label="Equipment" tone="info" />
                   ) : null}
 
                   {patient.dateOfBirth ? (
-                    <span className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-medium text-zinc-300">
-                      {formatBirthday(patient.dateOfBirth)}
-                    </span>
+                    <SmallBadge label={formatBirthday(patient.dateOfBirth)} />
                   ) : null}
 
                   {(patient.reportTypes ?? []).slice(0, 2).map((reportType) => (
-                    <span
-                      key={reportType}
-                      className="rounded-full border border-white/10 bg-white/[0.03] px-2 py-1 text-[10px] font-medium text-zinc-400"
-                    >
-                      {reportType}
-                    </span>
+                    <SmallBadge key={reportType} label={reportType} />
                   ))}
                 </div>
               </button>
@@ -227,5 +226,3 @@ export function PatientList({
     </aside>
   );
 }
-
-

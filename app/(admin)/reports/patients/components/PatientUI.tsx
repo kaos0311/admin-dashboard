@@ -2,6 +2,16 @@
 
 import type { ReactNode } from "react";
 
+import {
+  alerts,
+  badges,
+  buttons,
+  forms,
+  glass,
+  spacing,
+  typography,
+} from "@/theme";
+
 import type { PatientStatus, PatientTaskPriority } from "../lib/patientTypes";
 
 export function Section({
@@ -14,12 +24,13 @@ export function Section({
   children: ReactNode;
 }) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-black/20 p-5">
-      <div className="mb-4 flex items-center gap-2 text-zinc-100">
+    <section className={glass.cardPadded}>
+      <div className={`${spacing.inlineMd} mb-4 ${typography.bodyStrong}`}>
         {icon}
-        <h3 className="text-lg font-semibold">{title}</h3>
+        <h3 className={typography.cardTitle}>{title}</h3>
       </div>
-      <div className="grid gap-4 md:grid-cols-3">{children}</div>
+
+      <div className={spacing.gridThree}>{children}</div>
     </section>
   );
 }
@@ -36,17 +47,18 @@ export function NoteBox({
   onChange: (next: string) => void;
 }) {
   return (
-    <div>
-      <label htmlFor={id} className="mb-2 block text-sm text-zinc-400">
+    <div className={forms.field}>
+      <label htmlFor={id} className={forms.label}>
         {label}
       </label>
+
       <textarea
         id={id}
         title={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
         rows={6}
-        className="w-full resize-y rounded-2xl border border-white/10 bg-black p-3 text-sm text-white outline-none focus:border-white/30"
+        className={forms.textarea}
       />
     </div>
   );
@@ -68,8 +80,9 @@ export function Input({
   const id = `input-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
   return (
-    <label htmlFor={id}>
-      <span className="mb-2 block text-xs text-zinc-400">{label}</span>
+    <label htmlFor={id} className={forms.field}>
+      <span className={forms.label}>{label}</span>
+
       <input
         id={id}
         title={label}
@@ -77,55 +90,45 @@ export function Input({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-xl border border-white/10 bg-black p-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-white/30"
+        className={forms.input}
       />
     </label>
   );
 }
 
-export function StatusPill({ status }: { status: PatientStatus }) {
-  const styles =
-    status === "active"
-      ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-200"
-      : status === "archived"
-        ? "border-amber-500/20 bg-amber-500/10 text-amber-200"
-        : "border-red-500/20 bg-red-500/10 text-red-200";
+function pillClass(tone: "success" | "warning" | "danger" | "neutral" | "info") {
+  const toneClass = {
+    success: badges.success,
+    warning: badges.warning,
+    danger: badges.danger,
+    neutral: badges.neutral,
+    info: badges.info,
+  }[tone];
 
-  return (
-    <span className={`shrink-0 rounded-full border px-3 py-1 text-xs capitalize ${styles}`}>
-      {status}
-    </span>
-  );
+  return `${glass.chip} ${toneClass}`;
+}
+
+export function StatusPill({ status }: { status: PatientStatus }) {
+  const tone =
+    status === "active"
+      ? "success"
+      : status === "archived"
+        ? "warning"
+        : "danger";
+
+  return <span className={pillClass(tone)}>{status}</span>;
 }
 
 export function RiskPill({ score }: { score: number }) {
-  const styles =
-    score >= 8
-      ? "border-red-500/20 bg-red-500/10 text-red-200"
-      : score >= 5
-        ? "border-amber-500/20 bg-amber-500/10 text-amber-200"
-        : "border-emerald-500/20 bg-emerald-500/10 text-emerald-200";
+  const tone = score >= 8 ? "danger" : score >= 5 ? "warning" : "success";
 
-  return (
-    <span className={`rounded-full border px-3 py-1 text-xs ${styles}`}>
-      Risk {score}
-    </span>
-  );
+  return <span className={pillClass(tone)}>Risk {score}</span>;
 }
 
 export function DataQualityPill({ score }: { score: number }) {
-  const styles =
-    score < 70
-      ? "border-red-500/20 bg-red-500/10 text-red-200"
-      : score < 90
-        ? "border-amber-500/20 bg-amber-500/10 text-amber-200"
-        : "border-emerald-500/20 bg-emerald-500/10 text-emerald-200";
+  const tone = score < 70 ? "danger" : score < 90 ? "warning" : "success";
 
-  return (
-    <span className={`rounded-full border px-3 py-1 text-xs ${styles}`}>
-      Data {score}%
-    </span>
-  );
+  return <span className={pillClass(tone)}>Data {score}%</span>;
 }
 
 export function TaskPriorityPill({
@@ -133,42 +136,38 @@ export function TaskPriorityPill({
 }: {
   priority: PatientTaskPriority;
 }) {
-  const styles =
+  const tone =
     priority === "urgent"
-      ? "border-red-500/20 bg-red-500/10 text-red-200"
+      ? "danger"
       : priority === "watch"
-        ? "border-amber-500/20 bg-amber-500/10 text-amber-200"
-        : "border-white/10 bg-white/10 text-zinc-300";
+        ? "warning"
+        : "neutral";
 
-  return (
-    <span className={`rounded-full border px-3 py-1 text-xs capitalize ${styles}`}>
-      {priority}
-    </span>
-  );
+  return <span className={pillClass(tone)}>{priority}</span>;
 }
 
 export function Badge({ label }: { label: string }) {
-  return (
-    <span className="rounded-full border border-cyan-500/20 bg-cyan-500/10 px-3 py-1 text-xs text-cyan-200">
-      {label}
-    </span>
-  );
+  return <span className={pillClass("info")}>{label}</span>;
 }
 
 export function Stat({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/30 p-3 text-right">
-      <p className="text-xs text-zinc-500">{label}</p>
-      <p className="mt-1 text-xl font-bold">{value.toLocaleString()}</p>
+    <div className={`${glass.insetPadded} text-right`}>
+      <p className={typography.caption}>{label}</p>
+      <p className={`mt-1 ${typography.metricSmall}`}>
+        {value.toLocaleString()}
+      </p>
     </div>
   );
 }
 
 export function Info({ label, value }: { label: string; value?: string }) {
   return (
-    <div className="rounded-xl border border-white/10 bg-black/30 p-3">
-      <p className="text-xs text-zinc-500">{label}</p>
-      <p className="mt-1 break-words text-white">{value || "â€”"}</p>
+    <div className={glass.insetPadded}>
+      <p className={typography.caption}>{label}</p>
+      <p className={`mt-1 break-words ${typography.bodyStrong}`}>
+        {value || "—"}
+      </p>
     </div>
   );
 }
@@ -184,20 +183,21 @@ export function Panel({
   tone: "amber" | "red" | "neutral";
   children: ReactNode;
 }) {
-  const styles =
+  const panelClass =
     tone === "amber"
-      ? "border-amber-500/20 bg-amber-500/10 text-amber-100"
+      ? alerts.warning
       : tone === "red"
-        ? "border-red-500/20 bg-red-500/10 text-red-100"
-        : "border-white/10 bg-black/30 text-zinc-300";
+        ? alerts.danger
+        : glass.cardPadded;
 
   return (
-    <section className={`rounded-2xl border p-4 ${styles}`}>
+    <section className={panelClass}>
       <div className="flex items-start gap-3">
-        <div className="mt-0.5">{icon}</div>
-        <div>
-          <h3 className="font-semibold">{title}</h3>
-          <div className="mt-1 text-sm opacity-90">{children}</div>
+        <div className="mt-0.5 shrink-0">{icon}</div>
+
+        <div className="min-w-0">
+          <h3 className={typography.bodyStrong}>{title}</h3>
+          <div className={`mt-1 ${typography.body}`}>{children}</div>
         </div>
       </div>
     </section>
@@ -214,23 +214,25 @@ export function EmptyState({
   message: string;
 }) {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/30 p-5">
-      <div className="flex items-center gap-2 text-zinc-200">
+    <div className={glass.emptyState}>
+      <div className={`${spacing.inline} justify-center ${typography.bodyStrong}`}>
         {icon}
-        <p className="font-semibold">{title}</p>
+        <p>{title}</p>
       </div>
-      <p className="mt-2 text-sm text-zinc-500">{message}</p>
+
+      <p className={`mt-2 ${typography.bodyFaint}`}>{message}</p>
     </div>
   );
 }
 
 export function LoadingList() {
   return (
-    <div className="space-y-2">
+    <div className={spacing.stackTight}>
       {Array.from({ length: 8 }).map((_, index) => (
         <div
           key={index}
-          className="h-20 animate-pulse rounded-2xl border border-white/10 bg-white/5"
+          className={`${glass.card} h-20 animate-pulse`}
+          aria-hidden="true"
         />
       ))}
     </div>
@@ -250,24 +252,22 @@ export function ActionButton({
   icon: ReactNode;
   label: string;
 }) {
-  const styles =
+  const buttonClass =
     tone === "amber"
-      ? "border-amber-500/20 bg-amber-500/10 text-amber-100 hover:bg-amber-500/20"
+      ? buttons.warning
       : tone === "green"
-        ? "border-emerald-500/20 bg-emerald-500/10 text-emerald-100 hover:bg-emerald-500/20"
-        : "border-red-500/30 bg-red-600/10 text-red-100 hover:bg-red-600/20";
+        ? buttons.success
+        : buttons.danger;
 
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`inline-flex items-center gap-2 rounded-2xl border px-4 py-3 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50 ${styles}`}
+      className={buttonClass}
     >
       {icon}
       {label}
     </button>
   );
 }
-
-

@@ -7,6 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "verify": "npm run lint && npm run typecheck && npm run build",
     "repair:users": "tsx scripts/repairUsers.ts"
   },
   "dependencies": {

@@ -24,171 +24,97 @@ import {
 
 import OpenUploadCenterButton from "@/app/components/reports/OpenUploadCenterButton";
 import { db } from "@/lib/firebase";
-import { colors, glass, typography } from "@/theme";
+import { colors, glass, spacing, typography } from "@/theme";
+
+import type { PatientIndex, PatientWithDerived } from "./lib/patientTypes";
+import {
+  buildSearchBlob,
+  derivePatient,
+  formatMoney,
+  normalizePatient,
+  PATIENT_LIMIT,
+} from "./lib/patientUtils";
 
 type FilterMode = "all" | "hospice" | "cpap" | "wip" | "birthday";
 
-type Patient = {
-  id: string;
-  fullName: string;
-  firstName?: string;
-  lastName?: string;
-  dateOfBirth?: string;
-  age?: number | null;
-  phone?: string;
-  email?: string;
-  city?: string;
-  state?: string;
-  zip?: string;
-  hospice?: boolean;
-  patientSnapshot?: string;
-  snapshot?: string;
-  currentEquipmentCount?: number;
-  purchasesLast90DaysCount?: number;
-  insurance?: {
-    primaryInsurance?: string;
-    payor?: string;
-  } | null;
-  billing?: {
-    openBalanceEstimate?: number;
-  } | null;
-  cpap?: {
-    onRecord?: boolean;
-  } | null;
-  wip?: {
-    status?: string;
-  } | null;
-  daysUntilBirthday?: number | null;
-};
-
-const inputClass =
-  "w-full min-w-0 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none backdrop-blur-xl transition-colors placeholder:text-slate-600 focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20";
-
-const iconShellClass =
-  "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 backdrop-blur-xl";
-
-function asString(value: unknown): string {
-  return value === null ? "" : String(value).trim();
-}
-
-function asNumber(value: unknown): number {
-  const number = Number(value);
-  return Number.isFinite(number) ? number : 0;
-}
-
-function asBoolean(value: unknown): boolean {
-  if (value === true) return true;
-
-  if (typeof value === "string") {
-    const normalized = value.trim().toLowerCase();
-
-    return normalized === "true" || normalized === "yes" || normalized === "y";
-  }
-
-  return false;
-}
-
-function money(value: unknown): string {
-  return asNumber(value).toLocaleString("en-US", {
-    style: "currency",
-    currency: "USD",
-  });
-}
-
-function mapPatientDoc(id: string, data: DocumentData): Patient {
-  const firstName = asString(data.firstName);
-  const lastName = asString(data.lastName);
-
-  return {
-    id,
-    fullName:
-      asString(data.fullName) ||
-      [firstName, lastName].filter(Boolean).join(" ") ||
-      "Unnamed Patient",
-    firstName,
-    lastName,
-    dateOfBirth: asString(data.dateOfBirth || data.dob),
-    age: typeof data.age === "number" ? data.age : null,
-    phone: asString(data.phone),
-    email: asString(data.email),
-    city: asString(data.city),
-    state: asString(data.state),
-    zip: asString(data.zip),
-    hospice: asBoolean(data.hospice),
-    patientSnapshot: asString(data.patientSnapshot),
-    snapshot: asString(data.snapshot),
-    currentEquipmentCount: asNumber(data.currentEquipmentCount),
-    purchasesLast90DaysCount: asNumber(data.purchasesLast90DaysCount),
-    insurance: data.insurance ?? null,
-    billing: data.billing ?? null,
-    cpap: data.cpap ?? null,
-    wip: data.wip ?? null,
-    daysUntilBirthday:
-      typeof data.daysUntilBirthday === "number"
-        ? data.daysUntilBirthday
-        : null,
-  };
-}
-
-function StatCard({
-  title,
-  value,
-  icon,
-  subtext,
-}: {
+type StatCardProps = {
   title: string;
   value: string | number;
   icon: ReactNode;
   subtext: string;
-}) {
-  return (
-    <div className={`${glass.card} min-w-0 overflow-hidden`}>
-      <div className="flex min-w-0 items-center justify-between gap-3">
-        <div className="min-w-0">
-          <p className="break-words text-xs uppercase tracking-[0.2em] text-slate-500">
-            {title}
-          </p>
+};
 
-          <p className="mt-2 break-words text-2xl font-bold text-white">
-            {value}
-          </p>
-        </div>
+type BadgeTone = "neutral" | "info" | "success" | "warning" | "danger";
 
-        <div className={iconShellClass}>{icon}</div>
-      </div>
+const FILTER_OPTIONS: Array<{
+  label: string;
+  value: FilterMode;
+}> = [
+  { label: "All Patients", value: "all" },
+  { label: "Hospice", value: "hospice" },
+  { label: "CPAP/PAP", value: "cpap" },
+  { label: "WIP", value: "wip" },
+  { label: "Birthdays Next 30 Days", value: "birthday" },
+];
 
-      <p className="mt-3 break-words text-xs leading-5 text-slate-500">
-        {subtext}
-      </p>
-    </div>
-  );
+const badgeToneClasses: Record<BadgeTone, string> = {
+  neutral: colors.neutralBadge,
+  info: colors.infoBadge,
+  success: colors.successBadge,
+  warning: colors.warningBadge,
+  danger: colors.dangerBadge,
+};
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
 }
 
-function Badge({
+function mapPatientDoc(id: string, data: DocumentData): PatientWithDerived {
+  return derivePatient(normalizePatient(id, data as Partial<PatientIndex>));
+}
+
+function ThemeBadge({
   children,
-  tone = "default",
+  tone = "neutral",
 }: {
   children: ReactNode;
-  tone?: "default" | "blue" | "green" | "yellow" | "red";
+  tone?: BadgeTone;
 }) {
-  const classes: Record<NonNullable<typeof tone>, string> = {
-    default: "border-white/10 bg-white/[0.04] text-slate-300",
-    blue: "border-blue-400/20 bg-blue-500/10 text-blue-200",
-    green: "border-emerald-400/20 bg-emerald-500/10 text-emerald-200",
-    yellow: "border-yellow-400/20 bg-yellow-500/10 text-yellow-200",
-    red: "border-red-400/20 bg-red-500/10 text-red-200",
-  };
-
   return (
     <span
-      className={`inline-flex max-w-full items-center rounded-full border px-3 py-1 text-xs font-medium leading-5 ${classes[tone]}`}
+      className={cx(
+        "inline-flex max-w-full items-center rounded-full border px-3 py-1",
+        typography.small,
+        badgeToneClasses[tone],
+      )}
     >
       <span className="min-w-0 break-words">{children}</span>
     </span>
   );
 }
 
-function PatientCard({ patient }: { patient: Patient }) {
+function StatCard({ title, value, icon, subtext }: StatCardProps) {
+  return (
+    <article className={glass.statCard}>
+      <div className={cx(spacing.inlineMd, "justify-between")}>
+        <div className="min-w-0">
+          <p className={cx(typography.caption, "break-words")}>{title}</p>
+          <p className={cx(typography.metricCompact, "mt-2 break-words")}>
+            {value}
+          </p>
+        </div>
+
+        <div className={glass.iconBox}>{icon}</div>
+      </div>
+
+      <p className={cx(typography.smallMuted, "mt-3 break-words")}>
+        {subtext}
+      </p>
+    </article>
+  );
+}
+
+function PatientCard({ patient }: { patient: PatientWithDerived }) {
   const insurance =
     patient.insurance?.primaryInsurance ||
     patient.insurance?.payor ||
@@ -199,78 +125,87 @@ function PatientCard({ patient }: { patient: Patient }) {
   return (
     <Link
       href={`/reports/patients/${patient.id}`}
-      className={`${glass.card} group block min-w-0 overflow-hidden transition hover:border-sky-300/25`}
+      className={cx(glass.cardPadded, glass.cardHover, "group block")}
     >
       <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-center gap-2">
-            <h3 className="min-w-0 max-w-full break-words text-lg font-bold text-white group-hover:text-sky-100">
+          <div className={spacing.actions}>
+            <h3 className={cx(typography.cardTitle, "break-words")}>
               {patient.fullName}
             </h3>
 
-            {patient.hospice ? <Badge tone="red">Hospice</Badge> : null}
-            {patient.cpap?.onRecord ? <Badge tone="blue">CPAP/PAP</Badge> : null}
-            {patient.wip?.status ? <Badge tone="yellow">WIP</Badge> : null}
+            {patient.hospice ? (
+              <ThemeBadge tone="danger">Hospice</ThemeBadge>
+            ) : null}
+
+            {patient.cpap?.onRecord ? (
+              <ThemeBadge tone="info">CPAP/PAP</ThemeBadge>
+            ) : null}
+
+            {patient.wip?.status ? (
+              <ThemeBadge tone="warning">WIP</ThemeBadge>
+            ) : null}
           </div>
 
-          <p className="mt-1 break-words text-sm leading-6 text-slate-500">
+          <p className={cx(typography.smallMuted, "mt-1 break-words")}>
             DOB: {patient.dateOfBirth || "Unknown"}
-            {patient.age !== null ? ` â€¢ Age ${patient.age}` : ""}
+            {patient.age !== null && patient.age !== undefined
+              ? ` • Age ${patient.age}`
+              : ""}
           </p>
 
-          <p className="mt-3 max-w-full break-words text-sm leading-6 text-slate-400">
+          <p className={cx(typography.bodyMuted, "mt-3 break-words")}>
             {patient.patientSnapshot ||
               patient.snapshot ||
               "No patient summary available yet."}
           </p>
         </div>
 
-        <div className="grid min-w-0 grid-cols-2 gap-2 text-right text-xs text-slate-400 lg:w-72 lg:shrink-0">
-          <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3">
-            <p className="break-words text-slate-500">Equipment</p>
-
-            <p className="mt-1 break-words text-lg font-bold text-white">
+        <div className="grid min-w-0 grid-cols-2 gap-2 text-right lg:w-72 lg:shrink-0">
+          <div className={glass.insetPadded}>
+            <p className={typography.smallMuted}>Equipment</p>
+            <p className={cx(typography.metricSmall, "mt-1")}>
               {patient.currentEquipmentCount || 0}
             </p>
           </div>
 
-          <div className="min-w-0 rounded-2xl border border-white/10 bg-black/20 p-3">
-            <p className="break-words text-slate-500">Purchases</p>
-
-            <p className="mt-1 break-words text-lg font-bold text-white">
+          <div className={glass.insetPadded}>
+            <p className={typography.smallMuted}>Purchases</p>
+            <p className={cx(typography.metricSmall, "mt-1")}>
               {patient.purchasesLast90DaysCount || 0}
             </p>
           </div>
         </div>
       </div>
 
-      <div className="mt-5 grid min-w-0 gap-3 text-sm text-slate-400 md:grid-cols-3">
+      <div className={cx(spacing.gridCardsThree, "mt-5")}>
         <div className="min-w-0">
-          <p className="break-words text-xs uppercase tracking-[0.2em] text-slate-600">
-            Contact
+          <p className={typography.caption}>Contact</p>
+          <p className={cx(typography.bodyMuted, "mt-1 break-words")}>
+            {patient.phone || "No phone"}
           </p>
-
-          <p className="mt-1 break-words">{patient.phone || "No phone"}</p>
-          <p className="break-words">{patient.email || "No email"}</p>
+          <p className={cx(typography.bodyMuted, "break-words")}>
+            {patient.email || "No email"}
+          </p>
         </div>
 
         <div className="min-w-0">
-          <p className="break-words text-xs uppercase tracking-[0.2em] text-slate-600">
-            Location
+          <p className={typography.caption}>Location</p>
+          <p className={cx(typography.bodyMuted, "mt-1 break-words")}>
+            {location || "No city/state"}
           </p>
-
-          <p className="mt-1 break-words">{location || "No city/state"}</p>
-          <p className="break-words">{patient.zip || ""}</p>
+          <p className={cx(typography.bodyMuted, "break-words")}>
+            {patient.zip || ""}
+          </p>
         </div>
 
         <div className="min-w-0">
-          <p className="break-words text-xs uppercase tracking-[0.2em] text-slate-600">
-            Insurance / Balance
+          <p className={typography.caption}>Insurance / Balance</p>
+          <p className={cx(typography.bodyMuted, "mt-1 break-words")}>
+            {insurance}
           </p>
-
-          <p className="mt-1 break-words">{insurance}</p>
-          <p className="break-words">
-            {money(patient.billing?.openBalanceEstimate || 0)}
+          <p className={cx(typography.bodyMuted, "break-words")}>
+            {formatMoney(patient.billing?.openBalanceEstimate || 0)}
           </p>
         </div>
       </div>
@@ -279,31 +214,23 @@ function PatientCard({ patient }: { patient: Patient }) {
 }
 
 export default function PatientsReportPage() {
-  const [patients, setPatients] = useState<Patient[]>([]);
+  const [patients, setPatients] = useState<PatientWithDerived[]>([]);
   const [search, setSearch] = useState("");
   const [filterMode, setFilterMode] = useState<FilterMode>("all");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    let active = true;
+    setLoading(true);
+    setError(null);
 
-    queueMicrotask(() => {
-      if (!active) return;
-
-      setLoading(true);
-      setError(null);
-    });
-
-    const patientsQuery = query(collection(db, "patients"), limit(500));
+    const patientsQuery = query(collection(db, "patients"), limit(PATIENT_LIMIT));
 
     const unsubscribe = onSnapshot(
       patientsQuery,
       (snapshot) => {
-        if (!active) return;
-
-        const rows = snapshot.docs.map((doc) =>
-          mapPatientDoc(doc.id, doc.data())
+        const rows = snapshot.docs.map((patientDoc) =>
+          mapPatientDoc(patientDoc.id, patientDoc.data()),
         );
 
         setPatients(rows);
@@ -312,41 +239,20 @@ export default function PatientsReportPage() {
       },
       (err: Error) => {
         console.error("Failed to load patients", err);
-
-        if (!active) return;
-
         setError(err.message || "Failed to load patients.");
         setLoading(false);
-      }
+      },
     );
 
-    return () => {
-      active = false;
-      unsubscribe();
-    };
+    return unsubscribe;
   }, []);
 
   const filteredPatients = useMemo(() => {
     const needle = search.trim().toLowerCase();
 
     return patients.filter((patient) => {
-      const haystack = [
-        patient.fullName,
-        patient.dateOfBirth,
-        patient.phone,
-        patient.email,
-        patient.city,
-        patient.state,
-        patient.insurance?.primaryInsurance,
-        patient.insurance?.payor,
-        patient.patientSnapshot,
-        patient.snapshot,
-      ]
-        .filter(Boolean)
-        .join(" ")
-        .toLowerCase();
-
-      const matchesSearch = !needle || haystack.includes(needle);
+      const matchesSearch =
+        !needle || buildSearchBlob(patient).includes(needle);
 
       const matchesFilter =
         filterMode === "all" ||
@@ -372,31 +278,30 @@ export default function PatientsReportPage() {
         (patient) =>
           patient.daysUntilBirthday !== null &&
           patient.daysUntilBirthday !== undefined &&
-          patient.daysUntilBirthday <= 30
+          patient.daysUntilBirthday <= 30,
       ).length,
     };
   }, [patients]);
 
   return (
-    <main className={`${glass.page} ${colors.app} min-w-0 overflow-x-hidden`}>
+    <main className={cx(glass.page, colors.app)}>
       <div className={colors.grid} aria-hidden="true" />
+      <div className={colors.vignette} aria-hidden="true" />
 
-      <div className={`${glass.shell} relative z-10 min-w-0`}>
-        <section className={`${glass.panel} min-w-0 overflow-hidden`}>
-          <div className={colors.grid} aria-hidden="true" />
-
-          <div className="relative z-10 flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+      <div className={cx(glass.shell, spacing.page, spacing.stack)}>
+        <section className={glass.panelPadded}>
+          <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
-              <div className="inline-flex max-w-full items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase leading-5 tracking-[0.18em] text-slate-200 backdrop-blur-xl">
-                <Stethoscope className="h-3.5 w-3.5 shrink-0" />
+              <div className={glass.chip}>
+                <Stethoscope className="h-3.5 w-3.5 shrink-0" aria-hidden />
                 <span className="min-w-0 break-words">Live Patient Index</span>
               </div>
 
-              <h1 className={`${typography.hero} mt-4 break-words`}>
+              <h1 className={cx(typography.hero, "mt-4 break-words")}>
                 Patient Reports
               </h1>
 
-              <p className="mt-3 max-w-3xl break-words text-sm leading-6 text-slate-300">
+              <p className={cx(typography.body, "mt-3 max-w-3xl break-words")}>
                 Indexed patient profiles built from uploads, including
                 demographics, birthdays, equipment, purchases, hospice flags,
                 WIP status, insurance, and billing snapshots.
@@ -412,86 +317,104 @@ export default function PatientsReportPage() {
           </div>
         </section>
 
-        <section className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <section className={spacing.gridResponsive}>
           <StatCard
             title="Patients"
             value={stats.total}
-            icon={<UserRound className="h-5 w-5" />}
+            icon={<UserRound className="h-5 w-5" aria-hidden />}
             subtext="Loaded from Firestore"
           />
 
           <StatCard
             title="Hospice"
             value={stats.hospice}
-            icon={<HeartPulse className="h-5 w-5" />}
+            icon={<HeartPulse className="h-5 w-5" aria-hidden />}
             subtext="Flagged patient records"
           />
 
           <StatCard
             title="CPAP/PAP"
             value={stats.cpap}
-            icon={<Activity className="h-5 w-5" />}
+            icon={<Activity className="h-5 w-5" aria-hidden />}
             subtext="Sleep equipment on record"
           />
 
           <StatCard
             title="Open WIP"
             value={stats.wip}
-            icon={<Truck className="h-5 w-5" />}
+            icon={<Truck className="h-5 w-5" aria-hidden />}
             subtext="Work in progress snapshots"
           />
 
           <StatCard
             title="Birthdays"
             value={stats.birthdays}
-            icon={<Baby className="h-5 w-5" />}
+            icon={<Baby className="h-5 w-5" aria-hidden />}
             subtext="Next 30 days"
           />
         </section>
 
-        <section className={`${glass.panel} min-w-0 overflow-hidden`}>
-          <div className={colors.grid} aria-hidden="true" />
+        <section className={glass.panelPadded}>
+          <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+            <div className="min-w-0 flex-1">
+              <label htmlFor="patient-search" className={typography.formLabel}>
+                Search Patients
+              </label>
 
-          <div className="relative z-10 flex min-w-0 flex-col gap-3 p-5 lg:flex-row lg:items-center lg:justify-between">
-            <div className="relative min-w-0 flex-1">
-              <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+              <div className="relative mt-2 min-w-0">
+                <Search
+                  className={cx(
+                    colors.textFaint,
+                    "pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2",
+                  )}
+                  aria-hidden
+                />
 
-              <input
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Search patients by name, DOB, phone, city, insurance..."
-                className={`${inputClass} pl-11`}
-              />
+                <input
+                  id="patient-search"
+                  type="search"
+                  value={search}
+                  onChange={(event) => setSearch(event.target.value)}
+                  placeholder="Search by name, DOB, phone, city, insurance..."
+                  className={cx(glass.inputPadded, "pl-11")}
+                />
+              </div>
             </div>
 
-            <select
-              value={filterMode}
-              onChange={(event) =>
-                setFilterMode(event.target.value as FilterMode)
-              }
-              aria-label="Filter patients"
-              className={`${inputClass} lg:w-72 lg:shrink-0`}
-            >
-              <option value="all">All Patients</option>
-              <option value="hospice">Hospice</option>
-              <option value="cpap">CPAP/PAP</option>
-              <option value="wip">WIP</option>
-              <option value="birthday">Birthdays Next 30 Days</option>
-            </select>
+            <div className="min-w-0 lg:w-72 lg:shrink-0">
+              <label htmlFor="patient-filter" className={typography.formLabel}>
+                Filter Patients
+              </label>
+
+              <select
+                id="patient-filter"
+                value={filterMode}
+                onChange={(event) =>
+                  setFilterMode(event.target.value as FilterMode)
+                }
+                className={cx(glass.select, "mt-2")}
+              >
+                {FILTER_OPTIONS.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
         </section>
 
         {error ? (
-          <section className="min-w-0 overflow-hidden rounded-3xl border border-red-400/20 bg-red-500/10 p-5 text-red-200 backdrop-blur-xl">
-            <div className="flex min-w-0 items-start gap-3">
-              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" />
+          <section className={glass.alertDanger}>
+            <div className={cx(spacing.inlineMd, "items-start")}>
+              <AlertCircle className="mt-0.5 h-5 w-5 shrink-0" aria-hidden />
 
               <div className="min-w-0">
-                <h2 className="break-words font-semibold">
+                <h2 className={typography.bodyStrong}>
                   Failed to load patients
                 </h2>
 
-                <p className="mt-1 break-words text-sm leading-6 text-red-200/80">
+                <p className={cx(typography.body, "mt-1 break-words")}>
                   {error}
                 </p>
               </div>
@@ -500,24 +423,25 @@ export default function PatientsReportPage() {
         ) : null}
 
         {loading ? (
-          <section
-            className={`${glass.panel} min-w-0 overflow-hidden p-8 text-center text-slate-400`}
-          >
-            <p className="break-words">Loading patients from Firestore...</p>
+          <section className={cx(glass.panelPadded, "text-center")}>
+            <p className={typography.bodyMuted}>
+              Loading patients from Firestore...
+            </p>
           </section>
         ) : null}
 
         {!loading && !error && filteredPatients.length === 0 ? (
-          <section
-            className={`${glass.panel} min-w-0 overflow-hidden p-8 text-center`}
-          >
-            <Package className="mx-auto h-8 w-8 text-slate-600" />
+          <section className={cx(glass.emptyState, "text-center")}>
+            <Package
+              className={cx(colors.textFaint, "mx-auto h-8 w-8")}
+              aria-hidden
+            />
 
-            <h2 className="mt-3 break-words text-lg font-semibold text-white">
+            <h2 className={cx(typography.cardTitle, "mt-3")}>
               No patients found
             </h2>
 
-            <p className="mt-2 break-words text-sm leading-6 text-slate-500">
+            <p className={cx(typography.bodyMuted, "mt-2")}>
               Upload a patient, PAR, WIP, billing, or item detail report to
               populate this index.
             </p>
@@ -525,21 +449,21 @@ export default function PatientsReportPage() {
         ) : null}
 
         {!loading && !error && filteredPatients.length > 0 ? (
-          <section className="min-w-0 space-y-3">
+          <section className={spacing.stackTight}>
             <div className="flex min-w-0 flex-col gap-2 px-1 sm:flex-row sm:items-center sm:justify-between">
-              <p className="break-words text-sm text-slate-500">
+              <p className={typography.bodyFaint}>
                 Showing {filteredPatients.length} of {patients.length} patients
               </p>
 
-              <div className="flex min-w-0 items-center gap-2 text-xs text-slate-600">
-                <CalendarDays className="h-4 w-4 shrink-0" />
+              <div className={cx(spacing.inline, typography.smallMuted)}>
+                <CalendarDays className="h-4 w-4 shrink-0" aria-hidden />
                 <span className="min-w-0 break-words">
                   Live Firestore updates
                 </span>
               </div>
             </div>
 
-            <div className="grid min-w-0 gap-4">
+            <div className={spacing.stackTight}>
               {filteredPatients.map((patient) => (
                 <PatientCard key={patient.id} patient={patient} />
               ))}
@@ -550,6 +474,3 @@ export default function PatientsReportPage() {
     </main>
   );
 }
-
-
-

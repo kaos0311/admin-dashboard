@@ -1,5 +1,7 @@
-﻿export const PATIENTS_COLLECTION = "patients";
-export const PATIENT_TIMELINE_SUBCOLLECTION = "timeline";
+﻿import type { Timestamp } from "firebase/firestore";
+
+export const PATIENTS_COLLECTION = "patients" as const;
+export const PATIENT_TIMELINE_SUBCOLLECTION = "timeline" as const;
 
 export type PatientStatus = "active" | "archived" | "destroyed";
 
@@ -22,6 +24,13 @@ export type SortMode =
   | "lastActivityDesc"
   | "destroyEligibleAsc"
   | "dataQualityAsc";
+
+export type TimelineEventType =
+  | "system_event"
+  | "import"
+  | "task"
+  | "note"
+  | "status";
 
 export type CpapInfo = {
   onRecord?: boolean;
@@ -81,9 +90,20 @@ export type PatientTask = {
   dueDate: string;
   priority: PatientTaskPriority;
   status: PatientTaskStatus;
-  createdAt?: unknown;
-  updatedAt?: unknown;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
   createdBy?: string | null;
+};
+
+export type PatientTimelineEntry = {
+  id: string;
+  type: TimelineEventType;
+  title: string;
+  body?: string;
+  metadata?: Record<string, unknown>;
+  actorUid?: string | null;
+  actorEmail?: string | null;
+  createdAt?: Timestamp;
 };
 
 export type PatientSource = {
@@ -193,7 +213,7 @@ export type PatientIndex = {
   birthMonthDay?: string;
   age?: number | null;
   nextAge?: number | null;
-  nextBirthday?: unknown;
+  nextBirthday?: Timestamp;
   nextBirthdayIso?: string;
   daysUntilBirthday?: number | null;
 
@@ -209,9 +229,9 @@ export type PatientIndex = {
 
   status: PatientStatus;
 
-  archivedAt?: unknown;
-  restoredAt?: unknown;
-  destroyedAt?: unknown;
+  archivedAt?: Timestamp;
+  restoredAt?: Timestamp;
+  destroyedAt?: Timestamp;
 
   lastEquipmentDate?: string;
   lastTreatmentDate?: string;
@@ -245,8 +265,8 @@ export type PatientIndex = {
   riskScore?: number;
   rowCount?: number;
 
-  createdAt?: unknown;
-  updatedAt?: unknown;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
 };
 
 export type PatientWithDerived = PatientIndex & {
@@ -280,5 +300,3 @@ export type PatientStats = {
   openTasks: number;
   poorData: number;
 };
-
-

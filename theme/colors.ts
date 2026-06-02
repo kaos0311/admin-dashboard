@@ -12,9 +12,53 @@ export const colors = {
   textSecondary: "text-slate-300",
   textMuted: "text-slate-400",
   textFaint: "text-slate-500",
+  textInverse: "text-slate-950",
 
   border: "border-white/10",
   borderStrong: "border-white/15",
+  borderMuted: "border-white/[0.06]",
+
+  surface:
+    "bg-white/[0.045]",
+
+  surfaceHover:
+    "hover:bg-white/[0.07]",
+
+  surfaceStrong:
+    "bg-white/[0.08]",
+
+  surfaceInset:
+    "bg-black/25",
+
+  surfaceInput:
+    "bg-black/45",
+
+  surfaceInputFocus:
+    "focus:bg-black/55",
+
+  overlay:
+    "bg-slate-950/70",
+
+  shadow:
+    "shadow-xl shadow-black/25",
+
+  shadowStrong:
+    "shadow-2xl shadow-black/35",
+
+  success:
+    "border-emerald-400/25 bg-emerald-400/10 text-emerald-100",
+
+  warning:
+    "border-amber-400/25 bg-amber-400/10 text-amber-100",
+
+  danger:
+    "border-rose-400/25 bg-rose-400/10 text-rose-100",
+
+  info:
+    "border-cyan-400/25 bg-cyan-400/10 text-cyan-100",
+
+  neutral:
+    "border-white/10 bg-white/[0.06] text-slate-300",
 
   successBadge:
     "border-emerald-400/25 bg-emerald-400/10 text-emerald-100",
@@ -27,6 +71,21 @@ export const colors = {
 
   infoBadge:
     "border-cyan-400/25 bg-cyan-400/10 text-cyan-100",
+
+  neutralBadge:
+    "border-white/10 bg-white/[0.06] text-slate-300",
+
+  activeBadge:
+    "border-cyan-300/25 bg-cyan-300/10 text-cyan-100",
+
+  pulse:
+    "bg-cyan-300 shadow-[0_0_10px_rgba(125,211,252,0.9)]",
+
+  dangerPulse:
+    "bg-rose-300 shadow-[0_0_10px_rgba(253,164,175,0.9)]",
+
+  successPulse:
+    "bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]",
 } as const;
 
 export type ColorKey = keyof typeof colors;

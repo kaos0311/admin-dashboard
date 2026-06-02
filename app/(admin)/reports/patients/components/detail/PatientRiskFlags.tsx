@@ -1,16 +1,12 @@
 ﻿"use client";
 
-import {
-  Cake,
-  ShieldAlert,
-  ShieldCheck,
-} from "lucide-react";
+import { Cake, ShieldAlert, ShieldCheck } from "lucide-react";
+
+import { colors, spacing, typography } from "@/theme";
 
 import type { PatientDetailProps } from "./patient-detail-types";
 
-import {
-  Panel,
-} from "../PatientUI";
+import { Panel } from "../PatientUI";
 
 import {
   formatBirthday,
@@ -18,29 +14,36 @@ import {
   isBirthdayThisMonth,
 } from "../../lib/patientUtils";
 
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
+
 export function PatientRiskFlags({
   selected,
 }: Pick<PatientDetailProps, "selected">) {
   const flags = selected.riskFlags ?? [];
+  const hasRiskFlags = flags.length > 0;
+  const hasBirthdayThisMonth = isBirthdayThisMonth(selected.dateOfBirth);
+  const ageTurning = getAgeTurning(selected.dateOfBirth) ?? "—";
+  const birthday = formatBirthday(selected.dateOfBirth);
 
   return (
-    <div className="space-y-4">
-      {flags.length ? (
+    <div className={spacing.stackTight}>
+      {hasRiskFlags ? (
         <Panel
-          icon={
-            <ShieldAlert
-              className="h-5 w-5"
-              aria-hidden="true"
-            />
-          }
+          icon={<ShieldAlert className="h-5 w-5" aria-hidden="true" />}
           title="Risk / Completeness Flags"
           tone="red"
         >
-          <div className="flex flex-wrap gap-2">
+          <div className={spacing.actions}>
             {flags.map((flag) => (
               <span
                 key={flag}
-                className="rounded-full border border-red-500/20 bg-red-500/10 px-3 py-1 text-xs font-medium text-red-100 backdrop-blur-xl"
+                className={cx(
+                  "rounded-full border px-3 py-1 backdrop-blur-xl",
+                  typography.small,
+                  colors.dangerBadge,
+                )}
               >
                 {flag}
               </span>
@@ -49,54 +52,29 @@ export function PatientRiskFlags({
         </Panel>
       ) : (
         <Panel
-          icon={
-            <ShieldCheck
-              className="h-5 w-5"
-              aria-hidden="true"
-            />
-          }
+          icon={<ShieldCheck className="h-5 w-5" aria-hidden="true" />}
           title="Record Completeness"
           tone="neutral"
         >
-          <div className="text-sm text-zinc-300">
-            No major risk flags detected from indexed
-            patient fields.
-          </div>
+          <p className={typography.body}>
+            No major risk flags detected from indexed patient fields.
+          </p>
         </Panel>
       )}
 
-      {isBirthdayThisMonth(
-        selected.dateOfBirth
-      ) ? (
+      {hasBirthdayThisMonth ? (
         <Panel
-          icon={
-            <Cake
-              className="h-5 w-5"
-              aria-hidden="true"
-            />
-          }
+          icon={<Cake className="h-5 w-5" aria-hidden="true" />}
           title="Birthday Reminder"
           tone="amber"
         >
-          <div className="text-sm text-zinc-200">
+          <p className={typography.body}>
             {selected.fullName} turns{" "}
-            <span className="font-semibold text-white">
-              {getAgeTurning(
-                selected.dateOfBirth
-              ) ?? "â€”"}
-            </span>{" "}
-            on{" "}
-            <span className="font-semibold text-white">
-              {formatBirthday(
-                selected.dateOfBirth
-              )}
-            </span>
-            .
-          </div>
+            <strong className={typography.bodyStrong}>{ageTurning}</strong> on{" "}
+            <strong className={typography.bodyStrong}>{birthday}</strong>.
+          </p>
         </Panel>
       ) : null}
     </div>
   );
 }
-
-

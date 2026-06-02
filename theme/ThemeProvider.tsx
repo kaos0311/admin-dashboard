@@ -10,7 +10,7 @@ import {
   useState,
 } from "react";
 
-type Theme = "light" | "dark";
+export type Theme = "light" | "dark";
 
 type ThemeContextValue = {
   theme: Theme;
@@ -21,30 +21,42 @@ type ThemeContextValue = {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 const STORAGE_KEY = "ahm-theme";
+const DEFAULT_THEME: Theme = "dark";
 
-function isTheme(value: string | null): value is Theme {
+function isTheme(value: unknown): value is Theme {
   return value === "light" || value === "dark";
 }
 
 function getSystemTheme(): Theme {
-  if (typeof window === "undefined") return "dark";
+  if (typeof window === "undefined") return DEFAULT_THEME;
 
   return window.matchMedia("(prefers-color-scheme: dark)").matches
     ? "dark"
     : "light";
 }
 
-function getInitialTheme(): Theme {
-  if (typeof window === "undefined") return "dark";
+function getStoredTheme(): Theme | null {
+  if (typeof window === "undefined") return null;
 
-  const stored = window.localStorage.getItem(STORAGE_KEY);
-
-  if (isTheme(stored)) return stored;
-
-  return getSystemTheme();
+  try {
+    const stored = window.localStorage.getItem(STORAGE_KEY);
+    return isTheme(stored) ? stored : null;
+  } catch {
+    return null;
+  }
 }
 
-function applyTheme(theme: Theme) {
+function persistTheme(theme: Theme): void {
+  if (typeof window === "undefined") return;
+
+  try {
+    window.localStorage.setItem(STORAGE_KEY, theme);
+  } catch {
+    // Storage can fail in private mode or locked-down browsers.
+  }
+}
+
+function applyTheme(theme: Theme): void {
   if (typeof document === "undefined") return;
 
   const root = document.documentElement;
@@ -52,22 +64,28 @@ function applyTheme(theme: Theme) {
   root.classList.remove("light", "dark");
   root.classList.add(theme);
   root.style.colorScheme = theme;
+  root.dataset.theme = theme;
+}
+
+function resolveInitialTheme(): Theme {
+  return getStoredTheme() ?? getSystemTheme();
 }
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [theme, setThemeState] = useState<Theme>(() => getInitialTheme());
+  const [theme, setThemeState] = useState<Theme>(DEFAULT_THEME);
+  const [mounted, setMounted] = useState(false);
 
   useEffect(() => {
-    applyTheme(theme);
-  }, [theme]);
+    const initialTheme = resolveInitialTheme();
+
+    setThemeState(initialTheme);
+    applyTheme(initialTheme);
+    setMounted(true);
+  }, []);
 
   const setTheme = useCallback((nextTheme: Theme) => {
     setThemeState(nextTheme);
-
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(STORAGE_KEY, nextTheme);
-    }
-
+    persistTheme(nextTheme);
     applyTheme(nextTheme);
   }, []);
 
@@ -75,10 +93,7 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     setThemeState((currentTheme) => {
       const nextTheme = currentTheme === "dark" ? "light" : "dark";
 
-      if (typeof window !== "undefined") {
-        window.localStorage.setItem(STORAGE_KEY, nextTheme);
-      }
-
+      persistTheme(nextTheme);
       applyTheme(nextTheme);
 
       return nextTheme;
@@ -91,13 +106,21 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       setTheme,
       toggleTheme,
     }),
-    [theme, setTheme, toggleTheme]
+    [theme, setTheme, toggleTheme],
   );
 
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+  useEffect(() => {
+    if (!mounted) return;
+
+    applyTheme(theme);
+  }, [mounted, theme]);
+
+  return (
+    <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>
+  );
 }
 
-export function useTheme() {
+export function useTheme(): ThemeContextValue {
   const context = useContext(ThemeContext);
 
   if (!context) {

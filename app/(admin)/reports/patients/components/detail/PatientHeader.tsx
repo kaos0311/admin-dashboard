@@ -1,10 +1,8 @@
 ﻿"use client";
 
-import {
-  Archive,
-  ArchiveRestore,
-  Trash2,
-} from "lucide-react";
+import { Archive, ArchiveRestore, Trash2 } from "lucide-react";
+
+import { colors, glass, spacing, typography } from "@/theme";
 
 import type { PatientDetailProps } from "./patient-detail-types";
 
@@ -17,6 +15,10 @@ import {
 } from "../PatientUI";
 
 import { isDestroyEligible } from "../../lib/patientUtils";
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
 
 export function PatientHeader({
   selected,
@@ -32,120 +34,89 @@ export function PatientHeader({
   | "restorePatient"
   | "destroyPatient"
 >) {
-  return (
-    <div className="relative overflow-hidden rounded-[28px] border border-white/10 bg-white/[0.05] backdrop-blur-2xl shadow-[0_8px_40px_rgba(0,0,0,0.45)]">
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_left,rgba(59,130,246,0.18),transparent_35%),radial-gradient(circle_at_top_right,rgba(14,165,233,0.14),transparent_30%)]" />
+  const isSaving = savingId === selected.id;
+  const hasSnapshot = Boolean(selected.snapshot || selected.patientSnapshot);
 
-      <div className="relative flex flex-col gap-6 p-6 xl:flex-row xl:items-start xl:justify-between">
-        <div className="space-y-3">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight text-white">
+  return (
+    <header className={glass.cardPadded}>
+      <div
+        className={cx(
+          "flex flex-col xl:flex-row xl:items-start xl:justify-between",
+          "gap-6",
+        )}
+      >
+        <div className={cx(spacing.stackTight, "min-w-0 flex-1")}>
+          <div className={cx(spacing.actions, "min-w-0")}>
+            <h1 className={cx(typography.pageTitle, "break-words")}>
               {selected.fullName}
             </h1>
 
             <StatusPill status={selected.status} />
-
             <RiskPill score={selected.riskScore} />
+            <DataQualityPill score={selected.dataCompletenessScore} />
 
-            <DataQualityPill
-              score={selected.dataCompletenessScore}
-            />
-
-            {selected.cpap?.onRecord ? (
-              <Badge label="CPAP/PAP" />
-            ) : null}
-
-            {selected.hospice ? (
-              <Badge label="Hospice" />
-            ) : null}
+            {selected.cpap?.onRecord ? <Badge label="CPAP/PAP" /> : null}
+            {selected.hospice ? <Badge label="Hospice" /> : null}
           </div>
 
-          <div className="flex flex-wrap gap-6 text-sm text-zinc-400">
-            <div>
-              <span className="text-zinc-500">DOB:</span>{" "}
-              {selected.dateOfBirth || "â€”"}
+          <dl className={cx(spacing.actions, typography.bodyMuted)}>
+            <div className={spacing.inline}>
+              <dt className={typography.bodyFaint}>DOB:</dt>
+              <dd>{selected.dateOfBirth || "—"}</dd>
             </div>
 
-            <div>
-              <span className="text-zinc-500">Status:</span>{" "}
-              {selected.status}
+            <div className={spacing.inline}>
+              <dt className={typography.bodyFaint}>Status:</dt>
+              <dd>{selected.status}</dd>
             </div>
 
-            <div>
-              <span className="text-zinc-500">
-                Risk Score:
-              </span>{" "}
-              {selected.riskScore}
+            <div className={spacing.inline}>
+              <dt className={typography.bodyFaint}>Risk Score:</dt>
+              <dd>{selected.riskScore}</dd>
             </div>
-          </div>
+          </dl>
 
-          {(selected.snapshot ||
-            selected.patientSnapshot) && (
-            <div className="max-w-5xl rounded-2xl border border-white/10 bg-black/30 p-4 text-sm leading-relaxed text-zinc-300">
-              {selected.snapshot ||
-                selected.patientSnapshot}
+          {hasSnapshot ? (
+            <div className={cx(glass.insetPadded, typography.body)}>
+              {selected.snapshot || selected.patientSnapshot}
             </div>
-          )}
+          ) : null}
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className={cx(spacing.actions, "shrink-0")}>
           {selected.status === "active" ? (
             <ActionButton
               tone="amber"
-              disabled={savingId === selected.id}
-              onClick={() =>
-                void archivePatient(selected)
-              }
-              icon={
-                <Archive
-                  className="h-4 w-4"
-                  aria-hidden="true"
-                />
-              }
+              disabled={isSaving}
+              onClick={() => void archivePatient(selected)}
+              icon={<Archive className="h-4 w-4" aria-hidden="true" />}
               label="Archive"
             />
           ) : null}
 
           {selected.status === "archived" ? (
-            <ActionButton
-              tone="green"
-              disabled={savingId === selected.id}
-              onClick={() =>
-                void restorePatient(selected)
-              }
-              icon={
-                <ArchiveRestore
-                  className="h-4 w-4"
-                  aria-hidden="true"
-                />
-              }
-              label="Restore"
-            />
-          ) : null}
+            <>
+              <ActionButton
+                tone="green"
+                disabled={isSaving}
+                onClick={() => void restorePatient(selected)}
+                icon={
+                  <ArchiveRestore className="h-4 w-4" aria-hidden="true" />
+                }
+                label="Restore"
+              />
 
-          {selected.status === "archived" ? (
-            <ActionButton
-              tone="red"
-              disabled={
-                savingId === selected.id ||
-                !isDestroyEligible(selected)
-              }
-              onClick={() =>
-                void destroyPatient(selected)
-              }
-              icon={
-                <Trash2
-                  className="h-4 w-4"
-                  aria-hidden="true"
-                />
-              }
-              label="Destroy"
-            />
+              <ActionButton
+                tone="red"
+                disabled={isSaving || !isDestroyEligible(selected)}
+                onClick={() => void destroyPatient(selected)}
+                icon={<Trash2 className="h-4 w-4" aria-hidden="true" />}
+                label="Destroy"
+              />
+            </>
           ) : null}
         </div>
       </div>
-    </div>
+    </header>
   );
 }
-
-

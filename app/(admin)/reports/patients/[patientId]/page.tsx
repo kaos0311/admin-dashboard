@@ -12,7 +12,7 @@ import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
 
-import { addTimelineEntry, writeAuditLog } from "./patient-detail-actions";
+import { addTimelineEntry, writeAuditLog } from "../lib/patientActions";
 import {
   PATIENTS_COLLECTION,
   type PatientTask,
@@ -471,6 +471,7 @@ export default function PatientDetailPage() {
     </PageShell>
   );
 }
+
 
 
 

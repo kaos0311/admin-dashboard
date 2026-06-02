@@ -1,9 +1,8 @@
 ﻿import {
   addDoc,
   collection,
-  doc,
+  type DocumentData,
   serverTimestamp,
-  setDoc,
 } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
@@ -11,34 +10,94 @@ import type { PatientIndex, PatientStatus } from "./patientTypes";
 
 const PATIENTS_COLLECTION = "patients";
 const AUDIT_COLLECTION = "auditLogs";
+const TIMELINE_COLLECTION = "timeline";
 
-export async function writeAuditLog(params: {
+type TimelineEventType = "system_event" | "import" | "note" | "task" | "status";
+
+type AuditLogParams = {
   action: string;
   patient: PatientIndex;
   previousStatus: PatientStatus;
   newStatus: PatientStatus;
-}) {
+};
+
+type TimelineEntryParams = {
+  patientId: string;
+  type: TimelineEventType | string;
+  title: string;
+  body?: string;
+  metadata?: Record<string, unknown>;
+};
+
+type PatientSystemEventParams = {
+  patientId: string;
+  title: string;
+  body?: string;
+  metadata?: Record<string, unknown>;
+};
+
+type PatientImportEventParams = {
+  patientId: string;
+  reportType: string;
+  fileName?: string;
+  importId?: string;
+  rowCount?: number;
+};
+
+function getCurrentActor() {
   const user = auth.currentUser;
 
-  await setDoc(doc(collection(db, AUDIT_COLLECTION)), {
-    action: params.action,
-
+  return {
     actorUid: user?.uid ?? null,
     actorEmail: user?.email ?? null,
+  };
+}
 
-    targetId: params.patient.id,
-    targetName: params.patient.fullName,
+function getSystemActor() {
+  return {
+    actorUid: "system",
+    actorEmail: "system",
+  };
+}
+
+function getPatientTimelineCollection(patientId: string) {
+  return collection(db, PATIENTS_COLLECTION, patientId, TIMELINE_COLLECTION);
+}
+
+async function writeTimelineDocument(
+  patientId: string,
+  payload: DocumentData,
+): Promise<void> {
+  await addDoc(getPatientTimelineCollection(patientId), {
+    ...payload,
+    createdAt: serverTimestamp(),
+  });
+}
+
+export async function writeAuditLog({
+  action,
+  patient,
+  previousStatus,
+  newStatus,
+}: AuditLogParams): Promise<void> {
+  await addDoc(collection(db, AUDIT_COLLECTION), {
+    action,
+
+    ...getCurrentActor(),
+
+    targetId: patient.id,
+    targetName: patient.fullName,
     targetCollection: PATIENTS_COLLECTION,
 
-    previousStatus: params.previousStatus,
-    newStatus: params.newStatus,
+    previousStatus,
+    newStatus,
 
     details: {
-      patientId: params.patient.id,
-      patientName: params.patient.fullName,
-      dateOfBirth: params.patient.dateOfBirth || null,
-      hospice: params.patient.hospice ?? false,
-      riskScore: params.patient.riskScore ?? 0,
+      patientId: patient.id,
+      patientName: patient.fullName,
+      dateOfBirth: patient.dateOfBirth || null,
+      hospice: patient.hospice ?? false,
+      riskScore: patient.riskScore ?? 0,
       timestamp: new Date().toISOString(),
     },
 
@@ -46,88 +105,54 @@ export async function writeAuditLog(params: {
   });
 }
 
-export async function addTimelineEntry(params: {
-  patientId: string;
-  type: string;
-  title: string;
-  body?: string;
-  metadata?: Record<string, unknown>;
-}) {
-  const user = auth.currentUser;
-
-  await addDoc(
-    collection(db, PATIENTS_COLLECTION, params.patientId, "timeline"),
-    {
-      type: params.type,
-      title: params.title,
-
-      body: params.body ?? "",
-
-      metadata: params.metadata ?? {},
-
-      actorUid: user?.uid ?? null,
-      actorEmail: user?.email ?? null,
-
-      createdAt: serverTimestamp(),
-    }
-  );
+export async function addTimelineEntry({
+  patientId,
+  type,
+  title,
+  body,
+  metadata,
+}: TimelineEntryParams): Promise<void> {
+  await writeTimelineDocument(patientId, {
+    type,
+    title,
+    body: body ?? "",
+    metadata: metadata ?? {},
+    ...getCurrentActor(),
+  });
 }
 
-export async function addPatientSystemEvent(params: {
-  patientId: string;
-  title: string;
-  body?: string;
-  metadata?: Record<string, unknown>;
-}) {
-  await addDoc(
-    collection(db, PATIENTS_COLLECTION, params.patientId, "timeline"),
-    {
-      type: "system_event",
-
-      title: params.title,
-      body: params.body ?? "",
-
-      metadata: params.metadata ?? {},
-
-      actorUid: "system",
-      actorEmail: "system",
-
-      createdAt: serverTimestamp(),
-    }
-  );
+export async function addPatientSystemEvent({
+  patientId,
+  title,
+  body,
+  metadata,
+}: PatientSystemEventParams): Promise<void> {
+  await writeTimelineDocument(patientId, {
+    type: "system_event",
+    title,
+    body: body ?? "",
+    metadata: metadata ?? {},
+    ...getSystemActor(),
+  });
 }
 
-export async function addPatientImportEvent(params: {
-  patientId: string;
-  reportType: string;
-  fileName?: string;
-  importId?: string;
-  rowCount?: number;
-}) {
-  await addDoc(
-    collection(db, PATIENTS_COLLECTION, params.patientId, "timeline"),
-    {
-      type: "import",
-
-      title: `Imported ${params.reportType} report`,
-
-      body: params.fileName
-        ? `Source file: ${params.fileName}`
-        : "",
-
-      metadata: {
-        importId: params.importId ?? null,
-        reportType: params.reportType,
-        fileName: params.fileName ?? null,
-        rowCount: params.rowCount ?? 0,
-      },
-
-      actorUid: "system",
-      actorEmail: "system",
-
-      createdAt: serverTimestamp(),
-    }
-  );
+export async function addPatientImportEvent({
+  patientId,
+  reportType,
+  fileName,
+  importId,
+  rowCount,
+}: PatientImportEventParams): Promise<void> {
+  await writeTimelineDocument(patientId, {
+    type: "import",
+    title: `Imported ${reportType} report`,
+    body: fileName ? `Source file: ${fileName}` : "",
+    metadata: {
+      importId: importId ?? null,
+      reportType,
+      fileName: fileName ?? null,
+      rowCount: rowCount ?? 0,
+    },
+    ...getSystemActor(),
+  });
 }
-
-

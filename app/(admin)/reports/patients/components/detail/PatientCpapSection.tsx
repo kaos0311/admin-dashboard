@@ -8,31 +8,81 @@ import { Info, Section } from "../PatientUI";
 
 import { formatDate } from "../../lib/patientUtils";
 
+type CpapField = {
+  label: string;
+  value?: string;
+};
+
+function getCpapFields(
+  selected: PatientDetailProps["selected"],
+): CpapField[] {
+  const cpap = selected.cpap;
+
+  return [
+    {
+      label: "On Record",
+      value: cpap?.onRecord ? "Yes" : "No",
+    },
+    {
+      label: "Machine",
+      value: cpap?.machine,
+    },
+    {
+      label: "Mask Type",
+      value: cpap?.maskType,
+    },
+    {
+      label: "Humidifier",
+      value: cpap?.humidifier,
+    },
+    {
+      label: "Tubing",
+      value: cpap?.tubing,
+    },
+    {
+      label: "Filters",
+      value: cpap?.filters,
+    },
+    {
+      label: "Headgear",
+      value: cpap?.headgear,
+    },
+    {
+      label: "Pressure",
+      value: cpap?.pressure,
+    },
+    {
+      label: "Serial #",
+      value: cpap?.serialNumber,
+    },
+    {
+      label: "Setup Date",
+      value: formatDate(cpap?.setupDate),
+    },
+    {
+      label: "Last Service",
+      value: formatDate(cpap?.lastServiceDate),
+    },
+    {
+      label: "Compliance",
+      value: cpap?.complianceStatus,
+    },
+  ];
+}
+
 export function PatientCpapSection({
   selected,
 }: Pick<PatientDetailProps, "selected">) {
+  const cpapFields = getCpapFields(selected);
+
   return (
     <Section
       title="CPAP / PAP Therapy"
       icon={<HeartPulse className="h-5 w-5" aria-hidden="true" />}
     >
-      <Info label="On Record" value={selected.cpap?.onRecord ? "Yes" : "No"} />
-      <Info label="Machine" value={selected.cpap?.machine} />
-      <Info label="Mask Type" value={selected.cpap?.maskType} />
-      <Info label="Humidifier" value={selected.cpap?.humidifier} />
-      <Info label="Tubing" value={selected.cpap?.tubing} />
-      <Info label="Filters" value={selected.cpap?.filters} />
-      <Info label="Headgear" value={selected.cpap?.headgear} />
-      <Info label="Pressure" value={selected.cpap?.pressure} />
-      <Info label="Serial #" value={selected.cpap?.serialNumber} />
-      <Info label="Setup Date" value={formatDate(selected.cpap?.setupDate)} />
-      <Info
-        label="Last Service"
-        value={formatDate(selected.cpap?.lastServiceDate)}
-      />
-      <Info label="Compliance" value={selected.cpap?.complianceStatus} />
+      {cpapFields.map((field) => (
+        <Info key={field.label} label={field.label} value={field.value} />
+      ))}
     </Section>
   );
 }
-
-

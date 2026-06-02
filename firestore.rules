@@ -28,6 +28,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == userId;
     }
 
+    function createdBySelf() {
+      return isSignedIn()
+        && request.resource.data.createdBy == request.auth.uid;
+    }
+
     match /settings/{docId} {
       allow read: if isStaffOrAdmin();
       allow write: if isAdmin();
@@ -162,15 +167,13 @@ service cloud.firestore {
 
     match /aiConversations/{conversationId} {
       allow read: if isStaffOrAdmin();
-      allow create: if isStaffOrAdmin()
-        && request.resource.data.createdBy == request.auth.uid;
+      allow create: if isStaffOrAdmin() && createdBySelf();
       allow update: if isStaffOrAdmin();
       allow delete: if isAdmin();
 
       match /messages/{messageId} {
         allow read: if isStaffOrAdmin();
-        allow create: if isStaffOrAdmin()
-          && request.resource.data.createdBy == request.auth.uid;
+        allow create: if isStaffOrAdmin() && createdBySelf();
         allow update: if false;
         allow delete: if isAdmin();
       }

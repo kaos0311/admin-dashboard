@@ -1,43 +1,93 @@
-﻿import type {
+﻿import type { Timestamp } from "firebase/firestore";
+
+import type {
   BirthdayParts,
+  CpapInfo,
+  CurrentEquipmentItem,
+  PatientAuthorization,
+  PatientBilling,
+  PatientCmn,
+  PatientDeliverySummary,
   PatientIndex,
+  PatientInsurance,
+  PatientProfile,
+  PatientSource,
   PatientTask,
+  PatientTaskPriority,
+  PatientTaskStatus,
+  PatientWip,
   PatientWithDerived,
+  RecentPurchaseItem,
   SortMode,
 } from "./patientTypes";
 
 export const PATIENT_LIMIT = 500;
 export const SEVEN_YEARS_MS = 1000 * 60 * 60 * 24 * 365.25 * 7;
+export const EMPTY_DISPLAY = "—";
+
+type UnknownRecord = Record<string, unknown>;
+
+type Sorter = (
+  a: PatientWithDerived,
+  b: PatientWithDerived,
+) => number;
 
 export function safeText(value: unknown, fallback = ""): string {
   if (value === null || value === undefined) return fallback;
+
   return String(value).trim() || fallback;
 }
 
 export function safeNumber(value: unknown): number {
   const parsed = Number(value);
+
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
-export function safeRecord(value: unknown): Record<string, unknown> | null {
-  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
-  return value as Record<string, unknown>;
+export function safeRecord(value: unknown): UnknownRecord | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  return value as UnknownRecord;
+}
+
+export function safeTimestamp(value: unknown): Timestamp | undefined {
+  if (!value || typeof value !== "object") return undefined;
+
+  const record = value as Partial<Timestamp>;
+
+  if (
+    typeof record.toDate === "function" &&
+    typeof record.seconds === "number" &&
+    typeof record.nanoseconds === "number"
+  ) {
+    return record as Timestamp;
+  }
+
+  return undefined;
 }
 
 export function textField(
-  record: Record<string, unknown> | null | undefined,
-  key: string
+  record: object | null | undefined,
+  key: string,
 ): string {
-  if (!record) return "";
-  return safeText(record[key]);
+  const safe = safeRecord(record);
+
+  if (!safe) return "";
+
+  return safeText(safe[key]);
 }
 
 export function numberField(
-  record: Record<string, unknown> | null | undefined,
-  key: string
+  record: object | null | undefined,
+  key: string,
 ): number {
-  if (!record) return 0;
-  return safeNumber(record[key]);
+  const safe = safeRecord(record);
+
+  if (!safe) return 0;
+
+  return safeNumber(safe[key]);
 }
 
 export function isValidMonthDay(month: number, day: number): boolean {
@@ -46,6 +96,7 @@ export function isValidMonthDay(month: number, day: number): boolean {
   if (day < 1 || day > 31) return false;
 
   const testDate = new Date(2000, month - 1, day);
+
   return testDate.getMonth() === month - 1 && testDate.getDate() === day;
 }
 
@@ -53,19 +104,27 @@ export function getLocalDateParts(value?: string): BirthdayParts | null {
   if (!value) return null;
 
   const clean = value.trim();
+
   if (!clean) return null;
 
   const isoDateOnly = clean.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+
   if (isoDateOnly) {
     const year = Number(isoDateOnly[1]);
     const month = Number(isoDateOnly[2]);
     const day = Number(isoDateOnly[3]);
 
     if (!isValidMonthDay(month, day)) return null;
-    return { year, month, day };
+
+    return {
+      year,
+      month,
+      day,
+    };
   }
 
   const monthDayYear = clean.match(/^(\d{1,2})[-/](\d{1,2})[-/](\d{2,4})$/);
+
   if (monthDayYear) {
     const month = Number(monthDayYear[1]);
     const day = Number(monthDayYear[2]);
@@ -81,6 +140,7 @@ export function getLocalDateParts(value?: string): BirthdayParts | null {
   }
 
   const parsed = new Date(clean);
+
   if (Number.isNaN(parsed.getTime())) return null;
 
   return {
@@ -92,6 +152,7 @@ export function getLocalDateParts(value?: string): BirthdayParts | null {
 
 export function parseDate(value?: string): Date | null {
   const parts = getLocalDateParts(value);
+
   if (!parts) return null;
 
   return new Date(parts.year ?? 2000, parts.month - 1, parts.day);
@@ -99,7 +160,8 @@ export function parseDate(value?: string): Date | null {
 
 export function formatDate(value?: string): string {
   const parts = getLocalDateParts(value);
-  if (!parts) return "â€”";
+
+  if (!parts) return EMPTY_DISPLAY;
 
   const displayDate = new Date(parts.year ?? 2000, parts.month - 1, parts.day);
 
@@ -131,6 +193,7 @@ export function getCurrentMonthName(): string {
 
 export function isBirthdayThisMonth(dateOfBirth: string): boolean {
   const birthday = getLocalDateParts(dateOfBirth);
+
   if (!birthday) return false;
 
   return birthday.month === getCurrentMonthNumber();
@@ -142,6 +205,7 @@ export function getBirthdayDay(dateOfBirth: string): number | null {
 
 export function getAgeTurning(dateOfBirth: string): number | null {
   const birthday = getLocalDateParts(dateOfBirth);
+
   if (!birthday?.year) return null;
 
   return new Date().getFullYear() - birthday.year;
@@ -149,7 +213,8 @@ export function getAgeTurning(dateOfBirth: string): number | null {
 
 export function formatBirthday(dateOfBirth: string): string {
   const birthday = getLocalDateParts(dateOfBirth);
-  if (!birthday) return "â€”";
+
+  if (!birthday) return EMPTY_DISPLAY;
 
   const displayDate = new Date(2000, birthday.month - 1, birthday.day);
 
@@ -162,6 +227,7 @@ export function formatBirthday(dateOfBirth: string): string {
 
 export function getBirthdaySortValue(dateOfBirth: string): number {
   const birthday = getLocalDateParts(dateOfBirth);
+
   if (!birthday) return 9999;
 
   return birthday.month * 100 + birthday.day;
@@ -169,7 +235,9 @@ export function getBirthdaySortValue(dateOfBirth: string): number {
 
 export function addYears(date: Date, years: number): Date {
   const dateCopy = new Date(date);
+
   dateCopy.setFullYear(dateCopy.getFullYear() + years);
+
   return dateCopy;
 }
 
@@ -185,11 +253,11 @@ export function getLastActivityDate(patient: PatientIndex): string {
   );
 }
 
-
 export function getDestroyEligibleDate(patient: PatientIndex): string {
   if (patient.destroyEligibleDate) return patient.destroyEligibleDate;
 
   const lastActivity = parseDate(getLastActivityDate(patient));
+
   if (!lastActivity) return "";
 
   return addYears(lastActivity, 7).toISOString();
@@ -199,6 +267,7 @@ export function isDestroyEligible(patient: PatientIndex): boolean {
   if (patient.status !== "archived") return false;
 
   const lastActivity = parseDate(getLastActivityDate(patient));
+
   if (!lastActivity) return false;
 
   return Date.now() - lastActivity.getTime() >= SEVEN_YEARS_MS;
@@ -208,80 +277,113 @@ export function makeId(prefix: string): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+function normalizeTaskPriority(value: unknown): PatientTaskPriority {
+  const priority = safeText(value);
+
+  if (priority === "watch" || priority === "urgent") {
+    return priority;
+  }
+
+  return "routine";
+}
+
+function normalizeTaskStatus(value: unknown): PatientTaskStatus {
+  return safeText(value) === "done" ? "done" : "open";
+}
+
+function normalizeSources(value: unknown): PatientSource[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item): PatientSource | null => {
+      const record = safeRecord(item);
+
+      if (!record) return null;
+
+      return {
+        reportId: safeText(record.reportId),
+        reportType: safeText(record.reportType),
+        reportLabel: safeText(record.reportLabel),
+        fileName: safeText(record.fileName),
+      };
+    })
+    .filter((source): source is PatientSource => Boolean(source));
+}
+
+function normalizeCurrentEquipment(value: unknown): CurrentEquipmentItem[] {
+  return Array.isArray(value) ? (value as CurrentEquipmentItem[]) : [];
+}
+
+function normalizeRecentPurchases(value: unknown): RecentPurchaseItem[] {
+  return Array.isArray(value) ? (value as RecentPurchaseItem[]) : [];
+}
+
 export function normalizeTasks(value: unknown): PatientTask[] {
   if (!Array.isArray(value)) return [];
 
   return value
     .map((item): PatientTask | null => {
-      if (!item || typeof item !== "object") return null;
+      const raw = safeRecord(item);
 
-      const raw = item as Record<string, unknown>;
-      const priority = safeText(raw.priority);
-      const status = safeText(raw.status);
+      if (!raw) return null;
+
+      const title = safeText(raw.title);
+
+      if (!title) return null;
 
       return {
         id: safeText(raw.id) || makeId("task"),
-        title: safeText(raw.title),
+        title,
         assignedTo: safeText(raw.assignedTo),
         dueDate: safeText(raw.dueDate),
-        priority:
-          priority === "watch" || priority === "urgent"
-            ? priority
-            : "routine",
-        status: status === "done" ? "done" : "open",
-        createdAt: raw.createdAt,
-        updatedAt: raw.updatedAt,
+        priority: normalizeTaskPriority(raw.priority),
+        status: normalizeTaskStatus(raw.status),
+        createdAt: safeTimestamp(raw.createdAt),
+        updatedAt: safeTimestamp(raw.updatedAt),
         createdBy: typeof raw.createdBy === "string" ? raw.createdBy : null,
       };
     })
-    .filter((task): task is PatientTask => Boolean(task?.title));
+    .filter((task): task is PatientTask => Boolean(task));
 }
 
 export function normalizePatient(
   id: string,
-  raw: Partial<PatientIndex>
+  raw: Partial<PatientIndex>,
 ): PatientIndex {
   const firstName = safeText(raw.firstName);
   const lastName = safeText(raw.lastName);
   const fallbackName = [firstName, lastName].filter(Boolean).join(" ");
 
   return {
-  id,
-  firstName,
-  lastName,
-  fullName: safeText(raw.fullName, fallbackName || "Unnamed Patient"),
+    id,
 
-  normalizedFullName: safeText(raw.normalizedFullName),
-  sourceFullName: safeText(raw.sourceFullName),
+    firstName,
+    lastName,
+    fullName: safeText(raw.fullName, fallbackName || "Unnamed Patient"),
 
-  dateOfBirth: safeText(raw.dateOfBirth || raw.dob),
-  dateOfDeath: safeText(raw.dateOfDeath || raw.dod),
+    normalizedFullName: safeText(raw.normalizedFullName),
+    sourceFullName: safeText(raw.sourceFullName),
 
-  dob: safeText(raw.dob || raw.dateOfBirth),
-  dod: safeText(raw.dod || raw.dateOfDeath),
+    dateOfBirth: safeText(raw.dateOfBirth || raw.dob),
+    dateOfDeath: safeText(raw.dateOfDeath || raw.dod),
 
-  hasBirthday: raw.hasBirthday === true,
-  birthMonth: safeNumber(raw.birthMonth),
-  birthDay: safeNumber(raw.birthDay),
-  birthMonthDay: safeText(raw.birthMonthDay),
+    dob: safeText(raw.dob || raw.dateOfBirth),
+    dod: safeText(raw.dod || raw.dateOfDeath),
 
-age:
-  typeof raw.age === "number"
-    ? raw.age
-    : null,
+    hasBirthday: raw.hasBirthday === true,
+    birthMonth: safeNumber(raw.birthMonth),
+    birthDay: safeNumber(raw.birthDay),
+    birthMonthDay: safeText(raw.birthMonthDay),
 
-nextAge:
-  typeof raw.nextAge === "number"
-    ? raw.nextAge
-    : null,
+    age: typeof raw.age === "number" ? raw.age : null,
+    nextAge: typeof raw.nextAge === "number" ? raw.nextAge : null,
+    nextBirthday: safeTimestamp(raw.nextBirthday),
+    nextBirthdayIso: safeText(raw.nextBirthdayIso),
+    daysUntilBirthday:
+      typeof raw.daysUntilBirthday === "number"
+        ? raw.daysUntilBirthday
+        : null,
 
-nextBirthday: raw.nextBirthday,
-nextBirthdayIso: safeText(raw.nextBirthdayIso),
-
-daysUntilBirthday:
-  typeof raw.daysUntilBirthday === "number"
-    ? raw.daysUntilBirthday
-    : null,
     phone: safeText(raw.phone),
     email: safeText(raw.email),
     address: safeText(raw.address),
@@ -290,19 +392,16 @@ daysUntilBirthday:
     zip: safeText(raw.zip),
 
     reportTypes: Array.isArray(raw.reportTypes) ? raw.reportTypes : [],
-
-sources: Array.isArray(raw.sources)
-  ? raw.sources
-  : [],
+    sources: normalizeSources(raw.sources),
 
     status:
       raw.status === "archived" || raw.status === "destroyed"
         ? raw.status
         : "active",
 
-    archivedAt: raw.archivedAt,
-    restoredAt: raw.restoredAt,
-    destroyedAt: raw.destroyedAt,
+    archivedAt: safeTimestamp(raw.archivedAt),
+    restoredAt: safeTimestamp(raw.restoredAt),
+    destroyedAt: safeTimestamp(raw.destroyedAt),
 
     lastEquipmentDate: safeText(raw.lastEquipmentDate),
     lastTreatmentDate: safeText(raw.lastTreatmentDate),
@@ -316,31 +415,33 @@ sources: Array.isArray(raw.sources)
     equipmentNotes: safeText(raw.equipmentNotes),
     billingNotes: safeText(raw.billingNotes),
 
-    profile: safeRecord(raw.profile),
-    insurance: safeRecord(raw.insurance),
-    cpap: raw.cpap ?? null,
+    profile: safeRecord(raw.profile) as PatientProfile | null,
+    insurance: safeRecord(raw.insurance) as PatientInsurance | null,
+    cpap: (safeRecord(raw.cpap) as CpapInfo | null) ?? null,
 
-    currentEquipment: Array.isArray(raw.currentEquipment)
-      ? raw.currentEquipment
-      : [],
+    currentEquipment: normalizeCurrentEquipment(raw.currentEquipment),
     currentEquipmentCount: safeNumber(raw.currentEquipmentCount),
 
-    purchasesLast90Days: Array.isArray(raw.purchasesLast90Days)
-      ? raw.purchasesLast90Days
-      : [],
+    purchasesLast90Days: normalizeRecentPurchases(raw.purchasesLast90Days),
     purchasesLast90DaysCount: safeNumber(raw.purchasesLast90DaysCount),
 
-    authorization: safeRecord(raw.authorization),
-    cmn: safeRecord(raw.cmn),
-    billing: safeRecord(raw.billing),
-    wip: safeRecord(raw.wip),
-    deliverySummary: safeRecord(raw.deliverySummary),
+    authorization: safeRecord(raw.authorization) as PatientAuthorization | null,
+    cmn: safeRecord(raw.cmn) as PatientCmn | null,
+    billing: safeRecord(raw.billing) as PatientBilling | null,
+    wip: safeRecord(raw.wip) as PatientWip | null,
+    deliverySummary: safeRecord(
+      raw.deliverySummary,
+    ) as PatientDeliverySummary | null,
 
     hospice: raw.hospice === true,
     hospiceStatus: safeText(raw.hospiceStatus),
 
     tasks: normalizeTasks(raw.tasks),
     riskScore: safeNumber(raw.riskScore),
+    rowCount: safeNumber(raw.rowCount),
+
+    createdAt: safeTimestamp(raw.createdAt),
+    updatedAt: safeTimestamp(raw.updatedAt),
   };
 }
 
@@ -375,7 +476,7 @@ export function calculatePatientRisk(patient: PatientIndex): number {
 
   if (
     (patient.tasks ?? []).some(
-      (task) => task.status === "open" && task.priority === "urgent"
+      (task) => task.status === "open" && task.priority === "urgent",
     )
   ) {
     score += 3;
@@ -419,7 +520,7 @@ export function getRiskFlags(patient: PatientIndex): string[] {
 
   if (
     (patient.tasks ?? []).some(
-      (task) => task.status === "open" && task.priority === "urgent"
+      (task) => task.status === "open" && task.priority === "urgent",
     )
   ) {
     flags.push("Urgent task");
@@ -434,7 +535,10 @@ export function calculateDataCompleteness(patient: PatientIndex): number {
 
   const check = (value: unknown) => {
     total += 1;
-    if (safeText(value)) filled += 1;
+
+    if (safeText(value)) {
+      filled += 1;
+    }
   };
 
   check(patient.firstName);
@@ -447,7 +551,7 @@ export function calculateDataCompleteness(patient: PatientIndex): number {
 
   check(
     textField(patient.insurance, "primaryInsurance") ||
-      textField(patient.insurance, "payor")
+      textField(patient.insurance, "payor"),
   );
 
   check(textField(patient.profile, "primaryDoctor"));
@@ -466,16 +570,15 @@ export function calculateDataCompleteness(patient: PatientIndex): number {
 
 export function derivePatient(patient: PatientIndex): PatientWithDerived {
   const riskFlags = getRiskFlags(patient);
+  const tasks = patient.tasks ?? [];
 
   return {
     ...patient,
     reportTypes: patient.reportTypes ?? [],
-    tasks: patient.tasks ?? [],
+    tasks,
     riskScore: calculatePatientRisk(patient),
     riskFlags,
-    openTaskCount: (patient.tasks ?? []).filter(
-      (task) => task.status === "open"
-    ).length,
+    openTaskCount: tasks.filter((task) => task.status === "open").length,
     dataCompletenessScore: calculateDataCompleteness(patient),
     destroyEligibleDateComputed: getDestroyEligibleDate(patient),
     lastActivityDateComputed: getLastActivityDate(patient),
@@ -508,100 +611,84 @@ export function buildSearchBlob(patient: PatientWithDerived): string {
     textField(patient.authorization, "parStatus"),
     textField(patient.cmn, "status"),
     textField(patient.wip, "assignedTo"),
-
     (patient.sources ?? [])
-  .map(
-    (source) =>
-      `${source.reportType} ${source.reportLabel} ${source.fileName}`
-  )
-  .join(" "),
-
-  (patient.purchasesLast90Days ?? [])
-  .map(
-    (purchase) =>
-      `${purchase.itemName} ${purchase.hcpc} ${purchase.orderId}`
-  )
-  .join(" "),
-
+      .map(
+        (source) =>
+          `${source.reportType ?? ""} ${source.reportLabel ?? ""} ${
+            source.fileName ?? ""
+          }`,
+      )
+      .join(" "),
+    (patient.purchasesLast90Days ?? [])
+      .map(
+        (purchase) =>
+          `${purchase.itemName ?? ""} ${purchase.hcpc ?? ""} ${
+            purchase.orderId ?? ""
+          }`,
+      )
+      .join(" "),
     (patient.tasks ?? [])
       .map((task) => `${task.title} ${task.assignedTo} ${task.priority}`)
       .join(" "),
     (patient.currentEquipment ?? [])
       .map(
         (item) =>
-          `${item.itemName} ${item.hcpc} ${item.serialNumber} ${item.lotNumber} ${item.status}`
+          `${item.itemName ?? ""} ${item.hcpc ?? ""} ${
+            item.serialNumber ?? ""
+          } ${item.lotNumber ?? ""} ${item.status ?? ""}`,
       )
       .join(" "),
   ]
+    .filter(Boolean)
     .join(" ")
     .toLowerCase();
 }
 
+const SORTERS: Record<SortMode, Sorter> = {
+  nameAsc: (a, b) => a.fullName.localeCompare(b.fullName),
+
+  nameDesc: (a, b) => b.fullName.localeCompare(a.fullName),
+
+  riskDesc: (a, b) =>
+    b.riskScore - a.riskScore || a.fullName.localeCompare(b.fullName),
+
+  birthdayAsc: (a, b) =>
+    getBirthdaySortValue(a.dateOfBirth) -
+      getBirthdaySortValue(b.dateOfBirth) ||
+    a.fullName.localeCompare(b.fullName),
+
+  lastActivityDesc: (a, b) => {
+    const dateA = parseDate(a.lastActivityDateComputed)?.getTime() ?? 0;
+    const dateB = parseDate(b.lastActivityDateComputed)?.getTime() ?? 0;
+
+    return dateB - dateA;
+  },
+
+  destroyEligibleAsc: (a, b) => {
+    const dateA =
+      parseDate(a.destroyEligibleDateComputed)?.getTime() ??
+      Number.MAX_SAFE_INTEGER;
+
+    const dateB =
+      parseDate(b.destroyEligibleDateComputed)?.getTime() ??
+      Number.MAX_SAFE_INTEGER;
+
+    return dateA - dateB;
+  },
+
+  dataQualityAsc: (a, b) =>
+    a.dataCompletenessScore - b.dataCompletenessScore ||
+    b.riskScore - a.riskScore,
+};
+
 export function sortPatients(
   patients: PatientWithDerived[],
-  sortMode: SortMode
+  sortMode: SortMode,
 ): PatientWithDerived[] {
-  const sortedPatients = [...patients];
-
-  if (sortMode === "nameAsc") {
-    return sortedPatients.sort((a, b) => a.fullName.localeCompare(b.fullName));
-  }
-
-  if (sortMode === "nameDesc") {
-    return sortedPatients.sort((a, b) => b.fullName.localeCompare(a.fullName));
-  }
-
-  if (sortMode === "riskDesc") {
-    return sortedPatients.sort(
-      (a, b) => b.riskScore - a.riskScore || a.fullName.localeCompare(b.fullName)
-    );
-  }
-
-  if (sortMode === "birthdayAsc") {
-    return sortedPatients.sort(
-      (a, b) =>
-        getBirthdaySortValue(a.dateOfBirth) -
-          getBirthdaySortValue(b.dateOfBirth) ||
-        a.fullName.localeCompare(b.fullName)
-    );
-  }
-
-  if (sortMode === "lastActivityDesc") {
-    return sortedPatients.sort((a, b) => {
-      const dateA = parseDate(a.lastActivityDateComputed)?.getTime() ?? 0;
-      const dateB = parseDate(b.lastActivityDateComputed)?.getTime() ?? 0;
-
-      return dateB - dateA;
-    });
-  }
-
-  if (sortMode === "destroyEligibleAsc") {
-    return sortedPatients.sort((a, b) => {
-      const dateA =
-        parseDate(a.destroyEligibleDateComputed)?.getTime() ??
-        Number.MAX_SAFE_INTEGER;
-
-      const dateB =
-        parseDate(b.destroyEligibleDateComputed)?.getTime() ??
-        Number.MAX_SAFE_INTEGER;
-
-      return dateA - dateB;
-    });
-  }
-
-  if (sortMode === "dataQualityAsc") {
-    return sortedPatients.sort(
-      (a, b) =>
-        a.dataCompletenessScore - b.dataCompletenessScore ||
-        b.riskScore - a.riskScore
-    );
-  }
-
-  return sortedPatients;
+  return [...patients].sort(SORTERS[sortMode]);
 }
-export function patientNeedsAttention(
-  patient: PatientWithDerived
-): boolean {
+
+export function patientNeedsAttention(patient: PatientWithDerived): boolean {
   return (
     patient.riskScore >= 5 ||
     patient.hospice === true ||
@@ -612,5 +699,3 @@ export function patientNeedsAttention(
       .includes("expired")
   );
 }
-
-

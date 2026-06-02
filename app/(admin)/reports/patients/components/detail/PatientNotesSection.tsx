@@ -1,9 +1,67 @@
 ﻿"use client";
 
-import { NotebookPen } from "lucide-react";
+import { NotebookPen, Save } from "lucide-react";
 
-import { NoteBox, Section } from "../PatientUI";
+import { spacing } from "@/theme";
+
 import type { PatientDetailProps } from "./patient-detail-types";
+
+import { ActionButton, NoteBox, Section } from "../PatientUI";
+
+type NotesField = {
+  id: string;
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+};
+
+function getNotesFields({
+  notesDraft,
+  careNotesDraft,
+  equipmentNotesDraft,
+  billingNotesDraft,
+  setNotesDraft,
+  setCareNotesDraft,
+  setEquipmentNotesDraft,
+  setBillingNotesDraft,
+}: Pick<
+  PatientDetailProps,
+  | "notesDraft"
+  | "careNotesDraft"
+  | "equipmentNotesDraft"
+  | "billingNotesDraft"
+  | "setNotesDraft"
+  | "setCareNotesDraft"
+  | "setEquipmentNotesDraft"
+  | "setBillingNotesDraft"
+>): NotesField[] {
+  return [
+    {
+      id: "general-notes",
+      label: "General Snapshot / Owner Notes",
+      value: notesDraft,
+      onChange: setNotesDraft,
+    },
+    {
+      id: "care-notes",
+      label: "Care Notes",
+      value: careNotesDraft,
+      onChange: setCareNotesDraft,
+    },
+    {
+      id: "equipment-notes",
+      label: "Equipment Notes",
+      value: equipmentNotesDraft,
+      onChange: setEquipmentNotesDraft,
+    },
+    {
+      id: "billing-notes",
+      label: "Billing Notes",
+      value: billingNotesDraft,
+      onChange: setBillingNotesDraft,
+    },
+  ];
+}
 
 export function PatientNotesSection({
   selected,
@@ -31,53 +89,43 @@ export function PatientNotesSection({
   | "setBillingNotesDraft"
   | "saveNotes"
 >) {
+  const notesFields = getNotesFields({
+    notesDraft,
+    careNotesDraft,
+    equipmentNotesDraft,
+    billingNotesDraft,
+    setNotesDraft,
+    setCareNotesDraft,
+    setEquipmentNotesDraft,
+    setBillingNotesDraft,
+  });
+
   return (
     <Section
       title="Internal Notes"
       icon={<NotebookPen className="h-5 w-5" aria-hidden="true" />}
     >
-      <div className="grid gap-4 md:col-span-3 md:grid-cols-2">
-        <NoteBox
-          id="general-notes"
-          label="General Snapshot / Owner Notes"
-          value={notesDraft}
-          onChange={setNotesDraft}
-        />
-
-        <NoteBox
-          id="care-notes"
-          label="Care Notes"
-          value={careNotesDraft}
-          onChange={setCareNotesDraft}
-        />
-
-        <NoteBox
-          id="equipment-notes"
-          label="Equipment Notes"
-          value={equipmentNotesDraft}
-          onChange={setEquipmentNotesDraft}
-        />
-
-        <NoteBox
-          id="billing-notes"
-          label="Billing Notes"
-          value={billingNotesDraft}
-          onChange={setBillingNotesDraft}
-        />
+      <div className={spacing.gridCardsTwo}>
+        {notesFields.map((field) => (
+          <NoteBox
+            key={field.id}
+            id={field.id}
+            label={field.label}
+            value={field.value}
+            onChange={field.onChange}
+          />
+        ))}
       </div>
 
-      <div className="md:col-span-3">
-        <button
-          type="button"
-          onClick={() => void saveNotes(selected)}
+      <div>
+        <ActionButton
+          tone="green"
           disabled={savingNotes}
-          className="rounded-2xl border border-cyan-400/20 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 shadow-[0_12px_30px_rgba(6,182,212,0.12)] transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          {savingNotes ? "Saving Notes..." : "Save Notes"}
-        </button>
+          onClick={() => void saveNotes(selected)}
+          icon={<Save className="h-4 w-4" aria-hidden="true" />}
+          label={savingNotes ? "Saving Notes..." : "Save Notes"}
+        />
       </div>
     </Section>
   );
 }
-
-

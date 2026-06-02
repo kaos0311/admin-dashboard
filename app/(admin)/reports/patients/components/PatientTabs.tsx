@@ -1,6 +1,7 @@
 ﻿"use client";
 
 import type { ReactNode } from "react";
+
 import {
   Archive,
   Cake,
@@ -10,6 +11,8 @@ import {
   Trash2,
   UserRound,
 } from "lucide-react";
+
+import { glass, spacing } from "@/theme";
 
 import type { PatientStats, PatientTab } from "../lib/patientTypes";
 import { getCurrentMonthName } from "../lib/patientUtils";
@@ -31,20 +34,19 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`flex items-center justify-between gap-3 rounded-2xl border px-4 py-3 text-sm font-semibold transition ${
-        active
-          ? "border-white bg-white text-black"
-          : "border-white/10 bg-neutral-950 text-zinc-300 hover:bg-white/10"
+      aria-pressed={active}
+      className={`${glass.listItem} ${
+        active ? "border-cyan-300/35 bg-cyan-300/10 text-cyan-50" : ""
       }`}
     >
-      <span className="inline-flex items-center gap-2">
+      <span className="inline-flex min-w-0 items-center gap-2">
         {icon}
-        {label}
+        <span className="truncate">{label}</span>
       </span>
 
       <span
-        className={`rounded-full px-2 py-0.5 text-xs ${
-          active ? "bg-black/10 text-black" : "bg-white/10 text-zinc-300"
+        className={`${glass.chip} shrink-0 ${
+          active ? "border-cyan-300/25 bg-cyan-300/10 text-cyan-100" : ""
         }`}
       >
         {count.toLocaleString()}
@@ -63,7 +65,10 @@ export function PatientTabs({
   setTab: (tab: PatientTab) => void;
 }) {
   return (
-    <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-7">
+    <section
+      aria-label="Patient index filters"
+      className={`${spacing.gridResponsive} xl:grid-cols-7`}
+    >
       <TabButton
         active={tab === "active"}
         icon={<UserRound className="h-4 w-4" aria-hidden="true" />}
@@ -122,5 +127,3 @@ export function PatientTabs({
     </section>
   );
 }
-
-

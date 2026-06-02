@@ -8,7 +8,13 @@
         ".git",
         "firebase-debug.log",
         "firebase-debug.*.log",
-        "*.local"
+        "*.local",
+        "*.log",
+        ".runtimeconfig.json",
+        "serviceAccountKey.json",
+        "**/serviceAccountKey.json",
+        "**/*serviceAccount*.json",
+        "**/firebase-adminsdk*.json"
       ],
       "predeploy": [
         "npm --prefix \"$RESOURCE_DIR\" run build"

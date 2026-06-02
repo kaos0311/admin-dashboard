@@ -1,4 +1,6 @@
-﻿export const PATIENTS_COLLECTION = "patients";
+﻿import type { Timestamp } from "firebase/firestore";
+
+export const PATIENTS_COLLECTION = "patients";
 
 export type PatientStatus = "active" | "archived" | "destroyed";
 export type PatientTaskStatus = "open" | "done";
@@ -57,8 +59,8 @@ export type PatientTask = {
   dueDate: string;
   priority: PatientTaskPriority;
   status: PatientTaskStatus;
-  createdAt?: unknown;
-  updatedAt?: unknown;
+  createdAt?: Timestamp;
+  updatedAt?: Timestamp;
   createdBy?: string | null;
 };
 
@@ -80,9 +82,9 @@ export type PatientRecord = {
   reportTypes?: string[];
   status: PatientStatus;
 
-  archivedAt?: unknown;
-  restoredAt?: unknown;
-  destroyedAt?: unknown;
+  archivedAt?: Timestamp;
+  restoredAt?: Timestamp;
+  destroyedAt?: Timestamp;
 
   lastEquipmentDate?: string;
   lastTreatmentDate?: string;
@@ -119,4 +121,7 @@ export type BirthdayParts = {
   day: number;
   year: number | null;
 };
+
+
+
 

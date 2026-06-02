@@ -1,4 +1,5 @@
-﻿import type {
+﻿import type { Timestamp } from "firebase/firestore";
+import type {
   BirthdayParts,
   PatientRecord,
   PatientTask,
@@ -191,6 +192,18 @@ function normalizePriority(value: unknown): PatientTaskPriority {
   return "routine";
 }
 
+function normalizeTimestamp(value: unknown): Timestamp | undefined {
+  if (
+    value &&
+    typeof value === "object" &&
+    "seconds" in value &&
+    "nanoseconds" in value
+  ) {
+    return value as Timestamp;
+  }
+
+  return undefined;
+}
 export function normalizeTasks(value: unknown): PatientTask[] {
   if (!Array.isArray(value)) return [];
 
@@ -208,8 +221,8 @@ export function normalizeTasks(value: unknown): PatientTask[] {
         dueDate: safeText(raw.dueDate),
         priority: normalizePriority(raw.priority),
         status: status === "done" ? "done" : "open",
-        createdAt: raw.createdAt,
-        updatedAt: raw.updatedAt,
+        createdAt: normalizeTimestamp(raw.createdAt),
+        updatedAt: normalizeTimestamp(raw.updatedAt),
         createdBy: typeof raw.createdBy === "string" ? raw.createdBy : null,
       };
     })
@@ -376,4 +389,5 @@ export function getRiskFlags(patient: PatientRecord): string[] {
 
   return flags;
 }
+
 

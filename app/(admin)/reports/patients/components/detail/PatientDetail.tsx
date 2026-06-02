@@ -1,20 +1,20 @@
 ﻿"use client";
 
+import { spacing } from "@/theme";
+
 import type { PatientDetailProps } from "./patient-detail-types";
 
+import { PatientBillingSection } from "./PatientBillingSection";
+import { PatientCpapSection } from "./PatientCpapSection";
+import { PatientDeliverySection } from "./PatientDeliverySection";
+import { PatientEquipmentSection } from "./PatientEquipmentSection";
 import { PatientHeader } from "./PatientHeader";
-import { PatientRiskFlags } from "./PatientRiskFlags";
 import { PatientIdentitySection } from "./PatientIdentitySection";
 import { PatientInsuranceSection } from "./PatientInsuranceSection";
-import { PatientCpapSection } from "./PatientCpapSection";
-import { PatientEquipmentSection } from "./PatientEquipmentSection";
 import { PatientPurchasesSection } from "./PatientPurchasesSection";
-import { PatientDeliverySection } from "./PatientDeliverySection";
-import { PatientBillingSection } from "./PatientBillingSection";
+import { PatientRiskFlags } from "./PatientRiskFlags";
 
-export function PatientDetail(
-  props: PatientDetailProps
-) {
+export function PatientDetail(props: PatientDetailProps) {
   return (
     <div className="space-y-6">
       <PatientHeader {...props} />
@@ -35,12 +35,10 @@ export function PatientDetail(
 
       <PatientBillingSection {...props} />
 
-      {/* NEXT */}
+      {/* Roadmap */}
       {/* <PatientTasksSection /> */}
       {/* <PatientNotesSection /> */}
       {/* <PatientRetentionSection /> */}
     </div>
   );
 }
-
-

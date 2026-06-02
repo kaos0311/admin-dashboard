@@ -1,12 +1,14 @@
 ﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
+
 import {
   getIdTokenResult,
   onAuthStateChanged,
   signOut,
   type User,
 } from "firebase/auth";
+
 import { doc, getDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
@@ -29,6 +31,18 @@ type UseAuthRoleResult = {
   canReadAuditLogs: boolean;
 };
 
+type CachedRoleState = {
+  uid: string;
+  role: UserRole;
+  active: boolean | null;
+  checkedAt: number;
+};
+
+const ROLE_CACHE_TTL_MS = 60_000;
+const AUTH_DEBUG = false;
+
+let roleCache: CachedRoleState | null = null;
+
 function parseRole(value: unknown): UserRole {
   return value === "admin" || value === "staff" ? value : null;
 }
@@ -37,6 +51,34 @@ function getErrorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim()
     ? error.message
     : "Unable to verify user role.";
+}
+
+function clearAuthState(
+  setUser: (value: User | null) => void,
+  setRole: (value: UserRole) => void,
+  setActive: (value: boolean | null) => void,
+): void {
+  setUser(null);
+  setRole(null);
+  setActive(null);
+}
+
+function getCachedRole(uid: string): CachedRoleState | null {
+  if (!roleCache) return null;
+  if (roleCache.uid !== uid) return null;
+
+  const cacheAge = Date.now() - roleCache.checkedAt;
+
+  return cacheAge <= ROLE_CACHE_TTL_MS ? roleCache : null;
+}
+
+function setCachedRole(uid: string, role: UserRole, active: boolean | null): void {
+  roleCache = {
+    uid,
+    role,
+    active,
+    checkedAt: Date.now(),
+  };
 }
 
 export function useAuthRole(): UseAuthRoleResult {
@@ -54,20 +96,35 @@ export function useAuthRole(): UseAuthRoleResult {
       setError("");
 
       if (!currentUser) {
-        setUser(null);
-        setRole(null);
-        setActive(null);
-        setLoading(false);
+        roleCache = null;
+
+        if (!cancelled) {
+          clearAuthState(setUser, setRole, setActive);
+          setLoading(false);
+        }
+
+        return;
+      }
+
+      setUser(currentUser);
+
+      const cachedRole = getCachedRole(currentUser.uid);
+
+      if (cachedRole) {
+        if (!cancelled) {
+          setRole(cachedRole.role);
+          setActive(cachedRole.active);
+          setLoading(false);
+        }
+
         return;
       }
 
       try {
-        setUser(currentUser);
-
         let resolvedRole: UserRole = null;
         let resolvedActive: boolean | null = true;
 
-        const tokenResult = await getIdTokenResult(currentUser, true);
+        const tokenResult = await getIdTokenResult(currentUser, false);
         resolvedRole = parseRole(tokenResult.claims.role);
 
         const userSnap = await getDoc(doc(db, "users", currentUser.uid));
@@ -78,19 +135,23 @@ export function useAuthRole(): UseAuthRoleResult {
           resolvedActive = data.active !== false;
 
           const dbRole = parseRole(data.role);
-          if (dbRole) resolvedRole = dbRole;
 
-          console.warn("AUTH ROLE DEBUG:", {
-            uid: currentUser.uid,
-            email: currentUser.email,
-            userDocExists: true,
-            userDoc: data,
-            tokenClaims: tokenResult.claims,
-            resolvedRole,
-            resolvedActive,
-          });
+          if (dbRole) {
+            resolvedRole = dbRole;
+          }
+
+          if (AUTH_DEBUG) {
+            console.info("AUTH ROLE DEBUG:", {
+              uid: currentUser.uid,
+              email: currentUser.email,
+              userDocExists: true,
+              resolvedRole,
+              resolvedActive,
+            });
+          }
 
           if (data.active === false) {
+            roleCache = null;
             await signOut(auth);
 
             if (!cancelled) {
@@ -98,17 +159,19 @@ export function useAuthRole(): UseAuthRoleResult {
               setRole(null);
               setActive(false);
               setError("This account has been disabled.");
+              setLoading(false);
             }
 
             return;
           }
-        } else {
-          console.warn("AUTH ROLE DEBUG: user document missing", {
+        } else if (AUTH_DEBUG) {
+          console.info("AUTH ROLE DEBUG: user document missing", {
             uid: currentUser.uid,
             email: currentUser.email,
-            tokenClaims: tokenResult.claims,
           });
         }
+
+        setCachedRole(currentUser.uid, resolvedRole, resolvedActive);
 
         if (!cancelled) {
           setRole(resolvedRole);
@@ -117,13 +180,17 @@ export function useAuthRole(): UseAuthRoleResult {
       } catch (authRoleError) {
         console.error("AUTH ROLE ERROR:", authRoleError);
 
+        roleCache = null;
+
         if (!cancelled) {
           setRole(null);
           setActive(null);
           setError(getErrorMessage(authRoleError));
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
     });
 
@@ -157,6 +224,3 @@ export function useAuthRole(): UseAuthRoleResult {
     };
   }, [user, role, loading, error, active]);
 }
-
-
-

@@ -1,0 +1,290 @@
+﻿
+
+===== FILE: .\theme\index.ts =====
+
+export * from "./buttons";
+export * from "./colors";
+export * from "./glass";
+export * from "./motion";
+export * from "./spacing";
+export * from "./typography";
+export * from "./tileSystem";
+
+
+
+===== FILE: .\theme\glass.ts =====
+
+export const glass = {
+  page: "relative min-h-screen w-full overflow-x-hidden text-white",
+
+  shell: "relative z-10 mx-auto w-full max-w-7xl min-w-0",
+  shellTight: "relative z-10 mx-auto w-full max-w-6xl min-w-0",
+  shellFull: "relative z-10 w-full min-w-0",
+
+  panel:
+    "relative min-w-0 overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/48 shadow-xl shadow-black/30 backdrop-blur-2xl",
+
+  panelBefore:
+    "before:pointer-events-none before:absolute before:inset-0 before:rounded-[2rem] before:bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.08),transparent_42%)] before:opacity-70",
+
+  card:
+    "relative min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045] shadow-xl shadow-black/25 backdrop-blur-xl",
+
+  cardHover:
+    "transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-white/[0.07]",
+
+  inset: "min-w-0 rounded-2xl border border-white/10 bg-black/25",
+
+  toolbar:
+    "min-w-0 rounded-2xl border border-white/10 bg-slate-950/58 shadow-lg shadow-black/25 backdrop-blur-xl",
+
+  input:
+    "w-full rounded-2xl border border-white/10 bg-black/45 text-white outline-none placeholder:text-slate-600 shadow-inner shadow-black/20 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/55 disabled:cursor-not-allowed disabled:opacity-60",
+
+  select:
+    "w-full rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-white outline-none shadow-inner shadow-black/20 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/55 disabled:cursor-not-allowed disabled:opacity-60",
+
+  table: "overflow-x-auto rounded-2xl border border-white/10",
+
+  tableHeader: "bg-white/5 text-slate-400 backdrop-blur-xl",
+
+  divider: "border-white/10",
+
+  focus:
+    "focus:outline-none focus:ring-2 focus:ring-cyan-300/40 focus:ring-offset-0",
+} as const;
+
+export type GlassKey = keyof typeof glass;
+
+
+
+===== FILE: .\theme\colors.ts =====
+
+export const colors = {
+  app:
+    "relative isolate overflow-x-hidden bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.13),transparent_34%),radial-gradient(circle_at_0%_20%,rgba(14,165,233,0.10),transparent_28%),radial-gradient(circle_at_100%_18%,rgba(99,102,241,0.12),transparent_30%),linear-gradient(135deg,#020617_0%,#06111f_44%,#020617_100%)]",
+
+  grid:
+    "pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(to_right,rgba(148,163,184,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.07)_1px,transparent_1px)] bg-[size:48px_48px] opacity-30",
+
+  vignette:
+    "pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.34)_70%,rgba(0,0,0,0.78)_100%)]",
+
+  textPrimary: "text-white",
+  textSecondary: "text-slate-300",
+  textMuted: "text-slate-400",
+  textFaint: "text-slate-500",
+
+  border: "border-white/10",
+  borderStrong: "border-white/15",
+
+  successBadge:
+    "border-emerald-400/25 bg-emerald-400/10 text-emerald-100",
+
+  warningBadge:
+    "border-amber-400/25 bg-amber-400/10 text-amber-100",
+
+  dangerBadge:
+    "border-rose-400/25 bg-rose-400/10 text-rose-100",
+
+  infoBadge:
+    "border-cyan-400/25 bg-cyan-400/10 text-cyan-100",
+} as const;
+
+export type ColorKey = keyof typeof colors;
+
+
+
+===== FILE: .\theme\typography.ts =====
+
+export const typography = {
+  hero: "text-4xl font-black tracking-tight text-white sm:text-5xl",
+
+  pageTitle: "text-3xl font-black tracking-tight text-white sm:text-4xl",
+
+  sectionTitle: "text-xl font-bold tracking-tight text-white sm:text-2xl",
+
+  cardTitle: "text-base font-bold tracking-tight text-white sm:text-lg",
+
+  body: "text-sm leading-6 text-slate-300",
+
+  bodyMuted: "text-sm leading-6 text-slate-400",
+
+  caption:
+    "text-xs font-semibold uppercase tracking-[0.18em] text-slate-500",
+
+  label:
+    "text-xs font-semibold uppercase tracking-[0.16em] text-slate-400",
+
+  formLabel:
+    "text-xs font-semibold uppercase tracking-[0.16em] text-slate-400",
+
+  metric: "text-3xl font-black tracking-tight text-white",
+
+  metricCompact: "text-2xl font-black tracking-tight text-white",
+
+  mono: "font-mono text-sm tracking-tight",
+
+  code:
+    "rounded-lg bg-black/30 px-1.5 py-0.5 font-mono text-[0.82rem] text-cyan-200",
+} as const;
+
+export type TypographyKey = keyof typeof typography;
+
+
+
+===== FILE: .\theme\buttons.ts =====
+
+export const buttons = {
+  primary:
+    "inline-flex min-w-0 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-cyan-300/35 bg-cyan-400/15 px-4 py-2 text-sm font-semibold text-cyan-50 transition hover:bg-cyan-400/25 focus:outline-none focus:ring-2 focus:ring-cyan-300/40 disabled:pointer-events-none disabled:opacity-50",
+
+  secondary:
+    "inline-flex min-w-0 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-white transition hover:border-white/15 hover:bg-white/[0.10] focus:outline-none focus:ring-2 focus:ring-white/20 disabled:pointer-events-none disabled:opacity-50",
+
+  ghost:
+    "inline-flex min-w-0 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl px-3 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/[0.06] hover:text-white focus:outline-none focus:ring-2 focus:ring-white/20 disabled:pointer-events-none disabled:opacity-50",
+
+  danger:
+    "inline-flex min-w-0 shrink-0 items-center justify-center gap-2 whitespace-nowrap rounded-2xl border border-rose-400/30 bg-rose-500/15 px-4 py-2 text-sm font-semibold text-rose-50 transition hover:bg-rose-500/25 focus:outline-none focus:ring-2 focus:ring-rose-300/40 disabled:pointer-events-none disabled:opacity-50",
+
+  icon:
+    "inline-flex h-10 w-10 min-w-0 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.08] text-white backdrop-blur-xl transition-colors duration-200 hover:bg-white/[0.14] focus:outline-none focus:ring-2 focus:ring-cyan-300/40 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50",
+} as const;
+
+export type ButtonKey = keyof typeof buttons;
+
+
+
+===== FILE: .\theme\tileSystem.ts =====
+
+export const tiles = {
+  base:
+    "relative flex min-w-0 flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white/75 shadow-xl shadow-black/10 backdrop-blur-xl dark:border-white/10 dark:bg-white/[0.045] dark:shadow-black/25",
+
+  hover:
+    "transition-colors duration-200 hover:border-cyan-500/35 hover:bg-white/90 hover:shadow-[0_18px_55px_rgba(8,145,178,0.12)] dark:hover:border-cyan-300/35 dark:hover:bg-white/[0.07]",
+
+  metric: "p-5 sm:p-6",
+  action: "p-5 sm:p-6",
+  operational: "p-5 sm:p-6",
+
+  alert:
+    "border-rose-300/50 bg-rose-50/80 p-5 shadow-[0_0_45px_rgba(244,63,94,0.10)] sm:p-6 dark:border-rose-400/25 dark:bg-rose-500/[0.06]",
+
+  system:
+    "border-cyan-300/40 bg-cyan-50/80 p-5 shadow-[0_0_45px_rgba(34,211,238,0.08)] sm:p-6 dark:border-cyan-300/20 dark:bg-cyan-400/[0.045]",
+
+  compact: "p-4 sm:p-5",
+
+  header: "flex min-w-0 items-start justify-between gap-4",
+
+  icon:
+    "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-slate-200 bg-white/70 p-3 text-cyan-700 shadow-lg shadow-black/10 dark:border-white/10 dark:bg-white/[0.08] dark:text-cyan-200 dark:shadow-black/20",
+
+  label:
+    "block truncate text-xs font-semibold uppercase leading-5 tracking-[0.14em] text-slate-500 dark:text-slate-400",
+
+  title:
+    "min-w-0 break-words text-base font-bold leading-6 tracking-tight text-slate-950 sm:text-lg sm:leading-7 dark:text-white",
+
+  value:
+    "mt-3 min-w-0 break-words text-3xl font-black leading-none tracking-tight text-slate-950 dark:text-white",
+
+  helper:
+    "mt-2 min-w-0 break-words text-xs leading-5 text-slate-600 dark:text-slate-400",
+
+  description:
+    "min-w-0 break-words text-sm leading-6 text-slate-600 dark:text-slate-400",
+
+  badge:
+    "inline-flex max-w-full min-w-0 shrink-0 items-center truncate rounded-full border border-slate-200 bg-white/70 px-3 py-1.5 text-[0.68rem] font-black uppercase leading-none tracking-[0.18em] text-slate-700 dark:border-white/10 dark:bg-white/[0.08] dark:text-slate-200",
+
+  gridMetrics:
+    "grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0",
+
+  gridSections:
+    "grid min-w-0 gap-4 lg:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0",
+
+  gridTwo:
+    "grid min-w-0 gap-4 lg:grid-cols-2 [&>*]:min-w-0",
+} as const;
+
+export type TileKey = keyof typeof tiles;
+
+
+
+===== FILE: .\theme\spacing.ts =====
+
+export const spacing = {
+  page:
+    "px-4 py-6 sm:px-6 lg:px-8",
+
+  section:
+    "p-5 sm:p-6",
+
+  card:
+    "p-4 sm:p-5",
+
+  stack:
+    "space-y-6",
+
+  stackTight:
+    "space-y-4",
+
+  gridCards:
+    "grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4",
+
+  gridCardsThree:
+    "grid min-w-0 gap-4 md:grid-cols-3",
+
+  gridCardsTwo:
+    "grid min-w-0 gap-4 md:grid-cols-2",
+
+  gridResponsive:
+    "grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4",
+};
+
+
+
+===== FILE: .\theme\motion.ts =====
+
+export const motion = {
+  pageInitial: {
+    opacity: 0,
+    y: 10,
+  },
+
+  pageAnimate: {
+    opacity: 1,
+    y: 0,
+  },
+
+  pageTransition: {
+    duration: 0.22,
+    ease: "easeOut",
+  },
+
+  cardInitial: {
+    opacity: 0,
+    y: 8,
+    scale: 0.985,
+  },
+
+  cardAnimate: {
+    opacity: 1,
+    y: 0,
+    scale: 1,
+  },
+
+  cardTransition: {
+    duration: 0.18,
+    ease: "easeOut",
+  },
+
+  layout: {
+    layout: true,
+    layoutRoot: true,
+  },
+};
+

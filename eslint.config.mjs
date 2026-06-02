@@ -22,6 +22,7 @@ const eslintConfig = defineConfig([
       "no-debugger": "warn",
       "no-alert": "off",
       "prefer-const": "warn",
+      "no-var": "error",
 
       "no-unused-vars": "off",
 
@@ -31,8 +32,8 @@ const eslintConfig = defineConfig([
           argsIgnorePattern: "^_",
           varsIgnorePattern: "^_",
           caughtErrorsIgnorePattern: "^_",
-          destructuredArrayIgnorePattern: "^_",
-        },
+          destructuredArrayIgnorePattern: "^_"
+        }
       ],
 
       "@typescript-eslint/no-explicit-any": "warn",
@@ -50,8 +51,8 @@ const eslintConfig = defineConfig([
         "warn",
         {
           "ts-ignore": "allow-with-description",
-          minimumDescriptionLength: 6,
-        },
+          minimumDescriptionLength: 6
+        }
       ],
 
       "react/jsx-key": "error",
@@ -60,7 +61,6 @@ const eslintConfig = defineConfig([
       "react-hooks/purity": "off",
       "react-hooks/preserve-manual-memoization": "off",
       "react/self-closing-comp": "warn",
-
       "react/no-unescaped-entities": "warn",
 
       "@next/next/no-img-element": "warn",
@@ -69,19 +69,18 @@ const eslintConfig = defineConfig([
         "warn",
         {
           ignoreDeclarationSort: true,
-          ignoreCase: true,
-        },
+          ignoreCase: true
+        }
       ],
 
       curly: "off",
       "object-shorthand": ["warn", "always"],
       "prefer-template": "warn",
-      "no-var": "error",
 
       "no-trailing-spaces": "warn",
       "eol-last": ["warn", "always"],
-      "comma-dangle": "off",
-    },
+      "comma-dangle": "off"
+    }
   },
 
   {
@@ -89,54 +88,44 @@ const eslintConfig = defineConfig([
 
     rules: {
       "no-console": "off",
-      "@typescript-eslint/no-explicit-any": "off",
-    },
+      "@typescript-eslint/no-explicit-any": "off"
+    }
   },
 
   {
-    files: [
-      "**/*.test.{ts,tsx,js,jsx}",
-      "**/*.spec.{ts,tsx,js,jsx}",
-    ],
+    files: ["**/*.test.{ts,tsx,js,jsx}", "**/*.spec.{ts,tsx,js,jsx}"],
 
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
-      "no-console": "off",
-    },
+      "no-console": "off"
+    }
   },
 
   globalIgnores([
     ".next/**",
     "out/**",
-
     "build/**",
     "dist/**",
     "coverage/**",
-
     "functions/lib/**",
     ".firebase/**",
     "firebase-export/**",
-
     "firebase-debug.log",
     "firestore-debug.log",
-
     "next-env.d.ts",
     "node_modules/**",
-
     ".env",
     ".env.*",
-
     "**/serviceAccountKey.json",
     "**/*serviceAccount*.json",
     "**/*.serviceAccount.json",
-
+    "**/firebase-adminsdk*.json",
     "*.log",
     "*.tmp",
     "*.temp",
-
     ".DS_Store",
-    "Thumbs.db",
-  ]),
+    "Thumbs.db"
+  ])
 ]);
 
 export default eslintConfig;

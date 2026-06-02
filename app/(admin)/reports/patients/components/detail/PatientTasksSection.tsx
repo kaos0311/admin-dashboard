@@ -7,15 +7,48 @@ import {
   Plus,
 } from "lucide-react";
 
+import { glass, spacing, typography } from "@/theme";
+
 import type { PatientTaskPriority } from "../../lib/patientTypes";
 import { formatDate } from "../../lib/patientUtils";
 import {
+  ActionButton,
   EmptyState,
   Input,
   Section,
   TaskPriorityPill,
 } from "../PatientUI";
 import type { PatientDetailProps } from "./patient-detail-types";
+
+type TaskPriorityOption = {
+  label: string;
+  value: PatientTaskPriority;
+};
+
+const TASK_PRIORITY_OPTIONS: TaskPriorityOption[] = [
+  {
+    label: "Routine",
+    value: "routine",
+  },
+  {
+    label: "Watch",
+    value: "watch",
+  },
+  {
+    label: "Urgent",
+    value: "urgent",
+  },
+];
+
+const FULL_WIDTH_SECTION = "md:col-span-3";
+const TASK_FORM_GRID = "grid gap-3 md:grid-cols-4";
+const TASK_ROW_LAYOUT =
+  "flex flex-col gap-3 md:flex-row md:items-center md:justify-between";
+const FULL_WIDTH_ACTION = "md:col-span-4";
+
+function cx(...classes: Array<string | false | null | undefined>) {
+  return classes.filter(Boolean).join(" ");
+}
 
 export function PatientTasksSection({
   selected,
@@ -53,8 +86,8 @@ export function PatientTasksSection({
       title="Care Coordination Tasks"
       icon={<CalendarClock className="h-5 w-5" aria-hidden="true" />}
     >
-      <div className="space-y-4 md:col-span-3">
-        <div className="grid gap-3 rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl md:grid-cols-4">
+      <div className={cx(spacing.stackTight, FULL_WIDTH_SECTION)}>
+        <div className={cx(glass.cardPadded, TASK_FORM_GRID)}>
           <Input
             label="Task Title"
             value={newTaskTitle}
@@ -76,63 +109,70 @@ export function PatientTasksSection({
             onChange={setNewTaskDueDate}
           />
 
-          <label>
-            <span className="mb-2 block text-xs text-zinc-400">Priority</span>
+          <label htmlFor="task-priority">
+            <span className={cx("mb-2 block", typography.formLabel)}>
+              Priority
+            </span>
+
             <select
-              title="Task priority"
-              aria-label="Task priority"
+              id="task-priority"
+              name="task-priority"
               value={newTaskPriority}
               onChange={(event) =>
                 setNewTaskPriority(event.target.value as PatientTaskPriority)
               }
-              className="w-full rounded-xl border border-white/10 bg-black/50 p-3 text-sm text-white outline-none backdrop-blur-xl transition focus:border-cyan-400/50 focus:ring-2 focus:ring-cyan-400/20"
+              className={glass.select}
             >
-              <option value="routine">Routine</option>
-              <option value="watch">Watch</option>
-              <option value="urgent">Urgent</option>
+              {TASK_PRIORITY_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
 
-          <button
-            type="button"
-            onClick={() => void addTask(selected)}
-            disabled={savingTask}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-blue-400/20 bg-blue-500/10 px-4 py-3 text-sm font-semibold text-blue-100 shadow-[0_12px_30px_rgba(37,99,235,0.15)] transition hover:bg-blue-500/20 disabled:cursor-not-allowed disabled:opacity-50 md:col-span-4"
-          >
-            <Plus className="h-4 w-4" aria-hidden="true" />
-            {savingTask ? "Saving Task..." : "Add Task"}
-          </button>
+          <div className={FULL_WIDTH_ACTION}>
+            <ActionButton
+              tone="green"
+              disabled={savingTask}
+              onClick={() => void addTask(selected)}
+              icon={<Plus className="h-4 w-4" aria-hidden="true" />}
+              label={savingTask ? "Saving Task..." : "Add Task"}
+            />
+          </div>
         </div>
 
-        {openTasks.length ? (
-          <div className="space-y-2">
+        {openTasks.length > 0 ? (
+          <div className={spacing.stackTight}>
             {openTasks.map((task) => (
-              <div
+              <article
                 key={task.id}
-                className="flex flex-col gap-3 rounded-[24px] border border-white/10 bg-white/[0.04] p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] backdrop-blur-2xl md:flex-row md:items-center md:justify-between"
+                className={cx(glass.cardPadded, TASK_ROW_LAYOUT)}
               >
-                <div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <p className="font-semibold text-white">{task.title}</p>
+                <div className={spacing.stackTight}>
+                  <div className={spacing.actions}>
+                    <p className={typography.bodyStrong}>{task.title}</p>
                     <TaskPriorityPill priority={task.priority} />
                   </div>
 
-                  <p className="mt-1 text-xs text-zinc-400">
-                    Assigned: {task.assignedTo || "â€”"} | Due:{" "}
+                  <p className={typography.small}>
+                    Assigned: {task.assignedTo || "—"} | Due:{" "}
                     {formatDate(task.dueDate)}
                   </p>
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => void updateTaskStatus(selected, task.id, "done")}
+                <ActionButton
+                  tone="green"
                   disabled={savingTask}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-400/20 bg-emerald-500/10 px-4 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
-                  Mark Done
-                </button>
-              </div>
+                  onClick={() =>
+                    void updateTaskStatus(selected, task.id, "done")
+                  }
+                  icon={
+                    <CheckCircle2 className="h-4 w-4" aria-hidden="true" />
+                  }
+                  label="Mark Done"
+                />
+              </article>
             ))}
           </div>
         ) : (
@@ -146,5 +186,3 @@ export function PatientTasksSection({
     </Section>
   );
 }
-
-
