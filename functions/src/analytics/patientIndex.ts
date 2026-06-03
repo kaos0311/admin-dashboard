@@ -1,4 +1,5 @@
-﻿import { createEmptyRollup } from "./patient-index/builders/patient-rollup";
+﻿import { extractAuthorization } from "./patient-index/extractors/authorization";
+import { createEmptyRollup } from "./patient-index/builders/patient-rollup";
 import { rebuildBirthdayAnalyticsFromPatients } from "./patient-index/birthday-analytics";
 import { buildPatientSnapshot } from "./patient-index/builders/patient-snapshot";
 import {
@@ -497,38 +498,6 @@ function extractCpapInfo(row: Record<string, unknown>): CpapInfo | null {
       "cpap_compliance",
       "cpap compliance",
     ]),
-  };
-}
-
-function extractAuthorization(row: Record<string, unknown>): AuthorizationSnapshot | null {
-  const parNumber = valueFromAliases(row, [
-    "PARNumber",
-    "PAR Number",
-    "FirstPARNumber",
-  ]);
-
-  const parStatus = valueFromAliases(row, [
-    "parstatus",
-    "PARStatus",
-    "PAR Status",
-  ]);
-
-  if (!parNumber && !parStatus) return null;
-
-  return {
-    parNumber,
-    parStatus,
-    parExpiration: normalizeIsoDate(
-      valueFromAliases(row, ["PARExpiration", "PAR Expiration", "PARExpDate"])
-    ),
-    parInitialDate: normalizeIsoDate(
-      valueFromAliases(row, ["PARInitialDate", "PAR Initial Date"])
-    ),
-    parLogged: valueFromAliases(row, ["PARLogged", "PAR Logged"]),
-    firstParNumber: valueFromAliases(row, ["FirstPARNumber", "First PAR Number"]),
-    firstParExpiration: normalizeIsoDate(
-      valueFromAliases(row, ["FirstPARExpDate", "First PAR Exp Date"])
-    ),
   };
 }
 
@@ -1093,6 +1062,7 @@ export async function updatePatientIndexFromRows(args: {
     { merge: true }
   );
 }
+
 
 
 
