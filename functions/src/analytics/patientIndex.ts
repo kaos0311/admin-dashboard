@@ -1,550 +1,50 @@
-﻿import { FieldValue, getFirestore, Timestamp } from "firebase-admin/firestore";
-import { createHash } from "crypto";
+﻿import {
+  extractInsurance,
+  extractPatient,
+  extractPatientProfile
+} from "./patient-index/extractors/patient";
+import {
+  extractWip,
+  rowLooksWip
+} from "./patient-index/extractors/wip";
+import {
+  FieldValue,
+  getFirestore,
+  Timestamp
+} from "firebase-admin/firestore";
+import {
+  INDEX_VERSION,
+  MAX_BIRTHDAY_ANALYTICS_ROWS,
+  MAX_BULK_RETRY_ATTEMPTS
+} from "./patient-index/constants";
 
+import type {
+  AuthorizationSnapshot,
+  BillingSnapshot,
+  BirthdayAnalyticsItem,
+  BirthdayFields,
+  CmnSnapshot,
+  CpapInfo,
+  CurrentEquipmentItem,
+  DeliverySummary,
+  InsuranceSnapshot,
+  PatientIndexSource,
+  PatientRollup,
+  RecentPurchaseItem
+} from "./patient-index/types";
+
+import {
+  buildPatientId,
+  isWithinLastDays,
+  normalizeIsoDate,
+  normalizeKey,
+  normalizeString,
+  numberFromAliases,
+  safeDocId,
+  unwrapRow,
+  valueFromAliases
+} from "./patient-index/utils";
 const db = getFirestore();
-
-const INDEX_VERSION = "patient-index-v6-subcollections";
-const MAX_BULK_RETRY_ATTEMPTS = 3;
-const MAX_BIRTHDAY_ANALYTICS_ROWS = 500;
-type PatientIndexSource = {
-  reportId: string;
-  reportType: string;
-  reportLabel: string;
-  fileName: string;
-  processedAtIso: string;
-};
-
-type ImportedRowWrapper = {
-  rowNumber?: number;
-  lineNumber?: number;
-  data?: Record<string, unknown>;
-  text?: string;
-};
-
-type PatientProfile = {
-  patientId: string;
-  patientKey: string;
-  accountNumber: string;
-  sex: string;
-  height: string;
-  weight: string;
-  patientStatus: string;
-  patientHubStatus: string;
-  registrationDate: string;
-  lastLoginDate: string;
-  primaryDoctor: string;
-  orderingDoctor: string;
-  diagnosisCodes: string[];
-};
-
-type InsuranceSnapshot = {
-  primaryInsurance: string;
-  secondaryInsurance: string;
-  policyNumber: string;
-  insuranceStatus: string;
-  coverageTypes: string;
-  payor: string;
-};
-
-type CurrentEquipmentItem = {
-  id: string;
-  itemId: string;
-  itemName: string;
-  hcpc: string;
-  category: string;
-  saleType: string;
-  qty: number;
-  serialNumber: string;
-  lotNumber: string;
-  status: string;
-  startDate: string;
-  lastUpdated: string;
-  sourceReportId: string;
-  sourceFileName: string;
-};
-
-type RecentPurchaseItem = {
-  id: string;
-  itemId: string;
-  itemName: string;
-  hcpc: string;
-  purchaseDate: string;
-  quantity: number;
-  amount: number;
-  orderId: string;
-  sourceReportId: string;
-  sourceFileName: string;
-};
-
-type CpapInfo = {
-  onRecord: boolean;
-  machine: string;
-  maskType: string;
-  humidifier: string;
-  tubing: string;
-  filters: string;
-  headgear: string;
-  pressure: string;
-  serialNumber: string;
-  setupDate: string;
-  lastServiceDate: string;
-  complianceStatus: string;
-};
-
-type AuthorizationSnapshot = {
-  parNumber: string;
-  parStatus: string;
-  parExpiration: string;
-  parInitialDate: string;
-  parLogged: string;
-  firstParNumber: string;
-  firstParExpiration: string;
-};
-
-type CmnSnapshot = {
-  status: string;
-  formName: string;
-  initialDate: string;
-  expiryDate: string;
-  recertDate: string;
-  printedDate: string;
-  firstCmnName: string;
-  firstCmnInitialDate: string;
-};
-
-type BillingSnapshot = {
-  lastInvoiceDate: string;
-  lastPaymentDate: string;
-  totalCharges90Days: number;
-  totalAllowed90Days: number;
-  totalPayments90Days: number;
-  totalAdjustments90Days: number;
-  openBalanceEstimate: number;
-  invoiceStatus: string;
-};
-
-type WipSnapshot = {
-  status: string;
-  daysInState: number;
-  assignedTo: string;
-  dateNeeded: string;
-  completed: boolean;
-  primaryInsuranceVerified: boolean;
-  secondaryInsuranceVerified: boolean;
-  createdBy: string;
-};
-
-type DeliverySummary = {
-  salesOrderId: string;
-  salesOrderStatus: string;
-  actualDeliveryDate: string;
-  scheduledDeliveryDate: string;
-  deliveryTechName: string;
-  csr: string;
-  branch: string;
-  comments: string;
-  hipaaSignatureOnFile: string;
-};
-
-type BirthdayFields = {
-  hasBirthday: boolean;
-  birthMonth: number;
-  birthDay: number;
-  birthMonthDay: string;
-  age: number | null;
-  nextAge: number | null;
-  nextBirthday: Timestamp | null;
-  nextBirthdayIso: string;
-  daysUntilBirthday: number | null;
-};
-
-type BirthdayAnalyticsItem = {
-  id: string;
-  patientId: string;
-  fullName: string;
-  firstName: string;
-  lastName: string;
-  dateOfBirth: string;
-  birthMonth: number;
-  birthDay: number;
-  birthMonthDay: string;
-  age: number | null;
-  nextAge: number | null;
-  nextBirthdayIso: string;
-  daysUntilBirthday: number;
-  phone: string;
-  city: string;
-  state: string;
-  primaryInsurance: string;
-  cpapOnRecord: boolean;
-  hospice: boolean;
-};
-
-type PatientRollup = {
-  equipment: Map<string, CurrentEquipmentItem>;
-  purchases: Map<string, RecentPurchaseItem>;
-  cpap: CpapInfo | null;
-  authorization: AuthorizationSnapshot | null;
-  cmn: CmnSnapshot | null;
-  billing: BillingSnapshot | null;
-  wip: WipSnapshot | null;
-  deliverySummary: DeliverySummary | null;
-  profile: PatientProfile | null;
-  insurance: InsuranceSnapshot | null;
-};
-
-function normalizeString(value: unknown): string {
-  return value === null ? "" : String(value).trim();
-}
-
-function normalizeKey(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]/g, "");
-}
-
-function stableHash(value: string): string {
-  return createHash("sha1").update(value).digest("hex").slice(0, 24);
-}
-
-function safeDocId(value: string): string {
-  const clean = normalizeKey(value);
-  return clean || stableHash(value || "unknown");
-}
-
-function unwrapRow(row: Record<string, unknown>): Record<string, unknown> {
-  const wrapped = row as ImportedRowWrapper;
-
-  if (
-    wrapped.data &&
-    typeof wrapped.data === "object" &&
-    !Array.isArray(wrapped.data)
-  ) {
-    return wrapped.data;
-  }
-
-  return row;
-}
-
-function valueFromAliases(row: Record<string, unknown>, aliases: string[]): string {
-  const source = unwrapRow(row);
-  const entries = Object.entries(source);
-
-  for (const alias of aliases) {
-    const aliasKey = normalizeKey(alias);
-    const found = entries.find(([key]) => normalizeKey(key) === aliasKey);
-
-    if (found) {
-      const value = normalizeString(found[1]);
-      if (value) return value;
-    }
-  }
-
-  return "";
-}
-
-function numberFromAliases(row: Record<string, unknown>, aliases: string[]): number {
-  const raw = valueFromAliases(row, aliases);
-  if (!raw) return 0;
-
-  const parsed = Number(raw.replace(/[$,]/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
-}
-
-function boolFromAliases(row: Record<string, unknown>, aliases: string[]): boolean {
-  const value = valueFromAliases(row, aliases).toLowerCase();
-
-  return (
-    value === "yes" ||
-    value === "true" ||
-    value === "1" ||
-    value === "y" ||
-    value === "complete" ||
-    value === "completed" ||
-    value === "verified"
-  );
-}
-
-function normalizeIsoDate(value: string): string {
-  const raw = normalizeString(value).replace(/\s+12:00:00\s+AM$/i, "");
-  if (!raw) return "";
-
-  const parsed = new Date(raw);
-
-  if (!Number.isNaN(parsed.getTime())) {
-    const yyyy = parsed.getFullYear();
-    const mm = String(parsed.getMonth() + 1).padStart(2, "0");
-    const dd = String(parsed.getDate()).padStart(2, "0");
-    return `${yyyy}-${mm}-${dd}`;
-  }
-
-  return raw;
-}
-
-function isWithinLastDays(dateValue: string, days: number): boolean {
-  const normalized = normalizeIsoDate(dateValue);
-  if (!normalized) return false;
-
-  const parsed = new Date(`${normalized}T12:00:00`);
-  if (Number.isNaN(parsed.getTime())) return false;
-
-  const diff = Date.now() - parsed.getTime();
-  const limit = days * 24 * 60 * 60 * 1000;
-
-  return diff >= 0 && diff <= limit;
-}
-
-function titleCase(value: string): string {
-  return value
-    .toLowerCase()
-    .split(" ")
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(" ");
-}
-
-function parseFullName(rawFullName: string) {
-  const sourceFullName = normalizeString(rawFullName).replace(/\s+/g, " ");
-  let firstName = "";
-  let lastName = "";
-
-  if (sourceFullName.includes(",")) {
-    const [rawLast, rawRest] = sourceFullName.split(",", 2);
-    lastName = titleCase(rawLast || "");
-    firstName = titleCase((rawRest || "").trim().split(/\s+/)[0] || "");
-  } else {
-    const parts = sourceFullName.split(/\s+/).filter(Boolean);
-    firstName = titleCase(parts[0] || "");
-    lastName = titleCase(parts[parts.length - 1] || "");
-  }
-
-  return {
-    firstName,
-    lastName,
-    fullName: [firstName, lastName].filter(Boolean).join(" "),
-    sourceFullName,
-  };
-}
-
-function buildPatientId(input: {
-  firstName: string;
-  lastName: string;
-  dob: string;
-  accountNumber?: string;
-  brightreePatientId?: string;
-  brightreePatientKey?: string;
-}): string {
-  const primary =
-    input.brightreePatientKey ||
-    input.brightreePatientId ||
-    input.accountNumber ||
-    "";
-
-  if (primary) {
-    return `pt_${stableHash(primary)}`;
-  }
-
-  return `pt_${stableHash(
-    [
-      normalizeKey(input.lastName),
-      normalizeKey(input.firstName),
-      normalizeKey(input.dob || "unknown-dob"),
-    ].join("|")
-  )}`;
-}
-
-function extractPatient(row: Record<string, unknown>) {
-  const fullNameRaw = valueFromAliases(row, [
-    "fullname",
-    "full_name",
-    "patient_name",
-    "ptname",
-    "patientfullname",
-    "patient_full_name",
-    "PatientName",
-    "Patient Name",
-    "Customer",
-    "Customer Name",
-    "Name",
-  ]);
-
-  const parsed = parseFullName(fullNameRaw);
-
-  const fallbackFirst = titleCase(
-    valueFromAliases(row, [
-      "first_name",
-      "firstname",
-      "first name",
-      "patient_first_name",
-      "fname",
-    ])
-  );
-
-  const fallbackLast = titleCase(
-    valueFromAliases(row, [
-      "last_name",
-      "lastname",
-      "last name",
-      "patient_last_name",
-      "lname",
-    ])
-  );
-
-  const firstName = parsed.firstName || fallbackFirst;
-  const lastName = parsed.lastName || fallbackLast;
-
-  const dateOfBirth = normalizeIsoDate(
-    valueFromAliases(row, [
-      "dob",
-      "date_of_birth",
-      "date of birth",
-      "birth_date",
-      "DateOfBirth",
-      "DOB",
-    ])
-  );
-
-  const dateOfDeath = normalizeIsoDate(
-    valueFromAliases(row, [
-      "dod",
-      "date_of_death",
-      "date of death",
-      "death_date",
-      "DateOfDeath",
-      "DOD",
-    ])
-  );
-
-  return {
-    firstName,
-    lastName,
-    dateOfBirth,
-    dateOfDeath,
-    fullName: parsed.fullName || [firstName, lastName].filter(Boolean).join(" "),
-    sourceFullName: parsed.sourceFullName,
-    phone: valueFromAliases(row, [
-      "phone",
-      "phone_number",
-      "mobile",
-      "patient_phone",
-      "PhoneNumber",
-      "Customer Phone",
-    ]),
-    email: valueFromAliases(row, [
-      "email",
-      "email_address",
-      "patient_email",
-      "EmailAddress",
-    ]),
-    address: valueFromAliases(row, [
-      "address",
-      "street_address",
-      "patient_address",
-      "Address1",
-      "Bill To",
-      "Deliver To",
-    ]),
-    city: valueFromAliases(row, ["city", "patient_city"]),
-    state: valueFromAliases(row, ["state", "patient_state"]),
-    zip: valueFromAliases(row, ["zip", "zipcode", "zip_code", "postal_code"]),
-  };
-}
-
-function extractPatientProfile(row: Record<string, unknown>): PatientProfile {
-  const diagnosisRaw = valueFromAliases(row, [
-    "TopFourDiagCodes",
-    "SODiagCodes",
-    "Diagnosis Codes",
-    "DiagCodes",
-    "diagnosis",
-  ]);
-
-  return {
-    patientId: valueFromAliases(row, [
-      "PtID",
-      "Patient ID",
-      "PatientId",
-      "Customer ID",
-      "CustomerID",
-    ]),
-    patientKey: valueFromAliases(row, ["PtKey", "PatientKey"]),
-    accountNumber: valueFromAliases(row, [
-      "AcctNo",
-      "AccountNumber",
-      "Account Number",
-      "Acct No",
-    ]),
-    sex: valueFromAliases(row, ["sex", "gender", "Sex"]),
-    height: valueFromAliases(row, ["height", "Height"]),
-    weight: valueFromAliases(row, ["weight", "Weight"]),
-    patientStatus: valueFromAliases(row, [
-      "PatientStatus",
-      "Patient Status",
-      "status",
-    ]),
-    patientHubStatus: valueFromAliases(row, [
-      "Patient Hub Status",
-      "PatientHubStatus",
-      "HubStatus",
-    ]),
-    registrationDate: normalizeIsoDate(
-      valueFromAliases(row, ["Registration Date", "RegistrationDate"])
-    ),
-    lastLoginDate: normalizeIsoDate(
-      valueFromAliases(row, ["Last Login Date", "LastLoginDate"])
-    ),
-    primaryDoctor: valueFromAliases(row, [
-      "PrimaryDocname",
-      "Primary Doctor",
-      "PrimaryDocName",
-    ]),
-    orderingDoctor: valueFromAliases(row, [
-      "OrderingDocname",
-      "Ordering Doctor",
-      "OrderingDocName",
-    ]),
-    diagnosisCodes: diagnosisRaw
-      .split(/[,\s]+/)
-      .map((item) => item.trim())
-      .filter(Boolean)
-      .slice(0, 12),
-  };
-}
-
-function extractInsurance(row: Record<string, unknown>): InsuranceSnapshot {
-  return {
-    primaryInsurance: valueFromAliases(row, [
-      "PrimaryInsuranceName",
-      "Primary Insurance",
-      "Insurance",
-      "insurance",
-    ]),
-    secondaryInsurance: valueFromAliases(row, [
-      "SecondaryInsuranceName",
-      "Secondary Insurance",
-    ]),
-    policyNumber: valueFromAliases(row, [
-      "PolicyNbr",
-      "Policy Number",
-      "policy",
-    ]),
-    insuranceStatus: valueFromAliases(row, [
-      "InsuranceStatus",
-      "Insurance Status",
-    ]),
-    coverageTypes: valueFromAliases(row, [
-      "PayorCoverageTypeNames",
-      "Coverage Type",
-      "Coverage Types",
-    ]),
-    payor: valueFromAliases(row, [
-      "Payor",
-      "PayorName",
-      "Payer",
-      "PayerName",
-      "payor",
-      "payer",
-    ]),
-  };
-}
 
 function rowLooksHospice(row: Record<string, unknown>, reportType: string): boolean {
   const normalizedReportType = normalizeString(reportType).toLowerCase();
@@ -576,60 +76,6 @@ function rowLooksHospice(row: Record<string, unknown>, reportType: string): bool
     hospiceFlag === "true" ||
     hospiceFlag === "1"
   );
-}
-
-function rowLooksWip(row: Record<string, unknown>, reportType: string): boolean {
-  const normalizedReportType = normalizeString(reportType).toLowerCase();
-
-  return (
-    normalizedReportType.includes("wip") ||
-    normalizedReportType.includes("work_in_progress") ||
-    normalizedReportType.includes("work in progress") ||
-    Boolean(
-      valueFromAliases(row, [
-        "WIPStatusName",
-        "WIP Status",
-        "WIPAssignedTo",
-        "WIP Assigned To",
-      ])
-    )
-  );
-}
-
-function extractWip(row: Record<string, unknown>, reportType: string): WipSnapshot | null {
-  if (!rowLooksWip(row, reportType)) return null;
-
-  return {
-    status: valueFromAliases(row, ["WIPStatusName", "WIP Status", "status"]),
-    daysInState: numberFromAliases(row, [
-      "WIPDaysInState",
-      "DaysInState",
-      "Days In State",
-    ]),
-    assignedTo: valueFromAliases(row, [
-      "WIPAssignedTo",
-      "WIP Assigned To",
-      "AssignedTo",
-    ]),
-    dateNeeded: normalizeIsoDate(
-      valueFromAliases(row, ["WIPDateNeeded", "Date Needed", "DateNeeded"])
-    ),
-    completed: boolFromAliases(row, [
-      "WIPCompleted",
-      "WIP Completed",
-      "completed",
-      "Complete",
-    ]),
-    primaryInsuranceVerified: boolFromAliases(row, [
-      "PrimaryInsuranceVerified",
-      "Primary Insurance Verified",
-    ]),
-    secondaryInsuranceVerified: boolFromAliases(row, [
-      "SecondaryInsuranceVerified",
-      "Secondary Insurance Verified",
-    ]),
-    createdBy: valueFromAliases(row, ["Username", "CreatedBy", "Created By"]),
-  };
 }
 
 function rowLooksCompletedWip(row: Record<string, unknown>): boolean {
@@ -1872,5 +1318,31 @@ export async function updatePatientIndexFromRows(args: {
     { merge: true }
   );
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
