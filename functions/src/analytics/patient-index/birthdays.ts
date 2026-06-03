@@ -2,8 +2,20 @@
 
 import type { BirthdayFields } from "./types";
 
-import { dateAtLocalNoon, normalizeIsoDate } from "./utils";
+import { normalizeIsoDate } from "./utils";
 
+
+function dateAtLocalNoon(date: Date): Date {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate(),
+    12,
+    0,
+    0,
+    0
+  );
+}
 function daysInMonth(year: number, monthIndex: number): number {
   return new Date(year, monthIndex + 1, 0).getDate();
 }
@@ -96,3 +108,4 @@ export function buildBirthdayFields(
     daysUntilBirthday,
   };
 }
+
