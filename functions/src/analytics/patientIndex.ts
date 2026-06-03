@@ -1,4 +1,5 @@
-﻿import { rebuildBirthdayAnalyticsFromPatients } from "./patient-index/birthday-analytics";
+﻿import { createEmptyRollup } from "./patient-index/builders/patient-rollup";
+import { rebuildBirthdayAnalyticsFromPatients } from "./patient-index/birthday-analytics";
 import { buildPatientSnapshot } from "./patient-index/builders/patient-snapshot";
 import {
   extractInsurance,
@@ -702,20 +703,6 @@ function mergeBilling(
 }
 
 
-function createEmptyRollup(): PatientRollup {
-  return {
-    equipment: new Map<string, CurrentEquipmentItem>(),
-    purchases: new Map<string, RecentPurchaseItem>(),
-    cpap: null,
-    authorization: null,
-    cmn: null,
-    billing: null,
-    wip: null,
-    deliverySummary: null,
-    profile: null,
-    insurance: null,
-  };
-}
 export async function updatePatientIndexFromRows(args: {
   reportId: string;
   reportType: string;
@@ -1106,6 +1093,7 @@ export async function updatePatientIndexFromRows(args: {
     { merge: true }
   );
 }
+
 
 
 
