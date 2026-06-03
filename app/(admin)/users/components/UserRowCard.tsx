@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 
 import type { UserRole } from "@/lib/adminUsers";
+import { badges, buttons, typography } from "@/theme";
 import type { UserRow } from "../users-types";
 import { formatTimestamp } from "../users-utils";
 
@@ -45,8 +46,8 @@ export function UserRowCard({
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-medium ${
               user.role === "admin"
-                ? "bg-blue-500/15 text-blue-300"
-                : "bg-zinc-800 text-zinc-300"
+                ? badges.info
+                : badges.neutral
             }`}
           >
             {user.role}
@@ -55,27 +56,27 @@ export function UserRowCard({
           <span
             className={`rounded-full px-2.5 py-1 text-xs font-medium ${
               user.active
-                ? "bg-emerald-500/15 text-emerald-300"
-                : "bg-red-500/15 text-red-300"
+                ? badges.success
+                : badges.danger
             }`}
           >
             {user.active ? "active" : "disabled"}
           </span>
 
           {isSelf ? (
-            <span className="rounded-full bg-amber-500/15 px-2.5 py-1 text-xs font-medium text-amber-300">
+            <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${badges.warning}`}>
               you
             </span>
           ) : null}
         </div>
 
-        <p className="mt-2 break-all text-sm text-zinc-300">
+        <p className={`mt-2 break-all ${typography.body}`}>
           {user.email || "â€”"}
         </p>
 
-        <p className="mt-1 break-all text-xs text-zinc-500">UID: {user.uid}</p>
+        <p className={`mt-1 break-all ${typography.smallMuted}`}>UID: {user.uid}</p>
 
-        <div className="mt-3 grid gap-2 text-xs text-zinc-500 md:grid-cols-2">
+        <div className={`mt-3 grid gap-2 ${typography.smallMuted} md:grid-cols-2`}>
           <p>Created: {formatTimestamp(user.createdAt)}</p>
           <p>Updated: {formatTimestamp(user.updatedAt)}</p>
           <p>Theme: {user.theme}</p>
@@ -84,12 +85,12 @@ export function UserRowCard({
       </div>
 
       <div>
-        <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
+        <p className={typography.caption}>
           Role
         </p>
 
         <div className="flex items-center gap-2">
-          <Shield className="h-4 w-4 text-zinc-500" />
+          <Shield className={`h-4 w-4 ${typography.smallMuted}`} />
 
           <label htmlFor={`role-${user.uid}`} className="sr-only">
             Change role for {userLabel}
@@ -113,7 +114,7 @@ export function UserRowCard({
       </div>
 
       <div>
-        <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
+        <p className={typography.caption}>
           Account
         </p>
 
@@ -131,8 +132,8 @@ export function UserRowCard({
           onClick={() => onToggleActive(user)}
           className={`inline-flex w-full items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-60 ${
             user.active
-              ? "border border-red-500/20 bg-red-500/10 text-red-300 hover:bg-red-500/15"
-              : "border border-emerald-500/20 bg-emerald-500/10 text-emerald-300 hover:bg-emerald-500/15"
+              ? buttons.danger
+              : buttons.success
           }`}
         >
           {isBusy ? (
@@ -147,7 +148,7 @@ export function UserRowCard({
       </div>
 
       <div>
-        <p className="mb-2 text-xs uppercase tracking-wide text-zinc-500">
+        <p className={typography.caption}>
           Actions
         </p>
 
@@ -162,7 +163,7 @@ export function UserRowCard({
             onClick={() =>
               onRoleChange(user, user.role === "admin" ? "staff" : "admin")
             }
-            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 px-4 py-2.5 text-sm text-white transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+            className={buttons.secondary}
           >
             {isBusy ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -178,7 +179,7 @@ export function UserRowCard({
             title={isSelf ? "You cannot delete your own account." : "Delete user"}
             disabled={isBusy || isSelf}
             onClick={() => onDeleteUser(user)}
-            className="inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/10 px-4 py-2.5 text-sm text-red-300 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className={buttons.danger}
           >
             <Trash2 className="h-4 w-4" />
             Delete
@@ -186,7 +187,7 @@ export function UserRowCard({
         </div>
 
         {isSelf ? (
-          <p className="mt-2 text-xs text-zinc-500">
+          <p className={`mt-2 ${typography.smallMuted}`}>
             Self-delete, self-disable, and self-role-change are blocked.
           </p>
         ) : null}
@@ -194,5 +195,8 @@ export function UserRowCard({
     </article>
   );
 }
+
+
+
 
 

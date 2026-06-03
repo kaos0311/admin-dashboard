@@ -2,7 +2,7 @@
 
 import { Activity, Database, Loader2, SearchCheck } from "lucide-react";
 
-import { glass } from "@/theme";
+import { glass, typography } from "@/theme";
 
 type PatientIndexPanelProps = {
   patientIndex: unknown;
@@ -138,7 +138,7 @@ export function PatientIndexPanel({
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-sm text-slate-400">Last Updated</p>
+          <p className={typography.bodyMuted}>Last Updated</p>
 
           <p className="mt-2 text-sm font-medium text-slate-200">
             {analyticsLoading ? "Checking..." : lastUpdated}
@@ -148,5 +148,6 @@ export function PatientIndexPanel({
     </section>
   );
 }
+
 
 

@@ -11,6 +11,7 @@ import {
 import { Loader2, RefreshCcw, UploadCloud } from "lucide-react";
 
 import { auth, db, storage } from "@/lib/firebase";
+import { alerts, buttons, forms, glass, typography } from "@/theme";
 import { REPORT_TYPES, type ReportType } from "@/lib/reportTypes";
 
 type ReportUploadCardProps = {
@@ -233,11 +234,11 @@ export default function ReportUploadCard({
   }
 
   return (
-    <section className="rounded-3xl border border-zinc-800 bg-zinc-950 p-5 shadow-xl">
+    <section className={glass.cardPadded}>
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-semibold text-white">{title}</h2>
 
-        <p className="text-sm text-zinc-500">
+        <p className={typography.bodyFaint}>
           {description ??
             `Upload a CSV or PDF directly into the ${reportTypeLabel(
               reportType
@@ -249,7 +250,7 @@ export default function ReportUploadCard({
         <div>
           <label
             htmlFor={inputId}
-            className="mb-2 block text-sm font-medium text-zinc-300"
+            className={`mb-2 block ${typography.formLabel}`}
           >
             CSV or PDF file
           </label>
@@ -268,30 +269,30 @@ export default function ReportUploadCard({
               setUploadProgress(0);
               setMessage("");
             }}
-            className="block w-full rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-300 file:mr-4 file:rounded-xl file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-black disabled:opacity-60"
+            className={forms.fileInput}
           />
         </div>
 
         {selectedFile ? (
-          <div className="rounded-2xl border border-zinc-800 bg-black/40 p-4 text-sm text-zinc-300">
+          <div className={`${glass.insetPadded} ${typography.body}`}>
             <div>
-              <span className="text-zinc-500">File:</span> {selectedFile.name}
+              <span className={typography.smallMuted}>File:</span> {selectedFile.name}
             </div>
             <div>
-              <span className="text-zinc-500">Size:</span>{" "}
+              <span className={typography.smallMuted}>Size:</span>{" "}
               {formatBytes(selectedFile.size)}
             </div>
             <div>
-              <span className="text-zinc-500">Report type:</span>{" "}
+              <span className={typography.smallMuted}>Report type:</span>{" "}
               {reportTypeLabel(reportType)}
             </div>
             <div>
-              <span className="text-zinc-500">Cloud folder:</span>{" "}
+              <span className={typography.smallMuted}>Cloud folder:</span>{" "}
               reports/uploads/{reportType}/
             </div>
 
             {!selectedFileType ? (
-              <div className="mt-3 rounded-xl border border-red-500/20 bg-red-500/10 p-3 text-red-200">
+              <div className={`mt-3 ${alerts.danger}`}>
                 Unsupported file type. Use CSV or PDF.
               </div>
             ) : null}
@@ -299,8 +300,8 @@ export default function ReportUploadCard({
         ) : null}
 
         {uploading || uploadProgress > 0 ? (
-          <div className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 p-4">
-            <div className="mb-2 flex items-center justify-between text-sm text-cyan-100">
+          <div className={alerts.info}>
+            <div className={`mb-2 flex items-center justify-between ${typography.bodyStrong}`}>
               <span>Uploading</span>
               <span>{uploadProgress}%</span>
             </div>
@@ -315,7 +316,7 @@ export default function ReportUploadCard({
         ) : null}
 
         {message ? (
-          <div className="rounded-2xl border border-white/10 bg-black/40 p-3 text-sm text-zinc-200">
+          <div className={`${glass.insetPadded} ${typography.body}`}>
             {message}
           </div>
         ) : null}
@@ -325,7 +326,7 @@ export default function ReportUploadCard({
             type="button"
             onClick={() => void handleUpload()}
             disabled={!canUpload}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-medium text-black transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            className={`${buttons.primary} flex-1 py-3`}
           >
             {uploading ? (
               <>
@@ -344,7 +345,7 @@ export default function ReportUploadCard({
             type="button"
             onClick={resetSelectedFile}
             disabled={uploading}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-zinc-700 bg-zinc-900 px-4 py-3 text-sm text-zinc-200 transition hover:bg-zinc-800 disabled:cursor-not-allowed disabled:opacity-50"
+            className={`${buttons.secondary} py-3`}
           >
             <RefreshCcw className="h-4 w-4" />
             Reset
@@ -354,5 +355,6 @@ export default function ReportUploadCard({
     </section>
   );
 }
+
 
 

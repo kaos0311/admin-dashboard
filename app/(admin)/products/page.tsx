@@ -13,7 +13,7 @@ import {
 
 import toast from "react-hot-toast";
 
-import { colors, glass, typography } from "@/theme";
+import { alerts, colors, glass, typography } from "@/theme";
 
 import BarcodeScannerModal from "@/app/components/barcode-scanner/BarcodeScannerModal";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
@@ -332,7 +332,7 @@ export default function ProductsPage() {
         />
 
         <div className="relative z-10 flex min-h-[60vh] items-center justify-center">
-          <div className="rounded-3xl border border-red-500/20 bg-red-500/10 px-6 py-5 text-sm text-red-300 shadow-[0_0_35px_rgba(239,68,68,0.18)]">
+          <div className={alerts.danger}>
             Product catalog access denied.
           </div>
         </div>
@@ -362,7 +362,7 @@ export default function ProductsPage() {
 
           <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl">
+              <div className={glass.chip}>
                 <ShieldCheck className="h-3.5 w-3.5" />
 
                 Product Intelligence
@@ -373,7 +373,7 @@ export default function ProductsPage() {
                   Product Command Center
                 </h1>
 
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+                <p className={`mt-3 max-w-3xl ${typography.body}`}>
                   Operational product catalog management for inventory routing,
                   HCPCS mapping, vendor tracking, pricing, warranty oversight,
                   barcode intake, reorder monitoring, and lifecycle visibility.
@@ -385,7 +385,7 @@ export default function ProductsPage() {
 
             <div className={`${glass.card} max-w-sm`}>
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl">
+                <div className={glass.iconBox}>
                   <PackageSearch className="h-6 w-6" />
                 </div>
 
@@ -395,21 +395,21 @@ export default function ProductsPage() {
                       Product System
                     </p>
 
-                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl">
-                      <span className="h-2 w-2 animate-pulse rounded-full bg-sky-200 shadow-[0_0_10px_rgba(186,230,253,0.9)]" />
+                    <span className={glass.chip}>
+                      <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)]" />
 
                       Online
                     </span>
                   </div>
 
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className={`mt-1 ${typography.smallMuted}`}>
                     HCPCS + vendor intelligence active
                   </p>
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-400">
-                <ScanLine className="h-3.5 w-3.5 text-sky-200" />
+              <div className={`mt-4 flex items-center gap-2 ${glass.insetPadded} ${typography.small}`}>
+                <ScanLine className="h-3.5 w-3.5 text-[var(--color-accent)]" />
 
                 Barcode intake system operational
               </div>
@@ -442,7 +442,7 @@ export default function ProductsPage() {
 
         {stats.highRisk >
         0 ? (
-          <section className="rounded-3xl border border-amber-300/20 bg-amber-300/10 p-5 text-amber-100 shadow-[0_0_45px_rgba(251,191,36,0.12)] backdrop-blur-2xl">
+          <section className={alerts.warning}>
             <div className="flex items-stretch gap-3">
               <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
 
@@ -451,7 +451,7 @@ export default function ProductsPage() {
                   Catalog cleanup required
                 </h2>
 
-                <p className="mt-1 text-sm text-amber-100/80">
+                <p className={`mt-1 ${typography.bodyMuted}`}>
                   {stats.highRisk.toLocaleString()} product
                   record
                   {stats.highRisk ===
@@ -524,7 +524,7 @@ export default function ProductsPage() {
                     Product Catalog
                   </h2>
 
-                  <p className="mt-2 text-sm text-slate-400">
+                  <p className={`mt-2 ${typography.bodyMuted}`}>
                     {filteredProducts.length.toLocaleString()} visible
                     from{" "}
                     {products.length.toLocaleString()} loaded
@@ -533,7 +533,7 @@ export default function ProductsPage() {
                 </div>
 
                 <div className="relative">
-                  <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
+                  <Search className={`pointer-events-none absolute left-3 top-3.5 h-4 w-4 ${typography.smallMuted}`} />
 
                   <input
                     value={
@@ -554,7 +554,7 @@ export default function ProductsPage() {
                         })
                       )
                     }
-                    className="w-full rounded-2xl border border-white/10 bg-black/20 py-3 pl-10 pr-10 text-sm text-slate-100 outline-none backdrop-blur-xl focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20 xl:w-[420px]"
+                    className={`${glass.input} py-3 pl-10 pr-10 xl:w-[420px]`}
                     placeholder="Search name, SKU, UPC, HCPCS..."
                     aria-label="Search products"
                   />
@@ -573,7 +573,7 @@ export default function ProductsPage() {
                           })
                         )
                       }
-                      className="absolute right-3 top-3.5 text-slate-500 transition hover:text-white"
+                      className={`absolute right-3 top-3.5 transition ${typography.smallMuted} hover:text-white`}
                       aria-label="Clear search"
                     >
                       <X className="h-4 w-4" />
@@ -686,6 +686,8 @@ export default function ProductsPage() {
     </main>
   );
 }
+
+
 
 
 

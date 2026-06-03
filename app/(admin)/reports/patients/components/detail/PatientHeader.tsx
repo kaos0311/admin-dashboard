@@ -2,7 +2,7 @@
 
 import { Archive, ArchiveRestore, Trash2 } from "lucide-react";
 
-import { colors, glass, spacing, typography } from "@/theme";
+import { glass, spacing, typography } from "@/theme";
 
 import type { PatientDetailProps } from "./patient-detail-types";
 
@@ -120,3 +120,5 @@ export function PatientHeader({
     </header>
   );
 }
+
+

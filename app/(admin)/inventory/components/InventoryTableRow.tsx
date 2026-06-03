@@ -9,6 +9,11 @@ import {
 } from "lucide-react";
 
 import {
+  buttons,
+  typography,
+} from "@/theme";
+
+import {
   isLowStock,
   isServiceDue,
   isWarrantyExpired,
@@ -35,6 +40,14 @@ type InventoryTableRowProps = {
   onDelete: (item: InventoryItem) => void;
 };
 
+function alertTextClass(active: boolean): string {
+  return active ? typography.warningText : typography.smallMuted;
+}
+
+function dangerTextClass(active: boolean): string {
+  return active ? typography.dangerText : typography.smallMuted;
+}
+
 export function InventoryTableRow({
   item,
   isSelected,
@@ -58,11 +71,11 @@ export function InventoryTableRow({
       </td>
 
       <td className="px-4 py-3">
-        <div className="font-semibold text-white">
+        <div className={typography.bodyStrong}>
           {item.name}
         </div>
 
-        <div className="text-xs text-slate-500">
+        <div className={typography.smallMuted}>
           {item.category || "-"}
         </div>
 
@@ -75,35 +88,29 @@ export function InventoryTableRow({
         </div>
       </td>
 
-      <td className="px-4 py-3 text-slate-300">
+      <td className={`px-4 py-3 ${typography.body}`}>
         <div>{item.manufacturer || "-"}</div>
 
-        <div className="text-xs text-slate-500">
+        <div className={typography.smallMuted}>
           MFG ID: {item.manufacturerItemId || "-"}
         </div>
 
-        <div className="text-xs text-slate-500">
+        <div className={typography.smallMuted}>
           Model: {item.modelNumber || "-"}
         </div>
       </td>
 
-      <td className="px-4 py-3 text-slate-300">
+      <td className={`px-4 py-3 ${typography.body}`}>
         <div>SKU: {item.sku || "-"}</div>
         <div>Barcode: {item.barcode || "-"}</div>
         <div>Serial: {item.serial || "-"}</div>
         <div>Lot: {item.lotNumber || "-"}</div>
       </td>
 
-      <td className="px-4 py-3 text-slate-300">
+      <td className={`px-4 py-3 ${typography.body}`}>
         <div>On Hand: {item.quantityOnHand}</div>
 
-        <div
-          className={
-            isLowStock(item)
-              ? "font-semibold text-yellow-300"
-              : ""
-          }
-        >
+        <div className={isLowStock(item) ? typography.warningStrong : ""}>
           Available: {item.available}
         </div>
 
@@ -117,41 +124,29 @@ export function InventoryTableRow({
         </div>
       </td>
 
-      <td className="px-4 py-3 text-slate-300">
+      <td className={`px-4 py-3 ${typography.body}`}>
         <div>{item.warrantyProvider || "-"}</div>
 
-        <div className="text-xs text-slate-500">
+        <div className={typography.smallMuted}>
           Start: {item.warrantyStartDate || "-"}
         </div>
 
-        <div
-          className={`text-xs ${
-            isWarrantyExpired(item)
-              ? "text-red-300"
-              : "text-slate-500"
-          }`}
-        >
+        <div className={dangerTextClass(isWarrantyExpired(item))}>
           End: {item.warrantyEndDate || "-"}
         </div>
       </td>
 
-      <td className="px-4 py-3 text-slate-300">
+      <td className={`px-4 py-3 ${typography.body}`}>
         <div className="flex items-center gap-2 capitalize">
           <CalendarClock className="h-4 w-4" />
           {item.lifecycleStatus.replaceAll("_", " ")}
         </div>
 
-        <div
-          className={`text-xs ${
-            isServiceDue(item)
-              ? "text-yellow-300"
-              : "text-slate-500"
-          }`}
-        >
+        <div className={alertTextClass(isServiceDue(item))}>
           Service: {item.nextServiceDate || "-"}
         </div>
 
-        <div className="text-xs text-slate-500">
+        <div className={typography.smallMuted}>
           Life: {item.usefulLifeMonths || 0} months
         </div>
       </td>
@@ -161,7 +156,7 @@ export function InventoryTableRow({
           <button
             type="button"
             onClick={() => onEdit(item)}
-            className="rounded-xl border border-white/10 bg-white/10 p-2 text-white shadow-lg shadow-black/20 backdrop-blur-xl transition hover:bg-white/15"
+            className={buttons.icon}
             title="Edit"
             aria-label={`Edit ${item.name}`}
           >
@@ -171,7 +166,7 @@ export function InventoryTableRow({
           <button
             type="button"
             onClick={() => onDiscontinue(item)}
-            className="rounded-xl border border-yellow-500/20 bg-yellow-500/10 p-2 text-yellow-200 shadow-lg shadow-black/20 backdrop-blur-xl transition hover:bg-yellow-500/20"
+            className={buttons.iconWarning}
             title="Discontinue"
             aria-label={`Discontinue ${item.name}`}
           >
@@ -181,7 +176,7 @@ export function InventoryTableRow({
           <button
             type="button"
             onClick={() => onArchive(item)}
-            className="rounded-xl border border-red-500/20 bg-red-500/10 p-2 text-red-300 shadow-lg shadow-black/20 backdrop-blur-xl transition hover:bg-red-500/20"
+            className={buttons.iconArchive}
             title="Archive"
             aria-label={`Archive ${item.name}`}
           >
@@ -192,7 +187,7 @@ export function InventoryTableRow({
             <button
               type="button"
               onClick={() => onDelete(item)}
-              className="rounded-xl border border-red-700/30 bg-red-950/40 p-2 text-red-400 shadow-lg shadow-black/20 backdrop-blur-xl transition hover:bg-red-950/70"
+              className={buttons.iconDelete}
               title="Permanent Delete"
               aria-label={`Permanently delete ${item.name}`}
             >
@@ -204,5 +199,3 @@ export function InventoryTableRow({
     </tr>
   );
 }
-
-

@@ -1,6 +1,5 @@
 ﻿"use client";
 
-import { spacing } from "@/theme";
 
 import type { PatientDetailProps } from "./patient-detail-types";
 
@@ -42,3 +41,4 @@ export function PatientDetail(props: PatientDetailProps) {
     </div>
   );
 }
+

@@ -39,7 +39,6 @@ type CachedRoleState = {
 };
 
 const ROLE_CACHE_TTL_MS = 60_000;
-const AUTH_DEBUG = false;
 
 let roleCache: CachedRoleState | null = null;
 
@@ -140,16 +139,6 @@ export function useAuthRole(): UseAuthRoleResult {
             resolvedRole = dbRole;
           }
 
-          if (AUTH_DEBUG) {
-            console.info("AUTH ROLE DEBUG:", {
-              uid: currentUser.uid,
-              email: currentUser.email,
-              userDocExists: true,
-              resolvedRole,
-              resolvedActive,
-            });
-          }
-
           if (data.active === false) {
             roleCache = null;
             await signOut(auth);
@@ -164,12 +153,7 @@ export function useAuthRole(): UseAuthRoleResult {
 
             return;
           }
-        } else if (AUTH_DEBUG) {
-          console.info("AUTH ROLE DEBUG: user document missing", {
-            uid: currentUser.uid,
-            email: currentUser.email,
-          });
-        }
+        } else
 
         setCachedRole(currentUser.uid, resolvedRole, resolvedActive);
 
@@ -224,3 +208,8 @@ export function useAuthRole(): UseAuthRoleResult {
     };
   }, [user, role, loading, error, active]);
 }
+
+
+
+
+

@@ -15,6 +15,7 @@ import { Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { auth } from "@/lib/firebase";
+import { badges, buttons, forms, glass, typography } from "@/theme";
 
 function getSafeNextPath(rawNext: string | null): string {
   if (!rawNext) return "/dashboard";
@@ -124,8 +125,8 @@ export default function LoginPage() {
 
   if (checkingUser) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-black px-4 text-white">
-        <div className="flex items-center gap-3 rounded-3xl border border-white/10 bg-neutral-950 px-6 py-4 text-sm text-zinc-300 shadow-2xl shadow-black/30">
+      <div className={glass.pageCenter}>
+        <div className={glass.loadingCard}>
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading dashboard...
         </div>
@@ -134,38 +135,34 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-black px-4 text-white">
+    <main className={glass.pageCenter}>
       <form
         onSubmit={(event) => {
           void handleSubmit(event);
         }}
-        className="w-full max-w-md space-y-5 rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/40"
+        className={glass.authCard}
       >
         <div className="space-y-1">
-          <div className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs font-medium uppercase tracking-[0.18em] text-zinc-500">
-            Admin Access
-          </div>
+          <div className={badges.neutral}>Admin Access</div>
 
-          <h1 className="pt-2 text-2xl font-bold tracking-tight">
-            Sign in
-          </h1>
+          <h1 className={typography.sectionTitle}>Sign in</h1>
 
-          <p className="text-sm text-zinc-400">
+          <p className={typography.bodyMuted}>
             Access the Advanced Home Medical admin dashboard.
           </p>
         </div>
 
         <div className="space-y-4">
-          <div>
-            <label
-              htmlFor="login-email"
-              className="mb-2 block text-sm font-medium text-zinc-300"
-            >
+          <div className={forms.field}>
+            <label htmlFor="login-email" className={forms.label}>
               Email
             </label>
 
             <div className="relative">
-              <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <Mail
+                className={glass.inputIcon}
+                aria-hidden={true}
+              />
 
               <input
                 id="login-email"
@@ -179,21 +176,21 @@ export default function LoginPage() {
                 onChange={(event) => setEmail(event.target.value)}
                 placeholder="you@example.com"
                 disabled={submitting}
-                className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 pl-11 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-white/30 disabled:cursor-not-allowed disabled:opacity-60"
+                className={forms.inputIconLeft}
               />
             </div>
           </div>
 
-          <div>
-            <label
-              htmlFor="login-password"
-              className="mb-2 block text-sm font-medium text-zinc-300"
-            >
+          <div className={forms.field}>
+            <label htmlFor="login-password" className={forms.label}>
               Password
             </label>
 
             <div className="relative">
-              <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
+              <Lock
+                className={glass.inputIcon}
+                aria-hidden={true}
+              />
 
               <input
                 id="login-password"
@@ -206,7 +203,7 @@ export default function LoginPage() {
                 onChange={(event) => setPassword(event.target.value)}
                 placeholder="Enter your password"
                 disabled={submitting}
-                className="w-full rounded-2xl border border-white/10 bg-black/40 px-4 py-3 pl-11 pr-12 text-sm text-white outline-none transition placeholder:text-zinc-600 focus:border-white/30 disabled:cursor-not-allowed disabled:opacity-60"
+                className={forms.inputIconBoth}
               />
 
               <button
@@ -215,7 +212,7 @@ export default function LoginPage() {
                 disabled={submitting}
                 aria-label={showPassword ? "Hide password" : "Show password"}
                 title={showPassword ? "Hide password" : "Show password"}
-                className="absolute right-3 top-1/2 rounded-lg p-2 text-zinc-400 transition -translate-y-1/2 hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
+                className={buttons.iconInline}
               >
                 {showPassword ? (
                   <EyeOff className="h-4 w-4" aria-hidden={true} />
@@ -230,7 +227,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="inline-flex w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white px-4 py-3 font-medium text-black transition hover:bg-zinc-200 disabled:cursor-not-allowed disabled:opacity-60"
+          className={buttons.fullPrimary}
         >
           {submitting ? (
             <>
@@ -245,5 +242,3 @@ export default function LoginPage() {
     </main>
   );
 }
-
-

@@ -1,5 +1,7 @@
 ﻿"use client";
 
+
+import { typography } from "@/theme";
 import { AlertTriangle, Boxes } from "lucide-react";
 
 type InventoryStatsProps = {
@@ -61,7 +63,7 @@ function StatCard({
         </div>
 
         <div>
-          <p className="text-sm text-slate-400">{label}</p>
+          <p className={typography.bodyMuted}>{label}</p>
           <p className="text-2xl font-bold text-white">
             {typeof value === "number" ? value.toLocaleString() : value}
           </p>
@@ -70,6 +72,8 @@ function StatCard({
     </div>
   );
 }
+
+
 
 
 

@@ -23,6 +23,8 @@ import {
 
 import { productFormWarnings } from "../utils/productValidation";
 
+import { alerts, buttons, forms, typography } from "@/theme";
+
 import {
   CheckboxInput,
   SelectInput,
@@ -69,9 +71,9 @@ export function ProductForm({
       <div className="mb-5 flex items-center gap-3">
         <div className="rounded-2xl border border-white/10 bg-white/[0.08] p-3 shadow-inner shadow-white/5">
           {form.id ? (
-            <Pencil className="h-5 w-5 text-sky-100" />
+            <Pencil className="h-5 w-5" />
           ) : (
-            <Plus className="h-5 w-5 text-sky-100" />
+            <Plus className="h-5 w-5" />
           )}
         </div>
 
@@ -80,7 +82,7 @@ export function ProductForm({
             {form.id ? "Edit Product" : "Add Product"}
           </h2>
 
-          <p className="text-sm text-slate-400">
+          <p className={typography.bodyMuted}>
             Catalog identity, billing references, tracking rules, and cleanup
             flags.
           </p>
@@ -88,13 +90,13 @@ export function ProductForm({
       </div>
 
       {warnings.length > 0 ? (
-        <div className="mb-5 rounded-2xl border border-amber-300/20 bg-amber-300/10 p-4 text-sm text-amber-100">
+        <div className={alerts.warning}>
           <div className="mb-2 flex items-center gap-2 font-semibold">
             <AlertTriangle className="h-4 w-4" />
             Smart catalog warnings
           </div>
 
-          <ul className="list-inside list-disc space-y-1 text-amber-100/80">
+          <ul className={`list-inside list-disc space-y-1 ${typography.warningText}`}>
             {warnings.map((warning) => (
               <li key={warning}>{warning}</li>
             ))}
@@ -204,7 +206,7 @@ export function ProductForm({
         <div>
           <label
             htmlFor="upc"
-            className="mb-2 block text-sm text-slate-200/80"
+            className={forms.label}
           >
             UPC / Barcode
           </label>
@@ -216,7 +218,7 @@ export function ProductForm({
               onChange={(event) =>
                 onFormChange({ upc: event.target.value })
               }
-              className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white shadow-inner shadow-black/20 outline-none backdrop-blur-xl transition placeholder:text-slate-500 focus:border-sky-300/50 focus:bg-white/[0.09]"
+              className={forms.input}
               placeholder="Scan or type barcode"
             />
 
@@ -458,7 +460,7 @@ export function ProductForm({
         <div>
           <label
             htmlFor="notes"
-            className="mb-2 block text-sm text-slate-200/80"
+            className={forms.label}
           >
             Notes
           </label>
@@ -470,7 +472,7 @@ export function ProductForm({
               onFormChange({ notes: event.target.value })
             }
             rows={4}
-            className="w-full rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-white shadow-inner shadow-black/20 outline-none backdrop-blur-xl transition placeholder:text-slate-500 focus:border-sky-300/50 focus:bg-white/[0.09]"
+            className={forms.input}
             placeholder="Optional catalog notes. Do not enter PHI here."
           />
         </div>
@@ -479,7 +481,7 @@ export function ProductForm({
           <button
             type="submit"
             disabled={saving || !canWrite}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-sky-100 disabled:cursor-not-allowed disabled:opacity-50"
+            className={buttons.primary}
           >
             {saving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -502,5 +504,7 @@ export function ProductForm({
     </form>
   );
 }
+
+
 
 

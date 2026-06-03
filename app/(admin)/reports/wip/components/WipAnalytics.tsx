@@ -1,5 +1,7 @@
 ﻿"use client";
 
+
+import { typography } from "@/theme";
 import { BarChart3 } from "lucide-react";
 
 import type { WipAnalytics as WipAnalyticsType } from "@/lib/reports/wip";
@@ -58,14 +60,14 @@ export function WipAnalytics({ analytics }: WipAnalyticsProps) {
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
         <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-xs text-slate-500">Average Days Open</p>
+          <p className={typography.smallMuted}>Average Days Open</p>
           <p className="mt-1 text-xl font-bold text-white">
             {analytics.averageDaysOpen}
           </p>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <p className="text-xs text-slate-500">Completion Rate</p>
+          <p className={typography.smallMuted}>Completion Rate</p>
           <p className="mt-1 text-xl font-bold text-white">
             {analytics.completionRate}%
           </p>
@@ -74,5 +76,7 @@ export function WipAnalytics({ analytics }: WipAnalyticsProps) {
     </section>
   );
 }
+
+
 
 

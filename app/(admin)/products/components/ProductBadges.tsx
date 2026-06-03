@@ -1,5 +1,7 @@
 ﻿"use client";
 
+
+import { typography } from "@/theme";
 import type { Product, ProductStatus } from "../utils/productTypes";
 import { productRiskScore, qualityWarnings } from "../utils/productValidation";
 
@@ -17,7 +19,7 @@ export function ProductFlags({ product }: { product: Product }) {
   ].filter(Boolean);
 
   if (!flags.length) {
-    return <span className="text-xs text-slate-500">Clean</span>;
+    return <span className={typography.smallMuted}>Clean</span>;
   }
 
   return (
@@ -88,5 +90,7 @@ export function StatusBadge({ status }: { status: ProductStatus }) {
     </span>
   );
 }
+
+
 
 

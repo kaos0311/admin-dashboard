@@ -1,4 +1,5 @@
-﻿import { Clock3 } from "lucide-react";
+﻿import { typography } from "@/theme";
+import { Clock3 } from "lucide-react";
 import { glassPanelSoft } from "../../styles/glass";
 
 export function RecentActivityCard() {
@@ -11,7 +12,7 @@ export function RecentActivityCard() {
 
         <div>
           <h3 className="text-sm font-semibold text-white">Recent Activity</h3>
-          <p className="text-xs text-slate-500">Settings audit placeholder</p>
+          <p className={typography.smallMuted}>Settings audit placeholder</p>
         </div>
       </div>
 
@@ -24,5 +25,8 @@ export function RecentActivityCard() {
     </aside>
   );
 }
+
+
+
 
 

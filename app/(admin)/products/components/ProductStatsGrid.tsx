@@ -78,7 +78,7 @@ function StatCard({
     <div className="min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.07] p-5 shadow-2xl shadow-black/25 backdrop-blur-2xl">
       <div className="flex min-w-0 items-center gap-3">
         <div className="shrink-0 rounded-2xl border border-white/10 bg-white/[0.08] p-3 shadow-inner shadow-white/5">
-          <Icon className="h-5 w-5 text-sky-100" aria-hidden="true" />
+          <Icon className="h-5 w-5" aria-hidden="true" />
         </div>
 
         <div className="min-w-0">
@@ -91,5 +91,6 @@ function StatCard({
     </div>
   );
 }
+
 
 

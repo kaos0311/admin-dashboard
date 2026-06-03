@@ -12,6 +12,13 @@ import {
   User,
 } from "lucide-react";
 
+import {
+  badges,
+  buttons,
+  glass,
+  typography,
+} from "@/theme";
+
 import { formatCurrency, formatDate } from "../lib/orderFormat";
 import { glassPanel } from "../lib/orderUi";
 import type { OrderRow, OrderStatus } from "../lib/orderTypes";
@@ -42,7 +49,7 @@ export function OrdersTable({
         <table className="min-w-full text-left text-sm">
           <caption className="sr-only">Orders table</caption>
 
-          <thead className="border-b border-white/10 bg-white/[0.04] text-zinc-400">
+          <thead className={glass.tableHeader}>
             <tr>
               <TableHead>Patient</TableHead>
               <TableHead>Review</TableHead>
@@ -62,7 +69,7 @@ export function OrdersTable({
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan={12} className="px-4 py-12 text-center text-zinc-400">
+                <td colSpan={12} className={`px-4 py-12 text-center ${typography.bodyMuted}`}>
                   <div className="inline-flex items-center gap-2">
                     <Loader2 className="h-4 w-4 animate-spin" aria-hidden={true} />
                     Loading orders...
@@ -71,7 +78,7 @@ export function OrdersTable({
               </tr>
             ) : orders.length === 0 ? (
               <tr>
-                <td colSpan={12} className="px-4 py-12 text-center text-zinc-400">
+                <td colSpan={12} className={`px-4 py-12 text-center ${typography.bodyMuted}`}>
                   No orders found.
                 </td>
               </tr>
@@ -82,25 +89,25 @@ export function OrdersTable({
                 return (
                   <tr
                     key={order.id}
-                    className="border-b border-white/5 align-top transition last:border-0 hover:bg-white/[0.035]"
+                    className={glass.tableRow}
                   >
                     <td className="px-4 py-4">
                       <div className="flex items-start gap-3">
-                        <div className="rounded-2xl border border-white/10 bg-white/[0.07] p-2 text-zinc-300 shadow-inner shadow-black/20">
+                        <div className={glass.iconBoxSm}>
                           <User className="h-4 w-4" aria-hidden={true} />
                         </div>
 
                         <div>
-                          <div className="font-semibold text-white">
+                          <div className={typography.bodyStrong}>
                             {order.patientName || "Unnamed patient"}
                           </div>
 
-                          <div className="mt-1 text-xs text-zinc-500">
-                            DOB: {order.dob || "â€”"}
+                          <div className={`mt-1 ${typography.smallMuted}`}>
+                            DOB: {order.dob || "—"}
                           </div>
 
                           {order.facilityName ? (
-                            <div className="mt-1 text-xs text-zinc-500">
+                            <div className={`mt-1 ${typography.smallMuted}`}>
                               {order.facilityName}
                             </div>
                           ) : null}
@@ -112,32 +119,32 @@ export function OrdersTable({
                       <SmartReviewBadges order={order} />
                     </td>
 
-                    <td className="px-4 py-4 text-zinc-300">
-                      {order.salesOrderNumber || "â€”"}
+                    <td className={`px-4 py-4 ${typography.body}`}>
+                      {order.salesOrderNumber || "—"}
                     </td>
 
-                    <td className="max-w-xs px-4 py-4 text-zinc-300">
-                      {order.patientAddress || "â€”"}
+                    <td className={`max-w-xs px-4 py-4 ${typography.body}`}>
+                      {order.patientAddress || "—"}
                     </td>
 
                     <td className="px-4 py-4">
                       <div className="flex items-start gap-2">
                         <Package
-                          className="mt-0.5 h-4 w-4 text-zinc-500"
+                          className={`mt-0.5 h-4 w-4 ${typography.smallMuted}`}
                           aria-hidden={true}
                         />
 
                         <div>
-                          <div className="text-zinc-200">
-                            {order.productType || "â€”"}
+                          <div className={typography.subTitle}>
+                            {order.productType || "—"}
                           </div>
 
-                          <div className="mt-1 text-xs text-zinc-500">
-                            ID: {order.productId || "â€”"}
+                          <div className={`mt-1 ${typography.smallMuted}`}>
+                            ID: {order.productId || "—"}
                           </div>
 
                           {order.barcode ? (
-                            <div className="mt-1 text-xs text-zinc-500">
+                            <div className={`mt-1 ${typography.smallMuted}`}>
                               Barcode: {order.barcode}
                             </div>
                           ) : null}
@@ -145,16 +152,16 @@ export function OrdersTable({
                       </div>
                     </td>
 
-                    <td className="px-4 py-4 text-zinc-300">
+                    <td className={`px-4 py-4 ${typography.body}`}>
                       {order.quantity}
                     </td>
 
-                    <td className="px-4 py-4 text-zinc-300">
+                    <td className={`px-4 py-4 ${typography.body}`}>
                       {formatCurrency(order.purchaseCost)}
                     </td>
 
-                    <td className="px-4 py-4 text-zinc-300">
-                      {order.phone || "â€”"}
+                    <td className={`px-4 py-4 ${typography.body}`}>
+                      {order.phone || "—"}
                     </td>
 
                     <td className="px-4 py-4">
@@ -165,7 +172,7 @@ export function OrdersTable({
                       <InventoryBadge order={order} />
                     </td>
 
-                    <td className="px-4 py-4 text-zinc-400">
+                    <td className={`px-4 py-4 ${typography.bodyMuted}`}>
                       {formatDate(order.createdAt)}
                     </td>
 
@@ -247,7 +254,7 @@ export function OrdersTable({
                         )}
 
                         {isSaving ? (
-                          <span className="inline-flex items-center gap-1 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-2.5 py-1 text-xs font-semibold text-cyan-100">
+                          <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-semibold ${badges.info}`}>
                             <RotateCcw
                               className="h-3.5 w-3.5 animate-spin"
                               aria-hidden={true}
@@ -289,11 +296,9 @@ function ActionButton({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/[0.06] px-2.5 py-1.5 text-xs font-semibold text-zinc-200 shadow-inner shadow-black/20 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+      className={buttons.compactSecondary}
     >
       {children}
     </button>
   );
 }
-
-

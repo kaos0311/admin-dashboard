@@ -1,4 +1,4 @@
-export const glass = {
+﻿export const glass = {
   page:
     "relative min-h-screen w-full overflow-x-hidden text-white",
 
@@ -34,6 +34,9 @@ export const glass = {
 
   listItem:
     "relative min-w-0 rounded-2xl border border-white/10 bg-white/[0.045] p-4 backdrop-blur-xl transition hover:border-cyan-300/30 hover:bg-white/[0.07]",
+
+  selectedListItem:
+    "border-cyan-300/35 bg-cyan-300/10",
 
   inset:
     "min-w-0 rounded-2xl border border-white/10 bg-black/25",
@@ -98,8 +101,41 @@ export const glass = {
   divider:
     "border-white/10",
 
+  progressTrack:
+    "h-2 overflow-hidden rounded-full bg-white/10",
+  progressFill: "h-full rounded-full bg-[var(--color-accent)] transition-all duration-300",
+
+  riskHigh:
+    "h-full rounded-full bg-rose-500",
+
+  riskMedium:
+    "h-full rounded-full bg-amber-400",
+
+  riskLow:
+    "h-full rounded-full bg-cyan-400",
+
+  riskMinimal:
+    "h-full rounded-full bg-slate-400",
+
   focus:
     "focus:outline-none focus:ring-2 focus:ring-cyan-300/40 focus:ring-offset-0",
+  pageCenter:
+    "flex min-h-screen items-center justify-center bg-black px-4 text-white",
+
+  loadingCard:
+    "flex items-center gap-3 rounded-3xl border border-white/10 bg-neutral-950 px-6 py-4 text-sm text-zinc-300 shadow-2xl shadow-black/30",
+
+  authCard:
+    "w-full max-w-md space-y-5 rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/40",
+
+  inputIcon:
+    "pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500",
+
 } as const;
 
 export type GlassKey = keyof typeof glass;
+
+
+
+
+

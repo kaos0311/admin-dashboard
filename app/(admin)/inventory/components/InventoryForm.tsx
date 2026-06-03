@@ -1,5 +1,7 @@
 ﻿"use client";
 
+
+import { typography } from "@/theme";
 import { Loader2, PackagePlus, Pencil, Save } from "lucide-react";
 import type { FormEvent } from "react";
 
@@ -76,7 +78,7 @@ export function InventoryForm({
             {form.id ? "Edit Item" : "Add Item"}
           </h2>
 
-          <p className="text-sm text-slate-400">
+          <p className={typography.bodyMuted}>
             Inventory tracking, warranty, lifecycle, and searchable metadata.
           </p>
         </div>
@@ -418,5 +420,7 @@ export function InventoryForm({
     </form>
   );
 }
+
+
 
 

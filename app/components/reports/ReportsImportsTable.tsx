@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { badges, glass, typography } from "@/theme";
+
 type ImportMeta = {
   id: string;
   fileName: string;
@@ -38,18 +40,14 @@ function CountBadge({
   color?: "neutral" | "cyan" | "red" | "emerald";
 }) {
   const classes: Record<string, string> = {
-    neutral:
-      "border-white/10 bg-white/5 text-neutral-300",
-    cyan:
-      "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
-    red:
-      "border-red-500/20 bg-red-500/10 text-red-300",
-    emerald:
-      "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-  };
+  neutral: badges.neutral,
+  cyan: badges.info,
+  red: badges.danger,
+  emerald: badges.success,
+};
 
   if (value <= 0) {
-    return <span className="text-neutral-500">0</span>;
+    return <span className={typography.smallMuted}>0</span>;
   }
 
   return (
@@ -65,20 +63,20 @@ export default function ReportsImportsTable({
   imports,
 }: Props) {
   return (
-    <section className="overflow-hidden rounded-3xl border border-white/10 bg-neutral-950">
+    <section className={glass.card}>
       <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-6 py-5">
         <div>
           <h2 className="text-lg font-semibold text-white">
             Recent Imports
           </h2>
 
-          <p className="mt-1 text-sm text-neutral-500">
+          <p className={`mt-1 ${typography.bodyMuted}`}>
             Imported report history and hospice filtering metrics.
           </p>
         </div>
 
         <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-right">
-          <div className="text-xs uppercase tracking-[0.14em] text-neutral-500">
+          <div className={typography.caption}>
             Total Imports
           </div>
 
@@ -90,7 +88,7 @@ export default function ReportsImportsTable({
 
       <div className="admin-scroll overflow-x-auto">
         <table className="admin-table min-w-full">
-          <thead className="sticky top-0 z-10 border-b border-white/10 bg-neutral-950 text-neutral-400 backdrop-blur">
+          <thead className={glass.tableHeader}>
             <tr>
               <th className="px-4 py-4">File</th>
 
@@ -132,11 +130,11 @@ export default function ReportsImportsTable({
                   className="px-4 py-14 text-center"
                 >
                   <div className="mx-auto max-w-sm">
-                    <div className="text-lg font-medium text-neutral-300">
+                    <div className={typography.subTitle}>
                       No imports yet
                     </div>
 
-                    <div className="mt-2 text-sm text-neutral-500">
+                    <div className={`mt-2 ${typography.bodyMuted}`}>
                       Uploaded reports will appear here once
                       processing completes.
                     </div>
@@ -192,12 +190,12 @@ export default function ReportsImportsTable({
                     </td>
 
                     <td className="px-4 py-4">
-                      <span className="inline-flex rounded-full border border-white/10 bg-white/5 px-3 py-1 text-xs text-neutral-300">
+                      <span className={`inline-flex rounded-full px-3 py-1 text-xs ${badges.neutral}`}>
                         {reportType}
                       </span>
                     </td>
 
-                    <td className="px-4 py-4 text-neutral-400">
+                    <td className={`px-4 py-4 ${typography.bodyMuted}`}>
                       {importedAt}
                     </td>
 
@@ -242,5 +240,8 @@ export default function ReportsImportsTable({
     </section>
   );
 }
+
+
+
 
 

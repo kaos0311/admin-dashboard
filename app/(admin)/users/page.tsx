@@ -13,7 +13,7 @@ import toast from "react-hot-toast";
 
 import { httpsCallable } from "firebase/functions";
 
-import { colors, glass, typography } from "@/theme";
+import { alerts, badges, buttons, colors, glass, typography } from "@/theme";
 
 import { auth, functions } from "@/lib/firebase";
 
@@ -450,8 +450,8 @@ export default function UsersPage() {
           <div className={glass.panel}>
             <div className={colors.grid} />
 
-            <div className="relative flex items-center gap-3 p-6 text-slate-300">
-              <Loader2 className="h-5 w-5 animate-spin text-sky-200" />
+            <div className={`relative flex items-center gap-3 p-6 ${typography.body}`}>
+              <Loader2 className="h-5 w-5 animate-spin" />
 
               Loading admin access...
             </div>
@@ -473,7 +473,7 @@ export default function UsersPage() {
         <div className={colors.grid} />
 
         <div className="relative flex min-h-[60vh] items-center justify-center">
-          <div className="rounded-3xl border border-red-500/20 bg-red-500/10 px-6 py-5 text-sm text-red-300 shadow-[0_0_35px_rgba(239,68,68,0.18)]">
+          <div className={alerts.danger}>
             Admin access required.
           </div>
         </div>
@@ -491,7 +491,7 @@ export default function UsersPage() {
 
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="space-y-4">
-              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+              <div className={badges.neutral}>
                 <ShieldCheck className="h-3.5 w-3.5" />
 
                 Identity Intelligence
@@ -503,7 +503,7 @@ export default function UsersPage() {
                   Center
                 </h1>
 
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+                <p className={`mt-3 max-w-3xl ${typography.body}`}>
                   Administrative
                   control for dashboard
                   role
@@ -523,7 +523,7 @@ export default function UsersPage() {
 
             <div className={`${glass.card} max-w-sm`}>
               <div className="flex items-center gap-4">
-                <div className={"flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl"}>
+                <div className={glass.iconBox}>
                   <UserCog className="h-6 w-6" />
                 </div>
 
@@ -533,14 +533,14 @@ export default function UsersPage() {
                       User System
                     </p>
 
-                    <span className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
-                      <span className="h-2 w-2 animate-pulse rounded-full bg-sky-200 shadow-[0_0_10px_rgba(186,230,253,0.9)]" />
+                    <span className={badges.neutral}>
+                      <span className={badges.pulseDot} />
 
                       Active
                     </span>
                   </div>
 
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className={`mt-1 ${typography.smallMuted}`}>
                     Role and access
                     management online
                   </p>
@@ -552,7 +552,7 @@ export default function UsersPage() {
                 onClick={() =>
                   void bootstrapAdmin()
                 }
-                className={`${"inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"} mt-4 w-full`}
+                className={`${buttons.ghost} mt-4 w-full`}
               >
                 <ShieldCheck className="h-4 w-4" />
 
@@ -666,7 +666,7 @@ export default function UsersPage() {
           }
         />
 
-        <div className="flex items-center gap-2 text-xs text-slate-500">
+        <div className={`flex items-center gap-2 ${typography.smallMuted}`}>
           <RefreshCw className="h-3.5 w-3.5" />
 
           Role changes may require affected users to sign out and back in.
@@ -675,6 +675,8 @@ export default function UsersPage() {
     </main>
   );
 }
+
+
 
 
 

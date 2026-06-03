@@ -14,6 +14,16 @@ import {
   Zap,
 } from "lucide-react";
 
+import {
+  alerts,
+  badges,
+  buttons,
+  colors,
+  forms,
+  glass,
+  typography,
+} from "@/theme";
+
 import type { JarvisMessage } from "../hooks/useJarvis";
 
 type JarvisPanelProps = {
@@ -71,17 +81,32 @@ function JarvisCoreIcon({ size = "md" }: { size?: "sm" | "md" }) {
 
   return (
     <div
-      className={`relative flex ${outerSize} shrink-0 items-center justify-center rounded-2xl border border-cyan-300/20 bg-cyan-400/10 text-cyan-200 shadow-lg shadow-cyan-500/20`}
+      className={[
+        "relative flex shrink-0 items-center justify-center rounded-2xl",
+        outerSize,
+        colors.infoBadge,
+        "shadow-lg",
+      ].join(" ")}
       aria-hidden="true"
     >
       <div
-        className={`absolute ${ringSize} rounded-full border border-cyan-200/40 bg-cyan-300/10`}
+        className={[
+          "absolute rounded-full",
+          ringSize,
+          "border border-cyan-200/40 bg-cyan-300/10",
+        ].join(" ")}
       />
       <div className="absolute h-full w-full rounded-2xl bg-cyan-300/5 blur-md" />
+
       <div
-        className={`${innerSize} rounded-full bg-cyan-200 shadow-[0_0_18px_rgba(125,211,252,0.85)]`}
+        className={[
+          innerSize,
+          "rounded-full",
+          colors.pulse,
+        ].join(" ")}
       />
-      <Zap className={`absolute ${boltSize} text-slate-950/80`} />
+
+      <Zap className={["absolute", boltSize, colors.textInverse].join(" ")} />
     </div>
   );
 }
@@ -143,30 +168,45 @@ export function JarvisPanel({
   }
 
   return (
-    <section className="relative mx-auto w-full max-w-5xl min-w-0 overflow-hidden rounded-[1.75rem] border border-white/10 bg-slate-950/90 shadow-2xl shadow-black/30 backdrop-blur-xl">
+    <section
+      className={[
+        "relative mx-auto w-full max-w-5xl min-w-0 overflow-hidden rounded-[1.75rem]",
+        glass.panel,
+      ].join(" ")}
+    >
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-0 opacity-[0.035] [background-image:linear-gradient(rgba(255,255,255,0.8)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.8)_1px,transparent_1px)] [background-size:34px_34px]"
       />
 
-      <header className="relative border-b border-white/10 px-4 py-3 sm:px-5">
+      <header className={["relative px-4 py-3 sm:px-5", colors.border, "border-b"].join(" ")}>
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             <JarvisCoreIcon />
 
             <div className="min-w-0">
-              <h2 className="flex min-w-0 flex-wrap items-center gap-2 text-lg font-bold leading-7 text-white">
+              <h2 className={["flex min-w-0 flex-wrap items-center gap-2", typography.cardTitle].join(" ")}>
                 <span className="min-w-0 break-words">Jarvis</span>
 
-                <Sparkles className="h-4 w-4 shrink-0 text-sky-100" />
+                <Sparkles className="h-4 w-4 shrink-0" />
 
-                <span className="inline-flex min-w-0 max-w-full items-center gap-1 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2 py-0.5 text-[10px] font-semibold uppercase leading-4 tracking-wider text-cyan-100">
-                  <span className="h-2 w-2 shrink-0 rounded-full bg-cyan-300 shadow-[0_0_10px_rgba(125,211,252,0.9)]" />
+                <span
+                  className={[
+                    "inline-flex min-w-0 max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase leading-4 tracking-wider",
+                    badges.active,
+                  ].join(" ")}
+                >
+                  <span
+                    className={[
+                      "h-2 w-2 shrink-0 rounded-full",
+                      colors.pulse,
+                    ].join(" ")}
+                  />
                   Core Online
                 </span>
               </h2>
 
-              <p className="mt-1 max-w-2xl break-words text-xs leading-5 text-slate-400">
+              <p className={["mt-1 max-w-2xl break-words", typography.small].join(" ")}>
                 Database-aware Stark-style operations intelligence for imports,
                 queues, compliance, recalls, hospice oversight, audit activity,
                 and dashboard health.
@@ -178,7 +218,7 @@ export function JarvisPanel({
             <button
               type="button"
               onClick={clearJarvisMessages}
-              className="inline-flex shrink-0 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:bg-white/[0.12] hover:text-white focus:outline-none focus:ring-2 focus:ring-sky-200/30"
+              className={buttons.compactSecondary}
             >
               <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
               Clear
@@ -187,8 +227,8 @@ export function JarvisPanel({
         </div>
       </header>
 
-      <div className="relative flex h-[520px] min-w-0 flex-col bg-black/20">
-        <div className="border-b border-white/10 bg-slate-950/50 px-4 py-3 sm:px-5">
+      <div className={["relative flex h-[520px] min-w-0 flex-col", colors.surfaceInset].join(" ")}>
+        <div className={["px-4 py-3 sm:px-5", colors.border, colors.overlay, "border-b"].join(" ")}>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {QUICK_ACTIONS.map((action) => {
               const Icon = action.icon;
@@ -199,7 +239,7 @@ export function JarvisPanel({
                   type="button"
                   disabled={jarvisLoading}
                   onClick={() => sendQuickPrompt(action.prompt)}
-                  className="inline-flex min-w-0 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs font-semibold text-slate-300 transition-colors hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-sky-200/30 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={["min-w-0", buttons.compactSecondary].join(" ")}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
                   <span className="truncate">{action.label}</span>
@@ -220,18 +260,20 @@ export function JarvisPanel({
               return (
                 <div
                   key={message.id}
-                  className={`flex min-w-0 gap-2 ${
-                    isUser ? "justify-end" : "justify-start"
-                  }`}
+                  className={[
+                    "flex min-w-0 gap-2",
+                    isUser ? "justify-end" : "justify-start",
+                  ].join(" ")}
                 >
                   {!isUser ? <JarvisCoreIcon size="sm" /> : null}
 
                   <div
-                    className={`min-w-0 max-w-[86%] break-words rounded-[1.25rem] px-4 py-2.5 text-sm leading-6 shadow-sm sm:max-w-[72%] ${
+                    className={[
+                      "min-w-0 max-w-[86%] break-words rounded-[1.25rem] px-4 py-2.5 text-sm leading-6 shadow-sm sm:max-w-[72%]",
                       isUser
-                        ? "rounded-br-md bg-sky-200 text-slate-950"
-                        : "rounded-bl-md border border-white/10 bg-slate-900/95 text-slate-100"
-                    }`}
+                        ? ["rounded-br-md", colors.infoBadge].join(" ")
+                        : ["rounded-bl-md", glass.insetPadded, typography.bodyStrong].join(" "),
+                    ].join(" ")}
                   >
                     <p className="min-w-0 whitespace-pre-wrap break-words">
                       {message.content}
@@ -239,7 +281,7 @@ export function JarvisPanel({
                   </div>
 
                   {isUser ? (
-                    <div className="mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/[0.08] text-slate-300">
+                    <div className={["mt-1 flex h-7 w-7 shrink-0 items-center justify-center rounded-full", badges.neutral].join(" ")}>
                       <UserRound className="h-3.5 w-3.5" aria-hidden="true" />
                     </div>
                   ) : null}
@@ -247,17 +289,17 @@ export function JarvisPanel({
               );
             })
           ) : (
-            <div className="flex h-full min-h-[260px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-slate-950/50 p-6 text-center">
+            <div className={["flex h-full min-h-[260px] items-center justify-center rounded-3xl p-6 text-center", glass.emptyState].join(" ")}>
               <div className="min-w-0">
                 <div className="mx-auto flex justify-center">
                   <JarvisCoreIcon />
                 </div>
 
-                <p className="mt-3 text-sm font-semibold text-slate-300">
+                <p className={["mt-3", typography.bodyStrong].join(" ")}>
                   Jarvis core standing by.
                 </p>
 
-                <p className="mt-1 max-w-md text-xs leading-5 text-slate-500">
+                <p className={["mt-1 max-w-md", typography.smallMuted].join(" ")}>
                   Ask something useful before the spreadsheet gods start
                   collecting souls again.
                 </p>
@@ -269,9 +311,9 @@ export function JarvisPanel({
             <div className="flex min-w-0 justify-start gap-2">
               <JarvisCoreIcon size="sm" />
 
-              <div className="min-w-0 rounded-[1.25rem] rounded-bl-md border border-white/10 bg-slate-900/95 px-4 py-3 text-sm leading-6 text-slate-300">
+              <div className={["min-w-0 rounded-[1.25rem] rounded-bl-md px-4 py-3", glass.inset, typography.bodyMuted].join(" ")}>
                 <div className="flex min-w-0 items-center gap-2">
-                  <Loader2 className="h-4 w-4 shrink-0 animate-spin text-sky-200" />
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
                   <span className="min-w-0 break-words">
                     Jarvis is checking the database...
                   </span>
@@ -282,12 +324,12 @@ export function JarvisPanel({
         </div>
 
         {jarvisErrorMessage ? (
-          <div className="mx-4 mb-3 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm leading-6 text-red-200 sm:mx-5">
+          <div className={["mx-4 mb-3 px-4 py-3 sm:mx-5", alerts.danger].join(" ")}>
             {jarvisErrorMessage}
           </div>
         ) : null}
 
-        <div className="border-t border-white/10 bg-slate-950/80 px-4 py-3 backdrop-blur-xl sm:px-5">
+        <div className={["px-4 py-3 backdrop-blur-xl sm:px-5", colors.border, colors.overlay, "border-t"].join(" ")}>
           <div className="mb-2 flex min-w-0 flex-wrap gap-2">
             {SUGGESTED_PROMPTS.map((prompt) => (
               <button
@@ -295,7 +337,7 @@ export function JarvisPanel({
                 type="button"
                 disabled={jarvisLoading}
                 onClick={() => setJarvisPrompt(prompt)}
-                className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1 text-xs leading-5 text-slate-400 transition-colors hover:border-cyan-300/30 hover:bg-cyan-300/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-sky-200/30 disabled:cursor-not-allowed disabled:opacity-50"
+                className={["rounded-full px-3 py-1 text-xs leading-5", badges.neutral, colors.surfaceHover].join(" ")}
               >
                 {prompt}
               </button>
@@ -314,7 +356,7 @@ export function JarvisPanel({
               onKeyDown={handleKeyDown}
               rows={1}
               placeholder="Message Jarvis..."
-              className="max-h-32 min-h-[46px] flex-1 resize-none rounded-3xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm leading-6 text-white outline-none transition-colors placeholder:text-slate-500 focus:border-sky-300/40 focus:ring-2 focus:ring-sky-100/20"
+              className={["max-h-32 min-h-[46px] flex-1 resize-none rounded-3xl", forms.input].join(" ")}
             />
 
             <button
@@ -322,7 +364,7 @@ export function JarvisPanel({
               onClick={() => handleAskJarvis()}
               disabled={submitDisabled}
               aria-label={jarvisLoading ? "Sending message" : "Send message"}
-              className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-sky-200 text-slate-950 transition-colors hover:bg-sky-100 focus:outline-none focus:ring-2 focus:ring-sky-200/40 disabled:cursor-not-allowed disabled:opacity-50"
+              className={["flex h-11 w-11 shrink-0 items-center justify-center rounded-full", buttons.info].join(" ")}
             >
               {jarvisLoading ? (
                 <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -333,15 +375,11 @@ export function JarvisPanel({
           </div>
 
           <div className="mt-1.5 flex min-w-0 flex-col gap-1 text-[11px] sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-            <p
-              className={
-                remainingCharacters < 0 ? "text-red-300" : "text-slate-600"
-              }
-            >
+            <p className={remainingCharacters < 0 ? colors.dangerBadge : colors.textFaint}>
               {remainingCharacters} characters left
             </p>
 
-            <p className="text-slate-600">
+            <p className={colors.textFaint}>
               Enter sends. Shift+Enter starts a new line.
             </p>
           </div>
@@ -350,5 +388,4 @@ export function JarvisPanel({
     </section>
   );
 }
-
 

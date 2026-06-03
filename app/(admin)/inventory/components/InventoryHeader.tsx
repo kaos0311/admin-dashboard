@@ -1,5 +1,7 @@
 ﻿"use client";
 
+
+import { typography } from "@/theme";
 import { Boxes, Filter, RefreshCcw } from "lucide-react";
 
 type InventoryHeaderProps = {
@@ -24,7 +26,7 @@ export function InventoryHeader({
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Inventory</h1>
 
-            <p className="text-sm text-slate-300">
+            <p className={typography.body}>
               Stock, serials, lots, manufacturer data, warranty, lifecycle,
               service alerts, and batch controls.
             </p>
@@ -60,5 +62,7 @@ export function InventoryHeader({
     </section>
   );
 }
+
+
 
 

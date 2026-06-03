@@ -11,6 +11,8 @@ import {
   Rows3,
 } from "lucide-react";
 
+import { badges, typography } from "@/theme";
+
 type Props = {
   totalRows: number;
   totalAmount: number;
@@ -52,36 +54,26 @@ function formatCount(value: unknown): string {
   return countFormatter.format(safeNumber(value));
 }
 
-function getToneClasses(tone: KpiCard["tone"], highlight: boolean): string {
+function getToneClasses(
+  tone: KpiCard["tone"],
+  highlight: boolean
+): string {
   if (!highlight) {
-    return "border-white/10 bg-neutral-950 text-white";
+    return badges.kpiCard.neutral;
   }
 
-  const classes: Record<KpiCard["tone"], string> = {
-    neutral: "border-white/10 bg-neutral-950 text-white",
-    cyan: "border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
-    red: "border-red-500/30 bg-red-500/10 text-red-300",
-    emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-    yellow: "border-yellow-500/30 bg-yellow-500/10 text-yellow-300",
-  };
-
-  return classes[tone];
+  return badges.kpiCard[tone];
 }
 
-function getIconClasses(tone: KpiCard["tone"], highlight: boolean): string {
+function getIconClasses(
+  tone: KpiCard["tone"],
+  highlight: boolean
+): string {
   if (!highlight) {
-    return "border-white/10 bg-white/5 text-neutral-400";
+    return badges.kpiIcon.neutral;
   }
 
-  const classes: Record<KpiCard["tone"], string> = {
-    neutral: "border-white/10 bg-white/5 text-neutral-400",
-    cyan: "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
-    red: "border-red-500/20 bg-red-500/10 text-red-300",
-    emerald: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-    yellow: "border-yellow-500/20 bg-yellow-500/10 text-yellow-300",
-  };
-
-  return classes[tone];
+  return badges.kpiIcon[tone];
 }
 
 export default function ReportsKpiCards({
@@ -182,7 +174,7 @@ export default function ReportsKpiCards({
           >
             <div className="flex items-stretch justify-between gap-3">
               <div className="min-w-0">
-                <div className="text-sm text-neutral-400">
+                <div className={typography.bodyMuted}>
                   {card.label}
                 </div>
 
@@ -201,7 +193,7 @@ export default function ReportsKpiCards({
               </div>
             </div>
 
-            <p className="mt-4 text-xs leading-5 text-neutral-500">
+            <p className={typography.smallMuted}>
               {card.description}
             </p>
           </article>
@@ -210,6 +202,10 @@ export default function ReportsKpiCards({
     </section>
   );
 }
+
+
+
+
 
 
 

@@ -1,157 +1,63 @@
+﻿import { buttons, colors, glass, typography } from "@/theme";
+
 export function pageWrapClass(): string {
-  return "space-y-6 p-4 text-white sm:p-5 lg:p-6";
+  return ["space-y-6 p-4 sm:p-5 lg:p-6", colors.textPrimary].join(" ");
 }
 
 export function pageTitleClass(): string {
-  return "text-2xl font-bold tracking-tight text-white";
+  return typography.pageTitle;
 }
 
 export function pageSubtitleClass(): string {
-  return "mt-1 text-sm leading-6 text-zinc-400";
+  return ["mt-1", typography.bodyMuted].join(" ");
 }
 
 export function cardClass(): string {
-  return [
-    "rounded-3xl",
-    "border border-white/10",
-    "bg-zinc-900/90",
-    "p-5",
-    "shadow-sm",
-    "backdrop-blur-sm",
-  ].join(" ");
+  return ["p-5", glass.card].join(" ");
 }
 
 export function innerCardClass(): string {
-  return [
-    "rounded-2xl",
-    "border border-white/10",
-    "bg-zinc-950/80",
-    "p-4",
-  ].join(" ");
+  return ["p-4", glass.inset].join(" ");
 }
 
 export function mutedPanelClass(): string {
-  return [
-    "rounded-2xl",
-    "border border-dashed border-white/10",
-    "bg-zinc-950/70",
-    "p-6",
-    "text-sm",
-    "leading-6",
-    "text-zinc-400",
-  ].join(" ");
+  return ["border-dashed p-6", typography.bodyMuted, glass.inset].join(" ");
 }
 
 export function errorPanelClass(): string {
-  return [
-    "rounded-2xl",
-    "border border-red-500/30",
-    "bg-red-500/10",
-    "p-4",
-    "text-sm",
-    "leading-6",
-    "text-red-300",
-  ].join(" ");
+  return glass.alertDanger;
 }
 
 export function successPanelClass(): string {
-  return [
-    "rounded-2xl",
-    "border border-emerald-500/30",
-    "bg-emerald-500/10",
-    "p-4",
-    "text-sm",
-    "leading-6",
-    "text-emerald-300",
-  ].join(" ");
+  return glass.alertSuccess;
 }
 
 export function warningPanelClass(): string {
-  return [
-    "rounded-2xl",
-    "border border-amber-500/30",
-    "bg-amber-500/10",
-    "p-4",
-    "text-sm",
-    "leading-6",
-    "text-amber-300",
-  ].join(" ");
+  return glass.alertWarning;
 }
 
 export function statPillClass(): string {
-  return [
-    "inline-flex items-center",
-    "rounded-full",
-    "border border-white/10",
-    "bg-zinc-950",
-    "px-3 py-1",
-    "text-xs font-medium",
-    "text-zinc-300",
-  ].join(" ");
+  return glass.chip;
 }
 
 export function labelClass(): string {
-  return "mb-2 block text-sm font-medium text-zinc-300";
+  return ["mb-2 block", typography.formLabel].join(" ");
 }
 
 export function inputClass(): string {
-  return [
-    "w-full",
-    "rounded-2xl",
-    "border border-white/10",
-    "bg-zinc-950",
-    "px-4 py-3",
-    "text-sm text-white",
-    "outline-none",
-    "transition",
-    "placeholder:text-zinc-500",
-    "focus:border-cyan-500/70",
-    "disabled:cursor-not-allowed",
-    "disabled:opacity-50",
-  ].join(" ");
+  return ["text-sm", glass.inputPadded].join(" ");
 }
 
 export function selectClass(): string {
-  return [
-    "w-full",
-    "rounded-2xl",
-    "border border-white/10",
-    "bg-zinc-950",
-    "px-4 py-3",
-    "text-sm text-white",
-    "outline-none",
-    "transition",
-    "focus:border-cyan-500/70",
-    "disabled:cursor-not-allowed",
-    "disabled:opacity-50",
-  ].join(" ");
+  return ["text-sm", glass.select].join(" ");
 }
 
 export function textareaClass(): string {
-  return [
-    "min-h-[120px]",
-    "w-full",
-    "rounded-2xl",
-    "border border-white/10",
-    "bg-zinc-950",
-    "px-4 py-3",
-    "text-sm text-white",
-    "outline-none",
-    "transition",
-    "placeholder:text-zinc-500",
-    "focus:border-cyan-500/70",
-    "disabled:cursor-not-allowed",
-    "disabled:opacity-50",
-  ].join(" ");
+  return ["text-sm", glass.textarea].join(" ");
 }
 
 export function tableWrapperClass(): string {
-  return [
-    "overflow-hidden",
-    "rounded-3xl",
-    "border border-white/10",
-    "bg-zinc-950/80",
-  ].join(" ");
+  return ["overflow-hidden", glass.card].join(" ");
 }
 
 export function tableScrollClass(): string {
@@ -165,111 +71,58 @@ export function tableHeadClass(): string {
     "font-semibold",
     "uppercase",
     "tracking-[0.14em]",
-    "text-zinc-500",
+    colors.textFaint,
   ].join(" ");
 }
 
 export function tableCellClass(): string {
-  return "px-4 py-4 text-sm text-zinc-300";
+  return ["px-4 py-4", typography.body].join(" ");
 }
 
 export function tableRowClass(): string {
-  return [
-    "border-b border-white/5",
-    "transition",
-    "hover:bg-white/[0.035]",
-  ].join(" ");
+  return glass.tableRow;
 }
 
 export function rowSurfaceClass(): string {
-  return [
-    "rounded-2xl",
-    "border border-white/5",
-    "bg-zinc-950",
-  ].join(" ");
+  return glass.inset;
 }
 
 export function primaryButtonClass(): string {
-  return [
-    "inline-flex items-center justify-center gap-2",
-    "rounded-2xl",
-    "bg-cyan-600",
-    "px-4 py-2.5",
-    "text-sm font-medium",
-    "text-white",
-    "transition",
-    "hover:bg-cyan-500",
-    "disabled:cursor-not-allowed",
-    "disabled:opacity-50",
-  ].join(" ");
+  return buttons.primary;
 }
 
 export function secondaryButtonClass(): string {
-  return [
-    "inline-flex items-center justify-center gap-2",
-    "rounded-2xl",
-    "border border-white/10",
-    "bg-zinc-950",
-    "px-4 py-2.5",
-    "text-sm font-medium",
-    "text-white",
-    "transition",
-    "hover:bg-zinc-800",
-    "disabled:cursor-not-allowed",
-    "disabled:opacity-50",
-  ].join(" ");
+  return buttons.secondary;
 }
 
 export function dangerButtonClass(): string {
-  return [
-    "inline-flex items-center justify-center gap-2",
-    "rounded-2xl",
-    "bg-red-600",
-    "px-4 py-2.5",
-    "text-sm font-medium",
-    "text-white",
-    "transition",
-    "hover:bg-red-500",
-    "disabled:cursor-not-allowed",
-    "disabled:opacity-50",
-  ].join(" ");
+  return buttons.danger;
 }
 
 export function successButtonClass(): string {
-  return [
-    "inline-flex items-center justify-center gap-2",
-    "rounded-2xl",
-    "bg-emerald-600",
-    "px-4 py-2.5",
-    "text-sm font-medium",
-    "text-white",
-    "transition",
-    "hover:bg-emerald-500",
-    "disabled:cursor-not-allowed",
-    "disabled:opacity-50",
-  ].join(" ");
+  return buttons.success;
 }
 
 export function statusBadgeClass(
   tone: "blue" | "amber" | "green" | "red" | "zinc"
 ): string {
   const base =
-    "inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium";
+    "inline-flex items-center rounded-full border px-2.5 py-1 text-xs font-medium";
 
   switch (tone) {
     case "blue":
-      return `${base} bg-blue-500/15 text-blue-300`;
+      return [base, colors.infoBadge].join(" ");
 
     case "amber":
-      return `${base} bg-amber-500/15 text-amber-300`;
+      return [base, colors.warningBadge].join(" ");
 
     case "green":
-      return `${base} bg-emerald-500/15 text-emerald-300`;
+      return [base, colors.successBadge].join(" ");
 
     case "red":
-      return `${base} bg-red-500/15 text-red-300`;
+      return [base, colors.dangerBadge].join(" ");
 
     default:
-      return `${base} bg-zinc-800 text-zinc-300`;
+      return [base, colors.neutralBadge].join(" ");
   }
 }

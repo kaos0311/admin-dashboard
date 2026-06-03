@@ -1,5 +1,7 @@
 ﻿"use client";
 
+
+import { typography } from "@/theme";
 import { ClipboardList } from "lucide-react";
 
 import type { WipRecord } from "@/lib/reports/wip";
@@ -43,7 +45,7 @@ export function WipTable({ records }: WipTableProps) {
               <tr key={record.id} className="bg-white/[0.025]">
                 <td className="px-4 py-4">
                   <p className="font-medium text-white">{record.patientName}</p>
-                  <p className="text-xs text-slate-500">
+                  <p className={typography.smallMuted}>
                     {record.orderNumber ?? "No order"} Â· {record.issue}
                   </p>
                 </td>
@@ -72,5 +74,7 @@ export function WipTable({ records }: WipTableProps) {
     </section>
   );
 }
+
+
 
 

@@ -10,7 +10,7 @@ import {
   XCircle,
 } from "lucide-react";
 
-import { glass } from "@/theme";
+import { buttons, spacing, tables, typography } from "@/theme";
 import type { QueueFilter, RecentImportJob } from "../upload-types";
 
 type QueueCounts = Record<string, number>;
@@ -52,7 +52,13 @@ function getJobStatus(job: RecentImportJob): string {
 }
 
 function getJobRows(job: RecentImportJob): number {
-  return job.rowsProcessed ?? job.processedRows ?? job.processedCount ?? job.totalRows ?? 0;
+  return (
+    job.rowsProcessed ??
+    job.processedRows ??
+    job.processedCount ??
+    job.totalRows ??
+    0
+  );
 }
 
 function formatDate(value: unknown): string {
@@ -106,33 +112,33 @@ export function ImportJobsTable({
   const filterOptions = Object.entries(queueCounts);
 
   return (
-    <section className={glass.card} aria-labelledby="import-jobs-table-title">
-      <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
+    <section className={[tables.wrapper, spacing.cardLg].join(" ")} aria-labelledby="import-jobs-table-title">
+      <div className={tables.toolbar}>
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+          <p className={typography.eyebrow}>
             Processing Queue
           </p>
 
           <h2
             id="import-jobs-table-title"
-            className="mt-2 text-xl font-semibold text-white"
+            className={["mt-2", typography.sectionTitle].join(" ")}
           >
             Import Jobs
           </h2>
 
-          <p className="mt-2 text-sm leading-6 text-slate-400">
+          <p className={["mt-2", typography.bodyMuted].join(" ")}>
             Review, refresh, and clean up report processing jobs.
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-3">
+        <div className={tables.toolbarActions}>
           <button
             type="button"
             title="Refresh selected import jobs"
             aria-label="Refresh selected import jobs"
             disabled={selectedJobsCount === 0 || bulkBusy}
             onClick={handleRefreshSelected}
-            className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+            className={buttons.secondary}
           >
             {bulkBusy ? (
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
@@ -148,7 +154,7 @@ export function ImportJobsTable({
             aria-label="Delete selected import jobs"
             disabled={selectedJobsCount === 0 || bulkBusy}
             onClick={handleDeleteSelected}
-            className="inline-flex items-center gap-2 rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-2 text-sm font-semibold text-red-200 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+            className={buttons.danger}
           >
             <Trash2 className="h-4 w-4" aria-hidden="true" />
             Delete Selected
@@ -156,11 +162,11 @@ export function ImportJobsTable({
         </div>
       </div>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-[240px_minmax(0,1fr)]">
-        <div>
+      <div className={tables.filterGrid}>
+        <div className={tables.field}>
           <label
             htmlFor="upload-job-filter"
-            className="mb-2 block text-sm font-medium text-slate-300"
+            className={tables.label}
           >
             Job Status Filter
           </label>
@@ -172,7 +178,7 @@ export function ImportJobsTable({
             onChange={(event) =>
               setQueueFilter(event.target.value as QueueFilter)
             }
-            className="w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none transition focus:border-white/30"
+            className={tables.select}
           >
             {filterOptions.length > 0 ? (
               filterOptions.map(([status, count]) => (
@@ -186,17 +192,17 @@ export function ImportJobsTable({
           </select>
         </div>
 
-        <div>
+        <div className={tables.field}>
           <label
             htmlFor="upload-job-search"
-            className="mb-2 block text-sm font-medium text-slate-300"
+            className={tables.label}
           >
             Search Import Jobs
           </label>
 
-          <div className="relative">
+          <div className={tables.searchWrap}>
             <Search
-              className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+              className={tables.searchIcon}
               aria-hidden="true"
             />
 
@@ -208,80 +214,60 @@ export function ImportJobsTable({
               value={queueSearch}
               onChange={(event) => setQueueSearch(event.target.value)}
               placeholder="Search by file name, status, or report type"
-              className="w-full rounded-2xl border border-white/10 bg-black/30 py-3 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-white/30"
+              className={tables.searchInput}
             />
           </div>
         </div>
       </div>
 
-      <div className="mt-6 overflow-hidden rounded-3xl border border-white/10">
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[900px] text-left">
-            <caption className="sr-only">
+      <div className={tables.shell}>
+        <div className={tables.scroll}>
+          <table className={tables.table}>
+            <caption className={tables.caption}>
               Import jobs table with file name, report type, status, row count,
               timestamp, and available actions.
             </caption>
 
-            <thead className="bg-white/[0.04] text-xs uppercase tracking-[0.18em] text-slate-500">
-              <tr>
+            <thead className={tables.head}>
+              <tr className={tables.headRow}>
                 <th scope="col" className="w-14 px-4 py-4">
-                  <button
-                    type="button"
-                    title={
-                      allVisibleSelected
-                        ? "Deselect all visible import jobs"
-                        : "Select all visible import jobs"
-                    }
-                    aria-label={
-                      allVisibleSelected
-                        ? "Deselect all visible import jobs"
-                        : "Select all visible import jobs"
-                    }
+                  <SelectVisibleButton
+                    selected={allVisibleSelected}
                     onClick={toggleAllVisibleJobs}
-                    className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-slate-300 transition hover:bg-white/[0.08]"
-                  >
-                    {allVisibleSelected ? (
-                      <CheckSquare className="h-4 w-4" aria-hidden="true" />
-                    ) : (
-                      <span
-                        className="h-4 w-4 rounded border border-slate-500"
-                        aria-hidden="true"
-                      />
-                    )}
-                  </button>
+                  />
                 </th>
 
-                <th scope="col" className="px-4 py-4">
+                <th scope="col" className={tables.headerCell}>
                   File
                 </th>
 
-                <th scope="col" className="px-4 py-4">
+                <th scope="col" className={tables.headerCell}>
                   Type
                 </th>
 
-                <th scope="col" className="px-4 py-4">
+                <th scope="col" className={tables.headerCell}>
                   Status
                 </th>
 
-                <th scope="col" className="px-4 py-4">
+                <th scope="col" className={tables.headerCell}>
                   Rows
                 </th>
 
-                <th scope="col" className="px-4 py-4">
+                <th scope="col" className={tables.headerCell}>
                   Updated
                 </th>
 
-                <th scope="col" className="px-4 py-4 text-right">
+                <th scope="col" className={tables.headerCellRight}>
                   Actions
                 </th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-white/10">
+            <tbody className={tables.body}>
               {jobsLoading ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center">
-                    <div className="inline-flex items-center gap-3 text-sm text-slate-400">
+                    <div className={tables.loadingState}>
                       <Loader2
                         className="h-4 w-4 animate-spin"
                         aria-hidden="true"
@@ -293,7 +279,7 @@ export function ImportJobsTable({
               ) : visibleJobs.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-4 py-10 text-center">
-                    <div className="inline-flex items-center gap-3 text-sm text-slate-400">
+                    <div className={tables.emptyInline}>
                       <XCircle className="h-4 w-4" aria-hidden="true" />
                       No import jobs found.
                     </div>
@@ -309,65 +295,45 @@ export function ImportJobsTable({
                   return (
                     <tr
                       key={jobId}
-                      className="bg-black/10 transition hover:bg-white/[0.035]"
+                      className={selected ? tables.selectedRow : tables.row}
                     >
-                      <td className="px-4 py-4">
-                        <button
-                          type="button"
-                          title={
-                            selected
-                              ? `Deselect ${fileName}`
-                              : `Select ${fileName}`
-                          }
-                          aria-label={
-                            selected
-                              ? `Deselect ${fileName}`
-                              : `Select ${fileName}`
-                          }
+                      <td className={tables.headerCell}>
+                        <JobSelectButton
+                          selected={selected}
+                          fileName={fileName}
                           onClick={() => toggleSelectedJob(jobId)}
-                          className="inline-flex h-8 w-8 items-center justify-center rounded-xl border border-white/10 bg-black/20 text-slate-300 transition hover:bg-white/[0.08]"
-                        >
-                          {selected ? (
-                            <CheckSquare
-                              className="h-4 w-4"
-                              aria-hidden="true"
-                            />
-                          ) : (
-                            <span
-                              className="h-4 w-4 rounded border border-slate-500"
-                              aria-hidden="true"
-                            />
-                          )}
-                        </button>
+                        />
                       </td>
 
                       <td className="max-w-[320px] px-4 py-4">
-                        <p className="truncate text-sm font-semibold text-white">
+                        <p className={["truncate", typography.bodyStrong].join(" ")}>
                           {fileName}
                         </p>
 
-                        <p className="mt-1 text-xs text-slate-500">{jobId}</p>
+                        <p className={["mt-1", typography.smallMuted].join(" ")}>
+                          {jobId}
+                        </p>
                       </td>
 
-                      <td className="px-4 py-4 text-sm text-slate-300">
+                      <td className={tables.cell}>
                         {getJobReportType(job)}
                       </td>
 
-                      <td className="px-4 py-4">
-                        <span className="inline-flex rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-300">
+                      <td className={tables.headerCell}>
+                        <span className={tables.badge}>
                           {getJobStatus(job)}
                         </span>
                       </td>
 
-                      <td className="px-4 py-4 text-sm text-slate-300">
+                      <td className={tables.cell}>
                         {getJobRows(job).toLocaleString()}
                       </td>
 
-                      <td className="px-4 py-4 text-sm text-slate-400">
+                      <td className={tables.cellMuted}>
                         {formatDate(job.updatedAt ?? job.createdAt)}
                       </td>
 
-                      <td className="px-4 py-4">
+                      <td className={tables.headerCell}>
                         <div className="flex justify-end gap-2">
                           <button
                             type="button"
@@ -375,7 +341,7 @@ export function ImportJobsTable({
                             aria-label={`Refresh ${fileName}`}
                             disabled={busy}
                             onClick={() => refreshJob(job)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] text-slate-300 transition hover:bg-white/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                            className={tables.actionIcon}
                           >
                             {busy ? (
                               <Loader2
@@ -396,7 +362,7 @@ export function ImportJobsTable({
                             aria-label={`Delete ${fileName}`}
                             disabled={busy}
                             onClick={() => deleteJob(job)}
-                            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-400/20 bg-red-500/10 text-red-200 transition hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                            className={tables.actionIconDanger}
                           >
                             <Trash2 className="h-4 w-4" aria-hidden="true" />
                           </button>
@@ -411,5 +377,69 @@ export function ImportJobsTable({
         </div>
       </div>
     </section>
+  );
+}
+
+function SelectVisibleButton({
+  selected,
+  onClick,
+}: {
+  selected: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={
+        selected
+          ? "Deselect all visible import jobs"
+          : "Select all visible import jobs"
+      }
+      aria-label={
+        selected
+          ? "Deselect all visible import jobs"
+          : "Select all visible import jobs"
+      }
+      onClick={onClick}
+      className={tables.checkboxButton}
+    >
+      {selected ? (
+        <CheckSquare className="h-4 w-4" aria-hidden="true" />
+      ) : (
+        <span
+          className={tables.checkboxBox}
+          aria-hidden="true"
+        />
+      )}
+    </button>
+  );
+}
+
+function JobSelectButton({
+  selected,
+  fileName,
+  onClick,
+}: {
+  selected: boolean;
+  fileName: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      title={selected ? `Deselect ${fileName}` : `Select ${fileName}`}
+      aria-label={selected ? `Deselect ${fileName}` : `Select ${fileName}`}
+      onClick={onClick}
+      className={tables.checkboxButton}
+    >
+      {selected ? (
+        <CheckSquare className="h-4 w-4" aria-hidden="true" />
+      ) : (
+        <span
+          className={tables.checkboxBox}
+          aria-hidden="true"
+        />
+      )}
+    </button>
   );
 }

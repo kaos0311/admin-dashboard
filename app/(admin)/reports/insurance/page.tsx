@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 
 import OpenUploadCenterButton from "../components/OpenUploadCenterButton";
-import { colors, glass, typography } from "@/theme";
+import { badges, buttons, colors, glass, typography } from "@/theme";
 
 const insuranceFocusAreas = [
   {
@@ -77,14 +77,11 @@ const futureWorkflowItems = [
   "Audit-logged insurance record views",
 ];
 
-const badgeClass =
-  "inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl";
+const badgeClass = badges.neutral;
 
-const iconTileClass =
-  "flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-slate-200 shadow-sm backdrop-blur-xl";
+const iconTileClass = glass.iconBox;
 
-const secondaryButtonClass =
-  "inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-2 text-sm font-semibold text-slate-300 shadow-sm backdrop-blur-xl transition hover:bg-white/10 hover:text-white focus:outline-none focus:ring-2 focus:ring-white/20";
+const secondaryButtonClass = buttons.secondary;
 
 export default function InsuranceReportPage() {
   return (
@@ -104,7 +101,7 @@ export default function InsuranceReportPage() {
                 Insurance Reports
               </h1>
 
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-300">
+              <p className={`mt-3 max-w-3xl ${typography.body}`}>
                 Review insurance uploads, payer coverage gaps, authorization
                 readiness, and protected insurance workflows without dumping
                 sensitive policy data onto summary cards.
@@ -132,7 +129,7 @@ export default function InsuranceReportPage() {
           {insuranceReadinessItems.map((item) => (
             <article key={item.label} className={glass.card}>
               <div className="flex min-w-0 items-start justify-between gap-4">
-                <p className="min-w-0 break-words text-xs font-semibold uppercase tracking-[0.18em] text-slate-500">
+                <p className={`${typography.caption} min-w-0 break-words`}>
                   {item.label}
                 </p>
 
@@ -141,7 +138,7 @@ export default function InsuranceReportPage() {
                 </span>
               </div>
 
-              <p className="mt-4 text-sm leading-6 text-slate-400">
+              <p className={`mt-4 ${typography.bodyMuted}`}>
                 {item.detail}
               </p>
             </article>
@@ -165,7 +162,7 @@ export default function InsuranceReportPage() {
                   {area.label}
                 </h2>
 
-                <p className="mt-2 text-sm leading-6 text-slate-400">
+                <p className={`mt-2 ${typography.bodyMuted}`}>
                   {area.description}
                 </p>
               </article>
@@ -185,7 +182,7 @@ export default function InsuranceReportPage() {
                   Insurance Data Layer
                 </h2>
 
-                <p className="mt-2 max-w-4xl text-sm leading-6 text-slate-400">
+                <p className={`mt-2 max-w-4xl ${typography.bodyMuted}`}>
                   Insurance filters, payer summaries, patient coverage records,
                   authorization queues, and issue tracking belong here once the
                   insurance processor is wired. Keep this page focused on
@@ -201,11 +198,11 @@ export default function InsuranceReportPage() {
                     </div>
 
                     <div className="min-w-0">
-                      <h3 className="text-sm font-semibold text-sky-100">
+                      <h3 className={typography.subTitle}>
                         PHI display rule
                       </h3>
 
-                      <p className="mt-1 text-sm leading-6 text-slate-400">
+                      <p className={`mt-1 ${typography.bodyMuted}`}>
                         Summary pages should show operational status, not raw
                         insurance identifiers. Detail views should be role-gated,
                         audit-logged, and limited to the minimum necessary data.
@@ -226,7 +223,7 @@ export default function InsuranceReportPage() {
 
                 <div className="min-w-0">
                   <h2 className={typography.sectionTitle}>Future Workflow</h2>
-                  <p className="text-sm text-slate-500">
+                  <p className={typography.bodyMuted}>
                     Reserved production build targets.
                   </p>
                 </div>
@@ -236,12 +233,12 @@ export default function InsuranceReportPage() {
                 {futureWorkflowItems.map((item) => (
                   <div
                     key={item}
-                    className="flex min-w-0 items-center justify-between gap-3 rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-300"
+                    className={`${glass.insetPadded} flex min-w-0 items-center justify-between gap-3 ${typography.body}`}
                   >
                     <span className="min-w-0 break-words">{item}</span>
 
                     <ArrowRight
-                      className="h-4 w-4 shrink-0 text-slate-500"
+                      className={`h-4 w-4 shrink-0 ${typography.smallMuted}`}
                       aria-hidden="true"
                     />
                   </div>
@@ -254,5 +251,10 @@ export default function InsuranceReportPage() {
     </main>
   );
 }
+
+
+
+
+
 
 

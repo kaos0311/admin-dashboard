@@ -1,4 +1,4 @@
-export const typography = {
+﻿export const typography = {
   hero:
     "text-4xl font-black tracking-tight text-white sm:text-5xl",
 
@@ -19,6 +19,15 @@ export const typography = {
 
   bodyStrong:
     "text-sm font-semibold leading-6 text-white",
+
+  warningStrong:
+    "text-sm font-semibold leading-6 text-amber-300",
+
+  warningText:
+    "text-xs leading-5 text-amber-300",
+
+  dangerText:
+    "text-xs leading-5 text-rose-300",
 
   bodyMuted:
     "text-sm leading-6 text-slate-400",
@@ -67,3 +76,4 @@ export const typography = {
 } as const;
 
 export type TypographyKey = keyof typeof typography;
+

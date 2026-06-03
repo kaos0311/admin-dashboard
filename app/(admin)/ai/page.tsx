@@ -15,7 +15,16 @@ import {
 
 import toast from "react-hot-toast";
 
-import { colors, glass, typography } from "@/theme";
+import {
+  alerts,
+  badges,
+  buttons,
+  colors,
+  forms,
+  glass,
+  spacing,
+  typography,
+} from "@/theme";
 import { functions } from "@/lib/firebase";
 
 const askAdminAi = httpsCallable<{ prompt: string }, { answer?: string }>(
@@ -49,7 +58,6 @@ export default function AdminAiPage() {
   const [loading, setLoading] = useState(false);
 
   const cleanPrompt = useMemo(() => prompt.trim(), [prompt]);
-
   const remainingCharacters = MAX_PROMPT_LENGTH - prompt.length;
 
   const canSubmit =
@@ -64,10 +72,7 @@ export default function AdminAiPage() {
     }
 
     if (prompt.length > MAX_PROMPT_LENGTH) {
-      toast.error(
-        `Question exceeds ${MAX_PROMPT_LENGTH} character limit.`
-      );
-
+      toast.error(`Question exceeds ${MAX_PROMPT_LENGTH} character limit.`);
       return;
     }
 
@@ -76,10 +81,7 @@ export default function AdminAiPage() {
     setErrorMessage("");
 
     try {
-      const result = await askAdminAi({
-        prompt: cleanPrompt,
-      });
-
+      const result = await askAdminAi({ prompt: cleanPrompt });
       const responseAnswer = result.data?.answer?.trim();
 
       if (!responseAnswer) {
@@ -93,7 +95,6 @@ export default function AdminAiPage() {
       console.error("AI REQUEST ERROR:", error);
 
       const message = getErrorMessage(error);
-
       setErrorMessage(message);
 
       toast.error(
@@ -106,9 +107,7 @@ export default function AdminAiPage() {
     }
   }
 
-  function handleKeyDown(
-    event: React.KeyboardEvent<HTMLTextAreaElement>
-  ) {
+  function handleKeyDown(event: React.KeyboardEvent<HTMLTextAreaElement>) {
     if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
       event.preventDefault();
 
@@ -123,12 +122,12 @@ export default function AdminAiPage() {
       <div className={colors.grid} />
 
       <div className={glass.shell}>
-        <section className={glass.panel}>
+        <section className={[glass.panel, spacing.section].join(" ")}>
           <div className={colors.grid} />
 
           <div className="relative flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl">
+              <div className={["inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]", badges.neutral].join(" ")}>
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Stark Command Intelligence
               </div>
@@ -138,36 +137,36 @@ export default function AdminAiPage() {
                   Admin AI Command Center
                 </h1>
 
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
-                  Operational AI for imports, audit activity,
-                  compliance risk, hospice oversight, report health,
-                  recalls, WIP bottlenecks, and system diagnostics.
-                  Because staring at spreadsheets until your soul leaves
-                  your body is apparently still considered â€œworkflow.â€
+                <p className={["mt-3 max-w-3xl", typography.body].join(" ")}>
+                  Operational AI for imports, audit activity, compliance risk,
+                  hospice oversight, report health, recalls, WIP bottlenecks,
+                  and system diagnostics. Because staring at spreadsheets until
+                  your soul leaves your body is apparently still considered
+                  workflow.
                 </p>
               </div>
             </div>
 
-            <div className={`${glass.card} max-w-sm`}>
+            <div className={`${glass.cardPadded} max-w-sm`}>
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl">
+                <div className={glass.iconBox}>
                   <Bot className="h-6 w-6" />
                 </div>
 
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-white">
+                    <p className={typography.bodyStrong}>
                       Jarvis Online
                     </p>
 
-                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl">
-                      <span className="h-2 w-2 animate-pulse rounded-full bg-sky-200 shadow-[0_0_10px_rgba(186,230,253,0.9)]" />
+                    <span className={["inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em]", badges.active].join(" ")}>
+                      <span className={["h-2 w-2 animate-pulse rounded-full", colors.pulse].join(" ")} />
                       Active
                     </span>
                   </div>
 
-                  <p className="mt-1 text-xs text-slate-500">
-                    Firebase Callable â€¢ OpenAI Connected
+                  <p className={["mt-1", typography.smallMuted].join(" ")}>
+                    Firebase Callable • OpenAI Connected
                   </p>
                 </div>
               </div>
@@ -189,17 +188,18 @@ export default function AdminAiPage() {
                     Ask Jarvis
                   </label>
 
-                  <p className="mt-2 text-sm text-slate-400">
-                    Use Ctrl/âŒ˜ + Enter to send.
+                  <p className={["mt-2", typography.bodyMuted].join(" ")}>
+                    Use Ctrl/⌘ + Enter to send.
                   </p>
                 </div>
 
                 <div
-                  className={`rounded-full px-3 py-1 text-xs font-medium ${
+                  className={[
+                    "rounded-full px-3 py-1 text-xs font-medium",
                     remainingCharacters < 0
-                      ? "bg-red-500/10 text-red-300"
-                      : "bg-white/[0.06] text-slate-400"
-                  }`}
+                      ? colors.dangerBadge
+                      : badges.neutral,
+                  ].join(" ")}
                 >
                   {remainingCharacters} left
                 </div>
@@ -211,7 +211,7 @@ export default function AdminAiPage() {
                     key={suggestion}
                     type="button"
                     onClick={() => setPrompt(suggestion)}
-                    className="rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs text-slate-300 transition hover:border-sky-200/30 hover:bg-sky-100/10 hover:text-white hover:shadow-[0_0_18px_rgba(186,230,253,0.18)]"
+                    className={["rounded-xl px-3 py-2 text-xs transition", badges.neutral, colors.surfaceHover].join(" ")}
                   >
                     {suggestion}
                   </button>
@@ -224,18 +224,18 @@ export default function AdminAiPage() {
                 onChange={(event) => setPrompt(event.target.value)}
                 onKeyDown={handleKeyDown}
                 placeholder="Example: Summarize today's high-risk audit activity and identify operational concerns."
-                className={`min-h-[260px] w-full resize-none rounded-3xl border border-white/10 bg-black/30 p-4 text-sm leading-6 text-slate-100 outline-none placeholder:text-slate-500 shadow-inner shadow-black/20 backdrop-blur-xl focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20`}
+                className={["min-h-[260px] resize-none", forms.textarea].join(" ")}
               />
 
               {errorMessage ? (
-                <div className="mt-4 flex gap-3 rounded-2xl border border-red-500/20 bg-red-500/10 p-4 text-sm text-red-300">
+                <div className={["mt-4 flex gap-3", alerts.danger].join(" ")}>
                   <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
                   <p>{errorMessage}</p>
                 </div>
               ) : null}
 
               <div className="mt-5 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <p className="max-w-2xl text-xs leading-6 text-slate-500">
+                <p className={["max-w-2xl", typography.smallMuted].join(" ")}>
                   Keep prompts operational. Avoid PHI unless your
                   infrastructure is explicitly configured for compliant
                   handling. Lawyers travel in packs and feed on weak
@@ -246,7 +246,7 @@ export default function AdminAiPage() {
                   type="button"
                   onClick={handleAsk}
                   disabled={!canSubmit}
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+                  className={buttons.primary}
                 >
                   {loading ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -265,7 +265,7 @@ export default function AdminAiPage() {
 
             <div className="relative p-5">
               <div className="mb-5 flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl">
+                <div className={glass.iconBox}>
                   <Sparkles className="h-4 w-4" />
                 </div>
 
@@ -274,36 +274,36 @@ export default function AdminAiPage() {
                     AI Response
                   </p>
 
-                  <p className="text-sm text-slate-400">
+                  <p className={typography.bodyMuted}>
                     Operational analysis from Jarvis
                   </p>
                 </div>
               </div>
 
               {loading ? (
-                <div className="flex min-h-[420px] items-center justify-center rounded-3xl border border-white/10 bg-black/20 p-6">
+                <div className={["flex min-h-[420px] items-center justify-center p-6", glass.insetPadded].join(" ")}>
                   <div className="text-center">
-                    <Loader2 className="mx-auto h-6 w-6 animate-spin text-sky-200" />
+                    <Loader2 className="mx-auto h-6 w-6 animate-spin" />
 
-                    <p className="mt-4 text-sm text-slate-400">
+                    <p className={["mt-4", typography.bodyMuted].join(" ")}>
                       Running operational analysis...
                     </p>
                   </div>
                 </div>
               ) : answer ? (
-                <div className="max-h-[760px] overflow-auto whitespace-pre-wrap rounded-3xl border border-white/10 bg-black/20 p-5 text-sm leading-7 text-slate-100 shadow-inner">
+                <div className={["max-h-[760px] overflow-auto whitespace-pre-wrap p-5", glass.insetPadded, typography.bodyStrong].join(" ")}>
                   {answer}
                 </div>
               ) : (
-                <div className="flex min-h-[420px] items-center justify-center rounded-3xl border border-dashed border-white/10 bg-black/20 p-6 text-center">
+                <div className={["flex min-h-[420px] items-center justify-center p-6 text-center", glass.emptyState].join(" ")}>
                   <div>
-                    <Bot className="mx-auto h-8 w-8 text-slate-600" />
+                    <Bot className={["mx-auto h-8 w-8", colors.textFaint].join(" ")} />
 
-                    <p className="mt-4 text-sm font-medium text-slate-300">
+                    <p className={["mt-4", typography.bodyStrong].join(" ")}>
                       Awaiting operational query
                     </p>
 
-                    <p className="mt-2 text-xs text-slate-500">
+                    <p className={["mt-2", typography.smallMuted].join(" ")}>
                       Responses from Jarvis will appear here.
                     </p>
                   </div>
@@ -316,12 +316,3 @@ export default function AdminAiPage() {
     </main>
   );
 }
-
-
-
-
-
-
-
-
-

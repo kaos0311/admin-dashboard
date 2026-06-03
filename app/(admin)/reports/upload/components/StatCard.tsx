@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import { glass } from "@/theme";
+import { glass, typography } from "@/theme";
 
 type StatCardProps = {
   icon: ReactNode;
@@ -28,7 +28,7 @@ export function StatCard({
         </div>
 
         <div>
-          <p className="text-sm text-slate-400">{label}</p>
+          <p className={typography.bodyMuted}>{label}</p>
 
           <p className="mt-1 text-2xl font-bold text-white">
             {value}
@@ -44,5 +44,6 @@ export function StatCard({
     </div>
   );
 }
+
 
 
