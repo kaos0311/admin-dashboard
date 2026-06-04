@@ -1,5 +1,4 @@
-﻿import { rowLooksCompletedWip } from "./patient-index/extractors/wip";
-import { mergeBilling, mergeCpap } from "./patient-index/mergers";
+﻿import { mergeBilling, mergeCpap } from "./patient-index/mergers";
 import { extractDelivery } from "./patient-index/extractors/delivery";
 import { extractBilling } from "./patient-index/extractors/billing";
 import { extractCmn } from "./patient-index/extractors/cmn";
@@ -14,6 +13,7 @@ import {
 } from "./patient-index/extractors/patient";
 import {
   extractWip,
+  rowLooksCompletedWip,
   rowLooksWip
 } from "./patient-index/extractors/wip";
 import {
@@ -878,6 +878,7 @@ export async function updatePatientIndexFromRows(args: {
     { merge: true }
   );
 }
+
 
 
 
