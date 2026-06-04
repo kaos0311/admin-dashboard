@@ -1,4 +1,5 @@
-﻿import { extractDelivery } from "./patient-index/extractors/delivery";
+﻿import { mergeBilling, mergeCpap } from "./patient-index/mergers";
+import { extractDelivery } from "./patient-index/extractors/delivery";
 import { extractBilling } from "./patient-index/extractors/billing";
 import { extractCmn } from "./patient-index/extractors/cmn";
 import { extractAuthorization } from "./patient-index/extractors/authorization";
@@ -26,7 +27,6 @@ import {
 import { buildBirthdayFields } from "./patient-index/birthdays";
 
 import type {
-  BillingSnapshot,
   CpapInfo,
   CurrentEquipmentItem,
   PatientIndexSource,
@@ -501,49 +501,6 @@ function extractCpapInfo(row: Record<string, unknown>): CpapInfo | null {
   };
 }
 
-function mergeCpap(existing: CpapInfo | null, next: CpapInfo | null): CpapInfo | null {
-  if (!existing && !next) return null;
-  if (!existing) return next;
-  if (!next) return existing;
-
-  return {
-    onRecord: existing.onRecord || next.onRecord,
-    machine: next.machine || existing.machine,
-    maskType: next.maskType || existing.maskType,
-    humidifier: next.humidifier || existing.humidifier,
-    tubing: next.tubing || existing.tubing,
-    filters: next.filters || existing.filters,
-    headgear: next.headgear || existing.headgear,
-    pressure: next.pressure || existing.pressure,
-    serialNumber: next.serialNumber || existing.serialNumber,
-    setupDate: next.setupDate || existing.setupDate,
-    lastServiceDate: next.lastServiceDate || existing.lastServiceDate,
-    complianceStatus: next.complianceStatus || existing.complianceStatus,
-  };
-}
-
-function mergeBilling(
-  existing: BillingSnapshot | null,
-  next: BillingSnapshot | null
-): BillingSnapshot | null {
-  if (!existing && !next) return null;
-  if (!existing) return next;
-  if (!next) return existing;
-
-  return {
-    lastInvoiceDate: next.lastInvoiceDate || existing.lastInvoiceDate,
-    lastPaymentDate: next.lastPaymentDate || existing.lastPaymentDate,
-    totalCharges90Days: existing.totalCharges90Days + next.totalCharges90Days,
-    totalAllowed90Days: existing.totalAllowed90Days + next.totalAllowed90Days,
-    totalPayments90Days: existing.totalPayments90Days + next.totalPayments90Days,
-    totalAdjustments90Days:
-      existing.totalAdjustments90Days + next.totalAdjustments90Days,
-    openBalanceEstimate: existing.openBalanceEstimate + next.openBalanceEstimate,
-    invoiceStatus: next.invoiceStatus || existing.invoiceStatus,
-  };
-}
-
-
 export async function updatePatientIndexFromRows(args: {
   reportId: string;
   reportType: string;
@@ -934,6 +891,8 @@ export async function updatePatientIndexFromRows(args: {
     { merge: true }
   );
 }
+
+
 
 
 
