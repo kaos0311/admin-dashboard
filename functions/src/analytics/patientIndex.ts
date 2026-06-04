@@ -1,4 +1,5 @@
-﻿import { mergeBilling, mergeCpap } from "./patient-index/mergers";
+﻿import { rowLooksHospice } from "./patient-index/extractors/hospice";
+import { mergeBilling, mergeCpap } from "./patient-index/mergers";
 import { extractDelivery } from "./patient-index/extractors/delivery";
 import { extractBilling } from "./patient-index/extractors/billing";
 import { extractCmn } from "./patient-index/extractors/cmn";
@@ -47,38 +48,6 @@ import {
   valueFromAliases
 } from "./patient-index/utils";
 const db = getFirestore();
-
-function rowLooksHospice(row: Record<string, unknown>, reportType: string): boolean {
-  const normalizedReportType = normalizeString(reportType).toLowerCase();
-
-  const payor = valueFromAliases(row, [
-    "payor",
-    "payer",
-    "payorname",
-    "payername",
-    "insurance",
-    "primaryinsurance",
-    "primary_insurance",
-    "PrimaryInsuranceName",
-    "Insurance",
-  ]).toLowerCase();
-
-  const hospiceFlag = valueFromAliases(row, [
-    "hospice",
-    "is_hospice",
-    "ishospice",
-    "patientishospice",
-  ]).toLowerCase();
-
-  return (
-    normalizedReportType.includes("hospice") ||
-    payor.includes("hospice") ||
-    payor.includes("pennyroyal") ||
-    hospiceFlag === "yes" ||
-    hospiceFlag === "true" ||
-    hospiceFlag === "1"
-  );
-}
 
 function extractItemId(row: Record<string, unknown>): string {
   return valueFromAliases(row, [
@@ -878,6 +847,7 @@ export async function updatePatientIndexFromRows(args: {
     { merge: true }
   );
 }
+
 
 
 
