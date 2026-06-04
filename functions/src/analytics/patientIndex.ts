@@ -1,4 +1,5 @@
-﻿import { extractBilling } from "./patient-index/extractors/billing";
+﻿import { extractDelivery } from "./patient-index/extractors/delivery";
+import { extractBilling } from "./patient-index/extractors/billing";
 import { extractCmn } from "./patient-index/extractors/cmn";
 import { extractAuthorization } from "./patient-index/extractors/authorization";
 import { createEmptyRollup } from "./patient-index/builders/patient-rollup";
@@ -28,7 +29,6 @@ import type {
   BillingSnapshot,
   CpapInfo,
   CurrentEquipmentItem,
-  DeliverySummary,
   PatientIndexSource,
   PatientRollup,
   RecentPurchaseItem
@@ -501,59 +501,6 @@ function extractCpapInfo(row: Record<string, unknown>): CpapInfo | null {
   };
 }
 
-function extractDelivery(row: Record<string, unknown>): DeliverySummary | null {
-  const salesOrderId = valueFromAliases(row, [
-    "Sales Order",
-    "SalesOrderId",
-    "Sales Order ID",
-    "SO",
-  ]);
-
-  const deliveryDate = normalizeIsoDate(
-    valueFromAliases(row, [
-      "ActualDeliveryDate",
-      "Delivery Date",
-      "Delivered Date",
-    ])
-  );
-
-  const scheduledDate = normalizeIsoDate(
-    valueFromAliases(row, ["SchedDeliveryDate", "Scheduled Delivery Date"])
-  );
-
-  const comments = valueFromAliases(row, [
-    "Comments or Special Instructions",
-    "Comments",
-    "Special Instructions",
-    "notes",
-  ]);
-
-  if (!salesOrderId && !deliveryDate && !scheduledDate && !comments) return null;
-
-  return {
-    salesOrderId,
-    salesOrderStatus: valueFromAliases(row, [
-      "SalesOrderStatus",
-      "Sales Order Status",
-    ]),
-    actualDeliveryDate: deliveryDate,
-    scheduledDeliveryDate: scheduledDate,
-    deliveryTechName: valueFromAliases(row, [
-      "DeliveryTechName",
-      "Delivery Tech",
-      "Technician",
-    ]),
-    csr: valueFromAliases(row, ["CSR"]),
-    branch: valueFromAliases(row, ["Branch"]),
-    comments,
-    hipaaSignatureOnFile: valueFromAliases(row, [
-      "HIPAA Signature on file",
-      "HIPAA",
-      "HipaaSignatureOnFile",
-    ]),
-  };
-}
-
 function mergeCpap(existing: CpapInfo | null, next: CpapInfo | null): CpapInfo | null {
   if (!existing && !next) return null;
   if (!existing) return next;
@@ -987,6 +934,8 @@ export async function updatePatientIndexFromRows(args: {
     { merge: true }
   );
 }
+
+
 
 
 
