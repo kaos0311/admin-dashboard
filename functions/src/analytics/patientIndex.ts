@@ -79,20 +79,6 @@ function rowLooksHospice(row: Record<string, unknown>, reportType: string): bool
   );
 }
 
-function rowLooksCompletedWip(row: Record<string, unknown>): boolean {
-  const wip = extractWip(row, "wip");
-  if (!wip) return false;
-
-  const status = wip.status.toLowerCase();
-
-  return (
-    wip.completed ||
-    status.includes("complete") ||
-    status.includes("completed") ||
-    status.includes("resolved")
-  );
-}
-
 function extractItemId(row: Record<string, unknown>): string {
   return valueFromAliases(row, [
     "Item ID",
@@ -891,6 +877,7 @@ export async function updatePatientIndexFromRows(args: {
     { merge: true }
   );
 }
+
 
 
 

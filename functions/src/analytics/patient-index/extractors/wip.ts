@@ -63,4 +63,17 @@ export function extractWip(row: Record<string, unknown>, reportType: string): Wi
   };
 }
 
+export function rowLooksCompletedWip(row: Record<string, unknown>): boolean {
+  const wip = extractWip(row, "wip");
+  if (!wip) return false;
+
+  const status = wip.status.toLowerCase();
+
+  return (
+    wip.completed ||
+    status.includes("complete") ||
+    status.includes("completed") ||
+    status.includes("resolved")
+  );
+}
 
