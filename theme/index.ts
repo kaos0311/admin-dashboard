@@ -9,3 +9,4 @@ export * from "./spacing";
 export * from "./tables";
 export * from "./typography";
 export * from "./tileSystem";
+export * from "./orderStatus";
