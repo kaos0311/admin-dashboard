@@ -1,4 +1,4 @@
-﻿import type { Timestamp } from "firebase/firestore";
+import type { Timestamp } from "firebase/firestore";
 
 import type {
   BirthdayParts,
@@ -350,24 +350,51 @@ export function normalizePatient(
   id: string,
   raw: Partial<PatientIndex>,
 ): PatientIndex {
-  const firstName = safeText(raw.firstName);
-  const lastName = safeText(raw.lastName);
-  const fallbackName = [firstName, lastName].filter(Boolean).join(" ");
+    const record = raw as Partial<PatientIndex> & Record<string, unknown>;
+
+  const patientName = safeText(record.patientName);
+  const sourceFullName = safeText(record.sourceFullName);
+  const existingFullName = safeText(record.fullName);
+
+  let firstName = safeText(record.firstName);
+  let lastName = safeText(record.lastName);
+
+  const bestName =
+    existingFullName ||
+    patientName ||
+    sourceFullName ||
+    [firstName, lastName].filter(Boolean).join(" ");
+
+  if ((!firstName || !lastName) && bestName) {
+    const parts = bestName.trim().split(/\s+/).filter(Boolean);
+
+    if (!firstName) {
+      firstName = parts[0] ?? "";
+    }
+
+    if (!lastName && parts.length > 1) {
+      lastName = parts.slice(1).join(" ");
+    }
+  }
+
+  const fallbackName =
+    bestName ||
+    [firstName, lastName].filter(Boolean).join(" ");
 
   return {
     id,
 
     firstName,
     lastName,
-    fullName: safeText(raw.fullName, fallbackName || "Unnamed Patient"),
+    fullName: safeText(record.fullName, fallbackName || "Unnamed Patient"),
 
     normalizedFullName: safeText(raw.normalizedFullName),
-    sourceFullName: safeText(raw.sourceFullName),
+    sourceFullName: safeText(record.sourceFullName || record.patientName),
 
-    dateOfBirth: safeText(raw.dateOfBirth || raw.dob),
+    dateOfBirth: safeText(record.dateOfBirth || record.dob),
     dateOfDeath: safeText(raw.dateOfDeath || raw.dod),
 
-    dob: safeText(raw.dob || raw.dateOfBirth),
+    dob: safeText(record.dob || record.dateOfBirth),
     dod: safeText(raw.dod || raw.dateOfDeath),
 
     hasBirthday: raw.hasBirthday === true,
@@ -699,3 +726,4 @@ export function patientNeedsAttention(patient: PatientWithDerived): boolean {
       .includes("expired")
   );
 }
+

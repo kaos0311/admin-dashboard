@@ -90,6 +90,48 @@ const PHONE_FIELDS = [
   "Home Phone",
   "Mobile Phone",
   "Cell Phone",
+  "Billing Address Phone",
+  "Billing Address Mobile Phone",
+  "Delivery Address Phone",
+];
+
+const EMAIL_FIELDS = [
+  "Email",
+  "Email Address",
+  "Patient Email",
+  "E-Mail",
+  "Billing Address Email Address",
+];
+
+const ADDRESS_FIELDS = [
+  "Address",
+  "Street Address",
+  "Patient Address",
+  "Address 1",
+  "Billing Address Address 1",
+  "Delivery Address Address 1",
+];
+
+const CITY_FIELDS = [
+  "City",
+  "Patient City",
+  "Billing Address City",
+  "Delivery Address City",
+];
+
+const STATE_FIELDS = [
+  "State",
+  "Patient State",
+  "Billing Address State",
+  "Delivery Address State",
+];
+
+const ZIP_FIELDS = [
+  "Zip",
+  "Zip Code",
+  "Postal Code",
+  "Billing Address Postal Code",
+  "Delivery Address Postal Code",
 ];
 
 const PRIMARY_PAYOR_FIELDS = [
@@ -319,6 +361,11 @@ function normalizePatientIdentity(
   const dobKey = cleanText(dob).replace(/[^\d]/g, "");
 
   const phone = normalizePhone(getCsvField(raw, PHONE_FIELDS)) || null;
+  const email = cleanText(getCsvField(raw, EMAIL_FIELDS)) || null;
+  const address = cleanText(getCsvField(raw, ADDRESS_FIELDS)) || null;
+  const city = cleanText(getCsvField(raw, CITY_FIELDS)) || null;
+  const state = cleanText(getCsvField(raw, STATE_FIELDS)) || null;
+  const zip = cleanText(getCsvField(raw, ZIP_FIELDS)) || null;
 
   const hospice = detectHospice(raw);
 
@@ -338,6 +385,11 @@ function normalizePatientIdentity(
     dob,
     dobKey,
     phone,
+    email,
+    address,
+    city,
+    state,
+    zip,
     hospiceDetected: hospice.hospiceDetected,
     hospiceSourceField: hospice.hospiceSourceField,
     hospiceSourceValue: hospice.hospiceSourceValue,
@@ -433,6 +485,11 @@ function buildIndex(params: {
       patient.lastName,
       patient.dob,
       patient.phone,
+      patient.email,
+      patient.address,
+      patient.city,
+      patient.state,
+      patient.zip,
     ]
       .filter(Boolean)
       .join(" "),
@@ -454,7 +511,11 @@ function buildIndex(params: {
     dobKey: patient.dobKey || null,
 
     phone: patient.phone,
-
+    email: patient.email,
+    address: patient.address,
+    city: patient.city,
+    state: patient.state,
+    zip: patient.zip,
     hospiceName: patient.hospiceDetected
       ? patient.hospiceSourceValue ?? null
       : null,
@@ -478,6 +539,11 @@ function buildIndex(params: {
       patient.lastName,
       patient.dob,
       patient.phone,
+      patient.email,
+      patient.address,
+      patient.city,
+      patient.state,
+      patient.zip,
       insurance.primaryPayor,
       insurance.secondaryPayor,
       insurance.insuranceType,

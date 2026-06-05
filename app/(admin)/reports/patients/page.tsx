@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -150,7 +150,7 @@ function PatientCard({ patient }: { patient: PatientWithDerived }) {
           <p className={cx(typography.smallMuted, "mt-1 break-words")}>
             DOB: {patient.dateOfBirth || "Unknown"}
             {patient.age !== null && patient.age !== undefined
-              ? ` • Age ${patient.age}`
+              ? ` - Age ${patient.age}`
               : ""}
           </p>
 

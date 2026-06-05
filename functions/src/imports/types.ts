@@ -85,6 +85,11 @@ export type FirestoreIndexFields = {
   dobKey?: string | null;
 
   phone?: string | null;
+  email?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zip?: string | null;
 
   hospiceName?: string | null;
   hospiceDetected?: boolean | null;
@@ -135,6 +140,11 @@ export type NormalizedPatientIdentity = {
   dobKey: string;
 
   phone: string | null;
+  email: string | null;
+  address: string | null;
+  city: string | null;
+  state: string | null;
+  zip: string | null;
 
   hospiceDetected: boolean;
   hospiceSourceField?: string | null;
@@ -205,3 +215,4 @@ export type NormalizedImportRow = {
   createdAtMs: number;
   updatedAtMs: number;
 };
+
