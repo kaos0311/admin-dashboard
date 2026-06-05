@@ -1,6 +1,6 @@
 ﻿import { UserRound } from "lucide-react";
 
-import { glass, typography } from "@/theme";
+import { glass, tiles, typography } from "@/theme";
 
 import type { HospicePatient } from "../hospice-types";
 import { titleCase } from "../hospice-utils";
@@ -42,7 +42,7 @@ export function HospicePatientCard({ patient }: HospicePatientCardProps) {
           <div className="flex min-w-0 items-center gap-2">
             <UserRound
               aria-hidden="true"
-              className="h-4 w-4 shrink-0 text-slate-500"
+              className={`h-4 w-4 shrink-0 ${typography.smallMuted}`}
             />
 
             <h3 className={`${typography.cardTitle} min-w-0 break-words`}>
@@ -50,7 +50,7 @@ export function HospicePatientCard({ patient }: HospicePatientCardProps) {
             </h3>
           </div>
 
-          <p className={`${typography.caption} mt-1 break-words text-slate-500`}>
+          <p className={`${typography.caption} mt-1 break-words`}>
             DOB: {patient.dateOfBirth || "Missing"}
           </p>
         </div>
@@ -103,13 +103,13 @@ export function HospicePatientCard({ patient }: HospicePatientCardProps) {
       {patient.notes ? (
         <section
           aria-label="Patient notes"
-          className={`${typography.bodyMuted} mt-4 min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-3`}
+          className={`${tiles.compact} ${typography.bodyMuted} mt-4 min-w-0 overflow-hidden`}
         >
           <p className="break-words">{patient.notes}</p>
         </section>
       ) : null}
 
-      <footer className="mt-4 flex min-w-0 flex-wrap justify-between gap-2 border-t border-white/10 pt-3 text-xs text-slate-600">
+      <footer className={`mt-4 flex min-w-0 flex-wrap justify-between gap-2 border-t border-white/10 pt-3 ${typography.caption}`}>
         <span className="min-w-0 break-words">
           Source: {patient.source || "Unknown"}
         </span>
@@ -134,10 +134,8 @@ function InfoBlock({
   className?: string;
 }) {
   return (
-    <div
-      className={`min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-3 ${className}`}
-    >
-      <p className={`${typography.label} break-words text-slate-500`}>
+    <div className={`${tiles.compact} min-w-0 overflow-hidden ${className}`}>
+      <p className={`${typography.label} break-words`}>
         {label}
       </p>
 
@@ -159,8 +157,8 @@ function ListBlock({
   const visibleValues = values.slice(0, MAX_VISIBLE_LIST_ITEMS);
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-2xl border border-white/10 bg-white/[0.03] p-3">
-      <p className={`${typography.label} break-words text-slate-500`}>
+    <section className={`${tiles.compact} min-w-0 overflow-hidden`}>
+      <p className={`${typography.label} break-words`}>
         {title}
       </p>
 
@@ -174,14 +172,14 @@ function ListBlock({
             <span
               key={value}
               title={value}
-              className="min-w-0 max-w-full truncate rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-xs text-slate-300"
+              className={tiles.tag}
             >
               {value}
             </span>
           ))}
 
           {hiddenCount > 0 ? (
-            <span className="rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-400">
+            <span className={tiles.tagMuted}>
               +{hiddenCount} more
             </span>
           ) : null}
@@ -190,5 +188,3 @@ function ListBlock({
     </section>
   );
 }
-
-

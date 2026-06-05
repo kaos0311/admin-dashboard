@@ -39,6 +39,12 @@
   badge:
     "inline-flex max-w-full min-w-0 shrink-0 items-center truncate rounded-full border border-white/10 bg-white/[0.08] px-3 py-1.5 text-[0.68rem] font-black uppercase leading-none tracking-[0.18em] text-slate-200",
 
+  tag:
+    "min-w-0 max-w-full truncate rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-xs text-slate-300",
+
+  tagMuted:
+    "rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-400",
+
   gridMetrics:
     "grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0",
 
@@ -50,3 +56,4 @@
 } as const;
 
 export type TileKey = keyof typeof tiles;
+
