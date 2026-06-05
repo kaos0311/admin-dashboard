@@ -1,5 +1,7 @@
 ﻿import { PieChart } from "lucide-react";
 
+import { glass, tables, typography } from "@/theme";
+
 import { AnalyticsLoadingBar } from "./AnalyticsLoadingBar";
 
 type BreakdownRow = {
@@ -19,20 +21,20 @@ export function AnalyticsBreakdownTable({
   rows,
 }: AnalyticsBreakdownTableProps) {
   return (
-    <div className="min-w-0 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.055] p-6 shadow-xl shadow-black/20 backdrop-blur-2xl">
+    <div className={glass.card}>
       <div className="mb-5 flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0">
-          <h2 className="break-words text-xl font-bold text-white">
+          <h2 className={typography.sectionTitle}>
             Report Breakdown
           </h2>
 
-          <p className="mt-1 break-words text-sm text-slate-400">
+          <p className={`${typography.bodyMuted} mt-1`}>
             Row counts by imported report type.
           </p>
         </div>
 
         <PieChart
-          className="h-5 w-5 shrink-0 text-slate-500"
+          className={`h-5 w-5 shrink-0 ${typography.smallMuted}`}
           aria-hidden="true"
         />
       </div>
@@ -44,39 +46,41 @@ export function AnalyticsBreakdownTable({
           <AnalyticsLoadingBar />
         </div>
       ) : rows.length === 0 ? (
-        <div className="min-w-0 rounded-2xl border border-white/10 bg-black/30 p-6 text-center text-sm text-slate-400">
+        <div className={tables.empty}>
           No report rows found for this filter.
         </div>
       ) : (
-        <div className="min-w-0 overflow-hidden rounded-2xl border border-white/10">
-          <div className="min-w-0 overflow-x-auto">
-            <table className="w-full min-w-[520px] text-left text-sm">
-              <thead className="bg-white/[0.05] text-slate-400">
+        <div className={tables.wrapper}>
+          <div className={tables.scroll}>
+            <table className={`${tables.table} min-w-[520px]`}>
+              <thead className={tables.head}>
                 <tr>
-                  <th className="px-4 py-3 font-semibold">Report Type</th>
-                  <th className="px-4 py-3 text-right font-semibold">Rows</th>
-                  <th className="px-4 py-3 text-right font-semibold">Share</th>
+                  <th className={tables.headCell}>Report Type</th>
+                  <th className={tables.headCellRight}>Rows</th>
+                  <th className={tables.headCellRight}>Share</th>
                 </tr>
               </thead>
 
-              <tbody className="divide-y divide-white/10">
+              <tbody className={tables.body}>
                 {rows.map((row) => {
                   const safeCount = Number.isFinite(row.count) ? row.count : 0;
 
                   return (
-                    <tr key={row.type} className="transition hover:bg-white/[0.035]">
-                      <td className="px-4 py-3 font-medium text-white">
+                    <tr key={row.type} className={tables.row}>
+                      <td className={tables.cellStrong}>
                         <div className="min-w-0 break-words leading-5">
                           {row.label || "Unknown"}
                         </div>
                       </td>
 
-                      <td className="px-4 py-3 text-right text-slate-300">
+                      <td className={tables.cellRight}>
                         {safeCount.toLocaleString()}
                       </td>
 
-                      <td className="px-4 py-3 text-right text-slate-400">
-                        {row.percent || "0%"}
+                      <td className={tables.cellMuted}>
+                        <div className="text-right">
+                          {row.percent || "0%"}
+                        </div>
                       </td>
                     </tr>
                   );
@@ -89,5 +93,3 @@ export function AnalyticsBreakdownTable({
     </div>
   );
 }
-
-
