@@ -1,7 +1,9 @@
 ﻿"use client";
 
 import { UserCheck } from "lucide-react";
+
 import { groupWipsByEmployee, type WipRecord } from "@/lib/reports/wip";
+import { badges, tiles, typography } from "@/theme";
 
 type WipEmployeeGroupsProps = {
   records: WipRecord[];
@@ -11,15 +13,15 @@ export function WipEmployeeGroups({ records }: WipEmployeeGroupsProps) {
   const groups = groupWipsByEmployee(records);
 
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/25 backdrop-blur-2xl">
-      <div className="mb-4 flex items-center gap-3">
-        <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-3 text-emerald-200">
-          <UserCheck className="h-5 w-5" />
+    <section className={`${tiles.base} ${tiles.metric}`}>
+      <div className="mb-4 flex min-w-0 items-center gap-3">
+        <div className={`${tiles.icon} ${badges.success}`}>
+          <UserCheck className="h-5 w-5" aria-hidden="true" />
         </div>
 
-        <div>
-          <h2 className="text-lg font-semibold text-white">Employee Load</h2>
-          <p className="text-sm text-slate-500">
+        <div className="min-w-0">
+          <h2 className={typography.sectionTitle}>Employee Load</h2>
+          <p className={typography.bodyMuted}>
             WIP ownership and accountability.
           </p>
         </div>
@@ -30,21 +32,16 @@ export function WipEmployeeGroups({ records }: WipEmployeeGroupsProps) {
           const overdue = items.filter((item) => item.daysOpen >= 7).length;
 
           return (
-            <div
-              key={employee}
-              className="rounded-2xl border border-white/10 bg-black/20 p-4"
-            >
+            <div key={employee} className={`${tiles.base} ${tiles.compact}`}>
               <div className="flex items-center justify-between gap-4">
-                <div>
-                  <p className="font-semibold text-white">{employee}</p>
-                  <p className="text-sm text-slate-500">
+                <div className="min-w-0">
+                  <p className={typography.cardTitle}>{employee}</p>
+                  <p className={typography.bodyMuted}>
                     {items.length} assigned WIP item{items.length === 1 ? "" : "s"}
                   </p>
                 </div>
 
-                <span className="rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold text-slate-300">
-                  {overdue} overdue
-                </span>
+                <span className={badges.neutral}>{overdue} overdue</span>
               </div>
             </div>
           );
@@ -53,5 +50,3 @@ export function WipEmployeeGroups({ records }: WipEmployeeGroupsProps) {
     </section>
   );
 }
-
-

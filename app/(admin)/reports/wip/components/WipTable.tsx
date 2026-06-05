@@ -1,10 +1,9 @@
 ﻿"use client";
 
-
-import { typography } from "@/theme";
 import { ClipboardList } from "lucide-react";
 
 import type { WipRecord } from "@/lib/reports/wip";
+import { tiles, typography } from "@/theme";
 import { WipStatusBadge } from "./WipStatusBadge";
 
 type WipTableProps = {
@@ -13,15 +12,15 @@ type WipTableProps = {
 
 export function WipTable({ records }: WipTableProps) {
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/25 backdrop-blur-2xl">
-      <div className="mb-4 flex items-center gap-3">
-        <div className="rounded-2xl border border-amber-300/20 bg-amber-400/10 p-3 text-amber-200">
-          <ClipboardList className="h-5 w-5" />
+    <section className={`${tiles.base} ${tiles.operational}`}>
+      <div className="mb-4 flex min-w-0 items-center gap-3">
+        <div className={tiles.icon}>
+          <ClipboardList className="h-5 w-5" aria-hidden="true" />
         </div>
 
-        <div>
-          <h2 className="text-lg font-semibold text-white">WIP Queue</h2>
-          <p className="text-sm text-slate-500">
+        <div className="min-w-0">
+          <h2 className={typography.sectionTitle}>WIP Queue</h2>
+          <p className={typography.bodyMuted}>
             Active work items and operational blockers.
           </p>
         </div>
@@ -44,9 +43,9 @@ export function WipTable({ records }: WipTableProps) {
             {records.map((record) => (
               <tr key={record.id} className="bg-white/[0.025]">
                 <td className="px-4 py-4">
-                  <p className="font-medium text-white">{record.patientName}</p>
+                  <p className={typography.cardTitle}>{record.patientName}</p>
                   <p className={typography.smallMuted}>
-                    {record.orderNumber ?? "No order"} Â· {record.issue}
+                    {record.orderNumber ?? "No order"} · {record.issue}
                   </p>
                 </td>
                 <td className="px-4 py-4 text-slate-300">{record.assignedTo}</td>
@@ -74,7 +73,3 @@ export function WipTable({ records }: WipTableProps) {
     </section>
   );
 }
-
-
-
-

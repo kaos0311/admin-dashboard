@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { colors, glass, typography } from "@/theme";
+import { colors, glass, spacing, typography } from "@/theme";
 
 import { WipAgingAlerts } from "./components/WipAgingAlerts";
 import { WipAnalytics } from "./components/WipAnalytics";
@@ -36,8 +36,8 @@ export default function WipReportPage() {
       <main className={cn(glass.page, colors.app)}>
         <div className={colors.grid} />
 
-        <section className={cn(glass.shell, "space-y-6")}>
-          <div className={cn(glass.panel, "p-6 sm:p-8")}>
+        <section className={cn(glass.shell, spacing.section)}>
+          <div className={cn(glass.panel, spacing.card)}>
             <div className="h-4 w-40 animate-pulse rounded-full bg-white/10" />
             <div className="mt-5 h-10 w-full max-w-xl animate-pulse rounded-2xl bg-white/10" />
             <div className="mt-4 h-4 w-full max-w-2xl animate-pulse rounded-full bg-white/10" />
@@ -54,15 +54,15 @@ export default function WipReportPage() {
       <main className={cn(glass.page, colors.app)}>
         <div className={colors.grid} />
 
-        <section className={cn(glass.shell, "space-y-6")}>
-          <div className={cn(glass.panel, "p-6 sm:p-8")}>
+        <section className={cn(glass.shell, spacing.section)}>
+          <div className={cn(glass.panel, spacing.card)}>
             <p className={typography.caption}>WIP Report</p>
             <h1 className={cn(typography.pageTitle, "mt-3")}>
               Work-in-progress oversight
             </h1>
-            <p className={cn(typography.body, "mt-3 max-w-3xl text-white/65")}>
-              The report failed to load. Naturally, because one broken listener
-              can ruin everyone&apos;s morning.
+            <p className={cn(typography.body, "mt-3 max-w-3xl")}>
+              The report failed to load. One broken listener, one dead page.
+              Lovely.
             </p>
           </div>
 
@@ -76,7 +76,7 @@ export default function WipReportPage() {
     <main className={cn(glass.page, colors.app)}>
       <div className={colors.grid} />
 
-      <section className={cn(glass.shell, "space-y-6")}>
+      <section className={cn(glass.shell, spacing.section)}>
         <WipHero onRefresh={refresh} />
 
         <WipStatGrid analytics={analytics} />
@@ -90,12 +90,12 @@ export default function WipReportPage() {
           onAgingChange={setAging}
         />
 
-        <section className="grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+        <section className="grid min-w-0 gap-6 xl:grid-cols-[1.1fr_0.9fr]">
           <WipAgingAlerts records={records} />
           <WipAnalytics analytics={analytics} />
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-[0.9fr_1.1fr]">
+        <section className="grid min-w-0 gap-6 xl:grid-cols-[0.9fr_1.1fr]">
           <WipEmployeeGroups records={records} />
           <WipTable records={filteredRecords} />
         </section>
@@ -103,6 +103,3 @@ export default function WipReportPage() {
     </main>
   );
 }
-
-
-

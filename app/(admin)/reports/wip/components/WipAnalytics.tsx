@@ -1,10 +1,9 @@
 ﻿"use client";
 
-
-import { typography } from "@/theme";
 import { BarChart3 } from "lucide-react";
 
 import type { WipAnalytics as WipAnalyticsType } from "@/lib/reports/wip";
+import { badges, tiles, typography } from "@/theme";
 
 type WipAnalyticsProps = {
   analytics: WipAnalyticsType;
@@ -19,17 +18,15 @@ export function WipAnalytics({ analytics }: WipAnalyticsProps) {
   ];
 
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/25 backdrop-blur-2xl">
-      <div className="mb-4 flex items-center gap-3">
-        <div className="rounded-2xl border border-sky-300/20 bg-sky-400/10 p-3 text-sky-200">
-          <BarChart3 className="h-5 w-5" />
+    <section className={`${tiles.base} ${tiles.metric}`}>
+      <div className="mb-4 flex min-w-0 items-center gap-3">
+        <div className={`${tiles.icon} ${badges.info}`}>
+          <BarChart3 className="h-5 w-5" aria-hidden="true" />
         </div>
 
-        <div>
-          <h2 className="text-lg font-semibold text-white">WIP Analytics</h2>
-          <p className="text-sm text-slate-500">
-            Basic operational breakdown.
-          </p>
+        <div className="min-w-0">
+          <h2 className={typography.sectionTitle}>WIP Analytics</h2>
+          <p className={typography.bodyMuted}>Basic operational breakdown.</p>
         </div>
       </div>
 
@@ -42,9 +39,9 @@ export function WipAnalytics({ analytics }: WipAnalyticsProps) {
 
           return (
             <div key={row.label}>
-              <div className="mb-1 flex justify-between text-sm">
-                <span className="text-slate-300">{row.label}</span>
-                <span className="text-slate-500">{row.value}</span>
+              <div className="mb-1 flex justify-between gap-4 text-sm">
+                <span className={typography.bodyMuted}>{row.label}</span>
+                <span className={typography.smallMuted}>{row.value}</span>
               </div>
 
               <div className="h-2 overflow-hidden rounded-full bg-white/10">
@@ -59,24 +56,16 @@ export function WipAnalytics({ analytics }: WipAnalyticsProps) {
       </div>
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+        <div className={`${tiles.base} ${tiles.compact}`}>
           <p className={typography.smallMuted}>Average Days Open</p>
-          <p className="mt-1 text-xl font-bold text-white">
-            {analytics.averageDaysOpen}
-          </p>
+          <p className={tiles.value}>{analytics.averageDaysOpen}</p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+        <div className={`${tiles.base} ${tiles.compact}`}>
           <p className={typography.smallMuted}>Completion Rate</p>
-          <p className="mt-1 text-xl font-bold text-white">
-            {analytics.completionRate}%
-          </p>
+          <p className={tiles.value}>{analytics.completionRate}%</p>
         </div>
       </div>
     </section>
   );
 }
-
-
-
-
