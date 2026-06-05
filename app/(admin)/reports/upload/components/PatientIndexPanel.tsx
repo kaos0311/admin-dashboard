@@ -2,7 +2,7 @@
 
 import { Activity, Database, Loader2, SearchCheck } from "lucide-react";
 
-import { glass, typography } from "@/theme";
+import { glass, tiles, typography } from "@/theme";
 
 type PatientIndexPanelProps = {
   patientIndex: unknown;
@@ -86,26 +86,23 @@ export function PatientIndexPanel({
     >
       <div className="flex items-start justify-between gap-4">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+          <p className={typography.caption}>
             Index Health
           </p>
 
           <h2
             id="patient-index-panel-title"
-            className="mt-2 text-lg font-semibold text-white"
+            className={`${typography.sectionTitle} mt-2`}
           >
             Patient Index
           </h2>
 
-          <p className="mt-2 text-sm leading-6 text-slate-400">
+          <p className={`${typography.bodyMuted} mt-2`}>
             Search index status for imported patient records.
           </p>
         </div>
 
-        <div
-          className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-slate-300"
-          aria-hidden="true"
-        >
+        <div className={glass.iconBox} aria-hidden="true">
           {analyticsLoading ? (
             <Loader2 className="h-5 w-5 animate-spin" />
           ) : (
@@ -115,32 +112,32 @@ export function PatientIndexPanel({
       </div>
 
       <div className="mt-6 grid gap-3">
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <div className="flex items-center gap-2 text-sm text-slate-400">
+        <div className={tiles.metric}>
+          <div className={`flex items-center gap-2 ${typography.bodyMuted}`}>
             <Activity className="h-4 w-4" aria-hidden="true" />
             <span>Total Patients</span>
           </div>
 
-          <p className="mt-2 text-2xl font-bold text-white">
+          <p className={`${typography.metric} mt-2`}>
             {analyticsLoading ? "..." : totalPatients.toLocaleString()}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
-          <div className="flex items-center gap-2 text-sm text-slate-400">
+        <div className={tiles.metric}>
+          <div className={`flex items-center gap-2 ${typography.bodyMuted}`}>
             <SearchCheck className="h-4 w-4" aria-hidden="true" />
             <span>Indexed Records</span>
           </div>
 
-          <p className="mt-2 text-2xl font-bold text-white">
+          <p className={`${typography.metric} mt-2`}>
             {analyticsLoading ? "..." : indexedPatients.toLocaleString()}
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+        <div className={tiles.metric}>
           <p className={typography.bodyMuted}>Last Updated</p>
 
-          <p className="mt-2 text-sm font-medium text-slate-200">
+          <p className={`${typography.body} mt-2`}>
             {analyticsLoading ? "Checking..." : lastUpdated}
           </p>
         </div>
@@ -148,6 +145,3 @@ export function PatientIndexPanel({
     </section>
   );
 }
-
-
-
