@@ -1,5 +1,7 @@
 ﻿import type { RecentPurchaseItem } from "../patient-detail-types";
 
+import { tables } from "@/theme";
+
 import { formatDate, formatMoney } from "../patient-detail-utils";
 
 export function PurchaseTable({
@@ -9,60 +11,61 @@ export function PurchaseTable({
 }) {
   if (!items.length) {
     return (
-      <p className="rounded-2xl border border-white/10 bg-black/30 p-4 text-sm text-zinc-500 backdrop-blur-xl">
+      <p className={tables.empty}>
         No purchases indexed in the last 90 days.
       </p>
     );
   }
 
   return (
-    <div className="overflow-x-auto rounded-3xl border border-white/10 bg-black/20 backdrop-blur-2xl">
-      <table className="w-full min-w-[700px] text-left text-sm">
-        <thead className="bg-white/5 text-xs uppercase tracking-wide text-zinc-500">
-          <tr>
-            <th className="px-4 py-3">Item</th>
-            <th className="px-4 py-3">HCPCS</th>
-            <th className="px-4 py-3">Date</th>
-            <th className="px-4 py-3">Qty</th>
-            <th className="px-4 py-3">Amount</th>
-            <th className="px-4 py-3">Order</th>
-          </tr>
-        </thead>
-
-        <tbody>
-          {items.slice(0, 25).map((item, index) => (
-            <tr
-              key={`${item.itemName}-${item.orderId}-${index}`}
-              className="border-t border-white/10 transition hover:bg-white/[0.04]"
-            >
-              <td className="px-4 py-3 font-medium text-zinc-100">
-                {item.itemName || "â€”"}
-              </td>
-
-              <td className="px-4 py-3 text-zinc-400">
-                {item.hcpc || item.itemId || "â€”"}
-              </td>
-
-              <td className="px-4 py-3 text-zinc-400">
-                {formatDate(item.purchaseDate)}
-              </td>
-
-              <td className="px-4 py-3 text-zinc-400">
-                {item.quantity ?? "â€”"}
-              </td>
-
-              <td className="px-4 py-3 text-zinc-400">
-                {formatMoney(item.amount)}
-              </td>
-
-              <td className="px-4 py-3 text-zinc-400">
-                {item.orderId || "â€”"}
-              </td>
+    <div className={tables.wrapper}>
+      <div className={tables.scroll}>
+        <table className={`${tables.table} min-w-[700px]`}>
+          <thead className={tables.head}>
+            <tr>
+              <th className={tables.headCell}>Item</th>
+              <th className={tables.headCell}>HCPCS</th>
+              <th className={tables.headCell}>Date</th>
+              <th className={tables.headCell}>Qty</th>
+              <th className={tables.headCell}>Amount</th>
+              <th className={tables.headCell}>Order</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+
+          <tbody className={tables.body}>
+            {items.slice(0, 25).map((item, index) => (
+              <tr
+                key={`${item.itemName}-${item.orderId}-${index}`}
+                className={tables.row}
+              >
+                <td className={tables.cellStrong}>
+                  {item.itemName || "—"}
+                </td>
+
+                <td className={tables.cell}>
+                  {item.hcpc || item.itemId || "—"}
+                </td>
+
+                <td className={tables.cell}>
+                  {formatDate(item.purchaseDate)}
+                </td>
+
+                <td className={tables.cell}>
+                  {item.quantity ?? "—"}
+                </td>
+
+                <td className={tables.cell}>
+                  {formatMoney(item.amount)}
+                </td>
+
+                <td className={tables.cell}>
+                  {item.orderId || "—"}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
-
