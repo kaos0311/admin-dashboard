@@ -1,4 +1,6 @@
 import { defineConfig, globalIgnores } from "eslint/config";
+import reactPlugin from "eslint-plugin-react";
+import reactHooksPlugin from "eslint-plugin-react-hooks";
 
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
@@ -8,6 +10,11 @@ const eslintConfig = defineConfig([
   ...nextTs,
 
   {
+    plugins: {
+      react: reactPlugin,
+      "react-hooks": reactHooksPlugin,
+    },
+
     linterOptions: {
       reportUnusedDisableDirectives: true,
     },
@@ -84,11 +91,12 @@ const eslintConfig = defineConfig([
   },
 
   {
-    files: ["functions/**/*.{ts,js}", "scripts/**/*.{ts,js,mjs}"],
+    files: ["functions/**/*.{ts,js}", "scripts/**/*.{ts,js,mjs,cjs}"],
 
     rules: {
       "no-console": "off",
-      "@typescript-eslint/no-explicit-any": "off"
+      "@typescript-eslint/no-explicit-any": "off",
+      "@typescript-eslint/no-require-imports": "off"
     }
   },
 

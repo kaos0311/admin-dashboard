@@ -1,4 +1,4 @@
-﻿import type { Timestamp } from "firebase/firestore";
+import type { Timestamp } from "firebase/firestore";
 
 import type {
   ImportJobStatus,
@@ -438,5 +438,7 @@ export function readJob(id: string, value: unknown): RecentImportJob {
     completedAt: readDateValue(source, ["completedAt"]),
   };
 }
+
+
 
 
