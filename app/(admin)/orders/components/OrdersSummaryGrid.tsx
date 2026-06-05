@@ -2,7 +2,7 @@
 
 import { Activity, Archive, Ban, CheckCircle2, Clock } from "lucide-react";
 
-import { glassPanelTight, smallMutedText } from "../lib/orderUi";
+import { badges, tiles } from "@/theme";
 
 export function OrdersSummaryGrid({
   processing,
@@ -22,51 +22,49 @@ export function OrdersSummaryGrid({
       label: "Processing",
       value: processing,
       icon: Clock,
-      tone: "text-blue-200",
+      tone: badges.kpiIcon.cyan,
     },
     {
       label: "Ready",
       value: ready,
       icon: Activity,
-      tone: "text-cyan-200",
+      tone: badges.kpiIcon.cyan,
     },
     {
       label: "Delivered",
       value: delivered,
       icon: CheckCircle2,
-      tone: "text-emerald-200",
+      tone: badges.kpiIcon.emerald,
     },
     {
       label: "Cancelled",
       value: cancelled,
       icon: Ban,
-      tone: "text-rose-200",
+      tone: badges.kpiIcon.red,
     },
     {
       label: "Archived",
       value: archived,
       icon: Archive,
-      tone: "text-zinc-300",
+      tone: badges.kpiIcon.neutral,
     },
   ];
 
   return (
-    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5">
+    <div className="grid min-w-0 grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-5 [&>*]:min-w-0">
       {cards.map((card) => {
         const Icon = card.icon;
 
         return (
-          <section key={card.label} className={`${glassPanelTight} p-5`}>
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className={smallMutedText}>{card.label}</p>
-                <p className="mt-2 text-3xl font-bold tracking-tight text-white">
-                  {card.value.toLocaleString()}
-                </p>
+          <section key={card.label} className={`${tiles.base} ${tiles.metric}`}>
+            <div className="flex min-w-0 items-center justify-between gap-3">
+              <div className="min-w-0">
+                <p className={tiles.label}>{card.label}</p>
+                <p className={tiles.value}>{card.value.toLocaleString()}</p>
               </div>
 
-              <div className="rounded-2xl border border-white/10 bg-white/[0.08] p-3 shadow-inner shadow-black/20">
-                <Icon className={`h-5 w-5 ${card.tone}`} aria-hidden={true} />
+              <div className={`${tiles.icon} ${card.tone}`}>
+                <Icon className="h-5 w-5" aria-hidden={true} />
               </div>
             </div>
           </section>
@@ -75,5 +73,3 @@ export function OrdersSummaryGrid({
     </div>
   );
 }
-
-
