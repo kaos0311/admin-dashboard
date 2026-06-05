@@ -1,4 +1,4 @@
-import { HttpsError, onCall } from "firebase-functions/v2/https";
+﻿import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
   FieldValue,
   getFirestore,
@@ -146,7 +146,7 @@ export const rebuildReportsAnalytics = onCall(
     requireStaffOrAdmin(request as CallableRequestLike);
 
     const payload = getPayload(request.data);
-    const includeRowScan = payload.includeRowScan !== false;
+    const includeRowScan = payload.includeRowScan === true;
 
     const uid = request.auth!.uid;
     const email = getAuthEmail(request as CallableRequestLike);
@@ -177,7 +177,7 @@ export const rebuildReportsAnalytics = onCall(
         stage: "reading_reports",
       });
 
-      const reportsSnap = await db.collection("importedReports").get();
+      const reportsSnap = await db.collection("importJobs").get();
       totalReportDocs = reportsSnap.size;
 
       for (const reportDoc of reportsSnap.docs) {
@@ -350,3 +350,7 @@ export const rebuildReportsAnalytics = onCall(
     }
   }
 );
+
+
+
+

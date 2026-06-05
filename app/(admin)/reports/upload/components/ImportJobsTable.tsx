@@ -48,7 +48,27 @@ function getJobReportType(job: RecentImportJob): string {
 }
 
 function getJobStatus(job: RecentImportJob): string {
-  return job.status;
+  switch (job.status) {
+    case "queued":
+    case "uploaded":
+    case "processing":
+      return "Building";
+
+    case "completed":
+      return "Complete";
+
+    case "completed_with_errors":
+      return "Complete w/ Warnings";
+
+    case "failed":
+      return "Failed";
+
+    case "deleted":
+      return "Deleted";
+
+    default:
+      return String(job.status ?? "Unknown");
+  }
 }
 
 function getJobRows(job: RecentImportJob): number {
@@ -103,13 +123,35 @@ export function ImportJobsTable({
   toggleSelectedJob,
   toggleAllVisibleJobs,
 }: ImportJobsTableProps) {
-  const visibleJobs = filteredJobs.filter((job) => getJobId(job));
+  const visibleJobs = filteredJobs.filter(
+    (job) => getJobId(job) && job.status !== "uploaded" && job.status !== "deleted",
+  );
 
   const allVisibleSelected =
     visibleJobs.length > 0 &&
     visibleJobs.every((job) => selectedJobIds.has(getJobId(job)));
 
-  const filterOptions = Object.entries(queueCounts);
+  const filterOptions = Object.entries(queueCounts).filter(
+    ([status]) => status !== "uploaded" && status !== "deleted",
+  );
+
+  function getFilterLabel(status: string): string {
+    switch (status) {
+      case "all":
+        return "All jobs";
+      case "queued":
+      case "processing":
+        return "Building";
+      case "completed":
+        return "Complete";
+      case "failed":
+        return "Failed";
+      case "deleted":
+        return "Deleted";
+      default:
+        return status;
+    }
+  }
 
   return (
     <section className={[tables.wrapper, spacing.cardLg].join(" ")} aria-labelledby="import-jobs-table-title">
@@ -183,7 +225,7 @@ export function ImportJobsTable({
             {filterOptions.length > 0 ? (
               filterOptions.map(([status, count]) => (
                 <option key={status} value={status}>
-                  {status} ({count})
+                  {getFilterLabel(status)} ({count})
                 </option>
               ))
             ) : (
@@ -443,3 +485,5 @@ function JobSelectButton({
     </button>
   );
 }
+
+

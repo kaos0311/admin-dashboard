@@ -12,15 +12,49 @@ export const REPORT_REGISTRY: ReportRegistryEntry[] = [
   {
     type: "patients",
     displayName: "Patients",
-    filenameKeywords: ["patient", "patients", "par"],
-    headerKeywords: ["patient name", "date of birth", "dob", "patient id"],
+    filenameKeywords: [
+      "patient",
+      "patients",
+      "par",
+      "demographics",
+      "contact",
+    ],
+    headerKeywords: [
+      "patient name",
+      "date of birth",
+      "dob",
+      "patient dob",
+      "patient id",
+      "patient first name",
+      "patient last name",
+      "patient middle name",
+      "patient preferred name",
+      "patient account number",
+      "patient sex",
+      "patient branch office",
+      "patient branch group",
+      "patient customer type",
+      "patient facility",
+      "billing address address 1",
+      "billing address phone",
+      "billing address email address",
+      "delivery address address 1",
+      "delivery address phone",
+    ],
     processors: ["patients"],
   },
   {
     type: "hospice",
     displayName: "Hospice",
     filenameKeywords: ["hospice"],
-    headerKeywords: ["hospice", "patient name", "*"],
+    headerKeywords: [
+      "hospice",
+      "patient name",
+      "patient first name",
+      "patient last name",
+      "patient id",
+      "patient dob",
+    ],
     processors: ["patients", "hospice"],
   },
   {
@@ -30,12 +64,12 @@ export const REPORT_REGISTRY: ReportRegistryEntry[] = [
     headerKeywords: ["sales order", "order id", "hcpcs", "item"],
     processors: ["orders"],
   },
-    {
+  {
     type: "generic",
     displayName: "Generic Import",
     filenameKeywords: [],
     headerKeywords: [],
-    processors: ["patients"],
+    processors: [],
   },
 ];
 
@@ -50,43 +84,52 @@ export type ResolveReportTypeInput =
     };
 
 export function resolveReportType(input: ResolveReportTypeInput): string {
-  const fileName =
+  const explicitReportType =
     typeof input === "string"
-      ? input
+      ? ""
       : input.selectedReportType ||
         input.primaryReportType ||
         input.reportType ||
-        input.fileName ||
         "";
+
+  const fileName =
+    typeof input === "string" ? input : input.fileName || "";
 
   const headers = typeof input === "string" ? [] : input.headers ?? [];
 
-  const normalized = fileName.toLowerCase().trim();
+  const explicitNormalized = explicitReportType.toLowerCase().trim();
 
-  const explicit = REPORT_REGISTRY.find(
-    (entry) => entry.type.toLowerCase() === normalized
-  );
+  if (explicitNormalized && explicitNormalized !== "auto") {
+    const explicit = REPORT_REGISTRY.find(
+      (entry) => entry.type.toLowerCase() === explicitNormalized
+    );
 
-  if (explicit) {
-    return explicit.type;
+    if (explicit) {
+      return explicit.type;
+    }
   }
 
+  const normalizedFileName = fileName.toLowerCase().trim();
   const headerText = headers.join(" ").toLowerCase();
 
-  const scored = REPORT_REGISTRY.map((entry) => {
-    const filenameScore = entry.filenameKeywords.filter((keyword) =>
-      normalized.includes(keyword)
-    ).length * 3;
+  const scored = REPORT_REGISTRY
+    .filter((entry) => entry.type !== "generic")
+    .map((entry) => {
+      const filenameScore =
+        entry.filenameKeywords.filter((keyword) =>
+          normalizedFileName.includes(keyword)
+        ).length * 3;
 
-    const headerScore = entry.headerKeywords.filter((keyword) =>
-      headerText.includes(keyword)
-    ).length;
+      const headerScore = entry.headerKeywords.filter((keyword) =>
+        headerText.includes(keyword)
+      ).length;
 
-    return {
-      type: entry.type,
-      score: filenameScore + headerScore,
-    };
-  }).sort((a, b) => b.score - a.score);
+      return {
+        type: entry.type,
+        score: filenameScore + headerScore,
+      };
+    })
+    .sort((a, b) => b.score - a.score);
 
   return scored[0]?.score ? scored[0].type : "generic";
 }
