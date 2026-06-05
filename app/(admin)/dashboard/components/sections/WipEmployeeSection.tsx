@@ -2,10 +2,12 @@
 
 import { Users } from "lucide-react";
 
+import { tiles, typography } from "@/theme";
+
 import type { WipEmployeeSummary } from "../../dashboard-types";
-import { safeNumber } from "../../utils/normalize";
 import { EmptyState } from "../../shared/EmptyState";
 import { GlassPanel } from "../../shared/GlassPanel";
+import { safeNumber } from "../../utils/normalize";
 
 type WipEmployeeSectionProps = {
   employees: WipEmployeeSummary[];
@@ -24,32 +26,32 @@ export function WipEmployeeSection({
           employees.slice(0, 6).map((employee) => (
             <div
               key={employee.employeeId || employee.employeeName}
-              className="rounded-2xl border border-white/10 bg-black/20 p-4"
+              className={tiles.operational}
             >
-              <p className="font-semibold text-white">
+              <p className={typography.cardTitle}>
                 {employee.employeeName ||
                   employee.employee ||
                   "Unassigned"}
               </p>
 
-              <div className="mt-3 grid grid-cols-3 gap-2 text-center text-xs">
-                <div className="rounded-xl bg-white/10 p-2">
-                  <p className="text-white/50">Open</p>
-                  <p className="font-bold text-white">
+              <div className="mt-3 grid grid-cols-3 gap-2 text-center">
+                <div className={tiles.compact}>
+                  <p className={typography.caption}>Open</p>
+                  <p className={typography.metricCompact}>
                     {safeNumber(employee.openCount)}
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-white/10 p-2">
-                  <p className="text-white/50">Done</p>
-                  <p className="font-bold text-white">
+                <div className={tiles.compact}>
+                  <p className={typography.caption}>Done</p>
+                  <p className={typography.metricCompact}>
                     {safeNumber(employee.completedCount)}
                   </p>
                 </div>
 
-                <div className="rounded-xl bg-white/10 p-2">
-                  <p className="text-white/50">Pending</p>
-                  <p className="font-bold text-white">
+                <div className={tiles.compact}>
+                  <p className={typography.caption}>Pending</p>
+                  <p className={typography.metricCompact}>
                     {safeNumber(employee.pendingCount)}
                   </p>
                 </div>
@@ -63,5 +65,3 @@ export function WipEmployeeSection({
     </GlassPanel>
   );
 }
-
-
