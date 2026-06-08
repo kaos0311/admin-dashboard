@@ -2,6 +2,8 @@
 
 import { CalendarDays } from "lucide-react";
 
+import { glass, typography } from "@/theme";
+
 import type { BirthdayAnalytics } from "../../dashboard-types";
 import { safeNumber } from "../../utils/normalize";
 import { GlassPanel } from "../../shared/GlassPanel";
@@ -19,8 +21,8 @@ export function BirthdaysSection({
       icon={<CalendarDays className="h-5 w-5" />}
     >
       <div className="grid gap-3">
-        <div className="rounded-2xl bg-black/20 p-4">
-          <p className="text-xs text-white/50">Today</p>
+        <div className={`${glass.inset} p-4`}>
+          <p className={typography.caption}>Today</p>
 
           <p className="text-2xl font-bold">
             {safeNumber(birthdays.todayCount) ||
@@ -29,8 +31,8 @@ export function BirthdaysSection({
           </p>
         </div>
 
-        <div className="rounded-2xl bg-black/20 p-4">
-          <p className="text-xs text-white/50">
+        <div className={`${glass.inset} p-4`}>
+          <p className={typography.caption}>
             Next 7 Days
           </p>
 
@@ -41,8 +43,8 @@ export function BirthdaysSection({
           </p>
         </div>
 
-        <div className="rounded-2xl bg-black/20 p-4">
-          <p className="text-xs text-white/50">
+        <div className={`${glass.inset} p-4`}>
+          <p className={typography.caption}>
             This Month
           </p>
 
@@ -56,5 +58,7 @@ export function BirthdaysSection({
     </GlassPanel>
   );
 }
+
+
 
 

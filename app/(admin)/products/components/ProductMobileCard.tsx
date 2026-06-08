@@ -52,7 +52,7 @@ export function ProductMobileCard({
             {productName}
           </div>
 
-          <div className="mt-1 min-w-0 break-words text-xs leading-5 text-slate-500">
+          <div className="mt-1 min-w-0 break-words text-xs leading-5 ${typography.caption}">
             {productMeta}
           </div>
 
@@ -111,12 +111,15 @@ function InfoLine({
 
   return (
     <div className="grid min-w-0 grid-cols-[96px_minmax(0,1fr)] gap-3">
-      <span className="shrink-0 text-slate-500">{label}</span>
+      <span className="shrink-0 ${typography.caption}">{label}</span>
       <span className="min-w-0 break-words text-right text-slate-300">
         {displayValue}
       </span>
     </div>
   );
 }
+
+
+
 
 

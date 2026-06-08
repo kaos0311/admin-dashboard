@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { buttons, glass, typography } from "@/theme";
+
 import { Loader2, Play, RotateCcw, Trash2 } from "lucide-react";
 
 type UploadBatchActionsProps = {
@@ -33,14 +35,14 @@ export function UploadBatchActions({
 
   return (
     <section
-      className="flex flex-wrap items-center gap-3 rounded-[2rem] border border-white/10 bg-white/[0.055] p-5 shadow-xl shadow-black/20 backdrop-blur-2xl"
+      className={`${glass.panel} flex flex-wrap items-center gap-3 p-5`}
       aria-label="Upload batch actions"
     >
       <button
         type="button"
         disabled={startDisabled}
         onClick={onStartUpload}
-        className="inline-flex items-center gap-2 rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:bg-neutral-200 disabled:cursor-not-allowed disabled:opacity-50"
+        className={buttons.primary}
         aria-label={uploading ? "Uploads are currently running" : "Start queued uploads"}
       >
         {uploading ? (
@@ -76,12 +78,18 @@ export function UploadBatchActions({
 
       <div className="ml-auto text-sm text-neutral-400" aria-live="polite">
         Queue Size:{" "}
-        <span className="font-semibold text-white">
+        <span className={typography.cardTitle}>
           {queueCount.toLocaleString()}
         </span>
       </div>
     </section>
   );
 }
+
+
+
+
+
+
 
 

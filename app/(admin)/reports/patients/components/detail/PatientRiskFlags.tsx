@@ -78,3 +78,4 @@ export function PatientRiskFlags({
     </div>
   );
 }
+

@@ -107,7 +107,7 @@ export default function RentalsPage() {
                   Rentals Command Center
                 </h1>
 
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+                <p className={`mt-3 max-w-3xl ${typography.body}`}>
                   Operational rental tracking for active equipment,
                   returns, patient-linked rental records, product
                   availability, billing visibility, and overdue rental
@@ -125,7 +125,7 @@ export default function RentalsPage() {
 
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-white">
+                    <p className={typography.cardTitle}>
                       Rental System
                     </p>
 
@@ -136,7 +136,7 @@ export default function RentalsPage() {
                     </span>
                   </div>
 
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs ${typography.caption}">
                     Rental tracking and return monitoring active
                   </p>
                 </div>
@@ -207,5 +207,7 @@ export default function RentalsPage() {
     </main>
   );
 }
+
+
 
 

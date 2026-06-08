@@ -90,7 +90,7 @@ export default function SettingsPage() {
                   Settings Command Center
                 </h1>
 
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+                <p className={`mt-3 max-w-3xl ${typography.body}`}>
                   Manage company defaults, dashboard behavior, user access,
                   role controls, security settings, maintenance mode, and reset
                   tools. This is the room where one bad click can make the whole
@@ -180,6 +180,8 @@ export default function SettingsPage() {
     </main>
   );
 }
+
+
 
 
 

@@ -67,7 +67,7 @@ export function RentalForm({
 
       <div className="mt-6 grid gap-4 lg:grid-cols-4">
         <label className="block lg:col-span-2" htmlFor="rental-product">
-          <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+          <span className="text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}">
             Product
           </span>
 
@@ -238,5 +238,6 @@ export function RentalForm({
     </GlassCard>
   );
 }
+
 
 

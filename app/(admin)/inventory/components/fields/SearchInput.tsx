@@ -10,7 +10,7 @@ type SearchInputProps = {
 export function SearchInput({ value, onChange }: SearchInputProps) {
   return (
     <div className="relative">
-      <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 text-slate-500" />
+      <Search className="pointer-events-none absolute left-3 top-3.5 h-4 w-4 ${typography.caption}" />
 
       <input
         value={value}
@@ -23,5 +23,6 @@ export function SearchInput({ value, onChange }: SearchInputProps) {
     </div>
   );
 }
+
 
 

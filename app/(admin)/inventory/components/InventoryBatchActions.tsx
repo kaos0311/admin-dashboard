@@ -46,7 +46,7 @@ export function InventoryBatchActions({
         Archive Selected
       </button>
 
-      <span className="rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-slate-400 shadow-inner shadow-black/20 backdrop-blur-xl">
+      <span className="rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-sm ${typography.bodyMuted} shadow-inner shadow-black/20 backdrop-blur-xl">
         Selected: {selectedCount}
         {selectedVisibleCount !== selectedCount
           ? ` (${selectedVisibleCount} visible)`
@@ -55,5 +55,6 @@ export function InventoryBatchActions({
     </div>
   );
 }
+
 
 

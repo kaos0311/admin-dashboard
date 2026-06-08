@@ -28,7 +28,7 @@ export function WipTable({ records }: WipTableProps) {
 
       <div className="overflow-hidden rounded-2xl border border-white/10">
         <table className="min-w-full divide-y divide-white/10 text-left text-sm">
-          <thead className="bg-black/30 text-xs uppercase tracking-[0.18em] text-slate-500">
+          <thead className="bg-black/30 text-xs uppercase tracking-[0.18em] ${typography.caption}">
             <tr>
               <th className="px-4 py-3">Patient</th>
               <th className="px-4 py-3">Assigned</th>
@@ -62,7 +62,7 @@ export function WipTable({ records }: WipTableProps) {
 
             {records.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-10 text-center text-slate-500">
+                <td colSpan={6} className="px-4 py-10 text-center ${typography.caption}">
                   No WIP records match the current filters.
                 </td>
               </tr>
@@ -73,3 +73,4 @@ export function WipTable({ records }: WipTableProps) {
     </section>
   );
 }
+

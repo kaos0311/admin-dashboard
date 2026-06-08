@@ -29,7 +29,7 @@ export function InventoryTable({
   return (
     <div className="overflow-x-auto rounded-2xl border border-white/10">
       <table className="w-full min-w-[1550px] text-left text-sm">
-        <thead className="bg-white/5 text-slate-400 backdrop-blur-xl">
+        <thead className="bg-white/5 ${typography.bodyMuted} backdrop-blur-xl">
           <tr>
             <th className="px-4 py-3">Select</th>
             <th className="px-4 py-3">Item</th>
@@ -63,5 +63,6 @@ export function InventoryTable({
     </div>
   );
 }
+
 
 

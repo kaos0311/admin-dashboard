@@ -1,4 +1,7 @@
-﻿import type { HospiceRecord } from "../types";
+﻿import { glass, typography } from "@/theme";
+
+import type { HospiceRecord } from "../types";
+
 import { EmptyState } from "./EmptyState";
 
 type HospiceListProps = {
@@ -15,9 +18,9 @@ export function HospiceList({ records }: HospiceListProps) {
       {records.slice(0, 6).map((record) => (
         <div
           key={record.id}
-          className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"
+          className={`${glass.card} p-4`}
         >
-          <h3 className="font-semibold text-white">
+          <h3 className={typography.cardTitle}>
             {record.patientName || "Unknown patient"}
           </h3>
 
@@ -27,7 +30,7 @@ export function HospiceList({ records }: HospiceListProps) {
 
           <div className="mt-3 flex items-center justify-between text-sm">
             <span className="text-neutral-400">Status</span>
-            <span className="font-semibold text-white">
+            <span className={typography.cardTitle}>
               {record.status || "unknown"}
             </span>
           </div>
@@ -36,5 +39,10 @@ export function HospiceList({ records }: HospiceListProps) {
     </div>
   );
 }
+
+
+
+
+
 
 

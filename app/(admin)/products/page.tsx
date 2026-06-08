@@ -391,7 +391,7 @@ export default function ProductsPage() {
 
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-white">
+                    <p className={typography.cardTitle}>
                       Product System
                     </p>
 
@@ -686,6 +686,8 @@ export default function ProductsPage() {
     </main>
   );
 }
+
+
 
 
 

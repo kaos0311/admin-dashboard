@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { buttons, glass, typography } from "@/theme";
+
 import {
   CheckSquare,
   Filter,
@@ -62,8 +64,8 @@ export function ProductFilters({
 }: ProductFiltersProps) {
   return (
     <>
-      <div className="mb-4 rounded-3xl border border-white/10 bg-white/[0.05] p-4 shadow-xl shadow-black/20 backdrop-blur-2xl">
-        <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-300">
+      <div className={`${glass.panel} mb-4 p-4`}>
+        <div className={`${typography.cardTitle} mb-3 flex items-center gap-2`}>
           <Filter className="h-4 w-4" />
           Adaptive Filters
         </div>
@@ -187,7 +189,7 @@ export function ProductFilters({
           <button
             type="button"
             onClick={onResetFilters}
-            className="rounded-2xl border border-white/10 bg-white/[0.08] px-4 py-3 text-sm text-white transition hover:bg-white/[0.14]"
+            className={buttons.secondary}
           >
             Reset Filters
           </button>
@@ -199,7 +201,7 @@ export function ProductFilters({
           type="button"
           onClick={onToggleVisible}
           disabled={filteredCount === 0}
-          className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.08] px-4 py-2 text-sm text-white transition hover:bg-white/[0.14] disabled:cursor-not-allowed disabled:opacity-50"
+          className={buttons.secondary}
         >
           <CheckSquare className="h-4 w-4" />
 
@@ -223,17 +225,20 @@ export function ProductFilters({
           Archive Selected
         </button>
 
-        <span className="rounded-2xl border border-white/10 bg-black/30 px-4 py-2 text-sm text-slate-400">
+        <span className={`${glass.inset} px-4 py-2 ${typography.bodyMuted}`}>
           Showing {filteredCount.toLocaleString()} of{" "}
           {loadedCount.toLocaleString()}
         </span>
 
-        <span className="rounded-2xl border border-white/10 bg-black/30 px-4 py-2 text-sm text-slate-400">
+        <span className={`${glass.inset} px-4 py-2 ${typography.bodyMuted}`}>
           Selected: {selectedCount}
         </span>
       </div>
     </>
   );
 }
+
+
+
 
 

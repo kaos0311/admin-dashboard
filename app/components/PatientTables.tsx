@@ -168,3 +168,4 @@ function compactStrongCell(): string {
 function compactMutedCell(): string {
   return ["px-3 py-2", typography.bodyMuted].join(" ");
 }
+

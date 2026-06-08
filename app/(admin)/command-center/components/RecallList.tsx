@@ -1,5 +1,9 @@
-﻿import type { EquipmentRecall } from "../types";
+﻿import { glass, typography } from "@/theme";
+
+import type { EquipmentRecall } from "../types";
+
 import { badgeClass } from "../utils/commandCenterFormat";
+
 import { EmptyState } from "./EmptyState";
 
 type RecallListProps = {
@@ -16,11 +20,11 @@ export function RecallList({ recalls }: RecallListProps) {
       {recalls.slice(0, 6).map((recall) => (
         <div
           key={recall.id}
-          className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"
+          className={`${glass.card} p-4`}
         >
           <div className="flex items-start justify-between gap-3">
             <div>
-              <h3 className="font-semibold text-white">
+              <h3 className={typography.cardTitle}>
                 {recall.recallTitle || "Untitled Recall"}
               </h3>
 
@@ -43,5 +47,10 @@ export function RecallList({ recalls }: RecallListProps) {
     </div>
   );
 }
+
+
+
+
+
 
 

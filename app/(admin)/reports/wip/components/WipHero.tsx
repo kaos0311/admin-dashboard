@@ -47,3 +47,4 @@ export function WipHero({ onRefresh }: WipHeroProps) {
     </section>
   );
 }
+

@@ -94,7 +94,7 @@ export default function HospiceReportPage() {
                 <div
                   role="status"
                   aria-live="polite"
-                  className={`${typography.caption} shrink-0 text-slate-400`}
+                  className={`${typography.caption} shrink-0 ${typography.bodyMuted}`}
                 >
                   Loading hospice records...
                 </div>
@@ -116,5 +116,6 @@ export default function HospiceReportPage() {
     </main>
   );
 }
+
 
 

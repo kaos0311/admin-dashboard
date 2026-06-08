@@ -20,7 +20,7 @@ export function PageHeader({ title, description, action }: PageHeaderProps) {
             {title}
           </h1>
 
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+          <p className="mt-2 max-w-3xl text-sm leading-6 ${typography.bodyMuted}">
             {description}
           </p>
         </div>
@@ -30,5 +30,6 @@ export function PageHeader({ title, description, action }: PageHeaderProps) {
     </header>
   );
 }
+
 
 

@@ -28,7 +28,7 @@ export function RentalMobileCard({
             {record.productName || "Unnamed rental asset"}
           </h3>
 
-          <p className="mt-1 break-words text-xs leading-5 text-slate-500">
+          <p className="mt-1 break-words text-xs leading-5 ${typography.caption}">
             SN: {record.serialNumber || "â€”"} Â· Asset: {record.assetTag || "â€”"}
           </p>
         </div>
@@ -103,7 +103,7 @@ function RentalInfoBlock({
 }) {
   return (
     <div className="min-w-0">
-      <p className="truncate text-xs uppercase tracking-[0.16em] text-slate-500">
+      <p className="truncate text-xs uppercase tracking-[0.16em] ${typography.caption}">
         {label}
       </p>
 
@@ -117,12 +117,13 @@ function RentalInfoBlock({
       </p>
 
       {secondary ? (
-        <p className="min-w-0 break-words text-xs text-slate-500">
+        <p className="min-w-0 break-words text-xs ${typography.caption}">
           {secondary}
         </p>
       ) : null}
     </div>
   );
 }
+
 
 

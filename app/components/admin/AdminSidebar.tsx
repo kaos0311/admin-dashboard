@@ -3,7 +3,7 @@
 import { type ComponentType, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-
+import { navigation, typography } from "@/theme";
 import {
   Boxes,
   ClipboardList,
@@ -203,7 +203,7 @@ export default function AdminSidebar({
       <aside
         id="admin-sidebar"
         aria-label="Primary navigation"
-        className="hidden w-64 shrink-0 border-r border-white/10 bg-neutral-950 text-white lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex"
+        className={`${navigation.sidebarShell} border-white/10 bg-neutral-950 text-white`}
       >
         <SidebarInner
           pathname={pathname}
@@ -213,25 +213,25 @@ export default function AdminSidebar({
       </aside>
 
       {mobileOpen ? (
-        <div className="fixed inset-0 z-50 lg:hidden">
+        <div className={navigation.mobileOverlay}>
           <button
             type="button"
             aria-label="Close navigation menu"
             title="Close navigation menu"
             onClick={onClose}
-            className="absolute inset-0 bg-black/75 backdrop-blur-sm"
+            className={navigation.mobileBackdrop}
           />
 
           <aside
             aria-label="Mobile navigation"
-            className="absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-white/10 bg-neutral-950 text-white shadow-2xl"
+            className={`${navigation.mobileShell} border-white/10 bg-neutral-950 text-white`}
           >
-            <div className="flex items-center justify-between border-b border-white/10 px-4 py-4">
+            <div className={`${navigation.mobileHeader} border-white/10`}>
               <div>
-                <div className="text-sm font-semibold tracking-wide">
+                <div className={typography.cardTitle}>
                   Navigation
                 </div>
-                <div className="text-xs text-neutral-500">
+                <div className={typography.caption}>
                   Advanced Home Medical
                 </div>
               </div>
@@ -241,7 +241,7 @@ export default function AdminSidebar({
                 onClick={onClose}
                 title="Close sidebar"
                 aria-label="Close sidebar"
-                className="rounded-xl border border-white/10 bg-white/5 p-2 text-white transition hover:border-white/20 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30"
+                className={`${navigation.closeButton} border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10 focus:ring-white/30`}
               >
                 <X className="h-5 w-5" aria-hidden />
               </button>
@@ -276,17 +276,17 @@ function SidebarInner({
   }, [pathname, userRole]);
 
   return (
-    <div className="flex h-full w-full flex-col p-3">
-      <div className="mb-4 rounded-3xl border border-white/10 bg-black/50 px-4 py-5 shadow-lg shadow-black/20">
-        <div className="text-xs uppercase tracking-[0.24em] text-neutral-500">
+    <div className={navigation.inner}>
+      <div className={`${navigation.brandCard} border-white/10 bg-black/50 shadow-black/20`}>
+        <div className={typography.caption}>
           Advanced Home Medical
         </div>
 
-        <div className="mt-2 text-xl font-bold leading-tight">
+        <div className={`mt-2 ${typography.sectionTitle}`}>
           Admin Dashboard
         </div>
 
-        <div className="mt-2 text-sm leading-5 text-neutral-400">
+        <div className={`mt-2 ${typography.bodyMuted}`}>
           Operations, reports, insurance, hospice, inventory, rentals, and
           command-level oversight.
         </div>
@@ -294,7 +294,7 @@ function SidebarInner({
 
       <nav
         aria-label="Admin sections"
-        className="custom-sidebar-scroll flex flex-1 flex-col overflow-y-auto pr-1"
+        className={navigation.scrollArea}
       >
         <SidebarSection
           title="Operations"
@@ -318,7 +318,7 @@ function SidebarInner({
         />
       </nav>
 
-      <div className="mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-300">
+      <div className={navigation.health}>
         Database Health: Active
       </div>
     </div>
@@ -341,12 +341,12 @@ function SidebarSection({
   }
 
   return (
-    <section className="mb-5" aria-label={title}>
-      <div className="mb-2 px-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-neutral-500">
+    <section className={navigation.section} aria-label={title}>
+      <div className={`${navigation.sectionLabel} ${typography.caption}`}>
         {title}
       </div>
 
-      <div className="flex flex-col gap-1">
+      <div className={navigation.sectionStack}>
         {items.map((item) => {
           const Icon = item.icon;
 
@@ -358,18 +358,18 @@ function SidebarSection({
               onClick={onNavigate}
               aria-current={item.isActive ? "page" : undefined}
               className={[
-                "group relative flex items-center gap-3 rounded-2xl border px-4 py-3 text-sm font-medium transition-all duration-200",
+                navigation.itemBase,
                 item.isActive
-                  ? "border-white/20 bg-white/15 text-white shadow-md shadow-black/20"
-                  : "border-white/5 bg-black/20 text-neutral-300 hover:border-white/20 hover:bg-white/10 hover:text-white",
+                  ? navigation.itemActive
+                  : navigation.itemInactive,
               ].join(" ")}
             >
               <span
                 className={[
-                  "flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border transition-all duration-200",
+                  navigation.iconBase,
                   item.isActive
-                    ? "border-white/20 bg-white/15 text-white"
-                    : "border-white/10 bg-white/5 text-neutral-400 group-hover:border-white/20 group-hover:bg-white/10 group-hover:text-white",
+                    ? navigation.iconActive
+                    : navigation.iconInactive,
                 ].join(" ")}
               >
                 <Icon className="h-5 w-5" aria-hidden />
@@ -378,15 +378,15 @@ function SidebarSection({
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
 
               {item.badge ? (
-                <span className="rounded-full border border-red-500/20 bg-red-500/10 px-2 py-0.5 text-[10px] text-red-300">
+                <span className={navigation.badge}>
                   {item.badge}
                 </span>
               ) : item.isActive ? (
-                <span aria-hidden className="h-2 w-2 rounded-full bg-white" />
+                <span aria-hidden className={navigation.activeDot} />
               ) : (
                 <span
                   aria-hidden
-                  className="h-2 w-2 rounded-full bg-transparent transition group-hover:bg-white/40"
+                  className={navigation.inactiveDot}
                 />
               )}
             </Link>
@@ -396,5 +396,7 @@ function SidebarSection({
     </section>
   );
 }
+
+
 
 

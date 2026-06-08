@@ -23,7 +23,7 @@ import {
 
 import { productFormWarnings } from "../utils/productValidation";
 
-import { alerts, buttons, forms, typography } from "@/theme";
+import { alerts, buttons, forms, glass, tiles, typography } from "@/theme";
 
 import {
   CheckboxInput,
@@ -66,10 +66,10 @@ export function ProductForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="rounded-[32px] border border-white/10 bg-white/[0.07] p-6 shadow-[0_20px_80px_rgba(0,0,0,0.42)] backdrop-blur-3xl 2xl:sticky 2xl:top-6 2xl:max-h-[calc(100vh-3rem)] 2xl:overflow-y-auto"
+      className={`${glass.panel} p-6 2xl:sticky 2xl:top-6 2xl:max-h-[calc(100vh-3rem)] 2xl:overflow-y-auto`}
     >
       <div className="mb-5 flex items-center gap-3">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.08] p-3 shadow-inner shadow-white/5">
+        <div className={tiles.compact}>
           {form.id ? (
             <Pencil className="h-5 w-5" />
           ) : (
@@ -78,7 +78,7 @@ export function ProductForm({
         </div>
 
         <div>
-          <h2 className="text-xl font-bold text-white">
+          <h2 className={typography.sectionTitle}>
             {form.id ? "Edit Product" : "Add Product"}
           </h2>
 
@@ -225,7 +225,7 @@ export function ProductForm({
             <button
               type="button"
               onClick={onOpenScanner}
-              className="rounded-2xl border border-white/10 bg-white/[0.08] px-4 text-white transition hover:bg-white/[0.14]"
+              className={buttons.secondary}
               title="Scan barcode"
               aria-label="Scan barcode"
             >
@@ -257,7 +257,7 @@ export function ProductForm({
         <button
           type="button"
           onClick={onToggleAdvanced}
-          className="inline-flex w-full items-center justify-between rounded-2xl border border-white/10 bg-white/[0.08] px-4 py-3 text-sm font-semibold text-white transition hover:bg-white/[0.14]"
+          className={`${buttons.secondary} w-full justify-between`}
         >
           Advanced Catalog Fields
 
@@ -269,7 +269,7 @@ export function ProductForm({
         </button>
 
         {showAdvanced ? (
-          <div className="space-y-4 rounded-3xl border border-white/10 bg-black/20 p-4 backdrop-blur-xl">
+          <div className={`${glass.inset} space-y-4 p-4`}>
             <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-1">
               <TextInput
                 id="primary-vendor"
@@ -495,7 +495,7 @@ export function ProductForm({
           <button
             type="button"
             onClick={onClear}
-            className="rounded-2xl border border-white/10 bg-white/[0.08] px-4 py-3 text-sm text-white transition hover:bg-white/[0.14]"
+            className={buttons.secondary}
           >
             Clear
           </button>
@@ -504,6 +504,9 @@ export function ProductForm({
     </form>
   );
 }
+
+
+
 
 
 

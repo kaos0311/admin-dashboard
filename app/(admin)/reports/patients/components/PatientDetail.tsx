@@ -2,3 +2,4 @@
 export type { PatientDetailProps } from "./detail/patient-detail-types";
 
 
+

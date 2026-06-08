@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { forms, glass, typography } from "@/theme";
+
 type Option = [value: string, label: string];
 
 type TextInputProps = {
@@ -29,7 +31,7 @@ export function TextInput({
     <div className="min-w-0">
       <label
         htmlFor={id}
-        className="mb-2 block text-sm font-medium text-slate-200/80"
+        className={forms.label}
       >
         {label}
       </label>
@@ -46,7 +48,7 @@ export function TextInput({
         placeholder={placeholder ?? label}
         aria-label={label}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm text-white shadow-inner shadow-black/20 outline-none backdrop-blur-xl transition placeholder:text-slate-500 focus:border-sky-300/50 focus:bg-white/[0.09] focus:ring-2 focus:ring-sky-300/20"
+        className={forms.input}
       />
     </div>
   );
@@ -71,7 +73,7 @@ export function SelectInput({
     <div className="min-w-0">
       <label
         htmlFor={id}
-        className="mb-2 block text-sm font-medium text-slate-200/80"
+        className={forms.label}
       >
         {label}
       </label>
@@ -83,10 +85,10 @@ export function SelectInput({
         value={value}
         aria-label={label}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-white shadow-inner shadow-black/20 outline-none backdrop-blur-xl transition focus:border-sky-300/50 focus:bg-slate-950/80 focus:ring-2 focus:ring-sky-300/20"
+        className={forms.select}
       >
         {options.map(([optionValue, optionLabel]) => (
-          <option key={optionValue} value={optionValue} className="bg-slate-950">
+          <option key={optionValue} value={optionValue}>
             {optionLabel}
           </option>
         ))}
@@ -114,7 +116,7 @@ export function MiniSelect({
     <div className="min-w-0">
       <label
         htmlFor={id}
-        className="mb-2 block text-xs font-medium text-slate-400"
+        className={typography.caption}
       >
         {label}
       </label>
@@ -126,10 +128,10 @@ export function MiniSelect({
         value={value}
         aria-label={label}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-slate-950/70 px-3 py-3 text-sm text-white shadow-inner shadow-black/20 outline-none backdrop-blur-xl transition focus:border-sky-300/50 focus:bg-slate-950/80 focus:ring-2 focus:ring-sky-300/20"
+        className={forms.select}
       >
         {options.map(([optionValue, optionLabel]) => (
-          <option key={optionValue} value={optionValue} className="bg-slate-950">
+          <option key={optionValue} value={optionValue}>
             {optionLabel}
           </option>
         ))}
@@ -154,7 +156,7 @@ export function CheckboxInput({
   return (
     <label
       htmlFor={id}
-      className="flex min-w-0 cursor-pointer items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm text-slate-200 backdrop-blur-xl transition hover:bg-white/[0.08]"
+      className={`${glass.card} flex min-w-0 cursor-pointer items-center gap-3 px-4 py-3`}
     >
       <input
         id={id}
@@ -170,5 +172,9 @@ export function CheckboxInput({
     </label>
   );
 }
+
+
+
+
 
 

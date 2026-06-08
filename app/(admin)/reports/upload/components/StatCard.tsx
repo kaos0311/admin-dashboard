@@ -35,7 +35,7 @@ export function StatCard({
           </p>
 
           {helper ? (
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs ${typography.caption}">
               {helper}
             </p>
           ) : null}
@@ -44,6 +44,7 @@ export function StatCard({
     </div>
   );
 }
+
 
 
 

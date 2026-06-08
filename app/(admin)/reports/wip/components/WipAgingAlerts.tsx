@@ -55,3 +55,4 @@ export function WipAgingAlerts({ records }: WipAgingAlertsProps) {
     </section>
   );
 }
+

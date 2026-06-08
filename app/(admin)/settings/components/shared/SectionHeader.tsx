@@ -27,7 +27,7 @@ export function SectionHeader({
         </h2>
 
         {description ? (
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-400">
+          <p className="mt-2 max-w-3xl text-sm leading-6 ${typography.bodyMuted}">
             {description}
           </p>
         ) : null}
@@ -37,5 +37,6 @@ export function SectionHeader({
     </div>
   );
 }
+
 
 

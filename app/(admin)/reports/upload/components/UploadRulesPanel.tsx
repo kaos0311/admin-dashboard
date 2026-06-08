@@ -1,8 +1,8 @@
 ﻿"use client";
 
-import { FileCheck2, ShieldCheck } from "lucide-react";
+import { glass, typography } from "@/theme";
 
-import { glass } from "@/theme";
+import { FileCheck2, ShieldCheck } from "lucide-react";
 
 type UploadRule = {
   id: string;
@@ -41,27 +41,27 @@ export function UploadRulesPanel() {
     >
       <div className="flex items-start gap-4">
         <div
-          className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-slate-300"
+          className={`${glass.card} p-3 ${typography.bodyMuted}`}
           aria-hidden="true"
         >
           <ShieldCheck className="h-5 w-5" />
         </div>
 
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-slate-500">
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] ${typography.caption}">
             Guardrails
           </p>
 
           <h2
             id="upload-rules-panel-title"
-            className="mt-2 text-lg font-semibold text-white"
+            className={typography.metricCompact}
           >
             Upload Rules
           </h2>
 
           <p
             id="upload-rules-panel-description"
-            className="mt-2 text-sm leading-6 text-slate-400"
+            className="mt-2 text-sm leading-6 ${typography.bodyMuted}"
           >
             Keep imports clean, traceable, and HIPAA-minded.
           </p>
@@ -72,10 +72,10 @@ export function UploadRulesPanel() {
         {UPLOAD_RULES.map((rule) => (
           <li
             key={rule.id}
-            className="flex gap-3 rounded-2xl border border-white/10 bg-black/20 p-3 text-sm leading-6 text-slate-300"
+            className={`${glass.inset} flex gap-3 p-3 ${typography.body}`}
           >
             <FileCheck2
-              className="mt-0.5 h-4 w-4 shrink-0 text-slate-400"
+              className="mt-0.5 h-4 w-4 shrink-0 ${typography.bodyMuted}"
               aria-hidden="true"
             />
 
@@ -91,5 +91,8 @@ export function UploadRulesPanel() {
     </section>
   );
 }
+
+
+
 
 

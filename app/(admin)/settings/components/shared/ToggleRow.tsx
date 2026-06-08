@@ -1,4 +1,6 @@
-﻿type ToggleRowProps = {
+﻿import { typography } from "@/theme";
+
+type ToggleRowProps = {
   title: string;
   description: string;
   checked: boolean;
@@ -14,8 +16,8 @@ export function ToggleRow({
   return (
     <div className="flex items-start justify-between gap-4 rounded-2xl border border-white/10 bg-black/20 p-4">
       <div>
-        <p className="text-sm font-semibold text-white">{title}</p>
-        <p className="mt-1 text-sm leading-6 text-slate-400">
+        <p className={typography.cardTitle}>{title}</p>
+        <p className="mt-1 text-sm leading-6 ${typography.bodyMuted}">
           {description}
         </p>
       </div>
@@ -45,5 +47,9 @@ export function ToggleRow({
     </div>
   );
 }
+
+
+
+
 
 

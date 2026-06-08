@@ -1,4 +1,4 @@
-﻿import { typography, tiles } from "@/theme";
+﻿import { tiles, typography } from "@/theme";
 
 import type { RentalRecord } from "../rentals-types";
 import {
@@ -116,3 +116,4 @@ function TableCell({
     </td>
   );
 }
+

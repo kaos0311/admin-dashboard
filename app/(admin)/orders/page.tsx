@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { ClipboardList, Loader2, ShieldCheck, Truck } from "lucide-react";
 import toast from "react-hot-toast";
 
-import { colors, glass, typography } from "@/theme";
+import { colors, glass, tiles, typography } from "@/theme";
 
 import BarcodeScannerModal from "@/app/components/barcode-scanner/BarcodeScannerModal";
 import { normalizeBarcode } from "@/lib/barcode";
@@ -263,7 +263,7 @@ export default function OrdersPage() {
 
           <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="space-y-4">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl">
+              <div className={tiles.label}>
                 <ShieldCheck className="h-3.5 w-3.5" />
                 Orders Intelligence
               </div>
@@ -271,7 +271,7 @@ export default function OrdersPage() {
               <div>
                 <h1 className={typography.pageTitle}>Orders Command Center</h1>
 
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+                <p className={`mt-3 max-w-3xl ${typography.body}`}>
                   Operational order management for routing, imports, inventory
                   matching, hospice review, barcode intake, smart filtering,
                   delivery tracking, and escalation monitoring. Because somebody
@@ -283,29 +283,29 @@ export default function OrdersPage() {
 
             <div className={`${glass.card} max-w-sm`}>
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-white/10 text-cyan-200 shadow-lg shadow-cyan-500/10 backdrop-blur-xl">
+                <div className={tiles.compact}>
                   <Truck className="h-6 w-6" />
                 </div>
 
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-white">
+                    <p className={typography.cardTitle}>
                       Orders System
                     </p>
 
-                    <span className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl">
+                    <span className={tiles.label}>
                       <span className="h-2 w-2 animate-pulse rounded-full bg-sky-200 shadow-[0_0_10px_rgba(186,230,253,0.9)]" />
                       Active
                     </span>
                   </div>
 
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-1 text-xs ${typography.caption}">
                     Smart routing + inventory matching online
                   </p>
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-slate-400">
+              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs ${typography.bodyMuted}">
                 <ClipboardList className="h-3.5 w-3.5 text-sky-200" />
                 Operational order intelligence active
               </div>
@@ -505,5 +505,10 @@ export default function OrdersPage() {
     </main>
   );
 }
+
+
+
+
+
 
 

@@ -15,7 +15,7 @@
     <div className="min-w-[180px]">
       <label
         htmlFor={id}
-        className="mb-2 block text-xs uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400"
+        className="mb-2 block text-xs uppercase tracking-[0.15em] ${typography.caption} dark:${typography.bodyMuted}"
       >
         {label}
       </label>
@@ -36,5 +36,6 @@
     </div>
   );
 }
+
 
 

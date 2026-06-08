@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { Loader2, LogOut, Settings, UserCircle } from "lucide-react";
+
+import { typography } from "@/theme";
 import { useState } from "react";
 
 type AdminProfileMenuProps = {
@@ -37,7 +39,7 @@ export function AdminProfileMenu({
       {open ? (
         <div className="absolute right-0 top-full z-50 mt-2 w-72 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl shadow-black/40 backdrop-blur-2xl">
           <div className="border-b border-white/10 px-4 py-3">
-            <div className="text-sm font-semibold text-white">
+            <div className={typography.cardTitle}>
               {isAdmin ? "Administrator" : "Staff User"}
             </div>
             <div className="mt-1 truncate text-xs text-white/50">{userEmail}</div>
@@ -70,5 +72,10 @@ export function AdminProfileMenu({
     </div>
   );
 }
+
+
+
+
+
 
 

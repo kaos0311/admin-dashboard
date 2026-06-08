@@ -90,7 +90,7 @@ function StatCard({
       </div>
 
       <p
-        className={`${typography.caption} break-words text-slate-400`}
+        className={`${typography.caption} break-words ${typography.bodyMuted}`}
       >
         {title}
       </p>
@@ -103,5 +103,6 @@ function StatCard({
     </article>
   );
 }
+
 
 

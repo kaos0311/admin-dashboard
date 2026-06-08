@@ -18,7 +18,7 @@ function severityClass(severity: AuditSeverity): string {
 function InfoCard({ title, value }: { title: string; value: string }) {
   return (
     <div className="rounded-2xl border border-white/50 bg-white/50 p-4 backdrop-blur-xl dark:border-white/10 dark:bg-black/20">
-      <p className="text-xs uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">
+      <p className="text-xs uppercase tracking-[0.15em] ${typography.caption} dark:${typography.bodyMuted}">
         {title}
       </p>
 
@@ -38,7 +38,7 @@ export function AuditDetails({ selectedLog }: { selectedLog: AuditLogRow | null 
                 {selectedLog.actionLabel}
               </h2>
 
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm ${typography.caption}">
                 {formatTimestamp(selectedLog.createdAt)}
               </p>
             </div>
@@ -85,7 +85,7 @@ export function AuditDetails({ selectedLog }: { selectedLog: AuditLogRow | null 
           <InfoCard title="Device / User Agent" value={selectedLog.userAgent ?? "â€”"} />
 
           <div className="rounded-2xl border border-white/50 bg-white/50 p-4 backdrop-blur-xl dark:border-white/10 dark:bg-black/20">
-            <p className="text-xs uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">
+            <p className="text-xs uppercase tracking-[0.15em] ${typography.caption} dark:${typography.bodyMuted}">
               Details
             </p>
 
@@ -95,10 +95,11 @@ export function AuditDetails({ selectedLog }: { selectedLog: AuditLogRow | null 
           </div>
         </div>
       ) : (
-        <p className="text-slate-500">Select an audit event.</p>
+        <p className="${typography.caption}">Select an audit event.</p>
       )}
     </section>
   );
 }
+
 
 

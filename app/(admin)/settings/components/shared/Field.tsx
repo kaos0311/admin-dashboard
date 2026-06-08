@@ -23,7 +23,7 @@ export function Field({
   if (textarea) {
     return (
       <label className="block" htmlFor={id}>
-        <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+        <span className="text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}">
           {label}
         </span>
 
@@ -43,7 +43,7 @@ export function Field({
 
   return (
     <label className="block" htmlFor={id}>
-      <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+      <span className="text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}">
         {label}
       </span>
 
@@ -60,5 +60,6 @@ export function Field({
     </label>
   );
 }
+
 
 

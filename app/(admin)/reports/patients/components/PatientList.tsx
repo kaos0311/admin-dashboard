@@ -91,7 +91,7 @@ export function PatientList({
 
           <div className={`${glass.insetPadded} flex items-center gap-2`}>
             <Search
-              className="h-4 w-4 shrink-0 text-slate-500"
+              className="h-4 w-4 shrink-0 ${typography.caption}"
               aria-hidden="true"
             />
 
@@ -157,7 +157,7 @@ export function PatientList({
                   <div className="min-w-0">
                     <div className={spacing.inline}>
                       <UserRound
-                        className="h-4 w-4 shrink-0 text-slate-500"
+                        className="h-4 w-4 shrink-0 ${typography.caption}"
                         aria-hidden="true"
                       />
 
@@ -226,3 +226,4 @@ export function PatientList({
     </aside>
   );
 }
+

@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { typography } from "@/theme";
+
 import { ClipboardList } from "lucide-react";
 
 export function InventoryEmptyState() {
@@ -9,13 +11,17 @@ export function InventoryEmptyState() {
         <ClipboardList className="h-6 w-6 text-slate-300" />
       </div>
 
-      <h3 className="font-semibold text-white">No inventory records found.</h3>
+      <h3 className={typography.cardTitle}>No inventory records found.</h3>
 
-      <p className="mt-1 text-sm text-slate-400">
+      <p className="mt-1 text-sm ${typography.bodyMuted}">
         Adjust filters or add a new item. Truly advanced civilization stuff.
       </p>
     </div>
   );
 }
+
+
+
+
 
 

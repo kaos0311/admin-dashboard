@@ -46,7 +46,7 @@ function MiniStat({
       className={`${glass.card} min-w-0 overflow-hidden`}
     >
       <p
-        className={`${typography.caption} break-words text-slate-500`}
+        className={`${typography.caption} break-words ${typography.caption}`}
       >
         {title}
       </p>
@@ -59,5 +59,6 @@ function MiniStat({
     </article>
   );
 }
+
 
 

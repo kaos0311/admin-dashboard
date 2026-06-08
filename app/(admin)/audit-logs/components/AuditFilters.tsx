@@ -37,13 +37,13 @@ export function AuditFilters({
         <div className="flex-1">
           <label
             htmlFor="audit-log-search"
-            className="mb-2 block text-xs uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400"
+            className="mb-2 block text-xs uppercase tracking-[0.15em] ${typography.caption} dark:${typography.bodyMuted}"
           >
             Search
           </label>
 
           <div className="relative">
-            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+            <Search className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${typography.caption}" />
 
             <input
               id="audit-log-search"
@@ -126,5 +126,6 @@ export function AuditFilters({
     </section>
   );
 }
+
 
 

@@ -1,6 +1,6 @@
 ﻿"use client";
 
-import { badges, glass, typography } from "@/theme";
+import { badges, glass, tables, typography } from "@/theme";
 
 type ImportMeta = {
   id: string;
@@ -20,9 +20,7 @@ type Props = {
 };
 
 function safeString(value: unknown, fallback = "-"): string {
-  return typeof value === "string" && value.trim()
-    ? value.trim()
-    : fallback;
+  return typeof value === "string" && value.trim() ? value.trim() : fallback;
 }
 
 function safeNumber(value: unknown): number {
@@ -40,11 +38,11 @@ function CountBadge({
   color?: "neutral" | "cyan" | "red" | "emerald";
 }) {
   const classes: Record<string, string> = {
-  neutral: badges.neutral,
-  cyan: badges.info,
-  red: badges.danger,
-  emerald: badges.success,
-};
+    neutral: badges.neutral,
+    cyan: badges.info,
+    red: badges.danger,
+    emerald: badges.success,
+  };
 
   if (value <= 0) {
     return <span className={typography.smallMuted}>0</span>;
@@ -59,28 +57,24 @@ function CountBadge({
   );
 }
 
-export default function ReportsImportsTable({
-  imports,
-}: Props) {
+export default function ReportsImportsTable({ imports }: Props) {
   return (
     <section className={glass.card}>
-      <div className="flex flex-wrap items-center justify-between gap-4 border-b border-white/10 px-6 py-5">
+      <div
+        className={`${glass.divider} flex flex-wrap items-center justify-between gap-4 px-6 py-5`}
+      >
         <div>
-          <h2 className="text-lg font-semibold text-white">
-            Recent Imports
-          </h2>
+          <h2 className={typography.sectionTitle}>Recent Imports</h2>
 
           <p className={`mt-1 ${typography.bodyMuted}`}>
             Imported report history and hospice filtering metrics.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-right">
-          <div className={typography.caption}>
-            Total Imports
-          </div>
+        <div className={`${glass.inset} px-4 py-3 text-right`}>
+          <div className={typography.caption}>Total Imports</div>
 
-          <div className="mt-1 text-lg font-semibold text-white">
+          <div className={typography.metricCompact}>
             {countFormatter.format(imports.length)}
           </div>
         </div>
@@ -91,106 +85,55 @@ export default function ReportsImportsTable({
           <thead className={glass.tableHeader}>
             <tr>
               <th className="px-4 py-4">File</th>
-
-              <th className="px-4 py-4">
-                Report Type
-              </th>
-
-              <th className="px-4 py-4">
-                Imported
-              </th>
-
-              <th className="px-4 py-4 text-right">
-                Total Rows
-              </th>
-
-              <th className="px-4 py-4 text-right">
-                Hospice
-              </th>
-
-              <th className="px-4 py-4 text-right">
-                Living
-              </th>
-
-              <th className="px-4 py-4 text-right">
-                Deceased
-              </th>
-
-              <th className="px-4 py-4 text-right">
-                Skipped
-              </th>
+              <th className="px-4 py-4">Report Type</th>
+              <th className="px-4 py-4">Imported</th>
+              <th className="px-4 py-4 text-right">Total Rows</th>
+              <th className="px-4 py-4 text-right">Hospice</th>
+              <th className="px-4 py-4 text-right">Living</th>
+              <th className="px-4 py-4 text-right">Deceased</th>
+              <th className="px-4 py-4 text-right">Skipped</th>
             </tr>
           </thead>
 
           <tbody>
             {imports.length === 0 ? (
               <tr>
-                <td
-                  colSpan={8}
-                  className="px-4 py-14 text-center"
-                >
+                <td colSpan={8} className="px-4 py-14 text-center">
                   <div className="mx-auto max-w-sm">
-                    <div className={typography.subTitle}>
-                      No imports yet
-                    </div>
+                    <div className={typography.subTitle}>No imports yet</div>
 
                     <div className={`mt-2 ${typography.bodyMuted}`}>
-                      Uploaded reports will appear here once
-                      processing completes.
+                      Uploaded reports will appear here once processing
+                      completes.
                     </div>
                   </div>
                 </td>
               </tr>
             ) : (
               imports.map((item) => {
-                const fileName = safeString(
-                  item.fileName,
-                  "Unnamed file"
-                );
-
-                const reportType = safeString(
-                  item.reportType,
-                  "-"
-                );
-
-                const importedAt = safeString(
-                  item.importedAtLabel,
-                  "-"
-                );
-
-                const totalRows = safeNumber(
-                  item.totalRows
-                );
-
-                const hospiceRows = safeNumber(
-                  item.hospiceRows
-                );
-
-                const livingHospiceRows = safeNumber(
-                  item.livingHospiceRows
-                );
-
-                const deceasedHospiceRows = safeNumber(
-                  item.deceasedHospiceRows
-                );
-
-                const skippedHospiceRows = safeNumber(
-                  item.skippedHospiceRows
-                );
+                const fileName = safeString(item.fileName, "Unnamed file");
+                const reportType = safeString(item.reportType, "-");
+                const importedAt = safeString(item.importedAtLabel, "-");
+                const totalRows = safeNumber(item.totalRows);
+                const hospiceRows = safeNumber(item.hospiceRows);
+                const livingHospiceRows = safeNumber(item.livingHospiceRows);
+                const deceasedHospiceRows = safeNumber(item.deceasedHospiceRows);
+                const skippedHospiceRows = safeNumber(item.skippedHospiceRows);
 
                 return (
-                  <tr
-                    key={item.id}
-                    className="border-b border-white/5 transition hover:bg-white/[0.035]"
-                  >
+                  <tr key={item.id} className={tables.row}>
                     <td className="px-4 py-4">
-                      <div className="max-w-[320px] truncate font-medium text-white">
+                      <div
+                        className={`${typography.cardTitle} max-w-[320px] truncate`}
+                      >
                         {fileName}
                       </div>
                     </td>
 
                     <td className="px-4 py-4">
-                      <span className={`inline-flex rounded-full px-3 py-1 text-xs ${badges.neutral}`}>
+                      <span
+                        className={`inline-flex rounded-full px-3 py-1 text-xs ${badges.neutral}`}
+                      >
                         {reportType}
                       </span>
                     </td>
@@ -199,36 +142,26 @@ export default function ReportsImportsTable({
                       {importedAt}
                     </td>
 
-                    <td className="px-4 py-4 text-right font-mono text-white">
+                    <td
+                      className={`${typography.mono} px-4 py-4 text-right`}
+                    >
                       {countFormatter.format(totalRows)}
                     </td>
 
                     <td className="px-4 py-4 text-right">
-                      <CountBadge
-                        value={hospiceRows}
-                        color="cyan"
-                      />
+                      <CountBadge value={hospiceRows} color="cyan" />
                     </td>
 
                     <td className="px-4 py-4 text-right">
-                      <CountBadge
-                        value={livingHospiceRows}
-                        color="emerald"
-                      />
+                      <CountBadge value={livingHospiceRows} color="emerald" />
                     </td>
 
                     <td className="px-4 py-4 text-right">
-                      <CountBadge
-                        value={deceasedHospiceRows}
-                        color="red"
-                      />
+                      <CountBadge value={deceasedHospiceRows} color="red" />
                     </td>
 
                     <td className="px-4 py-4 text-right">
-                      <CountBadge
-                        value={skippedHospiceRows}
-                        color="neutral"
-                      />
+                      <CountBadge value={skippedHospiceRows} />
                     </td>
                   </tr>
                 );
@@ -240,8 +173,3 @@ export default function ReportsImportsTable({
     </section>
   );
 }
-
-
-
-
-

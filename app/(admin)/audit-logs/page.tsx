@@ -342,7 +342,7 @@ export default function AuditLogsPage() {
                   Center
                 </h1>
 
-                <p className="mt-3 max-w-3xl text-sm leading-7 text-slate-300">
+                <p className={`mt-3 max-w-3xl ${typography.body}`}>
                   Realtime operational
                   visibility into user
                   activity, security
@@ -473,6 +473,8 @@ export default function AuditLogsPage() {
     </main>
   );
 }
+
+
 
 
 

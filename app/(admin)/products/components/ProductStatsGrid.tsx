@@ -82,7 +82,7 @@ function StatCard({
         </div>
 
         <div className="min-w-0">
-          <p className="truncate text-sm text-slate-400">{label}</p>
+          <p className="truncate text-sm ${typography.bodyMuted}">{label}</p>
           <p className="truncate text-2xl font-bold text-white">
             {Number.isFinite(value) ? value.toLocaleString() : "0"}
           </p>
@@ -91,6 +91,7 @@ function StatCard({
     </div>
   );
 }
+
 
 
 

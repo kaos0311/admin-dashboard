@@ -43,3 +43,4 @@ export function WipStatGrid({ analytics }: WipStatGridProps) {
     </section>
   );
 }
+

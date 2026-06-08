@@ -32,7 +32,7 @@ export function ProductHero({
               Products
             </h1>
 
-            <p className="mt-1 max-w-4xl text-pretty text-sm leading-6 text-slate-400">
+            <p className="mt-1 max-w-4xl text-pretty text-sm leading-6 ${typography.bodyMuted}">
               Master DME/HME catalog for inventory, rentals, serialized
               tracking, billing references, recalls, and operational
               accountability.
@@ -46,7 +46,7 @@ export function ProductHero({
             onClick={onRefresh}
             disabled={loadingProducts}
             aria-label="Refresh products"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.08] px-5 py-3 text-sm font-semibold text-white shadow-lg shadow-black/20 transition hover:bg-white/[0.14] focus:outline-none focus:ring-2 focus:ring-cyan-300/40 disabled:cursor-not-allowed disabled:opacity-50"
+            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.08] px-5 py-3 text-sm ${typography.cardTitle} shadow-lg shadow-black/20 transition hover:bg-white/[0.14] focus:outline-none focus:ring-2 focus:ring-cyan-300/40 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {loadingProducts ? (
               <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
@@ -77,5 +77,8 @@ export function ProductHero({
     </section>
   );
 }
+
+
+
 
 

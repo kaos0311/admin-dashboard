@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { typography } from "@/theme";
+
 import { Truck } from "lucide-react";
 
 import type { RentalRow } from "../../dashboard-types";
@@ -21,7 +23,7 @@ export function RentalsSection({ rentals }: RentalsSectionProps) {
               key={rental.id}
               className="rounded-2xl border border-white/10 bg-black/20 p-4"
             >
-              <p className="font-semibold text-white">
+              <p className={typography.cardTitle}>
                 {rental.patientName || "Unknown Patient"}
               </p>
 
@@ -41,5 +43,9 @@ export function RentalsSection({ rentals }: RentalsSectionProps) {
     </GlassPanel>
   );
 }
+
+
+
+
 
 

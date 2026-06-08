@@ -1,7 +1,12 @@
 ﻿"use client";
 
 
-import { typography } from "@/theme";
+import {
+  buttons,
+  glass,
+  tiles,
+  typography,
+} from "@/theme";
 import { Loader2, PackagePlus, Pencil, Save } from "lucide-react";
 import type { FormEvent } from "react";
 
@@ -62,19 +67,19 @@ export function InventoryForm({
   return (
     <form
       onSubmit={onSubmit}
-      className="rounded-[2rem] border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl"
+      className={`${glass.shell} p-6`}
     >
       <div className="mb-5 flex items-center gap-3">
-        <div className="rounded-2xl border border-white/10 bg-white/10 p-3 shadow-inner shadow-white/5">
+        <div className={tiles.compact}>
           {form.id ? (
-            <Pencil className="h-5 w-5 text-white" />
+            <Pencil className="h-5 w-5" />
           ) : (
-            <PackagePlus className="h-5 w-5 text-white" />
+            <PackagePlus className="h-5 w-5" />
           )}
         </div>
 
         <div>
-          <h2 className="text-xl font-bold text-white">
+          <h2 className={typography.sectionTitle}>
             {form.id ? "Edit Item" : "Add Item"}
           </h2>
 
@@ -379,16 +384,16 @@ export function InventoryForm({
           }
         />
 
-        <div className="rounded-2xl border border-white/10 bg-black/40 p-4 text-sm text-slate-300 shadow-inner shadow-black/20 backdrop-blur-xl">
+        <div className={`${glass.inset} p-4 ${typography.body}`}>
           Available:{" "}
-          <span className="font-bold text-white">
+          <span className={typography.metricCompact}>
             {available.toLocaleString()}
           </span>
 
           {" â€¢ "}
 
           Total Value:{" "}
-          <span className="font-bold text-white">
+          <span className={typography.metricCompact}>
             {formatMoney(totalValue)}
           </span>
         </div>
@@ -397,7 +402,7 @@ export function InventoryForm({
           <button
             type="submit"
             disabled={saving || !canWrite}
-            className="inline-flex flex-1 items-center justify-center gap-2 rounded-2xl bg-white px-4 py-3 text-sm font-semibold text-black shadow-xl shadow-black/20 transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+            className={`${buttons.primary} flex-1`}
           >
             {saving ? (
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -411,7 +416,7 @@ export function InventoryForm({
           <button
             type="button"
             onClick={onReset}
-            className="rounded-2xl border border-white/10 bg-white/10 px-4 py-3 text-sm text-white shadow-lg shadow-black/20 backdrop-blur-xl transition hover:bg-white/15"
+            className={buttons.secondary}
           >
             Clear
           </button>
@@ -420,6 +425,9 @@ export function InventoryForm({
     </form>
   );
 }
+
+
+
 
 
 

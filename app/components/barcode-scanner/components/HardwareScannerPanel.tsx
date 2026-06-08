@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { typography } from "@/theme";
+
 import type { RefObject } from "react";
 import { Wifi } from "lucide-react";
 
@@ -24,8 +26,8 @@ export default function HardwareScannerPanel({
         </div>
 
         <div>
-          <h3 className="font-semibold text-white">External Scanner Mode</h3>
-          <p className="text-sm text-zinc-400">
+          <h3 className={typography.cardTitle}>External Scanner Mode</h3>
+          <p className={typography.bodyMuted}>
             USB, Bluetooth, Wi-Fi, or network scanner configured as keyboard
             input.
           </p>
@@ -68,5 +70,9 @@ export default function HardwareScannerPanel({
     </section>
   );
 }
+
+
+
+
 
 

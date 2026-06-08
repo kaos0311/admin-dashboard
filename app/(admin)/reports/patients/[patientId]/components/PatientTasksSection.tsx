@@ -2,6 +2,8 @@
 
 import { CheckCircle2, ClipboardCheck, Plus } from "lucide-react";
 
+import { buttons, forms, glass, typography } from "@/theme";
+
 import type {
   PatientTask,
   PatientTaskPriority,
@@ -33,7 +35,7 @@ function Input({
 
   return (
     <label htmlFor={id}>
-      <span className="mb-2 block text-xs text-zinc-400">{label}</span>
+      <span className={typography.label}>{label}</span>
 
       <input
         id={id}
@@ -42,7 +44,7 @@ function Input({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
-        className="w-full rounded-2xl border border-white/10 bg-black/30 p-3 text-sm text-white outline-none placeholder:text-zinc-600 focus:border-cyan-400/30"
+        className={`${forms.input} mt-2`}
       />
     </label>
   );
@@ -69,19 +71,19 @@ function TaskList({
       {tasks.map((task) => (
         <div
           key={task.id}
-          className="flex flex-col gap-3 rounded-3xl border border-white/10 bg-black/25 p-4 backdrop-blur-xl md:flex-row md:items-center md:justify-between"
+          className={`${glass.inset} flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between`}
         >
           <div>
             <div className="flex flex-wrap items-center gap-2">
-              <p className="font-semibold text-white">{task.title}</p>
+              <p className={typography.cardTitle}>{task.title}</p>
 
               <TaskPriorityPill priority={task.priority} />
 
               <StatusSmall label={task.status} />
             </div>
 
-            <p className="mt-1 text-xs text-zinc-400">
-              Assigned: {task.assignedTo || "â€”"} | Due:{" "}
+            <p className={`${typography.caption} mt-1`}>
+              Assigned: {task.assignedTo || "—"} | Due:{" "}
               {formatDate(task.dueDate)}
             </p>
           </div>
@@ -90,7 +92,7 @@ function TaskList({
             type="button"
             onClick={() => void onChangeStatus(task.id, nextStatus)}
             disabled={saving}
-            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-2 text-sm text-emerald-100 transition hover:bg-emerald-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+            className={buttons.success}
           >
             <CheckCircle2 className="h-4 w-4" />
             {actionLabel}
@@ -130,7 +132,7 @@ type Props = {
 export function PatientTasksSection(props: Props) {
   return (
     <div className="space-y-4 md:col-span-3">
-      <div className="grid gap-3 rounded-3xl border border-white/10 bg-black/25 p-4 backdrop-blur-2xl md:grid-cols-4">
+      <div className={`${glass.inset} grid gap-3 p-4 md:grid-cols-4`}>
         <Input
           label="Task Title"
           value={props.newTaskTitle}
@@ -153,7 +155,7 @@ export function PatientTasksSection(props: Props) {
         />
 
         <label>
-          <span className="mb-2 block text-xs text-zinc-400">
+          <span className={typography.label}>
             Priority
           </span>
 
@@ -166,7 +168,7 @@ export function PatientTasksSection(props: Props) {
                 event.target.value as PatientTaskPriority
               )
             }
-            className="w-full rounded-2xl border border-white/10 bg-black/30 p-3 text-sm text-white outline-none"
+            className={`${forms.select} mt-2`}
           >
             <option value="routine">Routine</option>
             <option value="watch">Watch</option>
@@ -178,7 +180,7 @@ export function PatientTasksSection(props: Props) {
           type="button"
           onClick={() => void props.addTask()}
           disabled={props.savingTask}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50 md:col-span-4"
+          className={`${buttons.primary} md:col-span-4`}
         >
           <Plus className="h-4 w-4" />
 
@@ -203,8 +205,8 @@ export function PatientTasksSection(props: Props) {
       )}
 
       {props.completedTasks.length ? (
-        <details className="rounded-3xl border border-white/10 bg-black/25 p-4 backdrop-blur-2xl">
-          <summary className="cursor-pointer text-sm font-semibold text-zinc-300">
+        <details className={`${glass.inset} p-4`}>
+          <summary className={`${typography.cardTitle} cursor-pointer`}>
             Completed Tasks ({props.completedTasks.length})
           </summary>
 
@@ -222,5 +224,3 @@ export function PatientTasksSection(props: Props) {
     </div>
   );
 }
-
-

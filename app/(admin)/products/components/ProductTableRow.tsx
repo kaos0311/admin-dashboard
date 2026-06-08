@@ -55,7 +55,7 @@ export function ProductTableRow({
               {productName}
             </div>
 
-            <div className="mt-1 line-clamp-2 break-words text-xs leading-5 text-slate-500">
+            <div className="mt-1 line-clamp-2 break-words text-xs leading-5 ${typography.caption}">
               {productMeta}
             </div>
           </div>
@@ -125,5 +125,6 @@ function TableTextCell({
     </td>
   );
 }
+
 
 

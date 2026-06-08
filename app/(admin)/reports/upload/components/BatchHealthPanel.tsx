@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { glass, typography } from "@/theme";
+
 import {
   CheckCircle2,
   Clock3,
@@ -21,9 +23,9 @@ export function BatchHealthPanel({
   failed,
 }: BatchHealthPanelProps) {
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-white/[0.055] p-5 shadow-xl shadow-black/20 backdrop-blur-2xl">
+    <section className={`${glass.panel} p-5`}>
       <div className="mb-5">
-        <h2 className="text-lg font-semibold text-white">
+        <h2 className={typography.sectionTitle}>
           Upload Queue Health
         </h2>
 
@@ -97,12 +99,15 @@ function PanelStat({
           </p>
         </div>
 
-        <div className="rounded-xl border border-white/10 bg-black/20 p-2">
+        <div className={`${glass.inset} p-2`}>
           {icon}
         </div>
       </div>
     </div>
   );
 }
+
+
+
 
 

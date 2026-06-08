@@ -11,13 +11,13 @@ export function RecentActivityCard() {
         </div>
 
         <div>
-          <h3 className="text-sm font-semibold text-white">Recent Activity</h3>
+          <h3 className={typography.cardTitle}>Recent Activity</h3>
           <p className={typography.smallMuted}>Settings audit placeholder</p>
         </div>
       </div>
 
       <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-        <p className="text-sm leading-6 text-slate-400">
+        <p className="text-sm leading-6 ${typography.bodyMuted}">
           Activity logging should be wired to <span className="text-slate-200">auditLogs</span>{" "}
           when settings updates are finalized through admin-only operations.
         </p>
@@ -25,6 +25,8 @@ export function RecentActivityCard() {
     </aside>
   );
 }
+
+
 
 
 

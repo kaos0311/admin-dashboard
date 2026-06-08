@@ -16,7 +16,7 @@ export function RentalsHeader() {
             Rental Equipment
           </h1>
 
-          <p className="mt-3 max-w-3xl break-words text-sm leading-6 text-slate-400">
+          <p className="mt-3 max-w-3xl break-words text-sm leading-6 ${typography.bodyMuted}">
             Track rental inventory, patient assignments, return dates,
             maintenance status, and monthly revenue without letting equipment
             wander off into the abyss like every missing charger in human
@@ -30,7 +30,7 @@ export function RentalsHeader() {
           </div>
 
           <div className="min-w-0">
-            <p className="truncate text-xs uppercase tracking-[0.18em] text-slate-500">
+            <p className="truncate text-xs uppercase tracking-[0.18em] ${typography.caption}">
               Operations
             </p>
 
@@ -43,5 +43,6 @@ export function RentalsHeader() {
     </GlassCard>
   );
 }
+
 
 

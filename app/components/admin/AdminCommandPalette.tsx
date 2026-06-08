@@ -2,6 +2,8 @@
 
 import Link from "next/link";
 import { Command, X } from "lucide-react";
+
+import { buttons, forms, glass, typography } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
 
 const commands = [
@@ -53,16 +55,16 @@ export function AdminCommandPalette() {
         onClick={() => setOpen(true)}
         title="Open command palette"
         aria-label="Open command palette"
-        className="hidden rounded-xl border border-white/10 bg-white/5 p-2 text-white transition hover:bg-white/10 md:inline-flex"
+        className={`${buttons.secondary} hidden p-2 md:inline-flex`}
       >
         <Command className="h-4 w-4" aria-hidden="true" />
       </button>
 
       {open ? (
-        <div className="fixed inset-0 z-[200] bg-black/60 px-4 py-20 backdrop-blur-sm">
-          <div className="mx-auto max-w-xl overflow-hidden rounded-3xl border border-white/10 bg-slate-950 shadow-2xl shadow-black/50">
-            <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
-              <Command className="h-4 w-4 text-sky-300" aria-hidden="true" />
+        <div className={`bg-black/60 fixed inset-0 z-[200] px-4 py-20 backdrop-blur-sm`}>
+          <div className={`${glass.shell} mx-auto max-w-xl overflow-hidden`}>
+            <div className={`${glass.toolbar} flex items-center gap-3 px-4 py-3`}>
+              <Command className="h-4 w-4" aria-hidden="true" />
 
               <input
                 value={query}
@@ -71,7 +73,7 @@ export function AdminCommandPalette() {
                 title="Search commands"
                 aria-label="Search commands"
                 autoFocus
-                className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none placeholder:text-white/35"
+                className={`${forms.input} min-w-0 flex-1 border-0 bg-transparent shadow-none`}
               />
 
               <button
@@ -79,7 +81,7 @@ export function AdminCommandPalette() {
                 onClick={() => setOpen(false)}
                 title="Close command palette"
                 aria-label="Close command palette"
-                className="rounded-xl p-2 text-white/60 transition hover:bg-white/10 hover:text-white"
+                className={`${buttons.ghost} p-2`}
               >
                 <X className="h-4 w-4" aria-hidden="true" />
               </button>
@@ -94,14 +96,14 @@ export function AdminCommandPalette() {
                     setOpen(false);
                     setQuery("");
                   }}
-                  className="block rounded-2xl px-4 py-3 text-sm text-white transition hover:bg-white/10"
+                  className={`block rounded-2xl px-4 py-3 ${typography.body} transition hover:bg-white/10`}
                 >
                   {command.label}
                 </Link>
               ))}
 
               {filteredCommands.length === 0 ? (
-                <div className="px-4 py-8 text-center text-sm text-white/45">
+                <div className={`px-4 py-8 text-center ${typography.bodyMuted}`}>
                   No commands found.
                 </div>
               ) : null}
@@ -112,5 +114,8 @@ export function AdminCommandPalette() {
     </>
   );
 }
+
+
+
 
 

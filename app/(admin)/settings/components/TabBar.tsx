@@ -30,7 +30,7 @@ export function TabBar({ tabs, activeTab, onChange }: TabBarProps) {
                 "inline-flex h-10 items-center gap-2 rounded-2xl px-4 text-sm font-semibold transition",
                 active
                   ? "border border-cyan-300/50 bg-cyan-300/15 text-cyan-100 shadow-lg shadow-cyan-950/25"
-                  : "border border-transparent text-slate-400 hover:bg-white/[0.06] hover:text-slate-100",
+                  : "border border-transparent ${typography.bodyMuted} hover:bg-white/[0.06] hover:text-slate-100",
               ].join(" ")}
             >
               {tab.icon}
@@ -42,5 +42,6 @@ export function TabBar({ tabs, activeTab, onChange }: TabBarProps) {
     </nav>
   );
 }
+
 
 

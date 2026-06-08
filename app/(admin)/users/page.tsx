@@ -529,7 +529,7 @@ export default function UsersPage() {
 
                 <div>
                   <div className="flex items-center gap-2">
-                    <p className="text-sm font-semibold text-white">
+                    <p className={typography.cardTitle}>
                       User System
                     </p>
 
@@ -675,6 +675,8 @@ export default function UsersPage() {
     </main>
   );
 }
+
+
 
 
 

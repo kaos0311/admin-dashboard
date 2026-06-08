@@ -15,7 +15,7 @@
           : "border-white/50 bg-white/60 dark:border-white/10 dark:bg-white/[0.06]"
       }`}
     >
-      <p className="text-xs uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+      <p className="text-xs uppercase tracking-[0.18em] ${typography.caption} dark:${typography.bodyMuted}">
         {label}
       </p>
 
@@ -23,5 +23,6 @@
     </div>
   );
 }
+
 
 

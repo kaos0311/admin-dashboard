@@ -50,3 +50,4 @@ export function WipEmployeeGroups({ records }: WipEmployeeGroupsProps) {
     </section>
   );
 }
+

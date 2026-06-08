@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { typography } from "@/theme";
+
 import { Keyboard } from "lucide-react";
 
 type ManualScannerPanelProps = {
@@ -21,8 +23,8 @@ export default function ManualScannerPanel({
         </div>
 
         <div>
-          <h3 className="font-semibold text-white">Manual Entry</h3>
-          <p className="text-sm text-zinc-400">
+          <h3 className={typography.cardTitle}>Manual Entry</h3>
+          <p className={typography.bodyMuted}>
             Type or paste a barcode value.
           </p>
         </div>
@@ -56,5 +58,9 @@ export default function ManualScannerPanel({
     </section>
   );
 }
+
+
+
+
 
 

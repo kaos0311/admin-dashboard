@@ -1,12 +1,12 @@
 ﻿"use client";
 
+import { glass, typography } from "@/theme";
+
 import {
   AlertTriangle,
   Database,
   ShieldCheck,
 } from "lucide-react";
-
-import { glass } from "@/theme";
 
 import type { PatientIndexStats } from "../upload-types";
 import { formatTimestamp } from "../upload-utils";
@@ -27,18 +27,18 @@ export function ImportHealthPanel({
     <section className={glass.card}>
       <div className="flex items-start gap-4">
         <div
-          className="rounded-2xl border border-white/10 bg-white/[0.06] p-3 text-slate-300"
+          className={`${glass.card} p-3 ${typography.bodyMuted}`}
           aria-hidden="true"
         >
           <Database className="h-5 w-5" />
         </div>
 
         <div>
-          <h2 className="text-lg font-semibold text-white">
+          <h2 className={typography.sectionTitle}>
             Import Index Health
           </h2>
 
-          <p className="mt-1 text-sm leading-6 text-slate-400">
+          <p className="mt-1 text-sm leading-6 ${typography.bodyMuted}">
             Snapshot of indexed operational data available to reporting and
             analytics layers.
           </p>
@@ -126,5 +126,8 @@ export function ImportHealthPanel({
     </section>
   );
 }
+
+
+
 
 

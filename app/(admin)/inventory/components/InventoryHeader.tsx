@@ -31,7 +31,7 @@ export function InventoryHeader({
               service alerts, and batch controls.
             </p>
 
-            <p className="mt-1 text-xs text-slate-500">
+            <p className="mt-1 text-xs ${typography.caption}">
               {lastLoadedAt
                 ? `Last synced: ${lastLoadedAt.toLocaleTimeString()}`
                 : "Waiting for inventory sync..."}
@@ -62,6 +62,7 @@ export function InventoryHeader({
     </section>
   );
 }
+
 
 
 

@@ -1,4 +1,7 @@
-﻿import type { AdminUser, UserRole, UserStatus } from "../../settings-types";
+﻿import { typography } from "@/theme";
+
+import type { AdminUser, UserRole, UserStatus } from "../../settings-types";
+
 import { UserRow } from "./UserRow";
 
 type UsersTableProps = {
@@ -15,8 +18,8 @@ export function UsersTable({
   if (users.length === 0) {
     return (
       <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 px-6 py-12 text-center">
-        <p className="font-semibold text-white">No users found</p>
-        <p className="mt-2 text-sm text-slate-400">
+        <p className={typography.cardTitle}>No users found</p>
+        <p className="mt-2 text-sm ${typography.bodyMuted}">
           Create a user document above. Then make sure Firebase Auth and custom
           claims match, because Firestore documents alone are not magic keys.
         </p>
@@ -27,7 +30,7 @@ export function UsersTable({
   return (
     <div className="overflow-hidden rounded-3xl border border-white/10">
       <table className="w-full border-collapse text-left">
-        <thead className="bg-white/[0.045] text-xs uppercase tracking-[0.16em] text-slate-500">
+        <thead className="bg-white/[0.045] text-xs uppercase tracking-[0.16em] ${typography.caption}">
           <tr>
             <th className="px-4 py-3 font-semibold">User</th>
             <th className="px-4 py-3 font-semibold">Role</th>
@@ -50,5 +53,10 @@ export function UsersTable({
     </div>
   );
 }
+
+
+
+
+
 
 

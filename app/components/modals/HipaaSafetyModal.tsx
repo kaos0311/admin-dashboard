@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { typography } from "@/theme";
+
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 
 import { ModalFooter } from "./shared/ModalFooter";
@@ -123,7 +125,7 @@ export default function HipaaSafetyModal({
 
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-sm font-semibold text-white">
+                    <p className={typography.cardTitle}>
                       {item.title}
                     </p>
 
@@ -152,7 +154,7 @@ export default function HipaaSafetyModal({
           />
 
           <div>
-            <p className="text-sm font-semibold text-white">
+            <p className={typography.cardTitle}>
               Production reminder
             </p>
 
@@ -185,5 +187,9 @@ export default function HipaaSafetyModal({
     </ModalShell>
   );
 }
+
+
+
+
 
 

@@ -51,7 +51,7 @@ export function AnalyticsFilterCard({
             }
             className={[
   "w-full min-w-0 cursor-pointer rounded-2xl border border-white/10 bg-black/40 px-4 py-3",
-  "text-sm font-medium text-white outline-none transition placeholder:text-slate-500",
+  "text-sm font-medium text-white outline-none transition placeholder:${typography.caption}",
   "focus-visible:border-cyan-300/40 focus-visible:ring-2 focus-visible:ring-cyan-300/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950",
   "disabled:cursor-not-allowed disabled:opacity-60",
 ].join(" ")}
@@ -72,6 +72,7 @@ export function AnalyticsFilterCard({
     </section>
   );
 }
+
 
 
 

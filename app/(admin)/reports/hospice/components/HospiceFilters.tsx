@@ -35,7 +35,7 @@ type SelectFieldProps<TValue extends string> = {
 };
 
 const inputStyles =
-  "w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none backdrop-blur-xl transition placeholder:text-slate-500 focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20";
+  "w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none backdrop-blur-xl transition placeholder:${typography.caption} focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20";
 
 export function HospiceFilters({
   searchText,
@@ -58,7 +58,7 @@ export function HospiceFilters({
 
           <Search
             aria-hidden="true"
-            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${typography.caption}"
           />
 
           <input
@@ -112,7 +112,7 @@ function SelectField<TValue extends string>({
       {icon ? (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-slate-500"
+          className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 ${typography.caption}"
         >
           {icon}
         </span>
@@ -136,6 +136,7 @@ function SelectField<TValue extends string>({
     </label>
   );
 }
+
 
 
 

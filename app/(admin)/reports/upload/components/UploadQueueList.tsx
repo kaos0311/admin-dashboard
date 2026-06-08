@@ -48,7 +48,7 @@ export function UploadQueueList({
           ].map(([label, value]) => (
             <div key={label} className={cn(uploadUi.card, "p-3")}>
               <p className={typography.caption}>{label}</p>
-              <p className="mt-1 text-lg font-semibold text-white">{value}</p>
+              <p className={typography.metricCompact}>{value}</p>
             </div>
           ))}
         </div>
@@ -90,7 +90,7 @@ export function UploadQueueList({
       <div className="mt-6 space-y-3">
         {uploadQueue.length === 0 ? (
           <div className={cn(uploadUi.card, "p-6 text-center")}>
-            <FileText className="mx-auto h-8 w-8 text-white/45" aria-hidden="true" />
+            <FileText className="mx-auto h-8 w-8" aria-hidden="true" />
 
             <p className={cn(typography.cardTitle, "mt-3")}>
               No files queued
@@ -106,9 +106,9 @@ export function UploadQueueList({
               <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 shrink-0 text-slate-200" aria-hidden="true" />
+                    <FileText className="h-4 w-4 shrink-0" aria-hidden="true" />
 
-                    <p className="truncate font-semibold text-white">
+                    <p className={`${typography.cardTitle} truncate`}>
                       {item.file.name}
                     </p>
                   </div>
@@ -153,9 +153,9 @@ export function UploadQueueList({
                 </div>
               </div>
 
-              <div className="mt-4 h-2 overflow-hidden rounded-full bg-white/10">
+              <div className="mt-4 h-2 overflow-hidden rounded-full">
                 <div
-                  className="h-full rounded-full bg-white/80 transition-all duration-300"
+                  className="h-full rounded-full transition-all duration-300"
                   style={{
                     width: `${Math.max(0, Math.min(item.progress, 100))}%`,
                   }}
@@ -174,5 +174,7 @@ export function UploadQueueList({
     </div>
   );
 }
+
+
 
 

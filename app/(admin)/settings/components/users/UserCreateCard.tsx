@@ -51,7 +51,7 @@ export function UserCreateCard({
         />
 
         <label className="block" htmlFor="new-user-role">
-          <span className="text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+          <span className="text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}">
             Role
           </span>
 
@@ -99,5 +99,6 @@ export function UserCreateCard({
     </InfoCard>
   );
 }
+
 
 

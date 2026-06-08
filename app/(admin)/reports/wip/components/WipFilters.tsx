@@ -33,7 +33,7 @@ export function WipFilters({
         <label className="relative block min-w-0">
           <span className="sr-only">Search WIP records</span>
           <Search
-            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${typography.caption}"
             aria-hidden="true"
           />
           <input
@@ -81,3 +81,4 @@ export function WipFilters({
     </section>
   );
 }
+

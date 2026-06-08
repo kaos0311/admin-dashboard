@@ -1,5 +1,9 @@
-﻿import { USER_ROLE_OPTIONS, USER_STATUS_OPTIONS } from "../../settings-constants";
+﻿import { typography } from "@/theme";
+
+import { USER_ROLE_OPTIONS, USER_STATUS_OPTIONS } from "../../settings-constants";
+
 import type { AdminUser, UserRole, UserStatus } from "../../settings-types";
+
 import { StatusPill } from "../shared/StatusPill";
 
 type UserRowProps = {
@@ -22,10 +26,10 @@ export function UserRow({
   return (
     <tr className="border-b border-white/10 transition hover:bg-white/[0.035]">
       <td className="px-4 py-4">
-        <p className="font-semibold text-white">
+        <p className={typography.cardTitle}>
           {user.displayName || "Unnamed User"}
         </p>
-        <p className="mt-1 text-xs text-slate-500">{user.email || "No email"}</p>
+        <p className="mt-1 text-xs ${typography.caption}">{user.email || "No email"}</p>
       </td>
 
       <td className="px-4 py-4">
@@ -76,5 +80,10 @@ export function UserRow({
     </tr>
   );
 }
+
+
+
+
+
 
 

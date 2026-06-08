@@ -28,7 +28,7 @@ export function SelectField<TValue extends string>({
 
   return (
     <label className="block min-w-0" htmlFor={id}>
-      <span className="block truncate text-xs font-medium uppercase tracking-[0.16em] text-slate-400">
+      <span className="block truncate text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}">
         {label}
         {required ? <span className="text-red-300"> *</span> : null}
       </span>
@@ -55,5 +55,6 @@ export function SelectField<TValue extends string>({
     </label>
   );
 }
+
 
 

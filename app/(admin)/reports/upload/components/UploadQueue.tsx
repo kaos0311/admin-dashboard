@@ -1,5 +1,7 @@
 ﻿"use client";
 
+import { buttons, glass, typography } from "@/theme";
+
 import { RefreshCw, Trash2 } from "lucide-react";
 
 import type { RecentImportJob } from "../upload-types";
@@ -61,10 +63,10 @@ export function UploadQueue({
   const hasSelection = selectedCount > 0;
 
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-black/30 p-4 shadow-2xl shadow-black/30 backdrop-blur-2xl">
+    <section className={`${glass.panel} p-4`}>
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h2 className="text-lg font-bold text-white">Recent Import Jobs</h2>
+          <h2 className={typography.sectionTitle}>Recent Import Jobs</h2>
 
           <p className="text-xs text-neutral-400">
             Showing {jobs.length.toLocaleString()} import{" "}
@@ -83,7 +85,7 @@ export function UploadQueue({
             type="button"
             onClick={onSelectAll}
             disabled={!hasJobs || bulkBusy}
-            className="rounded-2xl border border-white/10 bg-white/10 px-4 py-2 text-sm font-semibold text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-45"
+            className={buttons.secondary}
           >
             Select All
           </button>
@@ -92,7 +94,7 @@ export function UploadQueue({
             type="button"
             onClick={onClearSelection}
             disabled={!hasSelection || bulkBusy}
-            className="rounded-2xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-neutral-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-45"
+            className={buttons.secondary}
           >
             Clear
           </button>
@@ -124,7 +126,7 @@ export function UploadQueue({
 
       <div className="space-y-3">
         {!hasJobs ? (
-          <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-8 text-center text-sm text-neutral-400">
+          <div className={`${glass.card} p-8 text-center ${typography.bodyMuted}`}>
             No import jobs yet.
           </div>
         ) : (
@@ -148,5 +150,8 @@ export function UploadQueue({
     </section>
   );
 }
+
+
+
 
 

@@ -27,7 +27,7 @@ export function EmptyState({
         {title}
       </h3>
 
-      <p className="mt-2 max-w-md break-words text-sm leading-6 text-slate-400">
+      <p className="mt-2 max-w-md break-words text-sm leading-6 ${typography.bodyMuted}">
         {description}
       </p>
 
@@ -39,5 +39,6 @@ export function EmptyState({
     </div>
   );
 }
+
 
 

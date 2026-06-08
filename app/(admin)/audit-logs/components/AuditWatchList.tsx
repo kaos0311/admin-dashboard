@@ -30,7 +30,7 @@ export function AuditWatchList({
   return (
     <aside className="h-fit space-y-4">
       <section className="rounded-3xl border border-white/50 bg-white/60 p-5 shadow-sm backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.06]">
-        <h3 className="text-sm font-semibold uppercase tracking-[0.15em] text-slate-500 dark:text-slate-400">
+        <h3 className="text-sm font-semibold uppercase tracking-[0.15em] ${typography.caption} dark:${typography.bodyMuted}">
           Top Actors
         </h3>
 
@@ -45,13 +45,13 @@ export function AuditWatchList({
               >
                 <p className="break-words text-sm font-medium">{actor}</p>
 
-                <p className="mt-1 text-xs text-slate-500">
+                <p className="mt-1 text-xs ${typography.caption}">
                   {count.toLocaleString()} event{count === 1 ? "" : "s"}
                 </p>
               </button>
             ))
           ) : (
-            <p className="text-sm text-slate-500">No actor activity loaded.</p>
+            <p className="text-sm ${typography.caption}">No actor activity loaded.</p>
           )}
         </div>
       </section>
@@ -93,5 +93,6 @@ export function AuditWatchList({
     </aside>
   );
 }
+
 
 

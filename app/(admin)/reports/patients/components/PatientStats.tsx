@@ -52,3 +52,4 @@ export function PatientStats({ stats }: { stats: PatientStatsType }) {
     </header>
   );
 }
+
