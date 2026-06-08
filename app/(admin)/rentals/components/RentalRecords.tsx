@@ -1,6 +1,8 @@
 ﻿import type { Dispatch, SetStateAction } from "react";
 import { Loader2, Search } from "lucide-react";
 
+import { buttons, forms, glass, tables, typography } from "@/theme";
+
 import { RENTAL_STATUSES } from "../rentals-constants";
 import type {
   RentalFilters,
@@ -50,7 +52,7 @@ export function RentalRecords({
           <span className="sr-only">Search rentals</span>
 
           <Search
-            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+            className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${typography.smallMuted}`}
             aria-hidden="true"
           />
 
@@ -66,7 +68,7 @@ export function RentalRecords({
             }
             placeholder="Search product, serial, asset tag, patient, location..."
             aria-label="Search rentals"
-            className="h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 pl-11 pr-4 text-sm text-white outline-none transition placeholder:text-slate-600 focus:border-cyan-300/60 focus:bg-black/40 focus:ring-4 focus:ring-cyan-400/10"
+            className={`${forms.input} pl-11`}
           />
         </label>
 
@@ -84,9 +86,9 @@ export function RentalRecords({
               }))
             }
             aria-label="Filter rental status"
-            className="h-11 w-full min-w-0 rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:bg-black/40 focus:ring-4 focus:ring-cyan-400/10"
+            className={forms.select}
           >
-            <option value="all" className="bg-slate-950">
+            <option value="all">
               All statuses
             </option>
 
@@ -94,7 +96,6 @@ export function RentalRecords({
               <option
                 key={status.value}
                 value={status.value}
-                className="bg-slate-950"
               >
                 {status.label}
               </option>
@@ -107,7 +108,7 @@ export function RentalRecords({
           onClick={onClearFilters}
           disabled={!hasActiveFilters}
           aria-label="Clear rental filters"
-          className="h-11 rounded-2xl border border-white/10 bg-white/[0.04] px-4 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08] focus:outline-none focus:ring-2 focus:ring-cyan-300/30 disabled:cursor-not-allowed disabled:opacity-40"
+          className={buttons.secondary}
         >
           Clear
         </button>
@@ -115,10 +116,10 @@ export function RentalRecords({
 
       <div className="mt-6 min-w-0">
         {loading ? (
-          <div className="flex min-h-[220px] items-center justify-center rounded-3xl border border-white/10 bg-black/20 backdrop-blur-xl">
-            <div className="flex min-w-0 items-center gap-3 text-sm text-slate-300">
+          <div className={`${glass.card} flex min-h-[220px] items-center justify-center`}>
+            <div className={`flex min-w-0 items-center gap-3 ${typography.bodyMuted}`}>
               <Loader2
-                className="h-5 w-5 shrink-0 animate-spin text-cyan-200"
+                className="h-5 w-5 shrink-0 animate-spin"
                 aria-hidden="true"
               />
               <span>Loading rentals...</span>
@@ -137,7 +138,7 @@ export function RentalRecords({
                 <button
                   type="button"
                   onClick={onClearFilters}
-                  className="rounded-2xl bg-cyan-300 px-4 py-2 text-sm font-bold text-slate-950 transition hover:bg-cyan-200 focus:outline-none focus:ring-2 focus:ring-cyan-300/40"
+                  className={buttons.primary}
                 >
                   Clear Filters
                 </button>
@@ -146,23 +147,23 @@ export function RentalRecords({
           />
         ) : (
           <>
-            <div className="hidden min-w-0 overflow-hidden rounded-3xl border border-white/10 lg:block">
-              <div className="min-w-0 overflow-x-auto">
-                <table className="w-full min-w-[1200px] border-collapse text-left">
-                  <thead className="bg-white/[0.045] text-xs uppercase tracking-[0.16em] text-slate-500">
+            <div className={`hidden lg:block ${tables.wrapper}`}>
+              <div className={tables.scroll}>
+                <table className={`${tables.table} min-w-[1200px] border-collapse`}>
+                  <thead className={tables.head}>
                     <tr>
-                      <th className="px-4 py-3 font-semibold">Asset</th>
-                      <th className="px-4 py-3 font-semibold">Patient</th>
-                      <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 font-semibold">Condition</th>
-                      <th className="px-4 py-3 font-semibold">Location</th>
-                      <th className="px-4 py-3 font-semibold">Dates</th>
-                      <th className="px-4 py-3 font-semibold">Rate</th>
-                      <th className="px-4 py-3 font-semibold">Actions</th>
+                      <th className={tables.headCell}>Asset</th>
+                      <th className={tables.headCell}>Patient</th>
+                      <th className={tables.headCell}>Status</th>
+                      <th className={tables.headCell}>Condition</th>
+                      <th className={tables.headCell}>Location</th>
+                      <th className={tables.headCell}>Dates</th>
+                      <th className={tables.headCell}>Rate</th>
+                      <th className={tables.headCell}>Actions</th>
                     </tr>
                   </thead>
 
-                  <tbody className="divide-y divide-white/10">
+                  <tbody className={tables.body}>
                     {records.map((record) => (
                       <RentalTableRow
                         key={record.id}
@@ -194,5 +195,3 @@ export function RentalRecords({
     </GlassCard>
   );
 }
-
-
