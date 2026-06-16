@@ -3,6 +3,7 @@
 import { DashboardHero } from "./components/DashboardHero";
 import { DashboardStatGrid } from "./components/DashboardStatGrid";
 import { BirthdaysSection } from "./components/sections/BirthdaysSection";
+import { ImportedReportsSection } from "./components/sections/ImportedReportsSection";
 import { RecentOrdersSection } from "./components/sections/RecentOrdersSection";
 import { RentalsSection } from "./components/sections/RentalsSection";
 import { WipEmployeeSection } from "./components/sections/WipEmployeeSection";
@@ -17,6 +18,8 @@ export default function DashboardPage() {
     rentals,
     products,
     wipEmployees,
+    importedReports,
+    reportTypeSummaries,
     loading,
     refreshing,
     error,
@@ -38,6 +41,13 @@ export default function DashboardPage() {
           inventoryAnalytics={inventoryAnalytics}
           products={products}
         />
+
+        <section className="grid gap-6 xl:grid-cols-3">
+          <ImportedReportsSection
+            reports={importedReports}
+            summaries={reportTypeSummaries}
+          />
+        </section>
 
         <section className="grid gap-6 xl:grid-cols-3">
           <RecentOrdersSection orders={orders} />

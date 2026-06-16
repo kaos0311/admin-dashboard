@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   collection,
   limit,
+  orderBy,
   onSnapshot,
   query,
   where,
@@ -13,6 +14,7 @@ import toast from "react-hot-toast";
 import { db } from "@/lib/firebase";
 import type {
   CommandCenterStats,
+  CommandImportedReport,
   CommandTask,
   ComplianceIssue,
   EquipmentRecall,
@@ -25,6 +27,8 @@ type LoadState = {
   tasks: boolean;
   hospice: boolean;
   recalls: boolean;
+  importedReports: boolean;
+  importJobs: boolean;
 };
 
 const INITIAL_LOAD_STATE: LoadState = {
@@ -32,6 +36,8 @@ const INITIAL_LOAD_STATE: LoadState = {
   tasks: false,
   hospice: false,
   recalls: false,
+  importedReports: false,
+  importJobs: false,
 };
 
 function mapDoc<T extends { id: string }>(
@@ -43,11 +49,55 @@ function mapDoc<T extends { id: string }>(
   } as T;
 }
 
+function reportRowCount(report: CommandImportedReport): number {
+  return (
+    Number(report.rowCount) ||
+    Number(report.rowsInserted) ||
+    Number(report.rowsProcessed) ||
+    Number(report.processedRows) ||
+    Number(report.totalRows) ||
+    0
+  );
+}
+
+function reportType(report: CommandImportedReport): string {
+  return (
+    report.reportType ||
+    report.primaryReportType ||
+    report.selectedReportType ||
+    "custom"
+  );
+}
+
+function mergeCommandImports(
+  reports: CommandImportedReport[],
+  jobs: CommandImportedReport[]
+): CommandImportedReport[] {
+  const merged = new Map<string, CommandImportedReport>();
+
+  jobs.forEach((job) => merged.set(job.id, job));
+  reports.forEach((report) => {
+    const job = merged.get(report.id);
+
+    merged.set(report.id, {
+      ...job,
+      ...report,
+      rowCount: reportRowCount(report) || (job ? reportRowCount(job) : 0),
+      uploadedAt:
+        report.uploadedAt || job?.uploadedAt || job?.createdAt || job?.startedAt || null,
+    });
+  });
+
+  return [...merged.values()].slice(0, 50);
+}
+
 export function useCommandCenterData() {
   const [issues, setIssues] = useState<ComplianceIssue[]>([]);
   const [tasks, setTasks] = useState<CommandTask[]>([]);
   const [hospice, setHospice] = useState<HospiceRecord[]>([]);
   const [recalls, setRecalls] = useState<EquipmentRecall[]>([]);
+  const [importedReportDocs, setImportedReportDocs] = useState<CommandImportedReport[]>([]);
+  const [importJobDocs, setImportJobDocs] = useState<CommandImportedReport[]>([]);
   const [loaded, setLoaded] = useState<LoadState>(INITIAL_LOAD_STATE);
 
   useEffect(() => {
@@ -68,6 +118,18 @@ export function useCommandCenterData() {
     const recallQuery = query(
       collection(db, "equipmentRecalls"),
       where("active", "==", true),
+      limit(50)
+    );
+
+    const importQuery = query(
+      collection(db, "importedReports"),
+      orderBy("uploadedAt", "desc"),
+      limit(50)
+    );
+
+    const importJobsQuery = query(
+      collection(db, "importJobs"),
+      orderBy("createdAt", "desc"),
       limit(50)
     );
 
@@ -110,6 +172,36 @@ export function useCommandCenterData() {
       }
     );
 
+    const unsubImports = onSnapshot(
+      importQuery,
+      (snapshot) => {
+        setImportedReportDocs(
+          snapshot.docs.map((doc) => mapDoc<CommandImportedReport>(doc))
+        );
+        setLoaded((current) => ({ ...current, importedReports: true }));
+      },
+      (error) => {
+        console.error("COMMAND CENTER IMPORTS SNAPSHOT ERROR:", error);
+        toast.error("Failed to load uploaded report command feed.");
+        setLoaded((current) => ({ ...current, importedReports: true }));
+      }
+    );
+
+    const unsubImportJobs = onSnapshot(
+      importJobsQuery,
+      (snapshot) => {
+        setImportJobDocs(
+          snapshot.docs.map((doc) => mapDoc<CommandImportedReport>(doc))
+        );
+        setLoaded((current) => ({ ...current, importJobs: true }));
+      },
+      (error) => {
+        console.error("COMMAND CENTER IMPORT JOBS SNAPSHOT ERROR:", error);
+        toast.error("Failed to load import job command feed.");
+        setLoaded((current) => ({ ...current, importJobs: true }));
+      }
+    );
+
     const unsubRecalls = onSnapshot(
       recallQuery,
       (snapshot) => {
@@ -128,10 +220,17 @@ export function useCommandCenterData() {
       unsubTasks();
       unsubHospice();
       unsubRecalls();
+      unsubImports();
+      unsubImportJobs();
     };
   }, []);
 
   const loading = !Object.values(loaded).every(Boolean);
+
+  const importedReports = useMemo(
+    () => mergeCommandImports(importedReportDocs, importJobDocs),
+    [importedReportDocs, importJobDocs]
+  );
 
   const stats: CommandCenterStats = useMemo(() => {
     const openIssues = issues.filter((issue) => issue.status !== "resolved");
@@ -166,8 +265,16 @@ export function useCommandCenterData() {
       escalatedTasks: escalatedTasks.length,
       hospiceRecords: hospice.length,
       activeRecalls: recalls.length,
+      importedReportFiles: importedReports.length,
+      importedReportRows: importedReports.reduce(
+        (sum, report) => sum + reportRowCount(report),
+        0
+      ),
+      uploadedReportTypes: new Set(
+        importedReports.map((report) => reportType(report))
+      ).size,
     };
-  }, [issues, tasks, hospice, recalls]);
+  }, [issues, tasks, hospice, recalls, importedReports]);
 
   const topIssues = useMemo(() => {
     return [...issues]
@@ -188,6 +295,7 @@ export function useCommandCenterData() {
     tasks,
     hospice,
     recalls,
+    importedReports,
     topIssues,
     topTasks,
     stats,
