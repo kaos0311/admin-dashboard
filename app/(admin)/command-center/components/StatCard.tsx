@@ -1,4 +1,6 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
+
+import { badges, glass, typography } from "@/theme";
 
 type StatCardProps = {
   title: string;
@@ -10,26 +12,23 @@ type StatCardProps = {
 export function StatCard({ title, value, icon, tone }: StatCardProps) {
   const toneClass =
     tone === "red"
-      ? "from-red-500/20 to-red-950/20 text-red-200"
+      ? badges.danger
       : tone === "orange"
-        ? "from-orange-500/20 to-orange-950/20 text-orange-200"
+        ? badges.warning
         : tone === "yellow"
-          ? "from-yellow-500/20 to-yellow-950/20 text-yellow-200"
-          : "from-blue-500/20 to-blue-950/20 text-blue-200";
+          ? badges.warning
+          : badges.info;
 
   return (
-    <div className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/20 backdrop-blur-2xl">
+    <div className={glass.cardPadded}>
       <div
-        className={`mb-4 flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br ${toneClass}`}
+        className={`mb-4 flex h-11 w-11 items-center justify-center rounded-2xl ${toneClass}`}
       >
         {icon}
       </div>
 
-      <p className="text-sm text-neutral-400">{title}</p>
-      <p className="mt-2 text-3xl font-bold text-white">{value}</p>
+      <p className={typography.bodyMuted}>{title}</p>
+      <p className={`${typography.metric} mt-2`}>{value}</p>
     </div>
   );
 }
-
-
-

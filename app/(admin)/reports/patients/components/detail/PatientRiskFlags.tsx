@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Cake, ShieldAlert, ShieldCheck } from "lucide-react";
 

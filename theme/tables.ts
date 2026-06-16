@@ -1,8 +1,8 @@
 ﻿export const tables = {
   wrapper:
-    "min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045] shadow-xl shadow-black/20 backdrop-blur-2xl",
+    "min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.06] shadow-xl shadow-black/20 backdrop-blur-2xl",
   shell:
-    "min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045] shadow-xl shadow-black/20 backdrop-blur-2xl",
+    "min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.06] shadow-xl shadow-black/20 backdrop-blur-2xl",
   toolbar:
     "flex flex-col gap-4 border-b border-white/10 bg-white/[0.04] p-4 sm:flex-row sm:items-center sm:justify-between",
   toolbarActions:
@@ -32,13 +32,13 @@
   headRow:
     "border-b border-white/10",
   headCell:
-    "px-4 py-3 text-left font-semibold",
+    "px-5 py-4 text-left font-semibold sm:px-6",
   headCellRight:
-    "px-4 py-3 text-right font-semibold",
+    "px-5 py-4 text-right font-semibold sm:px-6",
   headerCell:
-    "px-4 py-3 text-left font-semibold",
+    "px-5 py-4 text-left font-semibold sm:px-6",
   headerCellRight:
-    "px-4 py-3 text-right font-semibold",
+    "px-5 py-4 text-right font-semibold sm:px-6",
   body:
     "divide-y divide-white/10",
   row:
@@ -46,13 +46,13 @@
   selectedRow:
     "bg-cyan-400/10 transition hover:bg-cyan-400/15",
   cell:
-    "px-4 py-3 align-top text-slate-300",
+    "px-5 py-4 align-top leading-6 text-slate-300 sm:px-6",
   cellStrong:
-    "px-4 py-3 align-top font-semibold text-white",
+    "px-5 py-4 align-top font-semibold leading-6 text-white sm:px-6",
   cellMuted:
-    "px-4 py-3 align-top text-slate-400",
+    "px-5 py-4 align-top leading-6 text-slate-400 sm:px-6",
   cellRight:
-    "px-4 py-3 text-right align-top text-slate-300",
+    "px-5 py-4 text-right align-top leading-6 text-slate-300 sm:px-6",
   empty:
     "min-w-0 rounded-2xl border border-white/10 bg-black/30 p-6 text-center text-sm text-slate-400",
   loadingState:
@@ -60,7 +60,7 @@
   emptyInline:
     "rounded-2xl border border-white/10 bg-black/30 p-6 text-center text-sm text-slate-400",
   badge:
-    "inline-flex items-center rounded-full border border-white/10 bg-white/[0.06] px-2.5 py-1 text-xs font-semibold text-slate-200",
+    "inline-flex items-center rounded-full border border-white/10 bg-white/[0.06] px-3 py-1.5 text-xs font-semibold leading-5 text-slate-200",
   actionIcon:
     "rounded-xl border border-white/10 bg-white/[0.05] p-2 text-slate-200 transition hover:bg-white/[0.1] focus:outline-none focus:ring-2 focus:ring-cyan-300/30",
   actionIconDanger:

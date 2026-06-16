@@ -1,0 +1,2 @@
+glacctgrpkey,GL Account Group,inventoryglacct,inventoryadjglacct,salesglacct,costglacct,apoffsetglacct,aroffsetglacct,deprglacct,Cost Method,rentalglacct,taxglacct,cashglacct,deprresglacct,writeoffacct,refundglacct,UnappliedPaymentsGLAcct,CreditMemoGLAcct,OtherRevenueGLAcct,OtherRevenueAdjGLAcct,RentalContractAllow,SalesContractAllow
+1,"Advanced Home Medical, Inc.",1007,1008,1012,1004,1001,1002,1006,Average Cost,1010,1014,1003,1005,1015,1009,1018,,1016,1017,1011,1013

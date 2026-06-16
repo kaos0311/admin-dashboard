@@ -1,3 +1,4 @@
+import { typography } from "@/theme";
 ﻿export function SummaryCard({
   label,
   value,
@@ -15,7 +16,7 @@
           : "border-white/50 bg-white/60 dark:border-white/10 dark:bg-white/[0.06]"
       }`}
     >
-      <p className="text-xs uppercase tracking-[0.18em] ${typography.caption} dark:${typography.bodyMuted}">
+      <p className={`text-xs uppercase tracking-[0.18em] ${typography.caption} dark:${typography.bodyMuted}`}>
         {label}
       </p>
 

@@ -7,7 +7,7 @@ export type ImportJobSnapshot = {
   id: string;
   status?: "uploaded" | "processing" | "completed" | "failed" | string;
   fileName?: string;
-  fileType?: "csv" | "pdf" | string;
+  fileType?: "csv" | string;
   reportType?: string;
   processedRows?: number;
   totalRows?: number;
@@ -25,8 +25,7 @@ export async function uploadFileForServerImport({
   reportType: ReportType;
   skipHospicePatients: boolean;
 }): Promise<{ jobId: string; storagePath: string; downloadURL: string }> {
-  const lowerName = file.name.toLowerCase();
-  const fileType = lowerName.endsWith(".pdf") ? "pdf" : "csv";
+  const fileType = "csv";
   const safeName = file.name.replace(/[^\w.-]+/g, "_");
   const jobId = `${Date.now()}-${crypto.randomUUID()}`;
   const storagePath = `imports/${jobId}.${fileType}`;
@@ -49,7 +48,7 @@ export async function uploadFileForServerImport({
   });
 
   await uploadBytes(storageRef, file, {
-    contentType: fileType === "pdf" ? "application/pdf" : "text/csv",
+    contentType: "text/csv",
     customMetadata: {
       jobId,
       reportType,

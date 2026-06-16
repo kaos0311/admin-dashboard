@@ -19,7 +19,7 @@ export function UsersTable({
     return (
       <div className="rounded-3xl border border-dashed border-white/10 bg-black/20 px-6 py-12 text-center">
         <p className={typography.cardTitle}>No users found</p>
-        <p className="mt-2 text-sm ${typography.bodyMuted}">
+        <p className={`mt-2 text-sm ${typography.bodyMuted}`}>
           Create a user document above. Then make sure Firebase Auth and custom
           claims match, because Firestore documents alone are not magic keys.
         </p>
@@ -30,7 +30,9 @@ export function UsersTable({
   return (
     <div className="overflow-hidden rounded-3xl border border-white/10">
       <table className="w-full border-collapse text-left">
-        <thead className="bg-white/[0.045] text-xs uppercase tracking-[0.16em] ${typography.caption}">
+        <thead
+          className={`bg-white/[0.045] text-xs uppercase tracking-[0.16em] ${typography.caption}`}
+        >
           <tr>
             <th className="px-4 py-3 font-semibold">User</th>
             <th className="px-4 py-3 font-semibold">Role</th>

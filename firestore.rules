@@ -7,9 +7,21 @@ service cloud.firestore {
     }
 
     function role() {
+      return claimRole() != "" ? claimRole() : profileRole();
+    }
+
+    function claimRole() {
       return isSignedIn() && request.auth.token.role is string
         ? request.auth.token.role
         : "";
+    }
+
+    function profileRole() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role is string
+          ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+          : "";
     }
 
     function isAdmin() {
@@ -20,8 +32,12 @@ service cloud.firestore {
       return role() == "staff";
     }
 
+    function isTank() {
+      return role() == "tank";
+    }
+
     function isStaffOrAdmin() {
-      return isAdmin() || isStaff();
+      return isAdmin() || isStaff() || isTank();
     }
 
     function isSelf(userId) {
@@ -43,6 +59,16 @@ service cloud.firestore {
       allow write: if isAdmin();
     }
 
+    match /patientIndex/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /apiRegistry/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
     match /dashboardPreview/{docId} {
       allow read: if isStaffOrAdmin();
       allow write: if isAdmin();
@@ -50,10 +76,31 @@ service cloud.firestore {
 
     match /products/{docId} {
       allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /hcpcsCodes/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /referenceImports/{docId} {
+      allow read: if isStaffOrAdmin();
       allow write: if isAdmin();
     }
 
     match /inventory/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /stockMovements/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create: if isStaffOrAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /cpapSetupAppointments/{docId} {
       allow read: if isStaffOrAdmin();
       allow write: if isStaffOrAdmin();
     }
@@ -68,10 +115,46 @@ service cloud.firestore {
       allow write: if isStaffOrAdmin();
     }
 
+    match /rolodexContacts/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create, update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /qrCards/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create, update: if isStaffOrAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /qrScanEvents/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create: if isStaffOrAdmin();
+      allow update, delete: if isAdmin();
+    }
+
     match /users/{userId} {
       allow read: if isSelf(userId) || isAdmin();
       allow create: if isAdmin();
       allow update: if isSelf(userId) || isAdmin();
+      allow delete: if isAdmin();
+    }
+
+    match /employeeEvaluations/{docId} {
+      allow read, write: if isTank();
+    }
+
+    match /employeeEvaluationComments/{docId} {
+      allow read, create, update, delete: if isTank();
+    }
+
+    match /employeeEvaluationSnapshots/{docId} {
+      allow read, create, update, delete: if isTank();
+    }
+
+    match /retailCustomerContacts/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create, update: if isStaffOrAdmin();
       allow delete: if isAdmin();
     }
 
@@ -113,6 +196,24 @@ service cloud.firestore {
     match /patients/{docId} {
       allow read: if isStaffOrAdmin();
       allow write: if isStaffOrAdmin();
+
+      match /documents/{documentId} {
+        allow read: if isStaffOrAdmin();
+        allow create, update: if isStaffOrAdmin();
+        allow delete: if isAdmin();
+      }
+
+      match /equipment/{equipmentId} {
+        allow read: if isStaffOrAdmin();
+        allow create, update: if isStaffOrAdmin();
+        allow delete: if isAdmin();
+      }
+
+      match /timeline/{timelineId} {
+        allow read: if isStaffOrAdmin();
+        allow create: if isStaffOrAdmin();
+        allow update, delete: if isAdmin();
+      }
     }
 
     match /patients_index/{docId} {
@@ -135,9 +236,104 @@ service cloud.firestore {
       allow write: if isStaffOrAdmin();
     }
 
+    match /insurancePatients/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /insuranceQueue/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /patientAuthorizations/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /patientDeliveryTickets/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
+    }
+
+    match /deliveryFulfillmentScans/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create: if isStaffOrAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /deliverySignatures/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create: if isStaffOrAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /deliveryDamagePhotos/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create: if isStaffOrAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /deliveryTechLocations/{docId} {
+      allow read: if isAdmin();
+      allow create: if isStaffOrAdmin();
+      allow update, delete: if isAdmin();
+    }
+
+    match /chartExportLogs/{docId} {
+      allow read: if isAdmin();
+      allow create: if isStaffOrAdmin();
+      allow update, delete: if isAdmin();
+    }
+
     match /wipRecords/{docId} {
       allow read: if isStaffOrAdmin();
       allow write: if isStaffOrAdmin();
+    }
+
+    match /patientPhysicians/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /patientReferrals/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /shopItems/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /shopInventoryLots/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /shopInventorySerials/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /shopGlAccountGroups/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /shopGlDetails/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /shopCostOfGoodsSold/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
+    }
+
+    match /shopRawReports/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isAdmin();
     }
 
     match /importJobs/{docId} {
@@ -186,7 +382,13 @@ service cloud.firestore {
 
     match /auditLogs/{docId} {
       allow read: if isAdmin();
-      allow write: if false;
+      allow create: if isStaffOrAdmin() || isTank();
+      allow update, delete: if false;
+    }
+
+    match /phiAlerts/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create, update, delete: if isAdmin();
     }
 
     match /{document=**} {

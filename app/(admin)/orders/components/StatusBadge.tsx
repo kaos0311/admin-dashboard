@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { orderStatusLabels, orderStatusStyles } from "@/theme";
 

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
 import {
@@ -20,6 +20,14 @@ export type JarvisMessage = {
   role: JarvisMessageRole;
   content: string;
   createdAt: number;
+  artifact?: JarvisArtifact;
+};
+
+export type JarvisArtifact = {
+  type: "csv";
+  fileName: string;
+  title: string;
+  content: string;
 };
 
 type AskAdminAiRequest = {
@@ -28,6 +36,7 @@ type AskAdminAiRequest = {
 
 type AskAdminAiResponse = {
   answer?: string;
+  reportArtifact?: JarvisArtifact | null;
   contextUsed?: {
     imports: number;
     issues: number;
@@ -39,6 +48,24 @@ type AskAdminAiResponse = {
   };
 };
 
+type ScanDatabasePhiSafetyResponse = {
+  ok: boolean;
+  dryRun: boolean;
+  collections: string[];
+  documentsScanned: number;
+  fieldsScanned: number;
+  findingFields: number;
+  alertCount: number;
+  alertIds: string[];
+  collectionSummaries: Array<{
+    collection: string;
+    documentsScanned: number;
+    fieldsScanned: number;
+    findingFields: number;
+  }>;
+  correctiveMeasures: string[];
+};
+
 const MAX_PROMPT_LENGTH = 8000;
 const MAX_HISTORY_MESSAGES = 10;
 
@@ -46,6 +73,11 @@ const askAdminAi = httpsCallable<AskAdminAiRequest, AskAdminAiResponse>(
   functions,
   "askAdminAi"
 );
+
+const scanDatabasePhiSafety = httpsCallable<
+  { limitPerCollection?: number },
+  ScanDatabasePhiSafetyResponse
+>(functions, "scanDatabasePhiSafety");
 
 function createId(): string {
   if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
@@ -134,6 +166,7 @@ export function useJarvis() {
       {
         role: message.role,
         content: message.content,
+        artifact: message.artifact ?? null,
         createdAt: serverTimestamp(),
         createdBy: user.uid,
       }
@@ -196,6 +229,7 @@ export function useJarvis() {
         role: "assistant",
         content: answer,
         createdAt: Date.now(),
+        artifact: result.data?.reportArtifact ?? undefined,
       };
 
       setJarvisAnswer(answer);
@@ -220,6 +254,87 @@ export function useJarvis() {
           role: "assistant",
           content:
             "I could not complete that request. Check the callable logs, auth, App Check, OpenAI secret, and Firestore permissions. The usual digital dumpster fire checklist.",
+          createdAt: Date.now(),
+        },
+      ]);
+    } finally {
+      setJarvisLoading(false);
+    }
+  }
+
+  async function handleRunPhiScan() {
+    if (jarvisLoading) return;
+
+    const userMessage: JarvisMessage = {
+      id: createId(),
+      role: "user",
+      content: "Run a PHI/HIPAA safety scan.",
+      createdAt: Date.now(),
+    };
+
+    setJarvisMessages((current) => [...current, userMessage]);
+    setJarvisPrompt("");
+    setJarvisAnswer("");
+    setJarvisErrorMessage("");
+    setJarvisLoading(true);
+
+    void persistMessage(userMessage).catch((error) => {
+      console.error("JARVIS PHI SCAN USER MESSAGE PERSIST ERROR:", error);
+    });
+
+    try {
+      const result = await scanDatabasePhiSafety({ limitPerCollection: 500 });
+      const scan = result.data;
+      const riskyCollections = scan.collectionSummaries
+        .filter((item) => item.findingFields > 0)
+        .map((item) => `${item.collection}: ${item.findingFields}`)
+        .join(", ");
+
+      const answer = [
+        "PHI/HIPAA safety scan complete.",
+        "",
+        `Documents scanned: ${scan.documentsScanned}`,
+        `Risky text fields checked: ${scan.fieldsScanned}`,
+        `Fields with potential PHI: ${scan.findingFields}`,
+        `Open alerts created or updated: ${scan.alertCount}`,
+        riskyCollections
+          ? `Collections needing review: ${riskyCollections}`
+          : "Collections needing review: none found in the scanned sample.",
+        "",
+        "Corrective measures:",
+        ...scan.correctiveMeasures.map((measure) => `- ${measure}`),
+      ].join("\n");
+
+      const assistantMessage: JarvisMessage = {
+        id: createId(),
+        role: "assistant",
+        content: answer,
+        createdAt: Date.now(),
+      };
+
+      setJarvisAnswer(answer);
+      setJarvisMessages((current) => [...current, assistantMessage]);
+      toast.success("PHI/HIPAA scan complete.");
+
+      void persistMessage(assistantMessage).catch((error) => {
+        console.error("JARVIS PHI SCAN ASSISTANT MESSAGE PERSIST ERROR:", error);
+      });
+    } catch (error) {
+      console.error("JARVIS PHI SCAN ERROR:", error);
+
+      const message =
+        error instanceof Error ? error.message : "PHI/HIPAA scan failed.";
+
+      setJarvisErrorMessage(message);
+      toast.error("PHI/HIPAA scan failed.");
+
+      setJarvisMessages((current) => [
+        ...current,
+        {
+          id: createId(),
+          role: "assistant",
+          content:
+            "I could not complete the PHI/HIPAA scan. Check admin access, callable deployment, and Firestore permissions.",
           createdAt: Date.now(),
         },
       ]);
@@ -253,6 +368,7 @@ export function useJarvis() {
     remainingCharacters,
     canAskJarvis,
     handleAskJarvis,
+    handleRunPhiScan,
     clearJarvisMessages,
   };
 }

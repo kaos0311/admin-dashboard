@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   AlertTriangle,
@@ -11,22 +11,32 @@ import {
 } from "lucide-react";
 
 import { colors, glass } from "@/theme";
+import { useAuthRole } from "@/app/hooks/useAuthRole";
 
 import { CommandHero } from "./components/CommandHero";
+import { DatabaseHealthPanel } from "./components/DatabaseHealthPanel";
 import { HospiceList } from "./components/HospiceList";
 import { IssueList } from "./components/IssueList";
 import { JarvisPanel } from "./components/JarvisPanel";
 import { MiniCard } from "./components/MiniCard";
 import { Panel } from "./components/Panel";
+import { ProductionReadinessPanel } from "./components/ProductionReadinessPanel";
 import { RecallList } from "./components/RecallList";
 import { StatCard } from "./components/StatCard";
 import { TaskList } from "./components/TaskList";
 import { useCommandCenterData } from "./hooks/useCommandCenterData";
 import { useJarvis } from "./hooks/useJarvis";
+import { useProductionReadiness } from "./hooks/useProductionReadiness";
 
 export default function CommandCenterPage() {
+  const { isAdmin } = useAuthRole();
   const { hospice, recalls, stats, topIssues, topTasks, loading } =
     useCommandCenterData();
+  const {
+    alerts: productionAlerts,
+    stats: productionStats,
+    loading: productionLoading,
+  } = useProductionReadiness(isAdmin);
 
   const {
     jarvisPrompt,
@@ -38,6 +48,7 @@ export default function CommandCenterPage() {
     remainingCharacters,
     canAskJarvis,
     handleAskJarvis,
+    handleRunPhiScan,
     clearJarvisMessages,
   } = useJarvis();
 
@@ -48,7 +59,10 @@ export default function CommandCenterPage() {
       <div className={glass.shell}>
         <CommandHero loading={loading} openIssues={stats.openIssues} />
 
-        <section aria-label="Jarvis command intelligence" className="mx-auto w-full max-w-5xl">
+        <section
+          aria-label="Jarvis command intelligence and database health"
+          className="grid w-full min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]"
+        >
           <JarvisPanel
             jarvisPrompt={jarvisPrompt}
             jarvisAnswer={jarvisAnswer}
@@ -59,8 +73,11 @@ export default function CommandCenterPage() {
             canAskJarvis={canAskJarvis}
             setJarvisPrompt={setJarvisPrompt}
             handleAskJarvis={handleAskJarvis}
+            handleRunPhiScan={handleRunPhiScan}
             clearJarvisMessages={clearJarvisMessages}
           />
+
+          <DatabaseHealthPanel stats={stats} loading={loading} />
         </section>
 
         <section
@@ -95,6 +112,12 @@ export default function CommandCenterPage() {
             tone="yellow"
           />
         </section>
+
+        <ProductionReadinessPanel
+          alerts={productionAlerts}
+          stats={productionStats}
+          loading={productionLoading}
+        />
 
         <section
           aria-label="Command center secondary statistics"

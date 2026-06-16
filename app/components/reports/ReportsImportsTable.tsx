@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { badges, glass, tables, typography } from "@/theme";
 
@@ -173,3 +173,4 @@ export default function ReportsImportsTable({ imports }: Props) {
     </section>
   );
 }
+

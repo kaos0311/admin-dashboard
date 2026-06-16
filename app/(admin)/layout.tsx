@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { type ReactNode, useCallback, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -6,6 +6,7 @@ import { LogOut, Menu } from "lucide-react";
 import { signOut } from "firebase/auth";
 
 import AdminSidebar from "@/app/components/admin/AdminSidebar";
+import { JarvisSafetyInterlock } from "@/app/components/admin/JarvisSafetyInterlock";
 import StaffOrAdmin from "@/app/components/auth/StaffOrAdmin";
 import MaintenanceGate from "@/app/components/MaintenanceGate";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
@@ -18,7 +19,7 @@ type AdminLayoutProps = {
 
 export default function AdminLayout({ children }: AdminLayoutProps) {
   const router = useRouter();
-  const { user, loading } = useAuthRole();
+  const { user, role, loading } = useAuthRole();
 
   const [mobileOpen, setMobileOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
@@ -59,9 +60,10 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   return (
     <StaffOrAdmin>
       <MaintenanceGate>
-        <div className={`${colors.app} min-h-screen ${colors.textPrimary}`}>
+        <div className={`admin-page ${colors.app} min-h-screen ${colors.textPrimary}`}>
           <div className={colors.grid} />
           <div className={colors.vignette} />
+          <JarvisSafetyInterlock />
 
           <a
             href="#admin-main-content"
@@ -71,7 +73,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
           </a>
 
           <div className="flex min-h-screen min-w-0">
-            <AdminSidebar mobileOpen={mobileOpen} onClose={closeMobileMenu} />
+            <AdminSidebar
+              mobileOpen={mobileOpen}
+              onClose={closeMobileMenu}
+              userRole={role ?? "staff"}
+            />
 
             <div className="flex min-w-0 flex-1 flex-col lg:ml-64">
               <header className={`${glass.toolbar} sticky top-0 z-30 rounded-none border-x-0 border-t-0`}>

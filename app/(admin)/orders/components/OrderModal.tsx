@@ -1,10 +1,15 @@
-﻿"use client";
+"use client";
 
 import type { HTMLAttributes } from "react";
 import { Loader2, ScanLine, X } from "lucide-react";
 
 import { buttons, colors, glass, spacing, typography } from "@/theme";
 
+import type {
+  FacilityAutofillOption,
+  PatientAutofillOption,
+  ProductAutofillOption,
+} from "../hooks/useOrderAutofill";
 import type { OrderFormState, OrderStatus } from "../lib/orderTypes";
 
 const statusOptions: Array<{ value: OrderStatus; label: string }> = [
@@ -23,6 +28,9 @@ export function OrderModal({
   mode,
   onClose,
   onChange,
+  patientOptions,
+  productOptions,
+  facilityOptions,
   onSave,
   onScan,
   onLoadBarcode,
@@ -35,10 +43,48 @@ export function OrderModal({
   mode: "create" | "edit";
   onClose: () => void;
   onChange: (field: keyof OrderFormState, value: string) => void;
+  patientOptions: PatientAutofillOption[];
+  productOptions: ProductAutofillOption[];
+  facilityOptions: FacilityAutofillOption[];
   onSave: () => void;
   onScan?: () => void;
   onLoadBarcode: () => void;
 }) {
+  const patientListId = `${mode}-patient-options`;
+  const productListId = `${mode}-product-options`;
+  const productIdListId = `${mode}-product-id-options`;
+  const facilityListId = `${mode}-facility-options`;
+
+  function applyPatientAutofill(value: string) {
+    const clean = value.trim().toLowerCase();
+    const match = patientOptions.find(
+      (patient) => patient.name.toLowerCase() === clean
+    );
+
+    if (!match) return;
+
+    onChange("patientName", match.name);
+    if (match.phone) onChange("phone", match.phone);
+    if (match.address) onChange("patientAddress", match.address);
+    if (match.facilityName) onChange("facilityName", match.facilityName);
+  }
+
+  function applyProductAutofill(value: string) {
+    const clean = value.trim().toLowerCase();
+    const match = productOptions.find((product) =>
+      [product.name, product.id, product.sku, product.barcode]
+        .filter(Boolean)
+        .some((candidate) => candidate.toLowerCase() === clean)
+    );
+
+    if (!match) return;
+
+    onChange("productId", match.id);
+    onChange("productType", match.name || match.sku || match.id);
+    if (match.barcode) onChange("barcode", match.barcode);
+    if (match.price) onChange("purchaseCost", match.price);
+  }
+
   return (
     <div
       role="dialog"
@@ -85,9 +131,22 @@ export function OrderModal({
               id={`${mode}-patient-name`}
               label="Patient name"
               value={form.patientName}
-              onChange={(value) => onChange("patientName", value)}
+              onChange={(value) => {
+                onChange("patientName", value);
+                applyPatientAutofill(value);
+              }}
+              onBlur={() => applyPatientAutofill(form.patientName)}
+              list={patientListId}
               required
             />
+
+            <datalist id={patientListId}>
+              {patientOptions.map((patient) => (
+                <option key={patient.id} value={patient.name}>
+                  {[patient.phone, patient.address].filter(Boolean).join(" - ")}
+                </option>
+              ))}
+            </datalist>
 
             <TextField
               id={`${mode}-phone`}
@@ -111,7 +170,18 @@ export function OrderModal({
               label="Facility"
               value={form.facilityName}
               onChange={(value) => onChange("facilityName", value)}
+              list={facilityListId}
             />
+
+            <datalist id={facilityListId}>
+              {facilityOptions.map((facility) => (
+                <option key={facility.id} value={facility.name}>
+                  {[facility.group, facility.phone, facility.address]
+                    .filter(Boolean)
+                    .join(" - ")}
+                </option>
+              ))}
+            </datalist>
 
             <div>
               <label htmlFor={`${mode}-status`} className={typography.formLabel}>
@@ -175,7 +245,12 @@ export function OrderModal({
               id={`${mode}-product-id`}
               label="Inventory product ID"
               value={form.productId}
-              onChange={(value) => onChange("productId", value)}
+              onChange={(value) => {
+                onChange("productId", value);
+                applyProductAutofill(value);
+              }}
+              onBlur={() => applyProductAutofill(form.productId)}
+              list={productIdListId}
               required
             />
 
@@ -183,9 +258,30 @@ export function OrderModal({
               id={`${mode}-product-type`}
               label="Product"
               value={form.productType}
-              onChange={(value) => onChange("productType", value)}
+              onChange={(value) => {
+                onChange("productType", value);
+                applyProductAutofill(value);
+              }}
+              onBlur={() => applyProductAutofill(form.productType)}
+              list={productListId}
               required
             />
+
+            <datalist id={productIdListId}>
+              {productOptions.map((product) => (
+                <option key={`${product.id}-id`} value={product.id}>
+                  {product.name}
+                </option>
+              ))}
+            </datalist>
+
+            <datalist id={productListId}>
+              {productOptions.map((product) => (
+                <option key={`${product.id}-name`} value={product.name || product.sku || product.id}>
+                  {[product.sku, product.barcode].filter(Boolean).join(" - ")}
+                </option>
+              ))}
+            </datalist>
 
             <TextField
               id={`${mode}-purchase-cost`}
@@ -257,6 +353,8 @@ function TextField({
   onChange,
   required,
   inputMode,
+  list,
+  onBlur,
 }: {
   id: string;
   label: string;
@@ -264,6 +362,8 @@ function TextField({
   onChange: (value: string) => void;
   required?: boolean;
   inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"];
+  list?: string;
+  onBlur?: () => void;
 }) {
   return (
     <div>
@@ -276,8 +376,10 @@ function TextField({
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
+        onBlur={onBlur}
         className={`${glass.input} mt-2 px-4 py-3`}
         inputMode={inputMode}
+        list={list}
       />
     </div>
   );

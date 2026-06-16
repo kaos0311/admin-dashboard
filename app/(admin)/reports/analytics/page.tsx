@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { colors, glass } from "@/theme";
 
@@ -8,6 +8,7 @@ import { AnalyticsHealthBanner } from "./components/AnalyticsHealthBanner";
 import { AnalyticsHero } from "./components/AnalyticsHero";
 import { AnalyticsSourceCard } from "./components/AnalyticsSourceCard";
 import { AnalyticsStatGrid } from "./components/AnalyticsStatGrid";
+import { RetailFinancialPanel } from "./components/RetailFinancialPanel";
 
 import { reportTypeLabel } from "./analytics-utils";
 import { useReportsAnalytics } from "./use-reports-analytics";
@@ -74,6 +75,11 @@ export default function ReportsAnalyticsPage() {
           knownRows={knownRows}
         />
 
+        <RetailFinancialPanel
+          loading={loading}
+          retailFinancials={analytics.retailFinancials}
+        />
+
         <section
           className={[
             "grid w-full min-w-0 gap-6",
@@ -85,12 +91,15 @@ export default function ReportsAnalyticsPage() {
           <AnalyticsBreakdownTable
             loading={loading}
             rows={visibleBreakdownRows}
+            sourceBreakdown={analytics.sourceBreakdown}
+            patientClassification={analytics.patientClassification}
           />
 
           <AnalyticsSourceCard
             loading={loading}
             status={analytics.status}
             source={analytics.source}
+            analyticsVersion={analytics.analyticsVersion}
             generatedAtLabel={analytics.generatedAtLabel}
             lastRebuiltByEmail={analytics.lastRebuiltByEmail}
           />

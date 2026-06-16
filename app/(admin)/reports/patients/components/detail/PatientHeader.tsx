@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Archive, ArchiveRestore, Trash2 } from "lucide-react";
 

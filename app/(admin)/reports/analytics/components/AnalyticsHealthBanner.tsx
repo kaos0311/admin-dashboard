@@ -17,7 +17,7 @@ function getHealthToneClass(tone: AnalyticsHealth["tone"]) {
     case "danger":
       return "border-red-400/25 bg-red-500/10 text-red-200";
     default:
-      return "border-white/10 bg-white/[0.055] text-slate-300";
+      return `border-white/10 bg-white/[0.055] ${typography.bodyMuted}`;
   }
 }
 
@@ -67,6 +67,4 @@ export function AnalyticsHealthBanner({ health }: AnalyticsHealthBannerProps) {
     </section>
   );
 }
-
-
 

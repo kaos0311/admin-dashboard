@@ -87,11 +87,12 @@ function requireStaffOrAdmin(
 
   if (
     role !== "admin" &&
-    role !== "staff"
+    role !== "staff" &&
+    role !== "tank"
   ) {
     throw new HttpsError(
       "permission-denied",
-      "Only staff or admins can reprocess import jobs."
+      "Only staff, admins, or Tank users can reprocess import jobs."
     );
   }
 }
@@ -372,7 +373,55 @@ export const reprocessImportJob =
 
           processedRows: 0,
 
+          writtenRows: 0,
+
+          skippedRows: 0,
+
+          issueCount: 0,
+
+          completedChunkCount: 0,
+
+          failedChunkCount: 0,
+
+          failedQueueJobs: 0,
+
+          deadLetteredQueueJobs: 0,
+
           totalRows: 0,
+
+          destinationSummary:
+            FieldValue.delete(),
+
+          jarvisScreening: {
+            status: "pending",
+
+            message:
+              "Jarvis is waiting for this report to finish reprocessing before screening it again.",
+
+            findings: [
+              "Report reprocess was requested and is waiting on the import pipeline.",
+            ],
+
+            resolvedFindings:
+              Array.isArray(
+                job.jarvisScreening
+                  ?.resolvedFindings
+              )
+                ? job.jarvisScreening
+                    .resolvedFindings
+                : [],
+
+            remainingFindingCount: 1,
+
+            recommendations: [
+              "Wait for the import job to finish, then run Jarvis screening again if it does not update automatically.",
+            ],
+
+            checkedAt:
+              FieldValue.serverTimestamp(),
+
+            checkedBy: "jarvis",
+          },
 
           error: null,
 

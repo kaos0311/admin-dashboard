@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   addDoc,
   collection,
+  deleteField,
   doc,
   type FirestoreError,
   limit,
@@ -42,8 +43,8 @@ function isCompletedStatus(status: RecentImportJob["status"]): boolean {
   return status === "completed" || status === "completed_with_errors";
 }
 
-function isstatus(status: RecentImportJob["status"]): boolean {
-  return status === "processing" || status === "uploaded";
+function isProcessingStatus(status: RecentImportJob["status"]): boolean {
+  return status === "active" || status === "processing" || status === "uploaded";
 }
 
 function matchesQueueFilter(
@@ -52,7 +53,7 @@ function matchesQueueFilter(
 ): boolean {
   if (queueFilter === "all") return true;
   if (queueFilter === "completed") return isCompletedStatus(job.status);
-  if (queueFilter === "processing") return isstatus(job.status);
+  if (queueFilter === "processing") return isProcessingStatus(job.status);
   if (queueFilter === "failed") return job.status === "failed";
 
   return job.status === queueFilter;
@@ -147,7 +148,7 @@ export function useImportJobs({
         acc.all += 1;
 
         if (job.status === "queued") acc.queued += 1;
-        if (isstatus(job.status)) acc.processing += 1;
+        if (isProcessingStatus(job.status)) acc.processing += 1;
         if (isCompletedStatus(job.status)) acc.completed += 1;
         if (job.status === "failed") acc.failed += 1;
         if (job.status === "deleted") acc.deleted += 1;
@@ -292,7 +293,29 @@ export function useImportJobs({
       try {
         await updateDoc(doc(db, "importJobs", job.id), {
           status: "queued",
+          processingStatus: "queued_for_reprocess",
+          processingStage: "queued_for_reprocess",
           progress: 0,
+          progressPercent: 0,
+          processedRows: 0,
+          writtenRows: 0,
+          skippedRows: 0,
+          issueCount: 0,
+          failedQueueJobs: 0,
+          deadLetteredQueueJobs: 0,
+          destinationSummary: deleteField(),
+          jarvisScreening: {
+            status: "pending",
+            message: "Jarvis is waiting for this report to finish reprocessing before screening it again.",
+            findings: ["Report reprocess was requested and is waiting on the import pipeline."],
+            resolvedFindings: job.jarvisScreening?.resolvedFindings ?? [],
+            remainingFindingCount: 1,
+            recommendations: [
+              "Wait for the import job to finish, then click Run Check Again if Jarvis does not update automatically.",
+            ],
+            checkedAt: serverTimestamp(),
+            checkedBy: "jarvis",
+          },
           refreshRequestedAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           errorMessage: null,

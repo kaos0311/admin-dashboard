@@ -1,29 +1,31 @@
-﻿"use client";
+"use client";
 
 import { type ComponentType, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navigation, typography } from "@/theme";
 import {
+  BookOpen,
   Boxes,
+  CalendarDays,
   ClipboardList,
   FileBarChart2,
   FileText,
   Hammer,
   HeartPulse,
   Home,
+  Medal,
   Package,
   Repeat,
   Settings,
   Shield,
   Siren,
   UploadCloud,
-  Users,
   UserSquare2,
   X,
 } from "lucide-react";
 
-type UserRole = "admin" | "staff";
+type UserRole = "admin" | "staff" | "tank";
 type NavSection = "core" | "reports" | "system";
 
 type NavItem = {
@@ -93,14 +95,20 @@ const NAV_ITEMS: NavItem[] = [
     section: "core",
   },
   {
-    id: "users",
-    label: "Users",
-    href: "/users",
-    icon: Users,
+    id: "rolodex",
+    label: "Rolodex",
+    href: "/rolodex",
+    icon: BookOpen,
     section: "core",
-    roles: ["admin"],
   },
-
+  {
+    id: "employee-evaluations",
+    label: "Evaluations",
+    href: "/employee-evaluations",
+    icon: Medal,
+    section: "core",
+    roles: ["tank"],
+  },
   {
     id: "reports",
     label: "Reports",
@@ -121,6 +129,13 @@ const NAV_ITEMS: NavItem[] = [
     label: "Patients",
     href: "/reports/patients",
     icon: UserSquare2,
+    section: "reports",
+  },
+  {
+    id: "reports-cpap",
+    label: "CPAP Calendar",
+    href: "/reports/cpap",
+    icon: CalendarDays,
     section: "reports",
   },
   {
@@ -203,7 +218,7 @@ export default function AdminSidebar({
       <aside
         id="admin-sidebar"
         aria-label="Primary navigation"
-        className={`${navigation.sidebarShell} border-white/10 bg-neutral-950 text-white`}
+        className={`${navigation.sidebarShell}`}
       >
         <SidebarInner
           pathname={pathname}
@@ -224,9 +239,9 @@ export default function AdminSidebar({
 
           <aside
             aria-label="Mobile navigation"
-            className={`${navigation.mobileShell} border-white/10 bg-neutral-950 text-white`}
+            className={`${navigation.mobileShell}`}
           >
-            <div className={`${navigation.mobileHeader} border-white/10`}>
+            <div className={`${navigation.mobileHeader}`}>
               <div>
                 <div className={typography.cardTitle}>
                   Navigation
@@ -241,7 +256,7 @@ export default function AdminSidebar({
                 onClick={onClose}
                 title="Close sidebar"
                 aria-label="Close sidebar"
-                className={`${navigation.closeButton} border-white/10 bg-white/5 text-white hover:border-white/20 hover:bg-white/10 focus:ring-white/30`}
+                className={`${navigation.closeButton}`}
               >
                 <X className="h-5 w-5" aria-hidden />
               </button>
@@ -277,7 +292,7 @@ function SidebarInner({
 
   return (
     <div className={navigation.inner}>
-      <div className={`${navigation.brandCard} border-white/10 bg-black/50 shadow-black/20`}>
+      <div className={`${navigation.brandCard}`}>
         <div className={typography.caption}>
           Advanced Home Medical
         </div>
@@ -396,7 +411,4 @@ function SidebarSection({
     </section>
   );
 }
-
-
-
 

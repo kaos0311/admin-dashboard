@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useMemo, useRef, useState } from "react";
 import {
@@ -17,6 +17,7 @@ import {
 } from "firebase/storage";
 
 import { db, storage } from "@/lib/firebase";
+import { preflightUploadFile } from "../import-preflight";
 import type {
   AuthRoleState,
   ImportMode,
@@ -50,14 +51,8 @@ function getContentType(file: File, extension: string): string {
   if (file.type) return file.type;
 
   switch (extension) {
-    case "pdf":
-      return "application/pdf";
     case "csv":
       return "text/csv";
-    case "xlsx":
-      return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
-    case "xls":
-      return "application/vnd.ms-excel";
     default:
       return "application/octet-stream";
   }
@@ -136,7 +131,15 @@ export function useUploadQueue({
     });
 
     setUploadQueue((current) => [...nextItems, ...current]);
-  }, []);
+
+    nextItems.forEach((item) => {
+      if (item.status === "failed") return;
+
+      void preflightUploadFile(item.file).then((preflight) => {
+        updateUploadQueueItem(item.id, { preflight });
+      });
+    });
+  }, [updateUploadQueueItem]);
 
   const uploadSingleFile = useCallback(
     async (item: UploadQueueItem) => {
@@ -188,6 +191,29 @@ export function useUploadQueue({
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
           source: "reports_upload_page",
+          jarvisPreflight: item.preflight ?? null,
+          ...(item.preflight
+            ? {
+                detectedReportKind: item.preflight.detectedKind,
+                detectedReportLabel: item.preflight.detectedLabel,
+                headerValidation: {
+                  status: item.preflight.status === "passed" ? "passed" : "review",
+                  matchedHeaders: item.preflight.matchedHeaders,
+                  missingHeaders: item.preflight.missingHeaders,
+                  missingRequiredLabels: item.preflight.missingRequiredLabels,
+                  uploadedHeaders: item.preflight.uploadedHeaders,
+                },
+                importRoute: {
+                  detectedKind: item.preflight.detectedKind,
+                  detectedLabel: item.preflight.detectedLabel,
+                  processor: "shop",
+                  pages: Array.from(
+                    new Set(item.preflight.destinations.map((destination) => destination.page)),
+                  ),
+                  destinations: item.preflight.destinations,
+                },
+              }
+            : {}),
         });
 
         jobId = jobRef.id;
@@ -211,6 +237,9 @@ export function useUploadQueue({
               originalName: item.file.name,
               uploadedByUid: user.uid ?? "",
               createdByEmail: user.email ?? "",
+              jarvisDetectedKind: item.preflight?.detectedKind ?? "",
+              jarvisDetectedLabel: item.preflight?.detectedLabel ?? "",
+              jarvisPreflightStatus: item.preflight?.status ?? "",
             },
           });
 

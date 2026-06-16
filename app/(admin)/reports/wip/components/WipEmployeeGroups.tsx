@@ -1,16 +1,25 @@
-﻿"use client";
+"use client";
 
 import { UserCheck } from "lucide-react";
 
 import { groupWipsByEmployee, type WipRecord } from "@/lib/reports/wip";
-import { badges, tiles, typography } from "@/theme";
+import { badges, glass, tiles, typography } from "@/theme";
 
 type WipEmployeeGroupsProps = {
   records: WipRecord[];
+  selectedEmployee: string | null;
+  onSelectEmployee: (employee: string | null) => void;
 };
 
-export function WipEmployeeGroups({ records }: WipEmployeeGroupsProps) {
+export function WipEmployeeGroups({
+  records,
+  selectedEmployee,
+  onSelectEmployee,
+}: WipEmployeeGroupsProps) {
   const groups = groupWipsByEmployee(records);
+  const sortedGroups = Object.entries(groups).sort(([first], [second]) =>
+    first.localeCompare(second)
+  );
 
   return (
     <section className={`${tiles.base} ${tiles.metric}`}>
@@ -28,11 +37,32 @@ export function WipEmployeeGroups({ records }: WipEmployeeGroupsProps) {
       </div>
 
       <div className="space-y-3">
-        {Object.entries(groups).map(([employee, items]) => {
+        {selectedEmployee ? (
+          <button
+            type="button"
+            onClick={() => onSelectEmployee(null)}
+            className={`${tiles.base} ${tiles.compact} ${tiles.hover} w-full text-left`}
+          >
+            <p className={typography.cardTitle}>Show all employees</p>
+            <p className={typography.bodyMuted}>
+              Clear the employee WIP filter.
+            </p>
+          </button>
+        ) : null}
+
+        {sortedGroups.map(([employee, items]) => {
           const overdue = items.filter((item) => item.daysOpen >= 7).length;
+          const isSelected = selectedEmployee === employee;
 
           return (
-            <div key={employee} className={`${tiles.base} ${tiles.compact}`}>
+            <button
+              key={employee}
+              type="button"
+              onClick={() => onSelectEmployee(isSelected ? null : employee)}
+              className={`${tiles.base} ${tiles.compact} ${tiles.hover} w-full text-left ${
+                isSelected ? glass.selectedListItem : ""
+              }`}
+            >
               <div className="flex items-center justify-between gap-4">
                 <div className="min-w-0">
                   <p className={typography.cardTitle}>{employee}</p>
@@ -43,7 +73,7 @@ export function WipEmployeeGroups({ records }: WipEmployeeGroupsProps) {
 
                 <span className={badges.neutral}>{overdue} overdue</span>
               </div>
-            </div>
+            </button>
           );
         })}
       </div>

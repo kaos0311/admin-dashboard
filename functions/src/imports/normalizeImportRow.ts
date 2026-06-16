@@ -56,23 +56,31 @@ const PATIENT_ID_FIELDS = [
 
 const PATIENT_NAME_FIELDS = [
   "Patient Name",
+  "Patient_Name",
+  "PatientName",
   "Name",
   "Full Name",
+  "Full_Name",
   "Patient",
   "Customer Name",
+  "Customer_Name",
 ];
 
 const FIRST_NAME_FIELDS = [
   "First Name",
+  "First_Name",
   "FirstName",
   "Patient First Name",
+  "Patient_First_Name",
   "PatientFirstName",
 ];
 
 const LAST_NAME_FIELDS = [
   "Last Name",
+  "Last_Name",
   "LastName",
   "Patient Last Name",
+  "Patient_Last_Name",
   "PatientLastName",
 ];
 
@@ -138,10 +146,20 @@ const PRIMARY_PAYOR_FIELDS = [
   "Primary Payor",
   "Primary Payer",
   "Primary Insurance",
+  "Primary Insurance (Active only) Primary Name",
+  "Primary_Insurance",
+  "PrimaryInsuranceName",
+  "Primary Insurance Name",
+  "Primary_Insurance_Name",
   "Insurance",
+  "Insurance Provider",
+  "Insurance_Provider",
   "Payor",
+  "Payor Name",
+  "Payor_Name",
   "Payer",
   "Payer Name",
+  "Payer_Name",
   "Payor Name",
 ];
 
@@ -149,6 +167,8 @@ const SECONDARY_PAYOR_FIELDS = [
   "Secondary Payor",
   "Secondary Payer",
   "Secondary Insurance",
+  "Secondary Insurance  (Active only) Secondary Name",
+  "Secondary Insurance (Active only) Secondary Name",
 ];
 
 const INSURANCE_TYPE_FIELDS = [
@@ -161,6 +181,9 @@ const INSURANCE_TYPE_FIELDS = [
 const POLICY_NUMBER_FIELDS = [
   "Policy Number",
   "Policy #",
+  "Primary Insurance (Active only) Policy #",
+  "Secondary Insurance  (Active only) Policy #",
+  "Secondary Insurance (Active only) Policy #",
   "Member ID",
   "Subscriber ID",
   "Insurance ID",
@@ -169,6 +192,9 @@ const POLICY_NUMBER_FIELDS = [
 const GROUP_NUMBER_FIELDS = [
   "Group Number",
   "Group #",
+  "Primary Insurance (Active only) Group #",
+  "Secondary Insurance  (Active only) Group #",
+  "Secondary Insurance (Active only) Group #",
   "Group ID",
 ];
 

@@ -1,7 +1,7 @@
 ﻿import { ArrowDownAZ, Search } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { glass } from "@/theme";
+import { glass, typography } from "@/theme";
 
 import {
   RISK_OPTIONS,
@@ -35,7 +35,7 @@ type SelectFieldProps<TValue extends string> = {
 };
 
 const inputStyles =
-  "w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none backdrop-blur-xl transition placeholder:${typography.caption} focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20";
+  `w-full rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-slate-100 outline-none backdrop-blur-xl transition placeholder:${typography.caption} focus:border-cyan-300/40 focus:ring-2 focus:ring-cyan-300/20`;
 
 export function HospiceFilters({
   searchText,
@@ -50,15 +50,15 @@ export function HospiceFilters({
   return (
     <section
       aria-label="Hospice record filters"
-      className={`${glass.panel} relative min-w-0 overflow-hidden`}
+      className={`${glass.panel} relative min-w-0 overflow-visible`}
     >
-      <div className="relative z-10 grid min-w-0 gap-3 p-4 sm:p-5 lg:grid-cols-[minmax(0,1fr)_180px_180px_190px]">
+      <div className="relative z-10 grid min-w-0 gap-4 p-5 sm:p-6 lg:grid-cols-[minmax(0,1fr)_180px_180px_190px]">
         <label className="relative block min-w-0">
           <span className="sr-only">Search hospice records</span>
 
           <Search
             aria-hidden="true"
-            className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${typography.caption}"
+            className={`pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 ${typography.caption}`}
           />
 
           <input
@@ -112,7 +112,7 @@ function SelectField<TValue extends string>({
       {icon ? (
         <span
           aria-hidden="true"
-          className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 ${typography.caption}"
+          className={`pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 ${typography.caption}`}
         >
           {icon}
         </span>

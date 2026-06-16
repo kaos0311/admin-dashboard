@@ -1,6 +1,6 @@
 ﻿import type { InventoryForm } from "./inventoryTypes";
 
-export const INVENTORY_LIMIT = 750;
+export const INVENTORY_LIMIT = 3000;
 export const FIRESTORE_BATCH_LIMIT = 450;
 
 export const initialInventoryForm: InventoryForm = {
@@ -9,6 +9,7 @@ export const initialInventoryForm: InventoryForm = {
   name: "",
   category: "",
   sku: "",
+  hcpc: "",
   barcode: "",
   serial: "",
   lotNumber: "",

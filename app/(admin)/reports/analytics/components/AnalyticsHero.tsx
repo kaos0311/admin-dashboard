@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { BarChart3, Loader2, RefreshCcw } from "lucide-react";
 
@@ -25,7 +25,7 @@ export function AnalyticsHero({
     <section
       className={[
         tiles.base,
-        "relative min-w-0 overflow-hidden p-6",
+        "relative min-w-0 overflow-hidden p-6 sm:p-7",
       ].join(" ")}
       aria-labelledby="analytics-hero-title"
     >
@@ -34,16 +34,16 @@ export function AnalyticsHero({
         aria-hidden="true"
       />
 
-      <div className="relative flex min-w-0 flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+      <div className="relative flex min-w-0 flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex min-w-0 items-start gap-4">
           <div
-            className="shrink-0 rounded-2xl border border-white/10 bg-white/10 p-3"
+            className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/10"
             aria-hidden="true"
           >
-            <BarChart3 className="h-7 w-7 text-cyan-200" />
+            <BarChart3 className="h-6 w-6 text-cyan-200" />
           </div>
 
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 flex-1 pt-0.5">
             <h1
               id="analytics-hero-title"
               className={[typography.pageTitle, "break-words"].join(" ")}
@@ -54,20 +54,19 @@ export function AnalyticsHero({
             <p
               className={[
                 typography.body,
-                "mt-2 max-w-3xl break-words",
+                "mt-2 max-w-3xl break-words leading-6",
               ].join(" ")}
             >
               Analytics-backed totals from imported report data. This page reads
               from the analytics summary document so the dashboard stays fast
-              instead of brute-force scanning collections like a confused
-              raccoon with admin access.
+              instead of brute-force scanning collections during everyday use.
             </p>
 
             <div className="mt-3 min-w-0 space-y-1">
               {generatedAtLabel ? (
                 <p className={[typography.bodyMuted, "text-xs"].join(" ")}>
                   Last built:{" "}
-                  <span className="break-words text-slate-300">
+                  <span className={`break-words ${typography.bodyMuted}`}>
                     {generatedAtLabel}
                   </span>
                 </p>
@@ -76,7 +75,7 @@ export function AnalyticsHero({
               {lastRebuiltByEmail ? (
                 <p className={[typography.bodyMuted, "text-xs"].join(" ")}>
                   Last rebuilt by:{" "}
-                  <span className="break-all text-slate-300">
+                  <span className={`break-all ${typography.bodyMuted}`}>
                     {lastRebuiltByEmail}
                   </span>
                 </p>
@@ -114,6 +113,4 @@ export function AnalyticsHero({
     </section>
   );
 }
-
-
 

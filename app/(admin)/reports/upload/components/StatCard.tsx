@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import type { ReactNode } from "react";
 
@@ -21,7 +21,7 @@ export function StatCard({
     <div className={glass.card}>
       <div className="flex items-start gap-3">
         <div
-          className="rounded-xl border border-white/10 bg-white/[0.06] p-2 text-slate-300"
+          className={`rounded-xl border border-white/10 bg-white/[0.06] p-2 ${typography.bodyMuted}`}
           aria-hidden="true"
         >
           {icon}
@@ -35,7 +35,7 @@ export function StatCard({
           </p>
 
           {helper ? (
-            <p className="mt-1 text-xs ${typography.caption}">
+            <p className={`mt-1 text-xs ${typography.caption}`}>
               {helper}
             </p>
           ) : null}
@@ -44,7 +44,4 @@ export function StatCard({
     </div>
   );
 }
-
-
-
 

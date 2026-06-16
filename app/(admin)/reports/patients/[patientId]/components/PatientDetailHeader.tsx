@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import {
@@ -48,14 +48,14 @@ export function PatientDetailHeader({
       </Link>
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-        <div>
+        <div className="min-w-0">
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-zinc-300">
             <UserRound className="h-3.5 w-3.5" />
             Patient command record
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-3xl font-bold tracking-tight text-white">
+            <h1 className="min-w-0 break-words text-3xl font-bold leading-[1.15] tracking-tight text-white">
               {patient.fullName}
             </h1>
 

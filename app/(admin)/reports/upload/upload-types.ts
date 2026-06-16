@@ -22,6 +22,7 @@ export type UploadStatus =
 export type UploadStep = UploadStatus;
 
 export type ImportJobStatus =
+  | "active"
   | "queued"
   | "uploaded"
   | "processing"
@@ -74,6 +75,8 @@ export type RecentImportJob = {
 
   processedRows?: number;
   processedCount?: number;
+  writtenRows?: number;
+  writtenCount?: number;
 
   insertedRows?: number;
   insertedCount?: number;
@@ -89,13 +92,83 @@ export type RecentImportJob = {
 
   completedWithErrors?: boolean;
   errorMessage?: string;
+  detectedReportKind?: string;
+  detectedReportLabel?: string;
+  processors?: string[];
+  headerValidation?: {
+    status?: "passed" | "review";
+    matchedHeaders?: string[];
+    missingHeaders?: string[];
+    missingRequiredLabels?: string[];
+    matchedRequiredLabels?: string[];
+    uploadedHeaders?: string[];
+  };
+  importRoute?: {
+    detectedKind?: string;
+    detectedLabel?: string;
+    processor?: string;
+    pages?: string[];
+    destinations?: Array<{
+      collection?: string;
+      label?: string;
+      page?: string;
+      required?: boolean;
+      condition?: string;
+    }>;
+  };
+  destinationSummary?: Record<
+    string,
+    {
+      processed?: number;
+      written?: number;
+      skipped?: number;
+      issues?: number;
+    }
+  >;
+  jarvisScreening?: {
+    status?: "passed" | "review" | "pending" | "failed";
+    checkedAt?: FirestoreDateValue;
+    message?: string;
+    findings?: string[];
+    resolvedFindings?: string[];
+    remainingFindingCount?: number;
+    recommendations?: string[];
+    handoffReport?: string;
+    landingAudit?: Array<{
+      collection: string;
+      label?: string;
+      page?: string;
+      required?: boolean;
+      status?: "landed" | "missing" | "conditional" | "issue";
+      processed?: number;
+      written?: number;
+      skipped?: number;
+      issues?: number;
+      message?: string;
+    }>;
+  };
 
   createdByUid?: string;
   createdByEmail?: string;
 
   createdAt?: FirestoreDateValue;
+  uploadedAt?: FirestoreDateValue;
+  refreshRequestedAt?: FirestoreDateValue;
+  lastReprocessRequestedAt?: FirestoreDateValue;
+  lastReprocessedAt?: FirestoreDateValue;
   updatedAt?: FirestoreDateValue;
   completedAt?: FirestoreDateValue;
+};
+
+export type ImportIssue = {
+  id: string;
+  rowIndex?: number;
+  severity?: "info" | "warning" | "error";
+  code?: string;
+  message?: string;
+  field?: string;
+  processor?: string;
+  blockedRow?: boolean;
 };
 
 export type PatientIndexStats = {
@@ -135,6 +208,23 @@ export type UploadQueueItem = {
   progress: number;
   jobId?: string;
   error?: string;
+  preflight?: {
+    status: "passed" | "review" | "failed";
+    detectedKind: string;
+    detectedLabel: string;
+    uploadedHeaders: string[];
+    matchedHeaders: string[];
+    missingHeaders: string[];
+    missingRequiredLabels: string[];
+    destinations: Array<{
+      collection: string;
+      label: string;
+      page: string;
+      required?: boolean;
+      condition?: string;
+    }>;
+    guidance: string[];
+  };
 };
 
 export type AuthRoleUser = {
@@ -149,6 +239,7 @@ export type AuthRoleState = {
   loading?: boolean;
   isAdmin?: boolean;
   isStaff?: boolean;
+  isTank?: boolean;
   error?: string | Error | null;
 };
 

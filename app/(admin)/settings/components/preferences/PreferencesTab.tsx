@@ -1,6 +1,6 @@
 ﻿import type { Dispatch, SetStateAction } from "react";
+import { glass } from "@/theme";
 import type { AppSettings, PreferenceSettings } from "../../settings-types";
-import { glassPanel } from "../../styles/glass";
 import { Field } from "../shared/Field";
 import { InfoCard } from "../shared/InfoCard";
 import { SectionHeader } from "../shared/SectionHeader";
@@ -29,16 +29,16 @@ export function PreferencesTab({
   }
 
   return (
-    <section className={`${glassPanel} p-5`}>
+    <section className={`${glass.card} p-5`}>
       <SectionHeader
         eyebrow="Preferences"
         title="Application Preferences"
         description="Control default behavior, refresh timing, visual behavior, and common guardrails for internal users."
       />
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+      <div className="mt-6 grid gap-5 lg:grid-cols-2">
         <InfoCard title="Navigation Defaults">
-          <div className="grid gap-4">
+          <div className="grid gap-5">
             <Field
               id="default-dashboard-route"
               label="Default Dashboard Route"
@@ -66,7 +66,7 @@ export function PreferencesTab({
           title="Operational Guardrails"
           description="These settings reduce dumb mistakes. Not all dumb mistakes, obviously. That would require divine intervention."
         >
-          <div className="grid gap-3">
+          <div className="grid gap-5">
             <ToggleRow
               title="Show PHI Warnings"
               description="Display reminders around protected patient data workflows."
@@ -88,7 +88,7 @@ export function PreferencesTab({
         </InfoCard>
 
         <InfoCard title="Interface Behavior">
-          <div className="grid gap-3">
+          <div className="grid gap-5">
             <ToggleRow
               title="Compact Tables"
               description="Reduce spacing in large data tables."

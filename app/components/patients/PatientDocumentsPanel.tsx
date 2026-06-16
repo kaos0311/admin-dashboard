@@ -1,11 +1,10 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import Link from "next/link";
 
 import {
-  addDoc,
   collection,
   deleteDoc,
   doc,
@@ -13,6 +12,7 @@ import {
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
 } from "firebase/firestore";
 
 import {
@@ -288,15 +288,16 @@ export default function PatientDocumentsPanel({
     setUploading(true);
 
     try {
+      const documentRef = doc(collection(db, "patients", patientId, "documents"));
       const safeName = sanitizeFileName(selectedFile.name);
-      const path = `patient-documents/${patientId}/${Date.now()}-${safeName}`;
+      const path = `patient-documents/${patientId}/${documentRef.id}/${Date.now()}-${safeName}`;
       const storageRef = ref(storage, path);
 
       await uploadBytes(storageRef, selectedFile);
 
       const url = await getDownloadURL(storageRef);
 
-      await addDoc(collection(db, "patients", patientId, "documents"), {
+      await setDoc(documentRef, {
         patientId,
         patientName,
         fileName: safeName,

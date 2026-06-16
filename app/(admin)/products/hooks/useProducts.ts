@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useRef, useState } from "react";
 import {
@@ -12,6 +12,7 @@ import {
   query,
   type QueryDocumentSnapshot,
   serverTimestamp,
+  setDoc,
   startAfter,
   updateDoc,
   writeBatch,
@@ -288,6 +289,18 @@ export function useProducts(args: {
           });
 
           toast.success("Product created.");
+        }
+
+        if (/^[A-Z]\d{4}[A-Z0-9]{0,2}$/.test(hcpcs)) {
+          await setDoc(doc(db, "hcpcsCodes", hcpcs), {
+            code: hcpcs,
+            shopDescription: name,
+            shopCategory: category,
+            observedInShop: true,
+            lastObservedSource: "product_catalog",
+            lastObservedAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }, { merge: true });
         }
 
         await loadProducts("reset");

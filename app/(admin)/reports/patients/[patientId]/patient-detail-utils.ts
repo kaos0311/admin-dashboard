@@ -98,7 +98,7 @@ export function parseDate(value?: string): Date | null {
 
 export function formatDate(value?: string): string {
   const parts = getLocalDateParts(value);
-  if (!parts) return "â€”";
+  if (!parts) return "";
 
   const displayDate = new Date(parts.year ?? 2000, parts.month - 1, parts.day);
 
@@ -269,8 +269,9 @@ export function normalizePatient(
     firstName,
     lastName,
     fullName: safeText(record.fullName, fallbackName || "Unnamed Patient"),
-    dateOfBirth: safeText(raw.dateOfBirth),
-    dateOfDeath: safeText(raw.dateOfDeath),
+    patientId: safeText(record.patientId),
+    dateOfBirth: safeText(raw.dateOfBirth || record.dob),
+    dateOfDeath: safeText(raw.dateOfDeath || record.dod),
 
     phone: safeText(raw.phone),
     email: safeText(raw.email),
@@ -303,6 +304,7 @@ export function normalizePatient(
 
     profile: safeRecord(raw.profile),
     insurance: safeRecord(raw.insurance),
+    brightree: safeRecord(raw.brightree),
     cpap: raw.cpap ?? null,
 
     currentEquipment: Array.isArray(raw.currentEquipment)
@@ -314,6 +316,9 @@ export function normalizePatient(
       ? raw.purchasesLast90Days
       : [],
     purchasesLast90DaysCount: safeNumber(raw.purchasesLast90DaysCount),
+    authorizationLines: Array.isArray(raw.authorizationLines)
+      ? raw.authorizationLines
+      : [],
 
     authorization: safeRecord(raw.authorization),
     cmn: safeRecord(raw.cmn),

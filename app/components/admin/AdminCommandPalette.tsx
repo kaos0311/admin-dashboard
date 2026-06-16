@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { Command, X } from "lucide-react";
@@ -10,6 +10,7 @@ const commands = [
   { label: "Open Dashboard", href: "/dashboard" },
   { label: "Open Upload Center", href: "/reports/upload" },
   { label: "Open Command Center", href: "/command-center" },
+  { label: "Open Rolodex", href: "/rolodex" },
   { label: "Open Patients", href: "/reports/patients" },
   { label: "Open Hospice", href: "/reports/hospice" },
   { label: "Open Insurance", href: "/reports/insurance" },

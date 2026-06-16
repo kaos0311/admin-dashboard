@@ -40,7 +40,7 @@ export function RentalRecords({
   onMarkReturned,
 }: RentalRecordsProps) {
   return (
-    <GlassCard className="min-w-0">
+    <GlassCard className="min-w-0 border-white/5 bg-white/[0.035] shadow-none">
       <SectionHeader
         eyebrow="Live records"
         title="Rental Inventory Records"
@@ -147,18 +147,19 @@ export function RentalRecords({
           />
         ) : (
           <>
-            <div className={`hidden lg:block ${tables.wrapper}`}>
+            <div className="hidden overflow-hidden rounded-2xl border border-white/5 lg:block">
               <div className={tables.scroll}>
-                <table className={`${tables.table} min-w-[1200px] border-collapse`}>
+                <table className={`${tables.table} min-w-[1500px] border-collapse`}>
                   <thead className={tables.head}>
                     <tr>
                       <th className={tables.headCell}>Asset</th>
                       <th className={tables.headCell}>Patient</th>
                       <th className={tables.headCell}>Status</th>
                       <th className={tables.headCell}>Condition</th>
-                      <th className={tables.headCell}>Location</th>
+                      <th className={tables.headCell}>Payor / PAR</th>
+                      <th className={tables.headCell}>Doctor</th>
                       <th className={tables.headCell}>Dates</th>
-                      <th className={tables.headCell}>Rate</th>
+                      <th className={tables.headCell}>Allow</th>
                       <th className={tables.headCell}>Actions</th>
                     </tr>
                   </thead>

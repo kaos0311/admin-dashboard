@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { glass, typography } from "@/theme";
+import { alerts, glass, typography } from "@/theme";
 
 import {
   AlertTriangle,
@@ -38,7 +38,7 @@ export function ImportHealthPanel({
             Import Index Health
           </h2>
 
-          <p className="mt-1 text-sm leading-6 ${typography.bodyMuted}">
+          <p className={`mt-1 text-sm leading-6 ${typography.bodyMuted}`}>
             Snapshot of indexed operational data available to reporting and
             analytics layers.
           </p>
@@ -78,19 +78,19 @@ export function ImportHealthPanel({
       </div>
 
       <div className="mt-6 grid gap-4 xl:grid-cols-2">
-        <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/10 p-4">
+        <div className={alerts.success}>
           <div className="flex items-start gap-3">
             <ShieldCheck
-              className="mt-0.5 h-5 w-5 text-emerald-200"
+              className="mt-0.5 h-5 w-5"
               aria-hidden="true"
             />
 
             <div>
-              <p className="text-sm font-semibold text-emerald-100">
+              <p className={typography.bodyStrong}>
                 Index Timestamp
               </p>
 
-              <p className="mt-1 text-sm text-emerald-50/80">
+              <p className={`mt-1 ${typography.body}`}>
                 {formatTimestamp(
                   stats.lastUpdatedAt ??
                     stats.lastUpdated ??
@@ -102,19 +102,19 @@ export function ImportHealthPanel({
           </div>
         </div>
 
-        <div className="rounded-2xl border border-amber-400/15 bg-amber-500/10 p-4">
+        <div className={alerts.warning}>
           <div className="flex items-start gap-3">
             <AlertTriangle
-              className="mt-0.5 h-5 w-5 text-amber-200"
+              className="mt-0.5 h-5 w-5"
               aria-hidden="true"
             />
 
             <div>
-              <p className="text-sm font-semibold text-amber-100">
+              <p className={typography.bodyStrong}>
                 Hospice Classification Warning
               </p>
 
-              <p className="mt-1 text-sm leading-6 text-amber-50/80">
+              <p className={`mt-1 ${typography.body}`}>
                 Verify hospice identifiers carefully. Bad wildcard logic can
                 contaminate analytics faster than a coffee spill on a payroll
                 spreadsheet.

@@ -61,4 +61,34 @@ export type CommandCenterStats = {
   activeRecalls: number;
 };
 
+export type ProductionAlertSeverity = "watch" | "high" | "critical";
+
+export type ProductionAlert = {
+  id: string;
+  title: string;
+  detail: string;
+  area:
+    | "delivery"
+    | "inventory"
+    | "imports"
+    | "patients"
+    | "documents"
+    | "security";
+  severity: ProductionAlertSeverity;
+  actionLabel: string;
+  href: string;
+};
+
+export type ProductionReadinessStats = {
+  missingSignatures: number;
+  unassignedDeliveries: number;
+  loadedNotDelivered: number;
+  staleTechCheckIns: number;
+  lowStockItems: number;
+  inventoryTraceIssues: number;
+  failedImports: number;
+  patientIdentityGaps: number;
+  chartDocumentGaps: number;
+  overallScore: number;
+};
 

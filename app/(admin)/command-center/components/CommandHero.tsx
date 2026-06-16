@@ -9,12 +9,12 @@ export function CommandHero({ loading, openIssues }: CommandHeroProps) {
   return (
     <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.08] via-neutral-950/90 to-red-950/30 p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-red-300">
             Operations Intelligence
           </p>
 
-          <h1 className="mt-2 text-3xl font-bold tracking-tight text-white md:text-4xl">
+          <h1 className="mt-2 break-words text-3xl font-bold leading-[1.15] tracking-tight text-white md:text-4xl">
             Command Center
           </h1>
 

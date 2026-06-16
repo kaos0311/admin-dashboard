@@ -1,7 +1,11 @@
 ﻿import type {
   AdminUser,
   AppSettings,
+  BrightreeReferenceKey,
+  BrightreeReferenceRecord,
+  BrightreeReferenceSettings,
   CompanySettings,
+  InventorySettings,
   PreferenceSettings,
   SecuritySettings,
   UserRole,
@@ -9,6 +13,10 @@
 } from "./settings-types";
 
 import { DEFAULT_APP_SETTINGS } from "./settings-constants";
+import {
+  BRIGHTREE_REFERENCE_GROUPS,
+  DEFAULT_BRIGHTREE_REFERENCES,
+} from "./brightree-reference-data";
 
 function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -30,7 +38,9 @@ function readNumber(value: unknown, fallback: number): number {
 }
 
 function normalizeRole(value: unknown): UserRole {
-  return value === "admin" || value === "staff" ? value : "staff";
+  return value === "admin" || value === "staff" || value === "tank"
+    ? value
+    : "staff";
 }
 
 function normalizeStatus(value: unknown): UserStatus {
@@ -159,6 +169,111 @@ export function normalizeSecuritySettings(
   };
 }
 
+export function normalizeInventorySettings(
+  data: Record<string, unknown> | undefined
+): InventorySettings {
+  const fallback = DEFAULT_APP_SETTINGS.inventory;
+  const source = data ?? {};
+
+  return {
+    defaultReorderLevel: readNumber(
+      source.defaultReorderLevel,
+      fallback.defaultReorderLevel
+    ),
+    cpapSupplyReorderLevel: readNumber(
+      source.cpapSupplyReorderLevel,
+      fallback.cpapSupplyReorderLevel
+    ),
+    oxygenReorderLevel: readNumber(
+      source.oxygenReorderLevel,
+      fallback.oxygenReorderLevel
+    ),
+    rentalEquipmentReorderLevel: readNumber(
+      source.rentalEquipmentReorderLevel,
+      fallback.rentalEquipmentReorderLevel
+    ),
+    highDemandReorderLevel: readNumber(
+      source.highDemandReorderLevel,
+      fallback.highDemandReorderLevel
+    ),
+    lowStockWarningEnabled: readBoolean(
+      source.lowStockWarningEnabled,
+      fallback.lowStockWarningEnabled
+    ),
+  };
+}
+
+function makeReferenceId(name: string, index: number): string {
+  const slug = name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+  return slug || `record-${index + 1}`;
+}
+
+function normalizeReferenceRecord(
+  value: unknown,
+  index: number
+): BrightreeReferenceRecord | null {
+  if (typeof value === "string") {
+    const name = readString(value);
+    if (!name) return null;
+
+    return {
+      id: makeReferenceId(name, index),
+      name,
+    };
+  }
+
+  if (typeof value !== "object" || value === null) return null;
+
+  const source = value as Record<string, unknown>;
+  const name = readString(source.name);
+  if (!name) return null;
+
+  return {
+    id: readString(source.id) || makeReferenceId(name, index),
+    name,
+    description: readString(source.description),
+    group: readString(source.group),
+    address: readString(source.address),
+    phone: readString(source.phone),
+    fax: readString(source.fax),
+    itemGroupNo: readString(source.itemGroupNo),
+    paymentType: readString(source.paymentType),
+  };
+}
+
+function normalizeReferenceList(
+  value: unknown,
+  fallback: BrightreeReferenceRecord[]
+): BrightreeReferenceRecord[] {
+  if (!Array.isArray(value)) return fallback;
+
+  return value
+    .map(normalizeReferenceRecord)
+    .filter((record): record is BrightreeReferenceRecord => Boolean(record));
+}
+
+export function normalizeBrightreeReferences(
+  data: Record<string, unknown> | undefined
+): BrightreeReferenceSettings {
+  const source = data ?? {};
+
+  return BRIGHTREE_REFERENCE_GROUPS.reduce<BrightreeReferenceSettings>(
+    (acc, group) => {
+      acc[group.key] = normalizeReferenceList(
+        source[group.key],
+        DEFAULT_BRIGHTREE_REFERENCES[group.key]
+      );
+
+      return acc;
+    },
+    {} as BrightreeReferenceSettings
+  );
+}
+
 export function normalizeAppSettings(
   data: Record<string, unknown> | undefined
 ): AppSettings {
@@ -177,10 +292,23 @@ export function normalizeAppSettings(
       ? (data.security as Record<string, unknown>)
       : undefined;
 
+  const inventory =
+    typeof data?.inventory === "object" && data.inventory !== null
+      ? (data.inventory as Record<string, unknown>)
+      : undefined;
+
+  const brightreeReferences =
+    typeof data?.brightreeReferences === "object" &&
+    data.brightreeReferences !== null
+      ? (data.brightreeReferences as Record<BrightreeReferenceKey, unknown>)
+      : undefined;
+
   return {
     company: normalizeCompanySettings(company),
     preferences: normalizePreferenceSettings(preferences),
     security: normalizeSecuritySettings(security),
+    inventory: normalizeInventorySettings(inventory),
+    brightreeReferences: normalizeBrightreeReferences(brightreeReferences),
     updatedAt: data?.updatedAt,
     updatedBy: readString(data?.updatedBy),
   };

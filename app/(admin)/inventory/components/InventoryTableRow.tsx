@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   CalendarClock,
@@ -14,6 +14,8 @@ import {
 } from "@/theme";
 
 import {
+  getEffectiveReorderLevel,
+  type InventoryThresholdSettings,
   isLowStock,
   isServiceDue,
   isWarrantyExpired,
@@ -32,6 +34,7 @@ type InventoryTableRowProps = {
   item: InventoryItem;
   isSelected: boolean;
   isAdmin: boolean;
+  thresholds: InventoryThresholdSettings;
 
   onToggleSelected: (id: string) => void;
   onEdit: (item: InventoryItem) => void;
@@ -52,12 +55,16 @@ export function InventoryTableRow({
   item,
   isSelected,
   isAdmin,
+  thresholds,
   onToggleSelected,
   onEdit,
   onDiscontinue,
   onArchive,
   onDelete,
 }: InventoryTableRowProps) {
+  const lowStock = isLowStock(item, thresholds);
+  const effectiveReorderLevel = getEffectiveReorderLevel(item, thresholds);
+
   return (
     <tr className="border-t border-white/10 align-top hover:bg-white/[0.04]">
       <td className="px-4 py-3">
@@ -82,7 +89,7 @@ export function InventoryTableRow({
         <div className="mt-2 flex flex-wrap gap-2">
           <StatusPill value={item.status} />
 
-          {isLowStock(item) && (
+          {lowStock && (
             <WarningPill label="Low Stock" />
           )}
         </div>
@@ -102,6 +109,7 @@ export function InventoryTableRow({
 
       <td className={`px-4 py-3 ${typography.body}`}>
         <div>SKU: {item.sku || "-"}</div>
+        <div>HCPCS: {item.hcpc || "-"}</div>
         <div>Barcode: {item.barcode || "-"}</div>
         <div>Serial: {item.serial || "-"}</div>
         <div>Lot: {item.lotNumber || "-"}</div>
@@ -110,14 +118,17 @@ export function InventoryTableRow({
       <td className={`px-4 py-3 ${typography.body}`}>
         <div>On Hand: {item.quantityOnHand}</div>
 
-        <div className={isLowStock(item) ? typography.warningStrong : ""}>
+        <div className={lowStock ? typography.warningStrong : ""}>
           Available: {item.available}
         </div>
 
         <div>Committed: {item.committed}</div>
         <div>On Rent: {item.onRent}</div>
         <div>On Order: {item.onOrder}</div>
-        <div>Reorder: {item.reorderLevel}</div>
+        <div>
+          Reorder: {effectiveReorderLevel}
+          {item.reorderLevel <= 0 ? " default" : ""}
+        </div>
 
         <div>
           Value: {formatMoney(item.totalValue)}

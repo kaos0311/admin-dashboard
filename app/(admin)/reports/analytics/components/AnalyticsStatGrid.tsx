@@ -73,24 +73,24 @@ type StatCardProps = {
 
 function StatCard({ title, value, loading, icon }: StatCardProps) {
   return (
-    <article className={[tiles.base, "min-w-0 p-5"].join(" ")}>
-      <div className="flex min-w-0 items-center gap-3">
+    <article className={[tiles.base, "min-w-0 p-4 sm:p-5"].join(" ")}>
+      <div className="flex min-w-0 items-start gap-3">
         <div
-          className="shrink-0 rounded-2xl border border-white/10 bg-white/10 p-3 text-cyan-200"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-cyan-200"
           aria-hidden="true"
         >
           {icon}
         </div>
 
-        <div className="min-w-0 flex-1">
-          <p className={[typography.bodyMuted, "truncate"].join(" ")}>
+        <div className="min-w-0 flex-1 pt-0.5">
+          <p className={[typography.bodyMuted, "break-words leading-4"].join(" ")}>
             {title}
           </p>
 
           <p
             className={[
               typography.metricCompact,
-              "mt-1 min-w-0 truncate",
+              "mt-1 min-w-0 break-words leading-none",
             ].join(" ")}
           >
             {loading ? (

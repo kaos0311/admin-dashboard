@@ -61,7 +61,7 @@ type CollectionReadParams = {
 const MAX_PROMPT_LENGTH = 8000;
 const MAX_FIELD_LENGTH = 700;
 
-const ALLOWED_ROLES = new Set(["admin", "staff"]);
+const ALLOWED_ROLES = new Set(["admin", "staff", "tank"]);
 
 const LIMITS = {
   importJobs: 12,

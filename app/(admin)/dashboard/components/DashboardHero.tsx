@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { RefreshCcw } from "lucide-react";
 

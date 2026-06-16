@@ -1,5 +1,6 @@
-﻿"use client";
+"use client";
 
+import { buttons, glass, tables, typography } from "@/theme";
 import { Pencil, Trash2 } from "lucide-react";
 
 import type { Product } from "../utils/productTypes";
@@ -33,7 +34,7 @@ export function ProductTableRow({
       : "-";
 
   return (
-    <tr className="align-top transition hover:bg-white/[0.04]">
+    <tr className={`align-top ${tables.row}`}>
       <td className="w-[90px] px-4 py-3">
         <input
           type="checkbox"
@@ -51,11 +52,11 @@ export function ProductTableRow({
           </div>
 
           <div className="min-w-0">
-            <div className="line-clamp-2 break-words font-semibold leading-5 text-white">
+            <div className={`line-clamp-2 break-words ${typography.bodyStrong}`}>
               {productName}
             </div>
 
-            <div className="mt-1 line-clamp-2 break-words text-xs leading-5 ${typography.caption}">
+            <div className={`mt-1 line-clamp-2 break-words text-xs leading-5 ${typography.caption}`}>
               {productMeta}
             </div>
           </div>
@@ -82,12 +83,12 @@ export function ProductTableRow({
         <StatusBadge status={product.status} />
       </td>
 
-      <td className="sticky right-0 z-10 w-[130px] bg-slate-950/95 px-4 py-3 shadow-[-12px_0_18px_rgba(0,0,0,0.45)] backdrop-blur-xl">
+      <td className={`sticky right-0 z-10 w-[130px] px-4 py-3 ${glass.toolbar}`}>
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={onEdit}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-white/10 bg-white/[0.08] text-slate-200 transition hover:bg-white/[0.14] focus:outline-none focus:ring-2 focus:ring-sky-300/30"
+            className={buttons.icon}
             title="Edit product"
             aria-label={`Edit ${productName}`}
           >
@@ -97,7 +98,7 @@ export function ProductTableRow({
           <button
             type="button"
             onClick={onArchive}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-red-400/20 bg-red-400/10 text-red-200 transition hover:bg-red-400/20 focus:outline-none focus:ring-2 focus:ring-red-300/30"
+            className={buttons.iconDanger}
             title="Archive product"
             aria-label={`Archive ${productName}`}
           >
@@ -120,7 +121,7 @@ function TableTextCell({
       : String(value);
 
   return (
-    <td className="px-4 py-3 text-slate-300">
+    <td className={tables.cell}>
       <div className="min-w-0 break-words leading-5">{displayValue}</div>
     </td>
   );

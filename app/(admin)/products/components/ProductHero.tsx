@@ -1,5 +1,6 @@
-﻿"use client";
+"use client";
 
+import { typography } from "@/theme";
 import { Loader2, Package2, RefreshCcw, Trash2 } from "lucide-react";
 
 type ProductHeroProps = {
@@ -20,7 +21,7 @@ export function ProductHero({
   onPurge,
 }: ProductHeroProps) {
   return (
-    <section className="min-w-0 overflow-hidden rounded-[32px] border border-white/10 bg-white/[0.07] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-3xl sm:p-6">
+    <section className="min-w-0 overflow-visible rounded-[32px] border border-white/10 bg-white/[0.07] p-5 shadow-[0_20px_80px_rgba(0,0,0,0.45)] backdrop-blur-3xl sm:p-6">
       <div className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="flex min-w-0 items-start gap-4">
           <div className="shrink-0 rounded-3xl border border-white/10 bg-white/[0.08] p-4 shadow-inner shadow-white/5">
@@ -28,11 +29,11 @@ export function ProductHero({
           </div>
 
           <div className="min-w-0">
-            <h1 className="truncate text-3xl font-bold tracking-tight text-white">
+            <h1 className="break-words text-3xl font-bold leading-[1.15] tracking-tight text-white">
               Products
             </h1>
 
-            <p className="mt-1 max-w-4xl text-pretty text-sm leading-6 ${typography.bodyMuted}">
+            <p className={`mt-1 max-w-4xl text-pretty text-sm leading-6 ${typography.bodyMuted}`}>
               Master DME/HME catalog for inventory, rentals, serialized
               tracking, billing references, recalls, and operational
               accountability.
@@ -46,7 +47,7 @@ export function ProductHero({
             onClick={onRefresh}
             disabled={loadingProducts}
             aria-label="Refresh products"
-            className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.08] px-5 py-3 text-sm ${typography.cardTitle} shadow-lg shadow-black/20 transition hover:bg-white/[0.14] focus:outline-none focus:ring-2 focus:ring-cyan-300/40 disabled:cursor-not-allowed disabled:opacity-50"
+            className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.08] px-5 py-3 text-sm ${typography.cardTitle} shadow-lg shadow-black/20 transition hover:bg-white/[0.14] focus:outline-none focus:ring-2 focus:ring-cyan-300/40 disabled:cursor-not-allowed disabled:opacity-50`}
           >
             {loadingProducts ? (
               <Loader2 className="h-4 w-4 shrink-0 animate-spin" />

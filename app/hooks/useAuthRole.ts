@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -13,7 +13,7 @@ import { doc, getDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
 
-export type UserRole = "admin" | "staff" | null;
+export type UserRole = "admin" | "staff" | "tank" | null;
 
 type UseAuthRoleResult = {
   user: User | null;
@@ -23,6 +23,7 @@ type UseAuthRoleResult = {
   active: boolean | null;
   isAdmin: boolean;
   isStaff: boolean;
+  isTank: boolean;
   isAdminOrStaff: boolean;
   canAccessDashboard: boolean;
   canUploadReports: boolean;
@@ -43,7 +44,9 @@ const ROLE_CACHE_TTL_MS = 60_000;
 let roleCache: CachedRoleState | null = null;
 
 function parseRole(value: unknown): UserRole {
-  return value === "admin" || value === "staff" ? value : null;
+  return value === "admin" || value === "staff" || value === "tank"
+    ? value
+    : null;
 }
 
 function getErrorMessage(error: unknown): string {
@@ -187,7 +190,8 @@ export function useAuthRole(): UseAuthRoleResult {
   return useMemo(() => {
     const isAdmin = role === "admin";
     const isStaff = role === "staff";
-    const isAdminOrStaff = isAdmin || isStaff;
+    const isTank = role === "tank";
+    const isAdminOrStaff = isAdmin || isStaff || isTank;
     const isActiveUser = active !== false;
     const canAccessDashboard = Boolean(user && isActiveUser && isAdminOrStaff);
 
@@ -199,6 +203,7 @@ export function useAuthRole(): UseAuthRoleResult {
       active,
       isAdmin,
       isStaff,
+      isTank,
       isAdminOrStaff,
       canAccessDashboard,
       canUploadReports: canAccessDashboard,

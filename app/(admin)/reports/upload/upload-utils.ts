@@ -24,7 +24,7 @@ export type UploadValidationResult = {
 
 const MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024;
 
-const ALLOWED_UPLOAD_EXTENSIONS = new Set(["csv", "pdf", "xlsx", "xls"]);
+const ALLOWED_UPLOAD_EXTENSIONS = new Set(["csv"]);
 
 const ACTIVE_UPLOAD_STATUSES = new Set<UploadStatus | UploadStep>([
   "validating",
@@ -106,6 +106,155 @@ function readString(
   }
 
   return undefined;
+}
+
+function readStringArray(
+  source: Record<string, unknown>,
+  keys: string[],
+): string[] {
+  for (const key of keys) {
+    const value = source[key];
+
+    if (Array.isArray(value)) {
+      return value.map((item) => String(item ?? "").trim()).filter(Boolean);
+    }
+  }
+
+  return [];
+}
+
+function readDestinationSummary(
+  value: unknown,
+): RecentImportJob["destinationSummary"] {
+  if (!value || typeof value !== "object") return undefined;
+
+  return Object.entries(value as Record<string, unknown>).reduce<
+    NonNullable<RecentImportJob["destinationSummary"]>
+  >((summary, [collectionName, counts]) => {
+    if (!counts || typeof counts !== "object") return summary;
+
+    const source = counts as Record<string, unknown>;
+    summary[collectionName] = {
+      processed: readNumber(source, ["processed"]),
+      written: readNumber(source, ["written"]),
+      skipped: readNumber(source, ["skipped"]),
+      issues: readNumber(source, ["issues"]),
+    };
+
+    return summary;
+  }, {});
+}
+
+function readJarvisScreening(value: unknown): RecentImportJob["jarvisScreening"] {
+  if (!value || typeof value !== "object") return undefined;
+
+  const source = value as Record<string, unknown>;
+  const status = readString(source, ["status"]);
+  const landingAudit = Array.isArray(source.landingAudit)
+    ? source.landingAudit
+        .flatMap((item) => {
+          if (!item || typeof item !== "object") return [];
+          const audit = item as Record<string, unknown>;
+          const auditStatus = readString(audit, ["status"]);
+          const collection = readString(audit, ["collection"]);
+          if (!collection) return [];
+          const status:
+            | "landed"
+            | "missing"
+            | "conditional"
+            | "issue"
+            | undefined =
+            auditStatus === "landed" ||
+            auditStatus === "missing" ||
+            auditStatus === "conditional" ||
+            auditStatus === "issue"
+              ? auditStatus
+              : undefined;
+
+          return [
+            {
+              collection,
+              label: readString(audit, ["label"]),
+              page: readString(audit, ["page"]),
+              required: Boolean(audit.required),
+              status,
+              processed: readNumber(audit, ["processed"]),
+              written: readNumber(audit, ["written"]),
+              skipped: readNumber(audit, ["skipped"]),
+              issues: readNumber(audit, ["issues"]),
+              message: readString(audit, ["message"]),
+            },
+          ];
+        })
+    : [];
+
+  return {
+    status:
+      status === "passed" ||
+      status === "review" ||
+      status === "pending" ||
+      status === "failed"
+        ? status
+        : undefined,
+    checkedAt: readDateValue(source, ["checkedAt"]),
+    message: readString(source, ["message"]),
+    findings: readStringArray(source, ["findings"]),
+    resolvedFindings: readStringArray(source, ["resolvedFindings"]),
+    remainingFindingCount: readNumber(source, ["remainingFindingCount"]),
+    recommendations: readStringArray(source, ["recommendations"]),
+    handoffReport: readString(source, ["handoffReport"]),
+    landingAudit,
+  };
+}
+
+function readHeaderValidation(
+  value: unknown,
+): RecentImportJob["headerValidation"] {
+  if (!value || typeof value !== "object") return undefined;
+
+  const source = value as Record<string, unknown>;
+  const status = readString(source, ["status"]);
+
+  return {
+    status: status === "passed" || status === "review" ? status : undefined,
+    matchedHeaders: readStringArray(source, ["matchedHeaders"]),
+    missingHeaders: readStringArray(source, ["missingHeaders"]),
+    missingRequiredLabels: readStringArray(source, ["missingRequiredLabels"]),
+    matchedRequiredLabels: readStringArray(source, ["matchedRequiredLabels"]),
+    uploadedHeaders: readStringArray(source, ["uploadedHeaders"]),
+  };
+}
+
+function readImportRoute(value: unknown): RecentImportJob["importRoute"] {
+  if (!value || typeof value !== "object") return undefined;
+
+  const source = value as Record<string, unknown>;
+  const destinations = Array.isArray(source.destinations)
+    ? source.destinations
+        .map((item) => {
+          if (!item || typeof item !== "object") return null;
+          const destination = item as Record<string, unknown>;
+
+          return {
+            collection: readString(destination, ["collection"]),
+            label: readString(destination, ["label"]),
+            page: readString(destination, ["page"]),
+            required: destination.required === false ? false : undefined,
+            condition: readString(destination, ["condition"]),
+          };
+        })
+        .filter(Boolean)
+    : [];
+
+  return {
+    detectedKind: readString(source, ["detectedKind"]),
+    detectedLabel: readString(source, ["detectedLabel"]),
+    processor: readString(source, ["processor"]),
+    pages: readStringArray(source, ["pages"]),
+    destinations: destinations as NonNullable<
+      RecentImportJob["importRoute"]
+    >["destinations"],
+  };
 }
 
 function readDateValue(
@@ -253,7 +402,7 @@ export function validateUploadFile(file: File): UploadValidationResult {
   if (!ALLOWED_UPLOAD_EXTENSIONS.has(extension)) {
     return {
       valid: false,
-      error: "Only CSV, PDF, XLS, and XLSX files are supported.",
+      error: "Only CSV files are supported by the automated import pipeline.",
     };
   }
 
@@ -367,6 +516,12 @@ export function readJob(id: string, value: unknown): RecentImportJob {
     "insertedCount",
   ]);
 
+  const writtenRows = readNumber(source, [
+    "writtenRows",
+    "rowsWritten",
+    "writtenCount",
+  ]);
+
   const rowsUpdated = readNumber(source, [
     "rowsUpdated",
     "updatedRows",
@@ -416,6 +571,8 @@ export function readJob(id: string, value: unknown): RecentImportJob {
 
     processedRows: rowsProcessed,
     processedCount: rowsProcessed,
+    writtenRows,
+    writtenCount: writtenRows,
 
     failedRows: rowsFailed,
     failedCount: rowsFailed,
@@ -425,6 +582,13 @@ export function readJob(id: string, value: unknown): RecentImportJob {
 
     completedWithErrors: readBoolean(source, ["completedWithErrors"]),
     errorMessage: readString(source, ["errorMessage", "error"]),
+    detectedReportKind: readString(source, ["detectedReportKind"]),
+    detectedReportLabel: readString(source, ["detectedReportLabel"]),
+    processors: readStringArray(source, ["processors"]),
+    headerValidation: readHeaderValidation(source.headerValidation),
+    importRoute: readImportRoute(source.importRoute),
+    destinationSummary: readDestinationSummary(source.destinationSummary),
+    jarvisScreening: readJarvisScreening(source.jarvisScreening),
 
     createdByUid: readString(source, ["createdByUid", "uid"]),
     createdByEmail: readString(source, [
@@ -434,6 +598,16 @@ export function readJob(id: string, value: unknown): RecentImportJob {
     ]),
 
     createdAt: readDateValue(source, ["createdAt"]),
+    uploadedAt: readDateValue(source, ["uploadedAt"]),
+    refreshRequestedAt: readDateValue(source, ["refreshRequestedAt"]),
+    lastReprocessRequestedAt: readDateValue(source, [
+      "lastReprocessRequestedAt",
+      "lastReprocessRequested",
+    ]),
+    lastReprocessedAt: readDateValue(source, [
+      "lastReprocessedAt",
+      "lastReprocessCompletedAt",
+    ]),
     updatedAt: readDateValue(source, ["updatedAt"]),
     completedAt: readDateValue(source, ["completedAt"]),
   };

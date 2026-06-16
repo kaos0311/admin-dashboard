@@ -1,8 +1,10 @@
-﻿"use client";
+"use client";
 
 import Link from "next/link";
 import { Bell, CircleAlert } from "lucide-react";
 import { useState } from "react";
+
+import { badges, glass, typography } from "@/theme";
 
 const notifications = [
   {
@@ -29,19 +31,23 @@ export function AdminNotifications() {
         onClick={() => setOpen((current) => !current)}
         title="Open notifications"
         aria-label="Open notifications"
-        className="relative rounded-xl border border-white/10 bg-white/5 p-2 text-white transition hover:bg-white/10"
+        className={`${glass.inset} relative p-2 transition hover:scale-[1.02]`}
       >
         <Bell className="h-4 w-4" aria-hidden="true" />
 
         {notifications.length > 0 ? (
-          <span className="absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full bg-red-400 ring-2 ring-slate-950" />
+          <span
+            className={`absolute -right-1 -top-1 h-2.5 w-2.5 rounded-full ring-2 ${badges.danger}`}
+          />
         ) : null}
       </button>
 
       {open ? (
-        <div className="absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden rounded-2xl border border-white/10 bg-slate-950/95 shadow-2xl shadow-black/40 backdrop-blur-2xl">
-          <div className="border-b border-white/10 px-4 py-3 text-sm font-semibold text-white">
-            Notifications
+        <div
+          className={`${glass.card} absolute right-0 top-full z-50 mt-2 w-80 overflow-hidden`}
+        >
+          <div className={`${glass.divider} px-4 py-3`}>
+            <span className={typography.cardTitle}>Notifications</span>
           </div>
 
           {notifications.map((item) => (
@@ -49,14 +55,19 @@ export function AdminNotifications() {
               key={item.id}
               href={item.href}
               onClick={() => setOpen(false)}
-              className="flex gap-3 border-b border-white/5 px-4 py-3 transition last:border-b-0 hover:bg-white/10"
+              className={glass.menuItem}
             >
-              <CircleAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" />
+              <CircleAlert
+                className={`mt-0.5 h-4 w-4 shrink-0 ${badges.warning}`}
+                aria-hidden="true"
+              />
+
               <span>
-                <span className="block text-sm font-medium text-white">
+                <span className={`block ${typography.label}`}>
                   {item.label}
                 </span>
-                <span className="mt-1 block text-xs leading-5 text-white/50">
+
+                <span className={`mt-1 block ${typography.caption}`}>
                   {item.detail}
                 </span>
               </span>
@@ -67,6 +78,4 @@ export function AdminNotifications() {
     </div>
   );
 }
-
-
 

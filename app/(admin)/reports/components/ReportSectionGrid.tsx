@@ -58,7 +58,7 @@ export function ReportSectionGrid() {
               <div
                 className={[
                   "inline-flex min-w-0 items-center gap-2",
-                  "text-sm font-medium ${typography.bodyMuted} transition",
+                  `text-sm font-medium ${typography.bodyMuted} transition`,
                   "group-hover:text-white",
                 ].join(" ")}
                 aria-hidden="true"

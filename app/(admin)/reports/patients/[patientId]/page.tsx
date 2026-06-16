@@ -1,16 +1,24 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import {
   ArrowLeft,
   CalendarClock,
+  ClipboardList,
+  FileDown,
+  FileText,
+  HeartPulse,
   NotebookPen,
+  PackageCheck,
+  ShieldCheck,
+  UserRound,
   X,
 } from "lucide-react";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
+import PatientDocumentsPanel from "@/app/components/patients/PatientDocumentsPanel";
 
 import { addTimelineEntry, writeAuditLog } from "../lib/patientActions";
 import {
@@ -32,6 +40,7 @@ import { usePatientDetail } from "./use-patient-detail";
 
 import { PatientBirthdayPanel } from "./components/PatientBirthdayPanel";
 import { PatientDetailHeader } from "./components/PatientDetailHeader";
+import { PatientExportReadinessSection } from "./components/PatientExportReadinessSection";
 import {
   GlassPanel,
   LoadingState,
@@ -40,16 +49,73 @@ import {
   RiskFlagPanel,
   Section,
 } from "./components/PatientDetailPrimitives";
-import { PatientInfoSections } from "./components/PatientInfoSections";
+import {
+  PatientCpapEquipmentSections,
+  PatientIdentityClinicalSections,
+  PatientOrdersBillingSections,
+} from "./components/PatientInfoSections";
 import { PatientNotesSection } from "./components/PatientNotesSection";
 import { PatientReportSources } from "./components/PatientReportSources";
 import { PatientRetentionSection } from "./components/PatientRetentionSection";
 import { PatientStatsGrid } from "./components/PatientStatsGrid";
 import { PatientTasksSection } from "./components/PatientTasksSection";
+import { PatientTimelineSection } from "./components/PatientTimelineSection";
+
+type PatientRecordTab =
+  | "overview"
+  | "profile"
+  | "equipment"
+  | "billing"
+  | "documents"
+  | "tasks"
+  | "history";
+
+const patientRecordTabs: Array<{
+  id: PatientRecordTab;
+  label: string;
+  icon: ReactNode;
+}> = [
+  {
+    id: "overview",
+    label: "Overview",
+    icon: <ShieldCheck className="h-4 w-4" />,
+  },
+  {
+    id: "profile",
+    label: "Identity & Clinical",
+    icon: <UserRound className="h-4 w-4" />,
+  },
+  {
+    id: "equipment",
+    label: "CPAP & Equipment",
+    icon: <HeartPulse className="h-4 w-4" />,
+  },
+  {
+    id: "billing",
+    label: "Orders & Billing",
+    icon: <PackageCheck className="h-4 w-4" />,
+  },
+  {
+    id: "documents",
+    label: "Documents",
+    icon: <FileText className="h-4 w-4" />,
+  },
+  {
+    id: "tasks",
+    label: "Tasks & Notes",
+    icon: <ClipboardList className="h-4 w-4" />,
+  },
+  {
+    id: "history",
+    label: "History",
+    icon: <CalendarClock className="h-4 w-4" />,
+  },
+];
 
 export default function PatientDetailPage() {
   const params = useParams<{ patientId: string }>();
   const router = useRouter();
+  const searchParams = useSearchParams();
 
   const patientId = params.patientId;
 
@@ -58,6 +124,7 @@ export default function PatientDetailPage() {
   const [savingStatus, setSavingStatus] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
+  const [activeTab, setActiveTab] = useState<PatientRecordTab>("overview");
 
   const [notesDraft, setNotesDraft] = useState("");
   const [careNotesDraft, setCareNotesDraft] = useState("");
@@ -69,6 +136,28 @@ export default function PatientDetailPage() {
   const [newTaskDueDate, setNewTaskDueDate] = useState("");
   const [newTaskPriority, setNewTaskPriority] =
     useState<PatientTaskPriority>("routine");
+
+  useEffect(() => {
+    const requestedTab = searchParams.get("tab");
+
+    if (requestedTab === "billing" || window.location.hash === "#wip") {
+      setActiveTab("billing");
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
+    if (activeTab !== "billing" || window.location.hash !== "#wip") {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      document.getElementById("wip")?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+  }, [activeTab]);
+
   useEffect(() => {
   if (!patient) {
     setNotesDraft("");
@@ -406,69 +495,150 @@ export default function PatientDetailPage() {
         </div>
       ) : null}
 
-      {riskFlags.length ? (
-        <RiskFlagPanel flags={riskFlags} />
-      ) : (
-        <RecordCompletePanel />
-      )}
+      <PatientRecordTabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {birthdayInfo ? (
-        <PatientBirthdayPanel
-          fullName={patient.fullName}
-          isThisMonth={birthdayInfo.isThisMonth}
-          birthday={birthdayInfo.birthday}
-          ageTurning={birthdayInfo.ageTurning}
-        />
+      {activeTab === "overview" ? (
+        <>
+          {riskFlags.length ? (
+            <RiskFlagPanel flags={riskFlags} />
+          ) : (
+            <RecordCompletePanel />
+          )}
+
+          {birthdayInfo ? (
+            <PatientBirthdayPanel
+              fullName={patient.fullName}
+              isThisMonth={birthdayInfo.isThisMonth}
+              birthday={birthdayInfo.birthday}
+              ageTurning={birthdayInfo.ageTurning}
+            />
+          ) : null}
+
+          <PatientStatsGrid
+            patient={patient}
+            openTasks={openTasks}
+            riskScore={riskScore}
+          />
+        </>
       ) : null}
 
-      <PatientStatsGrid
-        patient={patient}
-        openTasks={openTasks}
-        riskScore={riskScore}
-      />
+      {activeTab === "profile" ? (
+        <PatientIdentityClinicalSections patient={patient} />
+      ) : null}
 
-      <PatientInfoSections patient={patient} />
+      {activeTab === "equipment" ? (
+        <PatientCpapEquipmentSections patient={patient} />
+      ) : null}
 
-      <Section
-        title="Care Coordination Tasks"
-        icon={<CalendarClock className="h-5 w-5" />}
-      >
-        <PatientTasksSection
-          openTasks={openTasks}
-          completedTasks={completedTasks}
-          savingTask={savingTask}
-          newTaskTitle={newTaskTitle}
-          setNewTaskTitle={setNewTaskTitle}
-          newTaskAssignedTo={newTaskAssignedTo}
-          setNewTaskAssignedTo={setNewTaskAssignedTo}
-          newTaskDueDate={newTaskDueDate}
-          setNewTaskDueDate={setNewTaskDueDate}
-          newTaskPriority={newTaskPriority}
-          setNewTaskPriority={setNewTaskPriority}
-          addTask={addTask}
-          updateTaskStatus={updateTaskStatus}
-        />
-      </Section>
+      {activeTab === "billing" ? (
+        <PatientOrdersBillingSections patient={patient} />
+      ) : null}
 
-      <Section title="Internal Notes" icon={<NotebookPen className="h-5 w-5" />}>
-        <PatientNotesSection
-          notesDraft={notesDraft}
-          setNotesDraft={setNotesDraft}
-          careNotesDraft={careNotesDraft}
-          setCareNotesDraft={setCareNotesDraft}
-          equipmentNotesDraft={equipmentNotesDraft}
-          setEquipmentNotesDraft={setEquipmentNotesDraft}
-          billingNotesDraft={billingNotesDraft}
-          setBillingNotesDraft={setBillingNotesDraft}
-          savingNotes={savingNotes}
-          saveNotes={saveNotes}
-        />
-      </Section>
+      {activeTab === "documents" ? (
+        <>
+          <Section title="Chart Export Readiness" icon={<FileDown className="h-5 w-5" />}>
+            <PatientExportReadinessSection patient={patient} />
+          </Section>
 
-      <PatientRetentionSection patient={patient} />
+          <Section title="Digital Chart Documents" icon={<FileText className="h-5 w-5" />}>
+            <PatientDocumentsPanel patientId={patient.id} patientName={patient.fullName} />
+          </Section>
+        </>
+      ) : null}
 
-      <PatientReportSources reportTypes={patient.reportTypes} />
+      {activeTab === "tasks" ? (
+        <>
+          <Section
+            title="Care Coordination Tasks"
+            icon={<CalendarClock className="h-5 w-5" />}
+          >
+            <PatientTasksSection
+              openTasks={openTasks}
+              completedTasks={completedTasks}
+              savingTask={savingTask}
+              newTaskTitle={newTaskTitle}
+              setNewTaskTitle={setNewTaskTitle}
+              newTaskAssignedTo={newTaskAssignedTo}
+              setNewTaskAssignedTo={setNewTaskAssignedTo}
+              newTaskDueDate={newTaskDueDate}
+              setNewTaskDueDate={setNewTaskDueDate}
+              newTaskPriority={newTaskPriority}
+              setNewTaskPriority={setNewTaskPriority}
+              addTask={addTask}
+              updateTaskStatus={updateTaskStatus}
+            />
+          </Section>
+
+          <Section title="Internal Notes" icon={<NotebookPen className="h-5 w-5" />}>
+            <PatientNotesSection
+              notesDraft={notesDraft}
+              setNotesDraft={setNotesDraft}
+              careNotesDraft={careNotesDraft}
+              setCareNotesDraft={setCareNotesDraft}
+              equipmentNotesDraft={equipmentNotesDraft}
+              setEquipmentNotesDraft={setEquipmentNotesDraft}
+              billingNotesDraft={billingNotesDraft}
+              setBillingNotesDraft={setBillingNotesDraft}
+              savingNotes={savingNotes}
+              saveNotes={saveNotes}
+            />
+          </Section>
+        </>
+      ) : null}
+
+      {activeTab === "history" ? (
+        <>
+          <Section title="Patient Timeline" icon={<CalendarClock className="h-5 w-5" />}>
+            <PatientTimelineSection patientId={patient.id} />
+          </Section>
+
+          <PatientRetentionSection patient={patient} />
+
+          <PatientReportSources reportTypes={patient.reportTypes} />
+        </>
+      ) : null}
     </PageShell>
+  );
+}
+
+function PatientRecordTabs({
+  activeTab,
+  setActiveTab,
+}: {
+  activeTab: PatientRecordTab;
+  setActiveTab: (tab: PatientRecordTab) => void;
+}) {
+  return (
+    <GlassPanel>
+      <div
+        role="tablist"
+        aria-label="Patient record sections"
+        className="flex flex-wrap gap-2"
+      >
+        {patientRecordTabs.map((tab) => {
+          const selected = activeTab === tab.id;
+
+          return (
+            <button
+              key={tab.id}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setActiveTab(tab.id)}
+              className={[
+                "inline-flex min-h-11 min-w-0 items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition",
+                selected
+                  ? "border-cyan-300/45 bg-cyan-300/15 text-white shadow-lg shadow-cyan-950/30"
+                  : "border-white/10 bg-white/[0.04] text-slate-300 hover:border-cyan-200/30 hover:bg-white/[0.08] hover:text-white",
+              ].join(" ")}
+            >
+              <span className="shrink-0 text-cyan-200">{tab.icon}</span>
+              <span className="truncate">{tab.label}</span>
+            </button>
+          );
+        })}
+      </div>
+    </GlassPanel>
   );
 }
 

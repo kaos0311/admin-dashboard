@@ -4,7 +4,7 @@ import { getFunctions, httpsCallable } from "firebase/functions";
 
 import { app } from "@/lib/firebase";
 
-export type UserRole = "admin" | "staff";
+export type UserRole = "admin" | "staff" | "tank";
 
 export type CreateDashboardUserPayload = {
   email: string;
@@ -20,6 +20,11 @@ export type UpdateUserRolePayload = {
 
 export type UserActionPayload = {
   uid: string;
+};
+
+export type ResetUserPasswordPayload = {
+  uid: string;
+  newPassword: string;
 };
 
 export type CloudFunctionResult = {
@@ -123,6 +128,15 @@ export async function deleteUserAccount(
     UserActionPayload,
     CloudFunctionResult
   >("deleteUserAccount", payload);
+}
+
+export async function resetUserPassword(
+  payload: ResetUserPasswordPayload
+): Promise<CloudFunctionResult> {
+  return callFunction<
+    ResetUserPasswordPayload,
+    CloudFunctionResult
+  >("resetUserPassword", payload);
 }
 
 export async function forceRefreshCurrentUserToken(): Promise<void> {

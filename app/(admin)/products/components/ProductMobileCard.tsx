@@ -1,5 +1,6 @@
-﻿"use client";
+"use client";
 
+import { typography } from "@/theme";
 import { Pencil, Trash2 } from "lucide-react";
 
 import type { Product } from "../utils/productTypes";
@@ -33,7 +34,7 @@ export function ProductMobileCard({
       : "-";
 
   return (
-    <article className="min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.06] p-4 shadow-2xl shadow-black/30 backdrop-blur-2xl">
+    <article className="min-w-0 overflow-visible rounded-3xl border border-white/10 bg-white/[0.06] p-4 shadow-2xl shadow-black/30 backdrop-blur-2xl">
       <div className="flex min-w-0 gap-3">
         <input
           type="checkbox"
@@ -52,7 +53,7 @@ export function ProductMobileCard({
             {productName}
           </div>
 
-          <div className="mt-1 min-w-0 break-words text-xs leading-5 ${typography.caption}">
+          <div className={`mt-1 min-w-0 break-words text-xs leading-5 ${typography.caption}`}>
             {productMeta}
           </div>
 
@@ -111,7 +112,7 @@ function InfoLine({
 
   return (
     <div className="grid min-w-0 grid-cols-[96px_minmax(0,1fr)] gap-3">
-      <span className="shrink-0 ${typography.caption}">{label}</span>
+      <span className={`shrink-0 ${typography.caption}`}>{label}</span>
       <span className="min-w-0 break-words text-right text-slate-300">
         {displayValue}
       </span>

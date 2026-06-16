@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useRef, useState } from "react";
 import { collection, doc, serverTimestamp, setDoc } from "firebase/firestore";
@@ -20,7 +20,7 @@ type ReportUploadCardProps = {
   description?: string;
 };
 
-const ACCEPTED_FILE_TYPES = ".csv,.pdf,text/csv,application/pdf";
+const ACCEPTED_FILE_TYPES = ".csv,text/csv";
 
 function cleanFileName(name: string): string {
   return name
@@ -30,18 +30,17 @@ function cleanFileName(name: string): string {
     .slice(0, 140);
 }
 
-function getFileExtension(fileName: string): "csv" | "pdf" | null {
+function getFileExtension(fileName: string): "csv" | null {
   const lower = fileName.toLowerCase();
 
   if (lower.endsWith(".csv")) return "csv";
-  if (lower.endsWith(".pdf")) return "pdf";
 
   return null;
 }
 
-function getMimeType(file: File, fileType: "csv" | "pdf"): string {
+function getMimeType(file: File): string {
   if (file.type) return file.type;
-  return fileType === "pdf" ? "application/pdf" : "text/csv";
+  return "text/csv";
 }
 
 function formatBytes(bytes?: number): string {
@@ -95,14 +94,14 @@ export default function ReportUploadCard({
     if (uploadLockRef.current || uploading) return;
 
     if (!selectedFile) {
-      setMessage("Choose a CSV or PDF file first.");
+      setMessage("Choose a CSV file first.");
       return;
     }
 
     const fileType = getFileExtension(selectedFile.name);
 
     if (!fileType) {
-      setMessage("Only CSV and PDF files are supported.");
+      setMessage("Only CSV files are supported by the automated import pipeline.");
       return;
     }
 
@@ -123,7 +122,7 @@ export default function ReportUploadCard({
       const jobId = jobRef.id;
 
       const safeFileName = cleanFileName(selectedFile.name);
-      const mimeType = getMimeType(selectedFile, fileType);
+      const mimeType = getMimeType(selectedFile);
       const storageBucket = storage.app.options.storageBucket ?? "";
       const storagePath = `reports/uploads/${reportType}/${jobId}-${safeFileName}`;
       const storageRef = ref(storage, storagePath);
@@ -240,7 +239,7 @@ export default function ReportUploadCard({
 
         <p className={typography.bodyFaint}>
           {description ??
-            `Upload a CSV or PDF directly into the ${reportTypeLabel(
+            `Upload a CSV directly into the ${reportTypeLabel(
               reportType
             )} import pipeline.`}
         </p>
@@ -252,7 +251,7 @@ export default function ReportUploadCard({
             htmlFor={inputId}
             className={`mb-2 block ${typography.formLabel}`}
           >
-            CSV or PDF file
+            CSV file
           </label>
 
           <input
@@ -293,7 +292,7 @@ export default function ReportUploadCard({
 
             {!selectedFileType ? (
               <div className={`mt-3 ${alerts.danger}`}>
-                Unsupported file type. Use CSV or PDF.
+                Unsupported file type. Use CSV.
               </div>
             ) : null}
           </div>

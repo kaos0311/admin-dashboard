@@ -1,3 +1,4 @@
+import { typography } from "@/theme";
 ﻿import type { ReactNode } from "react";
 
 import { GlassCard } from "./shared/GlassCard";
@@ -7,6 +8,8 @@ type StatCardProps = {
   value: string | number;
   description: string;
   icon: ReactNode;
+  active?: boolean;
+  onClick?: () => void;
 };
 
 export function StatCard({
@@ -14,17 +17,18 @@ export function StatCard({
   value,
   description,
   icon,
+  active = false,
+  onClick,
 }: StatCardProps) {
   const displayValue =
     value === null || value === undefined || value === ""
       ? "0"
       : String(value);
 
-  return (
-    <GlassCard className="min-w-0 p-4">
+  const content = (
       <div className="flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className="truncate text-xs font-medium uppercase tracking-[0.16em] ${typography.caption}">
+          <p className={`truncate text-xs font-medium uppercase tracking-[0.16em] ${typography.caption}`}>
             {label}
           </p>
 
@@ -32,7 +36,7 @@ export function StatCard({
             {displayValue}
           </p>
 
-          <p className="mt-1 break-words text-xs leading-5 ${typography.bodyMuted}">
+          <p className={`mt-1 break-words text-xs leading-5 ${typography.bodyMuted}`}>
             {description}
           </p>
         </div>
@@ -41,6 +45,28 @@ export function StatCard({
           {icon}
         </div>
       </div>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={[
+          "min-w-0 rounded-3xl text-left transition",
+          active ? "ring-2 ring-cyan-300/45" : "hover:-translate-y-0.5",
+        ].join(" ")}
+      >
+        <GlassCard className="min-w-0 p-4">
+          {content}
+        </GlassCard>
+      </button>
+    );
+  }
+
+  return (
+    <GlassCard className="min-w-0 p-4">
+      {content}
     </GlassCard>
   );
 }

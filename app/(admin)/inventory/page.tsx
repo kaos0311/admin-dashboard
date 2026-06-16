@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
 
@@ -10,13 +10,14 @@ import {
 
 import toast from "react-hot-toast";
 
-import { colors, glass, tiles, typography } from "@/theme";
+import { buttons, colors, glass, tiles, typography } from "@/theme";
 
 import BarcodeScannerModal from "@/app/components/barcode-scanner/BarcodeScannerModal";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 
 import { normalizeBarcode } from "@/lib/barcode";
 
+import { InventoryAssetTiles } from "./components/InventoryAssetTiles";
 import { InventoryBatchActions } from "./components/InventoryBatchActions";
 import { InventoryEmptyState } from "./components/InventoryEmptyState";
 import { InventoryFilters } from "./components/InventoryFilters";
@@ -31,6 +32,7 @@ import { useInventoryData } from "./hooks/useInventoryData";
 import { useInventoryFilters } from "./hooks/useInventoryFilters";
 import { useInventoryForm } from "./hooks/useInventoryForm";
 import { useInventorySelection } from "./hooks/useInventorySelection";
+import { useInventorySettings } from "./hooks/useInventorySettings";
 
 import type { ScanTarget } from "./lib/inventoryTypes";
 
@@ -38,14 +40,14 @@ export default function InventoryPage() {
   const {
     loading: authLoading,
     isAdmin,
-    isStaff,
+    isAdminOrStaff,
   } = useAuthRole();
 
   const canRead =
-    isAdmin || isStaff;
+    isAdminOrStaff;
 
   const canWrite =
-    isAdmin || isStaff;
+    isAdminOrStaff;
 
   const [refreshKey, setRefreshKey] =
     useState(0);
@@ -58,6 +60,8 @@ export default function InventoryPage() {
 
   const [scanTarget, setScanTarget] =
     useState<ScanTarget>(null);
+
+  const inventoryThresholds = useInventorySettings();
 
   const {
     items,
@@ -97,7 +101,7 @@ export default function InventoryPage() {
     summary,
 
     resetFilters,
-  } = useInventoryFilters(items);
+  } = useInventoryFilters(items, inventoryThresholds);
 
   const {
     selectedIds,
@@ -115,6 +119,7 @@ export default function InventoryPage() {
 
   const {
     handleSubmit,
+    handleScanMovement,
     handleSoftDelete,
     handleHardDelete,
     handleDiscontinue,
@@ -159,6 +164,14 @@ export default function InventoryPage() {
         );
         break;
 
+      case "scanIn":
+        void handleScanMovement(clean, "in");
+        return;
+
+      case "scanOut":
+        void handleScanMovement(clean, "out");
+        return;
+
       default:
         updateForm(
           "barcode",
@@ -176,6 +189,25 @@ export default function InventoryPage() {
     useMemo(() => {
       return selectedIds.length;
     }, [selectedIds]);
+
+  const inventoryAutofillOptions = useMemo(() => {
+    function unique(values: string[]) {
+      return Array.from(
+        new Set(values.map((value) => value.trim()).filter(Boolean))
+      )
+        .sort((a, b) => a.localeCompare(b))
+        .slice(0, 250);
+    }
+
+    return {
+      itemNames: unique(items.map((item) => item.name)),
+      categories: unique(items.map((item) => item.category)),
+      skus: unique(items.map((item) => item.sku)),
+      hcpcs: unique(items.map((item) => item.hcpc)),
+      manufacturers: unique(items.map((item) => item.manufacturer)),
+      locations: unique(items.map((item) => item.locationName)),
+    };
+  }, [items]);
 
   function handleRefresh() {
     setRefreshKey(
@@ -217,7 +249,7 @@ export default function InventoryPage() {
       <div className={colors.grid} />
 
       <div className={glass.shell}>
-        <section className={glass.panel}>
+        <section className={`${glass.panel} p-5 sm:p-6`}>
           <div className={colors.grid} />
 
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
@@ -252,7 +284,7 @@ export default function InventoryPage() {
               </div>
             </div>
 
-            <div className={`${glass.card} max-w-sm`}>
+            <div className={`${glass.card} max-w-sm p-4 sm:p-5`}>
               <div className="flex items-center gap-4">
                 <div className={tiles.compact}>
                   <Boxes className="h-6 w-6" />
@@ -325,9 +357,10 @@ export default function InventoryPage() {
           }
         />
 
-        <section className="grid gap-6 2xl:grid-cols-[520px_minmax(0,1fr)]">
+        <section className="space-y-6">
           <InventoryForm
             form={form}
+            autofillOptions={inventoryAutofillOptions}
             saving={saving}
             canWrite={canWrite}
             onSubmit={
@@ -344,19 +377,43 @@ export default function InventoryPage() {
             }
           />
 
-          <section className={glass.panel}>
+          <section className={`${glass.panel} min-w-0 overflow-hidden`}>
             <div className={colors.grid} />
 
-            <div className="relative p-6">
-              <div className="mb-5 flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-                <div>
-                  <h2 className={typography.sectionTitle}>
-                    Inventory Records
-                  </h2>
+            <div className="relative p-4 sm:p-6">
+              <div className="mb-5 space-y-4">
+                <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <h2 className={`${typography.sectionTitle} break-words`}>
+                      Inventory Records
+                    </h2>
 
-                  <p className={`mt-2 ${typography.bodyMuted}`}>
-                    {filteredItems.length.toLocaleString()} visible records
-                  </p>
+                    <p className={`mt-2 ${typography.bodyMuted}`}>
+                      {filteredItems.length.toLocaleString()} visible records
+                    </p>
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => openScanner("scanIn")}
+                      className={buttons.success}
+                      disabled={!canWrite}
+                    >
+                      <ScanLine className="h-4 w-4" />
+                      Scan In
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => openScanner("scanOut")}
+                      className={buttons.warning}
+                      disabled={!canWrite}
+                    >
+                      <ScanLine className="h-4 w-4" />
+                      Scan Out
+                    </button>
+                  </div>
                 </div>
 
                 <InventoryFilters
@@ -418,42 +475,51 @@ export default function InventoryPage() {
                   0 ? (
                   <InventoryEmptyState />
                 ) : (
-                  <InventoryTable
-                    items={
-                      filteredItems
-                    }
-                    selectedIds={
-                      selectedIds
-                    }
-                    isAdmin={
-                      isAdmin
-                    }
-                    onToggleSelected={
-                      toggleSelected
-                    }
-                    onEdit={editItem}
-                    onDiscontinue={(
-                      item
-                    ) => {
-                      void handleDiscontinue(
+                  <div className="space-y-6">
+                    <InventoryAssetTiles
+                      items={filteredItems}
+                    />
+
+                    <InventoryTable
+                      items={
+                        filteredItems
+                      }
+                      selectedIds={
+                        selectedIds
+                      }
+                      isAdmin={
+                        isAdmin
+                      }
+                      thresholds={
+                        inventoryThresholds
+                      }
+                      onToggleSelected={
+                        toggleSelected
+                      }
+                      onEdit={editItem}
+                      onDiscontinue={(
                         item
-                      );
-                    }}
-                    onArchive={(
-                      item
-                    ) => {
-                      void handleSoftDelete(
+                      ) => {
+                        void handleDiscontinue(
+                          item
+                        );
+                      }}
+                      onArchive={(
                         item
-                      );
-                    }}
-                    onDelete={(
-                      item
-                    ) => {
-                      void handleHardDelete(
+                      ) => {
+                        void handleSoftDelete(
+                          item
+                        );
+                      }}
+                      onDelete={(
                         item
-                      );
-                    }}
-                  />
+                      ) => {
+                        void handleHardDelete(
+                          item
+                        );
+                      }}
+                    />
+                  </div>
                 )}
               </div>
             </div>

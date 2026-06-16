@@ -1,11 +1,14 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
 
 import {
   Building2,
+  ClipboardList,
+  Code2,
   Loader2,
   LockKeyhole,
+  PackageCheck,
   Save,
   ShieldAlert,
   ShieldCheck,
@@ -14,7 +17,8 @@ import {
   Users,
 } from "lucide-react";
 
-import { colors, glass, typography } from "@/theme";
+import { buttons, colors, glass, typography } from "@/theme";
+import AdminOnly from "@/app/components/auth/AdminOnly";
 
 import { SETTINGS_TABS } from "./settings-constants";
 import type { SettingsTabKey } from "./settings-types";
@@ -22,8 +26,11 @@ import { hasSettingsChanged } from "./settings-utils";
 
 import { useSettingsPage } from "./hooks/use-settings-page";
 
+import { ApiRegistryTab } from "./components/apis/ApiRegistryTab";
+import { BrightreeReferencesTab } from "./components/brightree/BrightreeReferencesTab";
 import { CompanyTab } from "./components/company/CompanyTab";
 import { DangerTab } from "./components/danger/DangerTab";
+import { InventoryTab } from "./components/inventory/InventoryTab";
 import { MessageCard } from "./components/MessageCard";
 import { PageHeader } from "./components/PageHeader";
 import { PreferencesTab } from "./components/preferences/PreferencesTab";
@@ -34,6 +41,9 @@ import { UsersTab } from "./components/users/UsersTab";
 const tabIcons: Record<SettingsTabKey, React.ReactNode> = {
   company: <Building2 className="h-4 w-4" />,
   preferences: <SlidersHorizontal className="h-4 w-4" />,
+  inventory: <PackageCheck className="h-4 w-4" />,
+  brightree: <ClipboardList className="h-4 w-4" />,
+  apis: <Code2 className="h-4 w-4" />,
   users: <Users className="h-4 w-4" />,
   security: <LockKeyhole className="h-4 w-4" />,
   danger: <ShieldAlert className="h-4 w-4" />,
@@ -49,12 +59,15 @@ export default function SettingsPage() {
     users,
     userDraft,
     setUserDraft,
+    passwordResetForm,
+    setPasswordResetForm,
     loading,
     saving,
     message,
     saveSettings,
     resetSettings,
     createUserDraft,
+    resetEmployeePassword,
     updateUserRole,
     updateUserStatus,
   } = useSettingsPage();
@@ -71,11 +84,12 @@ export default function SettingsPage() {
   }, []);
 
   return (
-    <main className={`${glass.page} ${colors.app}`}>
-      <div className={colors.grid} />
+    <AdminOnly>
+      <main className={`${glass.page} ${colors.app}`}>
+        <div className={colors.grid} />
 
-      <div className={glass.shell}>
-        <section className={glass.panel}>
+        <div className={glass.shell}>
+        <section className={`${glass.panel} p-5 sm:p-6`}>
           <div className={colors.grid} />
 
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
@@ -104,7 +118,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={resetSettings}
                 disabled={!changed || saving}
-                className={"inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"}
+                className={buttons.secondary}
               >
                 <Undo2 className="h-4 w-4" />
                 Reset Changes
@@ -114,7 +128,7 @@ export default function SettingsPage() {
                 type="button"
                 onClick={saveSettings}
                 disabled={!changed || saving}
-                className={"inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"}
+                className={buttons.primary}
               >
                 {saving ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -142,7 +156,7 @@ export default function SettingsPage() {
             <div className={colors.grid} />
 
             <div className="relative flex min-h-64 items-center justify-center p-6">
-              <div className="flex items-center gap-3 text-sm text-slate-300">
+              <div className={`flex items-center gap-3 text-sm ${typography.bodyMuted}`}>
                 <Loader2 className="h-5 w-5 animate-spin text-sky-200" />
                 Loading settings...
               </div>
@@ -158,12 +172,28 @@ export default function SettingsPage() {
               <PreferencesTab settings={settings} setSettings={setSettings} />
             ) : null}
 
+            {activeTab === "inventory" ? (
+              <InventoryTab settings={settings} setSettings={setSettings} />
+            ) : null}
+
+            {activeTab === "brightree" ? (
+              <BrightreeReferencesTab
+                settings={settings}
+                setSettings={setSettings}
+              />
+            ) : null}
+
+            {activeTab === "apis" ? <ApiRegistryTab /> : null}
+
             {activeTab === "users" ? (
               <UsersTab
                 users={users}
                 userDraft={userDraft}
                 setUserDraft={setUserDraft}
+                passwordResetForm={passwordResetForm}
+                setPasswordResetForm={setPasswordResetForm}
                 onCreateUser={createUserDraft}
+                onResetPassword={resetEmployeePassword}
                 onUpdateRole={updateUserRole}
                 onUpdateStatus={updateUserStatus}
               />
@@ -176,13 +206,9 @@ export default function SettingsPage() {
             {activeTab === "danger" ? <DangerTab /> : null}
           </>
         )}
-      </div>
-    </main>
+        </div>
+      </main>
+    </AdminOnly>
   );
 }
-
-
-
-
-
 

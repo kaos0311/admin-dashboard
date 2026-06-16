@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   type Dispatch,
@@ -20,10 +20,16 @@ import {
 } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
+import {
+  createDashboardUser,
+  resetUserPassword,
+  updateUserRole as updateDashboardUserRole,
+} from "@/lib/adminUsers";
 
 import {
   DEFAULT_APP_SETTINGS,
   DEFAULT_USER_DRAFT,
+  initialPasswordResetForm,
   SETTINGS_APP_DOC_ID,
   SETTINGS_COLLECTION,
   USERS_COLLECTION,
@@ -32,6 +38,7 @@ import {
 import type {
   AdminUser,
   AppSettings,
+  PasswordResetForm,
   SettingsMessage,
   UserDraft,
   UserRole,
@@ -54,6 +61,9 @@ type UseSettingsPageResult = {
   userDraft: UserDraft;
   setUserDraft: Dispatch<SetStateAction<UserDraft>>;
 
+  passwordResetForm: PasswordResetForm;
+  setPasswordResetForm: Dispatch<SetStateAction<PasswordResetForm>>;
+
   loading: boolean;
   saving: boolean;
 
@@ -63,6 +73,8 @@ type UseSettingsPageResult = {
   resetSettings: () => void;
 
   createUserDraft: () => Promise<void>;
+
+  resetEmployeePassword: () => Promise<void>;
 
   updateUserRole: (
     userId: string,
@@ -87,6 +99,9 @@ export function useSettingsPage(): UseSettingsPageResult {
 
   const [userDraft, setUserDraft] =
     useState<UserDraft>(DEFAULT_USER_DRAFT);
+
+  const [passwordResetForm, setPasswordResetForm] =
+    useState<PasswordResetForm>(initialPasswordResetForm);
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -211,6 +226,7 @@ export function useSettingsPage(): UseSettingsPageResult {
   const createUserDraft = useCallback(async () => {
     const email = userDraft.email.trim().toLowerCase();
     const displayName = userDraft.displayName.trim();
+    const password = userDraft.password;
 
     if (!validateEmail(email)) {
       setMessage({
@@ -221,39 +237,38 @@ export function useSettingsPage(): UseSettingsPageResult {
       return;
     }
 
+    if (password.length < 8) {
+      setMessage({
+        type: "error",
+        text: "Temporary password must be at least 8 characters.",
+      });
+
+      return;
+    }
+
     setSaving(true);
 
     try {
-      const userId = email
-        .replace(/[^a-z0-9]/gi, "_")
-        .toLowerCase();
-
-      await setDoc(
-        doc(db, USERS_COLLECTION, userId),
-        {
-          uid: userId,
-          email,
-          displayName,
-          role: userDraft.role,
-          status: "pending",
-          createdAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        {
-          merge: true,
-        }
-      );
+      await createDashboardUser({
+        email,
+        password,
+        displayName,
+        role: userDraft.role,
+      });
 
       setUserDraft(DEFAULT_USER_DRAFT);
 
       setMessage({
         type: "success",
-        text: "User document created.",
+        text: "Employee login created.",
       });
-    } catch {
+    } catch (error) {
       setMessage({
         type: "error",
-        text: "Unable to create user document.",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Unable to create employee login.",
       });
     } finally {
       setSaving(false);
@@ -265,13 +280,10 @@ export function useSettingsPage(): UseSettingsPageResult {
       userId: string,
       role: UserRole
     ) => {
-      await updateDoc(
-        doc(db, USERS_COLLECTION, userId),
-        {
-          role,
-          updatedAt: serverTimestamp(),
-        }
-      );
+      await updateDashboardUserRole({
+        uid: userId,
+        role,
+      });
     },
     []
   );
@@ -292,6 +304,55 @@ export function useSettingsPage(): UseSettingsPageResult {
     []
   );
 
+  const resetEmployeePassword = useCallback(async () => {
+    const uid = passwordResetForm.uid.trim();
+    const newPassword = passwordResetForm.newPassword;
+
+    if (!uid) {
+      setMessage({
+        type: "error",
+        text: "Select an employee before resetting a password.",
+      });
+
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setMessage({
+        type: "error",
+        text: "Temporary password must be at least 8 characters.",
+      });
+
+      return;
+    }
+
+    setSaving(true);
+
+    try {
+      await resetUserPassword({
+        uid,
+        newPassword,
+      });
+
+      setPasswordResetForm(initialPasswordResetForm);
+
+      setMessage({
+        type: "success",
+        text: "Employee password was reset.",
+      });
+    } catch (error) {
+      setMessage({
+        type: "error",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Unable to reset employee password.",
+      });
+    } finally {
+      setSaving(false);
+    }
+  }, [passwordResetForm]);
+
   return {
     settings,
     savedSettings,
@@ -302,6 +363,9 @@ export function useSettingsPage(): UseSettingsPageResult {
     userDraft,
     setUserDraft,
 
+    passwordResetForm,
+    setPasswordResetForm,
+
     loading,
     saving,
 
@@ -311,6 +375,7 @@ export function useSettingsPage(): UseSettingsPageResult {
     resetSettings,
 
     createUserDraft,
+    resetEmployeePassword,
 
     updateUserRole,
     updateUserStatus,

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   AlertTriangle,
@@ -89,7 +89,7 @@ export default function InsuranceReportPage() {
       <div className={colors.grid} aria-hidden="true" />
 
       <div className={`${glass.shell} relative z-10`}>
-        <section className={glass.panel}>
+        <section className={`${glass.panel} p-5 sm:p-6`}>
           <div className="relative z-10 flex flex-col gap-6 lg:flex-row lg:items-center lg:justify-between">
             <div className="min-w-0">
               <div className={badgeClass}>
@@ -124,10 +124,10 @@ export default function InsuranceReportPage() {
 
         <section
           aria-label="Insurance readiness summary"
-          className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+          className="grid gap-5 md:grid-cols-2 xl:grid-cols-4"
         >
           {insuranceReadinessItems.map((item) => (
-            <article key={item.label} className={glass.card}>
+            <article key={item.label} className={`${glass.card} p-5`}>
               <div className="flex min-w-0 items-start justify-between gap-4">
                 <p className={`${typography.caption} min-w-0 break-words`}>
                   {item.label}
@@ -147,13 +147,13 @@ export default function InsuranceReportPage() {
 
         <section
           aria-label="Insurance report focus areas"
-          className="grid gap-4 md:grid-cols-2 xl:grid-cols-4"
+          className="grid gap-5 md:grid-cols-2 xl:grid-cols-4"
         >
           {insuranceFocusAreas.map((area) => {
             const Icon = area.icon;
 
             return (
-              <article key={area.label} className={glass.card}>
+              <article key={area.label} className={`${glass.card} p-5`}>
                 <div className={iconTileClass}>
                   <Icon className="h-5 w-5" aria-hidden="true" />
                 </div>
@@ -191,7 +191,7 @@ export default function InsuranceReportPage() {
                   requires a protected detail view.
                 </p>
 
-                <div className={`${glass.card} mt-5`}>
+                <div className={`${glass.card} mt-5 p-4`}>
                   <div className="flex min-w-0 items-start gap-3">
                     <div className={iconTileClass}>
                       <LockKeyhole className="h-5 w-5" aria-hidden="true" />

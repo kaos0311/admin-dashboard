@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { glass, typography } from "@/theme";
+import { badges, glass, typography } from "@/theme";
 
 import {
   CheckCircle2,
@@ -29,7 +29,7 @@ export function BatchHealthPanel({
           Upload Queue Health
         </h2>
 
-        <p className="mt-1 text-sm text-neutral-500">
+        <p className={`mt-1 ${typography.bodyMuted}`}>
           Active upload state across the local queue.
         </p>
       </div>
@@ -80,12 +80,12 @@ function PanelStat({
 }) {
   const toneClass =
     tone === "blue"
-      ? "border-blue-400/20 bg-blue-500/10 text-blue-200"
+      ? badges.info
       : tone === "emerald"
-        ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
+        ? badges.success
         : tone === "rose"
-          ? "border-red-400/20 bg-red-500/10 text-red-200"
-          : "border-white/10 bg-black/20 text-neutral-200";
+          ? badges.danger
+          : badges.neutral;
 
   return (
     <div

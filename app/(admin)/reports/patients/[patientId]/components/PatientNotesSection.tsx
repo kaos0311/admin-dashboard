@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 function NoteBox({
   id,

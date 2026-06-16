@@ -14,7 +14,7 @@ export function GlassCard({
   return (
     <Component
       className={[
-        "min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/30 backdrop-blur-2xl",
+        "min-w-0 overflow-visible rounded-3xl border border-white/10 bg-white/[0.055] p-5 shadow-2xl shadow-black/30 backdrop-blur-2xl",
         "supports-[backdrop-filter]:bg-white/[0.045]",
         className,
       ]

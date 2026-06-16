@@ -15,18 +15,17 @@ export function AdminPageHeader({
   actions,
 }: AdminPageHeaderProps) {
   return (
-    <header className="relative mb-6 overflow-hidden rounded-[2rem] border border-white/10 bg-white/[0.035] p-5 shadow-[0_20px_70px_rgba(0,0,0,0.35),0_0_38px_rgba(34,211,238,0.07)] backdrop-blur-xl sm:p-6">
-      <div className="pointer-events-none absolute inset-x-8 top-0 h-px bg-gradient-to-r from-transparent via-cyan-200/35 to-transparent" />
-      <div className="pointer-events-none absolute -top-32 left-1/2 h-64 w-64 -translate-x-1/2 rounded-full bg-cyan-300/10 blur-3xl" />
-
-      <div className="relative z-10 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
+    <header className="mb-6 rounded-3xl border border-white/10 bg-white/[0.06] p-6 shadow-xl shadow-black/20 backdrop-blur-2xl">
+      <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div className="min-w-0">
           {eyebrow ? <p className={typography.caption}>{eyebrow}</p> : null}
 
           <h1 className={`${typography.pageTitle} mt-2`}>{title}</h1>
 
           {description ? (
-            <p className={typography.bodyMuted}>{description}</p>
+            <p className={`${typography.bodyMuted} mt-3 max-w-3xl`}>
+              {description}
+            </p>
           ) : null}
         </div>
 

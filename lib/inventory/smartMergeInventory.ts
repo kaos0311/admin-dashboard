@@ -20,6 +20,7 @@ export type SmartMergeInventoryInput = {
   manufacturer?: string;
   manufacturerItemId?: string;
   sku?: string;
+  hcpc?: string;
   barcode?: string;
   serial?: string;
   lotNumber?: string;
@@ -63,6 +64,7 @@ function buildSearchText(input: SmartMergeInventoryInput): string {
     input.manufacturer,
     input.manufacturerItemId,
     input.sku,
+    input.hcpc,
     input.barcode,
     input.serial,
     input.lotNumber,
@@ -83,6 +85,7 @@ async function findExistingInventory(input: SmartMergeInventoryInput) {
   const binLocation = clean(input.binLocation);
   const barcode = input.barcode ? normalizeBarcode(input.barcode) : "";
   const sku = clean(input.sku);
+  const hcpc = clean(input.hcpc).toUpperCase();
   const serial = clean(input.serial);
   const lotNumber = clean(input.lotNumber);
   const manufacturerItemId = clean(input.manufacturerItemId);
@@ -104,6 +107,12 @@ async function findExistingInventory(input: SmartMergeInventoryInput) {
   if (sku) {
     candidates.push(
       query(collection(db, "inventory"), where("sku", "==", sku), limit(10))
+    );
+  }
+
+  if (hcpc) {
+    candidates.push(
+      query(collection(db, "inventory"), where("hcpc", "==", hcpc), limit(10))
     );
   }
 
@@ -216,6 +225,7 @@ export async function smartMergeInventory(
     manufacturer: clean(input.manufacturer),
     manufacturerItemId: clean(input.manufacturerItemId),
     sku: clean(input.sku),
+    hcpc: clean(input.hcpc).toUpperCase(),
     barcode,
     serial: clean(input.serial),
     lotNumber: clean(input.lotNumber),

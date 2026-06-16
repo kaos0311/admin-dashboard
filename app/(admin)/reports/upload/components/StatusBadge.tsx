@@ -1,7 +1,8 @@
-﻿"use client";
+"use client";
 
 import { CheckCircle2, Loader2, XCircle } from "lucide-react";
 
+import { badges } from "@/theme";
 import type { UploadStep } from "../upload-types";
 import { getStepLabel, isActiveStep } from "../upload-utils";
 
@@ -14,12 +15,12 @@ export function StatusBadge({ step }: StatusBadgeProps) {
 
   const className =
     step === "complete"
-      ? "border-emerald-400/20 bg-emerald-500/10 text-emerald-200"
+      ? badges.success
       : step === "failed"
-        ? "border-red-400/20 bg-red-500/10 text-red-200"
+        ? badges.danger
         : isActiveStep(step)
-          ? "border-blue-400/20 bg-blue-500/10 text-blue-200"
-          : "border-white/10 bg-white/5 text-neutral-300";
+          ? badges.info
+          : badges.neutral;
 
   const icon =
     step === "complete" ? (

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Database } from "lucide-react";
 
@@ -10,6 +10,7 @@ type AnalyticsSourceCardProps = {
   source: string;
   generatedAtLabel: string;
   lastRebuiltByEmail: string;
+  analyticsVersion: string;
 };
 
 export function AnalyticsSourceCard({
@@ -18,6 +19,7 @@ export function AnalyticsSourceCard({
   source,
   generatedAtLabel,
   lastRebuiltByEmail,
+  analyticsVersion,
 }: AnalyticsSourceCardProps) {
   return (
     <aside
@@ -63,6 +65,11 @@ export function AnalyticsSourceCard({
         <InfoRow
           label="Source"
           value={source || "Firestore analytics document"}
+        />
+
+        <InfoRow
+          label="Version"
+          value={analyticsVersion || "Older summary"}
         />
 
         <InfoRow

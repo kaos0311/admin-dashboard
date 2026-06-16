@@ -2,10 +2,16 @@
 import type {
   AnalyticsHealth,
   CountsByType,
+  PatientClassificationAnalytics,
   ReportsAnalyticsDoc,
   ReportsAnalyticsStatus,
   ReportType,
+  RetailFinancialAnalytics,
+  RetailFinancialMetric,
+  RetailMetricStatus,
+  RetailMetricUnit,
   SelectedReportType,
+  SourceBreakdownRow,
 } from "./analytics-types";
 
 const VALID_ANALYTICS_STATUSES = new Set<ReportsAnalyticsStatus>([
@@ -48,6 +54,20 @@ export function normalizeStatus(value: unknown): ReportsAnalyticsStatus {
   return "missing";
 }
 
+function inferStatus(input: Record<string, unknown>): ReportsAnalyticsStatus {
+  const explicit = normalizeStatus(input.status);
+
+  if (explicit !== "missing") {
+    return explicit;
+  }
+
+  if (safeNumber(input.totalRows) > 0 || safeNumber(input.totalFiles) > 0) {
+    return "ready";
+  }
+
+  return "missing";
+}
+
 export function normalizeTimestampMillis(value: unknown): number {
   if (
     typeof value === "object" &&
@@ -65,6 +85,171 @@ export function normalizeTimestampMillis(value: unknown): number {
   return safeNumber(value);
 }
 
+const VALID_RETAIL_STATUSES = new Set<RetailMetricStatus>([
+  "available",
+  "partial",
+  "missing",
+]);
+
+const VALID_RETAIL_UNITS = new Set<RetailMetricUnit>([
+  "currency",
+  "percent",
+  "ratio",
+  "count",
+  "text",
+]);
+
+function safeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((item) => safeString(item))
+    .filter(Boolean);
+}
+
+function normalizeRetailMetric(value: unknown): RetailFinancialMetric | null {
+  if (typeof value !== "object" || value === null) return null;
+
+  const input = value as Record<string, unknown>;
+  const key = safeString(input.key);
+  const label = safeString(input.label);
+
+  if (!key || !label) return null;
+
+  const status =
+    typeof input.status === "string" &&
+    VALID_RETAIL_STATUSES.has(input.status as RetailMetricStatus)
+      ? (input.status as RetailMetricStatus)
+      : "missing";
+
+  const unit =
+    typeof input.unit === "string" &&
+    VALID_RETAIL_UNITS.has(input.unit as RetailMetricUnit)
+      ? (input.unit as RetailMetricUnit)
+      : "text";
+
+  const valueNumber =
+    input.value === null || input.value === undefined
+      ? null
+      : safeNumber(input.value);
+
+  return {
+    key,
+    label,
+    value: valueNumber,
+    formattedValue: safeString(input.formattedValue) || "Needs data",
+    unit,
+    status,
+    formula: safeString(input.formula),
+    insight: safeString(input.insight),
+    recommendation: safeString(input.recommendation),
+    missingInputs: safeStringArray(input.missingInputs),
+  };
+}
+
+export function emptyRetailFinancials(): RetailFinancialAnalytics {
+  return {
+    generatedAtLabel: "",
+    metrics: [],
+    purchasingSignals: [],
+    growthRecommendations: [],
+    missingInputs: [],
+    dataInputs: {
+      cogsRows: 0,
+      inventoryRows: 0,
+      productRows: 0,
+      orderRows: 0,
+    },
+  };
+}
+
+export function normalizeRetailFinancials(
+  value: unknown
+): RetailFinancialAnalytics {
+  if (typeof value !== "object" || value === null) {
+    return emptyRetailFinancials();
+  }
+
+  const input = value as Record<string, unknown>;
+  const dataInputs =
+    typeof input.dataInputs === "object" && input.dataInputs !== null
+      ? (input.dataInputs as Record<string, unknown>)
+      : {};
+
+  return {
+    generatedAtLabel: safeString(input.generatedAtLabel),
+    metrics: Array.isArray(input.metrics)
+      ? input.metrics
+          .map((metric) => normalizeRetailMetric(metric))
+          .filter((metric): metric is RetailFinancialMetric => Boolean(metric))
+      : [],
+    purchasingSignals: safeStringArray(input.purchasingSignals),
+    growthRecommendations: safeStringArray(input.growthRecommendations),
+    missingInputs: safeStringArray(input.missingInputs),
+    dataInputs: {
+      cogsRows: safeNumber(dataInputs.cogsRows),
+      inventoryRows: safeNumber(dataInputs.inventoryRows),
+      productRows: safeNumber(dataInputs.productRows),
+      orderRows: safeNumber(dataInputs.orderRows),
+    },
+  };
+}
+
+export function normalizePatientClassification(
+  value: unknown
+): PatientClassificationAnalytics {
+  if (typeof value !== "object" || value === null) {
+    return {
+      indexedPatients: 0,
+      hospicePatients: 0,
+      nonHospicePatients: 0,
+      patientSourceRows: 0,
+      generatedAtLabel: "",
+    };
+  }
+
+  const input = value as Record<string, unknown>;
+
+  return {
+    indexedPatients: safeNumber(input.indexedPatients),
+    hospicePatients: safeNumber(input.hospicePatients),
+    nonHospicePatients: safeNumber(input.nonHospicePatients),
+    patientSourceRows: safeNumber(input.patientSourceRows),
+    generatedAtLabel: safeString(input.generatedAtLabel),
+  };
+}
+
+function normalizeSourceBreakdownRow(value: unknown): SourceBreakdownRow | null {
+  if (typeof value !== "object" || value === null) return null;
+
+  const input = value as Record<string, unknown>;
+  const key = safeString(input.key);
+  const label = safeString(input.label);
+  const category = safeString(input.category) as ReportType;
+
+  if (!key || !label || !(category in emptyCounts)) {
+    return null;
+  }
+
+  return {
+    key,
+    label,
+    category,
+    rows: safeNumber(input.rows),
+    files: safeNumber(input.files),
+  };
+}
+
+export function normalizeSourceBreakdown(
+  value: unknown
+): SourceBreakdownRow[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .map((row) => normalizeSourceBreakdownRow(row))
+    .filter((row): row is SourceBreakdownRow => Boolean(row));
+}
+
 export function normalizeAnalyticsDoc(data: unknown): ReportsAnalyticsDoc {
   const input =
     typeof data === "object" && data !== null
@@ -75,14 +260,22 @@ export function normalizeAnalyticsDoc(data: unknown): ReportsAnalyticsDoc {
     totalRows: safeNumber(input.totalRows),
     totalFiles: safeNumber(input.totalFiles),
     countsByType: normalizeCountsByType(input.countsByType),
+    sourceBreakdown: normalizeSourceBreakdown(input.sourceBreakdown),
+    patientClassification: normalizePatientClassification(
+      input.patientClassification
+    ),
+    retailFinancials: normalizeRetailFinancials(input.retailFinancials),
     generatedAtLabel: safeString(input.generatedAtLabel),
     generatedAtMillis: normalizeTimestampMillis(
-      input.generatedAt ?? input.generatedAtMillis
+      input.analyticsGeneratedAt ??
+        input.generatedAt ??
+        input.generatedAtMillis
     ),
-    lastRebuiltByEmail: safeString(input.lastRebuiltByEmail),
-    lastRebuiltByUid: safeString(input.lastRebuiltByUid),
-    source: safeString(input.source),
-    status: normalizeStatus(input.status),
+    lastRebuiltByEmail: safeString(input.lastRebuiltByEmail || input.rebuiltByEmail),
+    lastRebuiltByUid: safeString(input.lastRebuiltByUid || input.rebuiltByUid),
+    analyticsVersion: safeString(input.analyticsVersion),
+    source: safeString(input.source) || "Firestore analytics document",
+    status: inferStatus(input),
   };
 }
 
@@ -115,6 +308,22 @@ export function reportTypeLabel(type: SelectedReportType): string {
       return "Purchases";
     case "rentals":
       return "Rentals";
+    case "orders":
+      return "Orders";
+    case "delivery":
+      return "Delivery";
+    case "billing":
+      return "Billing";
+    case "insurance":
+      return "Insurance";
+    case "hospice":
+      return "Hospice";
+    case "wip":
+      return "WIP";
+    case "cpap":
+      return "CPAP";
+    case "generic":
+      return "Generic";
     case "unknown":
       return "Unknown";
     default:

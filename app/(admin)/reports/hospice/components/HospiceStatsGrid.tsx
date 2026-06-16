@@ -6,7 +6,7 @@
 } from "lucide-react";
 import type { ReactNode } from "react";
 
-import { glass, typography } from "@/theme";
+import { badges, glass, typography } from "@/theme";
 
 import type { HospiceStats } from "../hospice-types";
 
@@ -28,10 +28,10 @@ type StatCardProps = {
 };
 
 const toneClasses: Record<StatTone, string> = {
-  red: "border-red-500/20 bg-red-500/10 text-red-300",
-  yellow: "border-yellow-500/20 bg-yellow-500/10 text-yellow-300",
-  emerald: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-  rose: "border-rose-500/20 bg-rose-500/10 text-rose-300",
+  red: badges.danger,
+  yellow: badges.warning,
+  emerald: badges.success,
+  rose: badges.danger,
 };
 
 export function HospiceStatsGrid({
@@ -40,7 +40,7 @@ export function HospiceStatsGrid({
   return (
     <section
       aria-label="Hospice summary statistics"
-      className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4"
+      className="grid min-w-0 gap-5 sm:grid-cols-2 xl:grid-cols-4"
     >
       <StatCard
         title="Total Hospice Records"
@@ -81,7 +81,7 @@ function StatCard({
 }: StatCardProps) {
   return (
     <article
-      className={`${glass.card} min-w-0 overflow-hidden`}
+      className={`${glass.card} min-w-0 overflow-visible p-5`}
     >
       <div
         className={`mb-4 flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border ${toneClasses[tone]}`}
@@ -96,7 +96,7 @@ function StatCard({
       </p>
 
       <p
-        className={`${typography.metric} mt-2 break-words text-white`}
+        className={`${typography.metric} mt-2 break-words`}
       >
         {value.toLocaleString()}
       </p>

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import type { ReactNode } from "react";
 
@@ -11,6 +11,7 @@ import {
 
 import { useAppSettings } from "@/app/hooks/useAppSettings";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
+import { alerts, badges, glass, typography } from "@/theme";
 
 type MaintenanceGateProps = {
   children: ReactNode;
@@ -32,21 +33,15 @@ function GateMessage({
   loading = false,
 }: GateMessageProps) {
   const toneClasses: Record<GateTone, string> = {
-    neutral:
-      "border-white/10 bg-neutral-950 text-neutral-300",
-    danger:
-      "border-red-500/20 bg-red-950/20 text-red-300",
-    warning:
-      "border-yellow-500/20 bg-yellow-950/20 text-yellow-200",
+    neutral: glass.cardPadded,
+    danger: alerts.danger,
+    warning: alerts.warning,
   };
 
   const iconClasses: Record<GateTone, string> = {
-    neutral:
-      "border-white/10 bg-white/5 text-neutral-300",
-    danger:
-      "border-red-500/20 bg-red-500/10 text-red-300",
-    warning:
-      "border-yellow-500/20 bg-yellow-500/10 text-yellow-200",
+    neutral: badges.neutral,
+    danger: badges.danger,
+    warning: badges.warning,
   };
 
   const Icon = loading
@@ -58,11 +53,11 @@ function GateMessage({
         : Lock;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-black p-6 text-white">
+    <main className={glass.pageCenter}>
       <section
         role="status"
         aria-live="polite"
-        className={`w-full max-w-md rounded-3xl border p-8 shadow-2xl shadow-black/40 ${toneClasses[tone]}`}
+        className={`w-full max-w-md ${toneClasses[tone]}`}
       >
         <div className="flex items-start gap-4">
           <div
@@ -78,7 +73,7 @@ function GateMessage({
 
           <div className="min-w-0">
             {title ? (
-              <h1 className="text-xl font-semibold text-white">
+              <h1 className={typography.cardTitle}>
                 {title}
               </h1>
             ) : null}
@@ -104,11 +99,12 @@ export default function MaintenanceGate({
     loading: authLoading,
     isAdmin,
     isStaff,
+    isTank,
     user,
   } = useAuthRole();
 
   const canReadSettings = Boolean(
-    user && (isAdmin || isStaff)
+    user && (isAdmin || isStaff || isTank)
   );
 
   const {
@@ -136,7 +132,7 @@ export default function MaintenanceGate({
     );
   }
 
-  if (!isAdmin && !isStaff) {
+  if (!isAdmin && !isStaff && !isTank) {
     return (
       <GateMessage
         title="Access Denied"
@@ -158,7 +154,8 @@ export default function MaintenanceGate({
 
   if (
     settings?.maintenanceMode &&
-    !isAdmin
+    !isAdmin &&
+    !isTank
   ) {
     return (
       <GateMessage

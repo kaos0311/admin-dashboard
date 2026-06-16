@@ -120,10 +120,7 @@ service firebase.storage {
     }
 
     function isReportFile() {
-      return isCsv() ||
-        isPdf() ||
-        isJson() ||
-        isText();
+      return isCsv();
     }
 
     function isReportSizeAllowed() {

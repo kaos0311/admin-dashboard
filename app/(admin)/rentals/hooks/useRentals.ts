@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
@@ -91,15 +91,47 @@ export function useRentals() {
       const payload = {
         ...form,
         productName: cleanProductName,
+        itemId: form.itemId.trim(),
+        itemGroup: form.itemGroup.trim(),
+        procCode: form.procCode.trim(),
+        modifiers: form.modifiers.trim(),
         serialNumber: cleanSerialNumber,
+        assetNumber: form.assetNumber.trim(),
         assetTag: cleanAssetTag,
         patientName: form.patientName.trim(),
         patientId: form.patientId.trim(),
+        patientDob: form.patientDob.trim(),
+        phone: form.phone.trim(),
         location: form.location.trim(),
         notes: form.notes.trim(),
         monthlyRate: Number.isFinite(Number(form.monthlyRate))
           ? Number(form.monthlyRate)
           : 0,
+        quantity: Number.isFinite(Number(form.quantity))
+          ? Number(form.quantity)
+          : 1,
+        charge: Number.isFinite(Number(form.charge)) ? Number(form.charge) : 0,
+        allow: Number.isFinite(Number(form.allow)) ? Number(form.allow) : 0,
+        extCharge: Number.isFinite(Number(form.extCharge))
+          ? Number(form.extCharge)
+          : 0,
+        extAllow: Number.isFinite(Number(form.extAllow))
+          ? Number(form.extAllow)
+          : 0,
+        parNumber: form.parNumber.trim(),
+        parExpiration: form.parExpiration.trim(),
+        planType: form.planType.trim(),
+        itemDiagnosis: form.itemDiagnosis.trim(),
+        insuranceName: form.insuranceName.trim(),
+        payor: form.payor.trim(),
+        orderingDoctor: form.orderingDoctor.trim(),
+        primaryDoctor: form.primaryDoctor.trim(),
+        orderDocNpi: form.orderDocNpi.trim(),
+        primaryDocNpi: form.primaryDocNpi.trim(),
+        salesOrderId: form.salesOrderId.trim(),
+        salesOrderDetailId: form.salesOrderDetailId.trim(),
+        hospice: form.hospice,
+        sourceReport: form.sourceReport.trim(),
         updatedAt: serverTimestamp(),
       };
 
@@ -123,17 +155,45 @@ export function useRentals() {
     setForm({
       productId: record.productId,
       productName: record.productName,
+      itemId: record.itemId,
+      itemGroup: record.itemGroup,
+      procCode: record.procCode,
+      modifiers: record.modifiers,
       serialNumber: record.serialNumber,
+      assetNumber: record.assetNumber,
       assetTag: record.assetTag,
       patientName: record.patientName,
       patientId: record.patientId,
+      patientDob: record.patientDob,
+      phone: record.phone,
       location: record.location,
       status: record.status,
       condition: record.condition,
       checkedOutDate: record.checkedOutDate,
       expectedReturnDate: record.expectedReturnDate,
       returnedDate: record.returnedDate,
+      nextBillingDate: record.nextBillingDate,
+      nextBillingPeriod: record.nextBillingPeriod,
       monthlyRate: record.monthlyRate,
+      quantity: record.quantity,
+      charge: record.charge,
+      allow: record.allow,
+      extCharge: record.extCharge,
+      extAllow: record.extAllow,
+      parNumber: record.parNumber,
+      parExpiration: record.parExpiration,
+      planType: record.planType,
+      itemDiagnosis: record.itemDiagnosis,
+      insuranceName: record.insuranceName,
+      payor: record.payor,
+      orderingDoctor: record.orderingDoctor,
+      primaryDoctor: record.primaryDoctor,
+      orderDocNpi: record.orderDocNpi,
+      primaryDocNpi: record.primaryDocNpi,
+      salesOrderId: record.salesOrderId,
+      salesOrderDetailId: record.salesOrderDetailId,
+      hospice: record.hospice,
+      sourceReport: record.sourceReport,
       notes: record.notes,
     });
   }, []);

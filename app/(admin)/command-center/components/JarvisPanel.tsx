@@ -1,8 +1,9 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useRef } from "react";
 import {
   ClipboardCheck,
+  Download,
   FileSearch,
   Loader2,
   RotateCcw,
@@ -36,35 +37,68 @@ type JarvisPanelProps = {
   canAskJarvis?: boolean;
   setJarvisPrompt: (value: string) => void;
   handleAskJarvis: (promptOverride?: string) => void;
+  handleRunPhiScan?: () => void;
   clearJarvisMessages?: () => void;
 };
 
 const QUICK_ACTIONS = [
   {
+    label: "PHI/HIPAA Scan",
+    icon: ShieldAlert,
+    action: "phi-scan",
+    prompt:
+      "Run a PHI/HIPAA safety scan. Create redacted alerts for risky leakage points and return corrective measures without exposing PHI.",
+  },
+  {
     label: "Analyze Latest Import",
     icon: FileSearch,
+    action: "prompt",
     prompt:
       "Analyze the latest import. Summarize issues, chunks, warnings, failed rows, stuck work, and recommended next actions.",
   },
   {
     label: "Find Stuck Work",
     icon: Wrench,
+    action: "prompt",
     prompt:
       "Find stuck or stalled work across imports, importQueue, tasks, WIP records, CMN queue, and PAR alerts. Prioritize urgent items.",
   },
   {
     label: "Compliance Risk",
     icon: ShieldAlert,
+    action: "prompt",
     prompt:
       "Summarize current compliance risks across CMN queue, PAR alerts, recalls, hospice oversight, audit logs, and open tasks.",
   },
   {
     label: "Daily Ops Brief",
     icon: ClipboardCheck,
+    action: "prompt",
     prompt:
       "Give me a concise command center operations brief. Include imports, issues, tasks, CMNs, PAR alerts, recalls, hospice oversight, and next actions.",
   },
-];
+  {
+    label: "Closeout",
+    icon: ClipboardCheck,
+    action: "prompt",
+    prompt:
+      "Run daily closeout. Summarize loaded-not-delivered tickets, unsigned delivered tickets, delivery exceptions, low stock, failed imports, PHI alerts, hospice nurse gaps, insurance/PAR/CMN risks, and what humans must verify before leaving.",
+  },
+  {
+    label: "Export Ops Report",
+    icon: Download,
+    action: "prompt",
+    prompt:
+      "Generate an exportable operations report with counts, sums, averages, missing data checks, queue health, and recommended follow-up.",
+  },
+  {
+    label: "Forecast Risks",
+    icon: Sparkles,
+    action: "prompt",
+    prompt:
+      "Forecast operational risks from current database trends. Include inventory pressure, WIP aging, import quality, hospice nurse gaps, insurance bottlenecks, and what humans should review before patient care decisions.",
+  },
+] as const;
 
 const SUGGESTED_PROMPTS = [
   "What needs immediate attention?",
@@ -111,6 +145,16 @@ function JarvisCoreIcon({ size = "md" }: { size?: "sm" | "md" }) {
   );
 }
 
+function artifactDownloadUrl(content: string): string {
+  if (typeof window === "undefined") return "#";
+
+  return URL.createObjectURL(
+    new Blob([content], {
+      type: "text/csv;charset=utf-8",
+    }),
+  );
+}
+
 export function JarvisPanel({
   jarvisPrompt,
   jarvisAnswer,
@@ -121,6 +165,7 @@ export function JarvisPanel({
   canAskJarvis,
   setJarvisPrompt,
   handleAskJarvis,
+  handleRunPhiScan,
   clearJarvisMessages,
 }: JarvisPanelProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
@@ -162,9 +207,13 @@ export function JarvisPanel({
     }
   }
 
-  function sendQuickPrompt(prompt: string) {
+  function sendQuickAction(action: (typeof QUICK_ACTIONS)[number]) {
     if (jarvisLoading) return;
-    handleAskJarvis(prompt);
+    if (action.action === "phi-scan" && handleRunPhiScan) {
+      handleRunPhiScan();
+      return;
+    }
+    handleAskJarvis(action.prompt);
   }
 
   return (
@@ -238,7 +287,7 @@ export function JarvisPanel({
                   key={action.label}
                   type="button"
                   disabled={jarvisLoading}
-                  onClick={() => sendQuickPrompt(action.prompt)}
+                  onClick={() => sendQuickAction(action)}
                   className={["min-w-0", buttons.compactSecondary].join(" ")}
                 >
                   <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
@@ -278,6 +327,19 @@ export function JarvisPanel({
                     <p className="min-w-0 whitespace-pre-wrap break-words">
                       {message.content}
                     </p>
+
+                    {!isUser && message.artifact ? (
+                      <a
+                        href={artifactDownloadUrl(message.artifact.content)}
+                        download={message.artifact.fileName}
+                        className={[
+                          "mt-3 inline-flex items-center gap-2 rounded-xl border border-cyan-300/25 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100 transition hover:bg-cyan-300/15",
+                        ].join(" ")}
+                      >
+                        <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                        Download {message.artifact.title}
+                      </a>
+                    ) : null}
                   </div>
 
                   {isUser ? (

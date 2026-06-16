@@ -1,6 +1,6 @@
 ﻿export const navigation = {
   sidebarShell:
-    "hidden w-64 shrink-0 border-r lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex",
+    "hidden w-64 shrink-0 border-r border-white/10 bg-neutral-950 text-white lg:fixed lg:inset-y-0 lg:left-0 lg:z-30 lg:flex",
 
   mobileOverlay:
     "fixed inset-0 z-50 lg:hidden",
@@ -9,13 +9,13 @@
     "absolute inset-0 bg-black/75 backdrop-blur-sm",
 
   mobileShell:
-    "absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r shadow-2xl",
+    "absolute inset-y-0 left-0 flex w-72 max-w-[85vw] flex-col border-r border-white/10 bg-neutral-950 text-white shadow-2xl",
 
   mobileHeader:
-    "flex items-center justify-between border-b px-4 py-4",
+    "flex items-center justify-between border-b border-white/10 px-4 py-4",
 
   brandCard:
-    "mb-4 rounded-3xl border px-4 py-5 shadow-lg",
+    "mb-4 rounded-3xl border border-white/10 bg-black/50 px-4 py-5 shadow-lg shadow-black/20",
 
   inner:
     "flex h-full w-full flex-col p-3",
@@ -51,7 +51,7 @@
     "border-white/10 bg-white/5 text-neutral-400 group-hover:border-white/20 group-hover:bg-white/10 group-hover:text-white",
 
   closeButton:
-    "rounded-xl border p-2 transition focus:outline-none focus:ring-2",
+    "rounded-xl border border-white/10 bg-white/5 p-2 text-white transition hover:border-white/20 hover:bg-white/10 focus:outline-none focus:ring-2 focus:ring-white/30",
 
   activeDot:
     "h-2 w-2 rounded-full bg-white",
@@ -65,3 +65,4 @@
   health:
     "mt-3 rounded-2xl border border-emerald-500/20 bg-emerald-500/10 px-4 py-3 text-xs text-emerald-300",
 };
+

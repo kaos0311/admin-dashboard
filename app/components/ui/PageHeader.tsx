@@ -15,14 +15,14 @@ export default function PageHeader({
 }: PageHeaderProps) {
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-      <div>
+      <div className="min-w-0">
         {eyebrow ? (
           <p className="text-xs font-bold uppercase tracking-[0.24em] text-cyan-200 light:text-cyan-700">
             {eyebrow}
           </p>
         ) : null}
 
-        <h1 className="mt-1 text-3xl font-bold tracking-tight text-white light:text-slate-950">
+        <h1 className="mt-1 break-words text-3xl font-bold leading-[1.15] tracking-tight text-white light:text-slate-950">
           {title}
         </h1>
 

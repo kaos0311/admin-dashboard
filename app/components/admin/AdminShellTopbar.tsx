@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   Bell,
@@ -9,8 +9,7 @@ import {
   UserRound,
 } from "lucide-react";
 
-import ThemeToggle from "@/theme/ThemeToggle";
-import { colors, glass } from "@/theme";
+import { colors, glass, ThemeToggle, typography } from "@/theme";
 
 type AdminShellTopbarProps = {
   userEmail?: string;
@@ -52,11 +51,11 @@ export function AdminShellTopbar({
           </button>
 
           <div className="min-w-0">
-            <p className="truncate text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200/80">
+            <p className="break-words text-xs font-semibold uppercase leading-5 tracking-[0.22em] text-cyan-200/80">
               Advanced Home Medical
             </p>
 
-            <h1 className={`truncate text-base font-semibold sm:text-lg ${colors.textPrimary}`}>
+            <h1 className={`break-words text-base font-semibold leading-tight sm:text-lg ${colors.textPrimary}`}>
               Operations Command
             </h1>
           </div>
@@ -64,7 +63,7 @@ export function AdminShellTopbar({
 
         <div className="hidden min-w-0 flex-1 justify-center md:flex">
           <div className={`flex w-full max-w-md items-center gap-2 rounded-2xl border ${colors.border} bg-white/[0.06] px-3 py-2 text-sm ${colors.textMuted} shadow-inner backdrop-blur-xl transition-colors`}>
-            <Search className="h-4 w-4 shrink-0 ${typography.caption}" />
+            <Search className={`h-4 w-4 shrink-0 ${typography.caption}`} />
             <span className="truncate">
               Search lives on the page level. No PHI exposed here.
             </span>
@@ -78,7 +77,7 @@ export function AdminShellTopbar({
           </div>
 
           <div className={`hidden max-w-[220px] items-center gap-2 rounded-2xl border ${colors.border} bg-white/[0.06] px-3 py-2 text-xs ${colors.textSecondary} sm:flex`}>
-            <UserRound className="h-4 w-4 shrink-0 ${typography.bodyMuted}" />
+            <UserRound className={`h-4 w-4 shrink-0 ${typography.bodyMuted}`} />
             <span className="truncate">{userEmail}</span>
           </div>
 

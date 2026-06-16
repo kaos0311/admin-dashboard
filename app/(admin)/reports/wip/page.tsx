@@ -1,4 +1,6 @@
-﻿"use client";
+"use client";
+
+import { useMemo, useState } from "react";
 
 import { colors, glass, spacing, typography } from "@/theme";
 
@@ -10,7 +12,7 @@ import { WipFilters } from "./components/WipFilters";
 import { WipHero } from "./components/WipHero";
 import { WipLoadingState } from "./components/WipLoadingState";
 import { WipStatGrid } from "./components/WipStatGrid";
-import { WipTable } from "./components/WipTable";
+import { WipEmployeeModal } from "./components/WipEmployeeModal";
 import { useWipData } from "./hooks/use-wip-data";
 import { useWipFilters } from "./hooks/use-wip-filters";
 
@@ -19,6 +21,7 @@ function cn(...classes: Array<string | false | null | undefined>) {
 }
 
 export default function WipReportPage() {
+  const [selectedEmployee, setSelectedEmployee] = useState<string | null>(null);
   const { records, analytics, loading, error, refresh } = useWipData();
 
   const {
@@ -30,6 +33,16 @@ export default function WipReportPage() {
     setAging,
     filteredRecords,
   } = useWipFilters(records);
+
+  const selectedEmployeeRecords = useMemo(() => {
+    if (!selectedEmployee) {
+      return [];
+    }
+
+    return filteredRecords.filter(
+      (record) => record.assignedTo === selectedEmployee
+    );
+  }, [filteredRecords, selectedEmployee]);
 
   if (loading) {
     return (
@@ -95,10 +108,17 @@ export default function WipReportPage() {
           <WipAnalytics analytics={analytics} />
         </section>
 
-        <section className="grid min-w-0 gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-          <WipEmployeeGroups records={records} />
-          <WipTable records={filteredRecords} />
-        </section>
+        <WipEmployeeGroups
+          records={filteredRecords}
+          selectedEmployee={selectedEmployee}
+          onSelectEmployee={setSelectedEmployee}
+        />
+
+        <WipEmployeeModal
+          employee={selectedEmployee}
+          records={selectedEmployeeRecords}
+          onClose={() => setSelectedEmployee(null)}
+        />
       </section>
     </main>
   );

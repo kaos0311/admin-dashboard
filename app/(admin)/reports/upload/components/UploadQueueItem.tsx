@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { type ReactNode, useMemo } from "react";
 import {
@@ -161,6 +161,7 @@ function isDeletedStatus(job: RecentImportJob): boolean {
 
 function isProcessingStatus(job: RecentImportJob): boolean {
   return (
+    job.status === "active" ||
     job.status === "queued" ||
     job.status === "uploaded" ||
     job.status === "processing"

@@ -33,7 +33,7 @@ export function AuditStats({ logs }: { logs: AuditLogRow[] }) {
   }, [logs]);
 
   return (
-    <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+    <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-6">
       <SummaryCard label="Loaded Logs" value={stats.total} />
       <SummaryCard label="High Risk" value={stats.highRisk} critical />
       <SummaryCard label="Suspicious" value={stats.suspicious} critical />

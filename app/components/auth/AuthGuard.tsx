@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
@@ -8,7 +8,7 @@ import { ShieldAlert } from "lucide-react";
 
 import { auth, db } from "@/lib/firebase";
 
-type AllowedRole = "admin" | "staff";
+type AllowedRole = "admin" | "staff" | "tank";
 type ResolvedRole = AllowedRole | null;
 
 type AuthGuardProps = {
@@ -21,7 +21,9 @@ type AuthGuardProps = {
 type GuardState = "checking" | "authorized" | "signedOut" | "forbidden" | "error";
 
 function parseRole(value: unknown): ResolvedRole {
-  return value === "admin" || value === "staff" ? value : null;
+  return value === "admin" || value === "staff" || value === "tank"
+    ? value
+    : null;
 }
 
 export default function AuthGuard({
@@ -97,7 +99,7 @@ export default function AuthGuard({
             setMessage(
               resolvedRole
                 ? `Your role "${resolvedRole}" is not allowed here.`
-                : "No admin/staff role was found on your account."
+                : "No dashboard role was found on your account."
             );
           }
 

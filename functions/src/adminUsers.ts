@@ -10,7 +10,7 @@ if (!getApps().length) {
 const db = getFirestore();
 const auth = getAuth();
 
-type DashboardRole = "admin" | "staff";
+type DashboardRole = "admin" | "staff" | "tank";
 
 type CreateDashboardUserInput = {
   email?: unknown;
@@ -35,7 +35,7 @@ function cleanString(value: unknown): string {
 }
 
 function normalizeRole(value: unknown): DashboardRole {
-  if (value === "admin" || value === "staff") {
+  if (value === "admin" || value === "staff" || value === "tank") {
     return value;
   }
 

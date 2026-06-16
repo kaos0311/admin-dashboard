@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { type RefObject, useState } from "react";
 import { FileSearch, FileUp, ShieldCheck } from "lucide-react";
@@ -43,7 +43,7 @@ export function ImportPanel({
           </h2>
 
           <p className={`${typography.bodyMuted} mt-1 max-w-3xl`}>
-            Upload CSV/PDF reports. This creates a protected import job for
+            Upload CSV reports. This creates a protected import job for
             Cloud Functions. Raw report history stays off this page because PHI
             is not decorative confetti.
           </p>
@@ -93,7 +93,7 @@ export function ImportPanel({
               disabled={importing}
               className="mt-2 w-full min-w-[230px] rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-sm text-white outline-none"
             >
-              <option value="deliveryTickets">Delivery Tickets PDF</option>
+              <option value="deliveryTickets">Delivery Tickets CSV</option>
               <option value="outstandingSalesOrders">
                 Outstanding Sales Orders CSV
               </option>
@@ -105,7 +105,7 @@ export function ImportPanel({
           <input
             ref={importInputRef}
             type="file"
-            accept=".csv,.pdf,text/csv,application/pdf"
+            accept=".csv,text/csv"
             disabled={importing}
             onChange={(event) => {
               const file = event.target.files?.[0] ?? null;

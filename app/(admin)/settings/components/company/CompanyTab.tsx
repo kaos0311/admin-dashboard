@@ -1,6 +1,6 @@
 ﻿import type { Dispatch, SetStateAction } from "react";
+import { glass } from "@/theme";
 import type { AppSettings, CompanySettings } from "../../settings-types";
-import { glassPanel } from "../../styles/glass";
 import { Field } from "../shared/Field";
 import { InfoCard } from "../shared/InfoCard";
 import { SectionHeader } from "../shared/SectionHeader";
@@ -26,20 +26,20 @@ export function CompanyTab({ settings, setSettings }: CompanyTabProps) {
   }
 
   return (
-    <section className={`${glassPanel} p-5`}>
+    <section className={`${glass.card} p-5`}>
       <SectionHeader
         eyebrow="Company"
         title="Company Defaults"
         description="Set business identity, contact information, and location defaults used across operational pages. Boring stuff, until itâ€™s wrong on paperwork and everyone starts acting surprised."
       />
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-3">
-        <div className="grid gap-4 lg:col-span-2">
+      <div className="mt-6 grid gap-5 lg:grid-cols-3">
+        <div className="grid gap-5 lg:col-span-2">
           <InfoCard
             title="Business Identity"
             description="These values should match how the company should appear internally and on generated operational summaries."
           >
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-5 md:grid-cols-2">
               <Field
                 id="company-name"
                 label="Company Name"
@@ -76,7 +76,7 @@ export function CompanyTab({ settings, setSettings }: CompanyTabProps) {
           </InfoCard>
 
           <InfoCard title="Contact Information">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-5 md:grid-cols-2">
               <Field
                 id="company-phone"
                 label="Phone"
@@ -107,7 +107,7 @@ export function CompanyTab({ settings, setSettings }: CompanyTabProps) {
           </InfoCard>
 
           <InfoCard title="Primary Address">
-            <div className="grid gap-4 md:grid-cols-2">
+            <div className="grid gap-5 md:grid-cols-2">
               <div className="md:col-span-2">
                 <Field
                   id="address-line-1"
@@ -155,7 +155,7 @@ export function CompanyTab({ settings, setSettings }: CompanyTabProps) {
           </InfoCard>
         </div>
 
-        <div className="grid content-start gap-4">
+        <div className="grid content-start gap-5">
           <RecentActivityCard />
 
           <InfoCard

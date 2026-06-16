@@ -1,6 +1,6 @@
 ﻿import type { Dispatch, SetStateAction } from "react";
+import { glass } from "@/theme";
 import type { AppSettings, SecuritySettings } from "../../settings-types";
-import { glassPanel } from "../../styles/glass";
 import { Field } from "../shared/Field";
 import { InfoCard } from "../shared/InfoCard";
 import { SectionHeader } from "../shared/SectionHeader";
@@ -26,16 +26,16 @@ export function SecurityTab({ settings, setSettings }: SecurityTabProps) {
   }
 
   return (
-    <section className={`${glassPanel} p-5`}>
+    <section className={`${glass.card} p-5`}>
       <SectionHeader
         eyebrow="Security"
         title="Security Controls"
         description="Manage access guardrails, maintenance behavior, export permissions, and audit expectations."
       />
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+      <div className="mt-6 grid gap-5 lg:grid-cols-2">
         <InfoCard title="Access Controls">
-          <div className="grid gap-3">
+          <div className="grid gap-5">
             <ToggleRow
               title="Require Admin For Report Reset"
               description="Only admins should be able to reset imported report data."
@@ -66,7 +66,7 @@ export function SecurityTab({ settings, setSettings }: SecurityTabProps) {
         </InfoCard>
 
         <InfoCard title="System Controls">
-          <div className="grid gap-3">
+          <div className="grid gap-5">
             <ToggleRow
               title="Maintenance Mode"
               description="Restrict normal access during maintenance windows."

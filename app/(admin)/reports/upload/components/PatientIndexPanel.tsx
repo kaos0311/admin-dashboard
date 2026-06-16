@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Activity, Database, Loader2, SearchCheck } from "lucide-react";
 
@@ -81,23 +81,23 @@ export function PatientIndexPanel({
 
   return (
     <section
-      className={glass.card}
+      className={[glass.card, "min-w-0 overflow-hidden p-5"].join(" ")}
       aria-labelledby="patient-index-panel-title"
     >
       <div className="flex items-start justify-between gap-4">
-        <div>
+        <div className="min-w-0">
           <p className={typography.caption}>
             Index Health
           </p>
 
           <h2
             id="patient-index-panel-title"
-            className={`${typography.sectionTitle} mt-2`}
+            className={`${typography.sectionTitle} mt-2 break-words`}
           >
             Patient Index
           </h2>
 
-          <p className={`${typography.bodyMuted} mt-2`}>
+          <p className={`${typography.bodyMuted} mt-2 break-words`}>
             Search index status for imported patient records.
           </p>
         </div>
@@ -111,33 +111,33 @@ export function PatientIndexPanel({
         </div>
       </div>
 
-      <div className="mt-6 grid gap-3">
-        <div className={tiles.metric}>
-          <div className={`flex items-center gap-2 ${typography.bodyMuted}`}>
+      <div className="mt-5 grid min-w-0 gap-3">
+        <div className={[tiles.metric, "min-w-0 overflow-hidden"].join(" ")}>
+          <div className={`flex min-w-0 items-center gap-2 ${typography.bodyMuted}`}>
             <Activity className="h-4 w-4" aria-hidden="true" />
-            <span>Total Patients</span>
+            <span className="min-w-0 break-words">Total Patients</span>
           </div>
 
-          <p className={`${typography.metric} mt-2`}>
+          <p className={`${typography.metricCompact} mt-2 break-words`}>
             {analyticsLoading ? "..." : totalPatients.toLocaleString()}
           </p>
         </div>
 
-        <div className={tiles.metric}>
-          <div className={`flex items-center gap-2 ${typography.bodyMuted}`}>
+        <div className={[tiles.metric, "min-w-0 overflow-hidden"].join(" ")}>
+          <div className={`flex min-w-0 items-center gap-2 ${typography.bodyMuted}`}>
             <SearchCheck className="h-4 w-4" aria-hidden="true" />
-            <span>Indexed Records</span>
+            <span className="min-w-0 break-words">Indexed Records</span>
           </div>
 
-          <p className={`${typography.metric} mt-2`}>
+          <p className={`${typography.metricCompact} mt-2 break-words`}>
             {analyticsLoading ? "..." : indexedPatients.toLocaleString()}
           </p>
         </div>
 
-        <div className={tiles.metric}>
-          <p className={typography.bodyMuted}>Last Updated</p>
+        <div className={[tiles.metric, "min-w-0 overflow-hidden"].join(" ")}>
+          <p className={`${typography.bodyMuted} break-words`}>Last Updated</p>
 
-          <p className={`${typography.body} mt-2`}>
+          <p className={`${typography.body} mt-2 break-words`}>
             {analyticsLoading ? "Checking..." : lastUpdated}
           </p>
         </div>

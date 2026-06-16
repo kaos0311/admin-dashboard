@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { ClipboardList } from "lucide-react";
 
@@ -12,7 +12,9 @@ type RecentOrdersSectionProps = {
   orders: OrderRow[];
 };
 
-export function RecentOrdersSection({ orders }: RecentOrdersSectionProps) {
+export function RecentOrdersSection({
+  orders,
+}: RecentOrdersSectionProps) {
   return (
     <GlassPanel
       title="Recent Orders"

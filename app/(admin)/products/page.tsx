@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 
@@ -17,6 +17,7 @@ import { alerts, colors, glass, typography } from "@/theme";
 
 import BarcodeScannerModal from "@/app/components/barcode-scanner/BarcodeScannerModal";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
+import { useBrightreeReferences } from "@/app/hooks/useBrightreeReferences";
 
 import { normalizeBarcode } from "@/lib/barcode";
 
@@ -47,12 +48,13 @@ export default function ProductsPage() {
   const {
     loading: authLoading,
     isAdmin,
-    isStaff,
+    isAdminOrStaff,
     user,
   } = useAuthRole();
 
-  const canRead = isAdmin || isStaff;
-  const canWrite = isAdmin || isStaff;
+  const canRead = isAdminOrStaff;
+  const canWrite = isAdminOrStaff;
+  const brightreeReferences = useBrightreeReferences();
 
   const {
     products,
@@ -131,21 +133,35 @@ export default function ProductsPage() {
   const categories =
     useMemo(
       () =>
-        uniqueOptions(
-          products,
-          "category"
-        ),
-      [products]
+        Array.from(
+          new Set([
+            ...uniqueOptions(
+              products,
+              "category"
+            ),
+            ...brightreeReferences.itemGroups
+              .map((item) => item.name)
+              .filter(Boolean),
+          ])
+        ).sort(),
+      [brightreeReferences.itemGroups, products]
     );
 
   const manufacturers =
     useMemo(
       () =>
-        uniqueOptions(
-          products,
-          "manufacturer"
-        ),
-      [products]
+        Array.from(
+          new Set([
+            ...uniqueOptions(
+              products,
+              "manufacturer"
+            ),
+            ...brightreeReferences.manufacturers
+              .map((item) => item.name)
+              .filter(Boolean),
+          ])
+        ).sort(),
+      [brightreeReferences.manufacturers, products]
     );
 
   const vendors =
@@ -353,7 +369,7 @@ export default function ProductsPage() {
         className={`${glass.shell} relative z-10`}
       >
         <section
-          className={`${glass.panel} relative overflow-hidden`}
+          className={`${glass.panel} relative overflow-visible p-5 sm:p-6`}
         >
           <div
             aria-hidden="true"
@@ -383,7 +399,7 @@ export default function ProductsPage() {
               </div>
             </div>
 
-            <div className={`${glass.card} max-w-sm`}>
+            <div className={`${glass.card} max-w-sm p-4 sm:p-5`}>
               <div className="flex items-center gap-4">
                 <div className={glass.iconBox}>
                   <PackageSearch className="h-6 w-6" />
@@ -510,7 +526,7 @@ export default function ProductsPage() {
           />
 
           <section
-            className={`${glass.panel} relative overflow-hidden`}
+            className={`${glass.panel} relative overflow-visible`}
           >
             <div
               aria-hidden="true"

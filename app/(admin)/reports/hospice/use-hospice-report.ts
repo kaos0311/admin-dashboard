@@ -1,12 +1,12 @@
-﻿"use client";
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import {
   collection,
   type FirestoreError,
-  limit,
   onSnapshot,
   query,
+  where,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
@@ -20,17 +20,13 @@ import type {
 import {
   filterHospicePatients,
   getHospiceStats,
+  getRecentMemorialPatients,
+  isActiveHospiceReportPatient,
   mergeHospicePatients,
   normalizeHospiceDoc,
 } from "./hospice-utils";
 
-const HOSPICE_COLLECTIONS = [
-  "hospicePatients",
-  "hospiceCare",
-  "hospiceOversight",
-] as const;
-
-const HOSPICE_QUERY_LIMIT = 500;
+const HOSPICE_COLLECTIONS = ["hospicePatients", "patients"] as const;
 
 type HospiceCollectionName = (typeof HOSPICE_COLLECTIONS)[number];
 
@@ -86,10 +82,10 @@ export function useHospiceReport() {
     setCollectionErrors({});
 
     const unsubscribers = HOSPICE_COLLECTIONS.map((collectionName) => {
-      const hospiceQuery = query(
-        collection(db, collectionName),
-        limit(HOSPICE_QUERY_LIMIT)
-      );
+      const hospiceQuery =
+        collectionName === "patients"
+          ? query(collection(db, collectionName), where("hospice", "==", true))
+          : query(collection(db, collectionName));
 
       return onSnapshot(
         hospiceQuery,
@@ -171,22 +167,32 @@ export function useHospiceReport() {
     return mergeHospicePatients(records);
   }, [collectionRecords]);
 
-  const stats = useMemo(() => {
-    return getHospiceStats(patients);
+  const activePatients = useMemo(() => {
+    return patients.filter(isActiveHospiceReportPatient);
   }, [patients]);
+
+  const memorialPatients = useMemo(() => {
+    return getRecentMemorialPatients(patients);
+  }, [patients]);
+
+  const stats = useMemo(() => {
+    return getHospiceStats(activePatients);
+  }, [activePatients]);
 
   const filteredPatients = useMemo(() => {
     return filterHospicePatients({
-      patients,
+      patients: activePatients,
       searchText,
       statusFilter,
       riskFilter,
       sortMode,
     });
-  }, [patients, searchText, statusFilter, riskFilter, sortMode]);
+  }, [activePatients, searchText, statusFilter, riskFilter, sortMode]);
 
   return {
     patients,
+    activePatients,
+    memorialPatients,
     filteredPatients,
     stats,
     loading,

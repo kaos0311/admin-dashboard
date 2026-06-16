@@ -1,13 +1,16 @@
 ﻿export type SettingsTabKey =
   | "company"
   | "preferences"
+  | "inventory"
+  | "brightree"
+  | "apis"
   | "users"
   | "security"
   | "danger";
 
 export type TabKey = SettingsTabKey;
 
-export type UserRole = "admin" | "staff";
+export type UserRole = "admin" | "staff" | "tank";
 
 export type UserStatus = "active" | "disabled" | "pending";
 
@@ -44,10 +47,48 @@ export type SecuritySettings = {
   allowStaffExports: boolean;
 };
 
+export type InventorySettings = {
+  defaultReorderLevel: number;
+  cpapSupplyReorderLevel: number;
+  oxygenReorderLevel: number;
+  rentalEquipmentReorderLevel: number;
+  highDemandReorderLevel: number;
+  lowStockWarningEnabled: boolean;
+};
+
+export type BrightreeReferenceRecord = {
+  id: string;
+  name: string;
+  description?: string;
+  group?: string;
+  address?: string;
+  phone?: string;
+  fax?: string;
+  itemGroupNo?: string;
+  paymentType?: string;
+};
+
+export type BrightreeReferenceKey =
+  | "insuranceGroups"
+  | "practitionerNoteReasons"
+  | "pickupExchangeReasons"
+  | "itemGroups"
+  | "planTypes"
+  | "manufacturers"
+  | "insuranceCompanies"
+  | "paymentReasons";
+
+export type BrightreeReferenceSettings = Record<
+  BrightreeReferenceKey,
+  BrightreeReferenceRecord[]
+>;
+
 export type AppSettings = {
   company: CompanySettings;
   preferences: PreferenceSettings;
   security: SecuritySettings;
+  inventory: InventorySettings;
+  brightreeReferences: BrightreeReferenceSettings;
   updatedAt?: unknown;
   updatedBy?: string;
 };
@@ -90,6 +131,7 @@ export type PasswordResetForm = {
 export type UserDraft = {
   email: string;
   displayName: string;
+  password: string;
   role: UserRole;
 };
 

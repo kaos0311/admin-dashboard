@@ -8,6 +8,7 @@
   UserRole,
   UserStatus,
 } from "./settings-types";
+import { DEFAULT_BRIGHTREE_REFERENCES } from "./brightree-reference-data";
 
 /* -------------------------------------------------------------------------- */
 /* FIRESTORE                                                                  */
@@ -49,6 +50,21 @@ export const SETTINGS_TABS: {
     description: "Dashboard behavior and display options.",
   },
   {
+    key: "inventory",
+    label: "Inventory",
+    description: "Resupply thresholds and stock warnings.",
+  },
+  {
+    key: "brightree",
+    label: "Brightree Lists",
+    description: "Reference lists for dropdowns and autofill.",
+  },
+  {
+    key: "apis",
+    label: "APIs",
+    description: "Track useful APIs, status, docs, and key handling.",
+  },
+  {
     key: "users",
     label: "Users",
     description: "Manage staff and administrator access.",
@@ -76,6 +92,10 @@ export const USER_ROLE_OPTIONS: {
   {
     label: "Admin",
     value: "admin",
+  },
+  {
+    label: "Tank Level",
+    value: "tank",
   },
   {
     label: "Staff",
@@ -138,6 +158,17 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     sessionTimeoutMinutes: 60,
     allowStaffExports: false,
   },
+
+  inventory: {
+    defaultReorderLevel: 5,
+    cpapSupplyReorderLevel: 10,
+    oxygenReorderLevel: 3,
+    rentalEquipmentReorderLevel: 2,
+    highDemandReorderLevel: 15,
+    lowStockWarningEnabled: true,
+  },
+
+  brightreeReferences: DEFAULT_BRIGHTREE_REFERENCES,
 };
 
 /* -------------------------------------------------------------------------- */
@@ -150,6 +181,7 @@ export const initialSettings: AppSettings =
 export const DEFAULT_USER_DRAFT: UserDraft = {
   email: "",
   displayName: "",
+  password: "",
   role: "staff",
 };
 

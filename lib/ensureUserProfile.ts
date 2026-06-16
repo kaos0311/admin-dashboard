@@ -13,7 +13,7 @@ export type DashboardUserProfile = {
   uid: string;
   email: string;
   displayName: string;
-  role: "admin" | "staff";
+  role: "admin" | "staff" | "tank";
   active: boolean;
 
   phone: string;
@@ -113,7 +113,9 @@ export async function ensureUserProfile(
       role:
         existingData.role === "admin"
           ? "admin"
-          : "staff",
+          : existingData.role === "tank"
+            ? "tank"
+            : "staff",
 
       active:
         typeof existingData.active ===

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 
@@ -29,6 +29,7 @@ export function useInventoryForm() {
       name: item.name,
       category: item.category,
       sku: item.sku,
+      hcpc: item.hcpc,
       barcode: item.barcode,
       serial: item.serial,
       lotNumber: item.lotNumber,

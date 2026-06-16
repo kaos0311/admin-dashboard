@@ -32,6 +32,7 @@ export function extractPatient(row: Record<string, unknown>) {
       "firstname",
       "first name",
       "patient_first_name",
+      "Patient First Name",
       "fname",
     ])
   );
@@ -42,6 +43,7 @@ export function extractPatient(row: Record<string, unknown>) {
       "lastname",
       "last name",
       "patient_last_name",
+      "Patient Last Name",
       "lname",
     ])
   );
@@ -57,6 +59,7 @@ export function extractPatient(row: Record<string, unknown>) {
       "birth_date",
       "DateOfBirth",
       "DOB",
+      "Patient DOB",
     ])
   );
 
@@ -172,16 +175,20 @@ export function extractInsurance(row: Record<string, unknown>): InsuranceSnapsho
     primaryInsurance: valueFromAliases(row, [
       "PrimaryInsuranceName",
       "Primary Insurance",
+      "Primary Insurance (Active only) Primary Name",
       "Insurance",
       "insurance",
     ]),
     secondaryInsurance: valueFromAliases(row, [
       "SecondaryInsuranceName",
       "Secondary Insurance",
+      "Secondary Insurance  (Active only) Secondary Name",
+      "Secondary Insurance (Active only) Secondary Name",
     ]),
     policyNumber: valueFromAliases(row, [
       "PolicyNbr",
       "Policy Number",
+      "Primary Insurance (Active only) Policy #",
       "policy",
     ]),
     insuranceStatus: valueFromAliases(row, [

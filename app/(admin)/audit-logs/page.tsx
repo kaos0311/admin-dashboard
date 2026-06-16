@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   useCallback,
@@ -286,7 +286,7 @@ export default function AuditLogsPage() {
           <div className={glass.panel}>
             <div className={colors.grid} />
 
-            <div className="relative flex items-center gap-3 p-6 text-slate-300">
+            <div className={`relative flex items-center gap-3 p-6 ${typography.bodyMuted}`}>
               <Loader2 className="h-5 w-5 animate-spin text-sky-200" />
 
               <span>
@@ -325,7 +325,7 @@ export default function AuditLogsPage() {
       <div className={colors.grid} />
 
       <div className={glass.shell}>
-        <section className={glass.panel}>
+        <section className={`${glass.panel} p-5 sm:p-6`}>
           <div className={colors.grid} />
 
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
@@ -366,7 +366,7 @@ export default function AuditLogsPage() {
                 disabled={
                   !filteredLogs.length
                 }
-                className={"inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-transparent px-4 py-2 text-sm font-semibold text-slate-300 transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50"}
+                className={`inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-transparent px-4 py-2 text-sm font-semibold ${typography.bodyMuted} transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50`}
               >
                 <Download className="h-4 w-4" />
 
@@ -434,7 +434,7 @@ export default function AuditLogsPage() {
 
         <section
           aria-label="Audit analysis panels"
-          className="grid gap-4 xl:grid-cols-[440px_minmax(0,1fr)_280px]"
+          className="grid gap-5 xl:grid-cols-[440px_minmax(0,1fr)_280px]"
         >
           <AuditList
             logs={logs}
@@ -473,11 +473,4 @@ export default function AuditLogsPage() {
     </main>
   );
 }
-
-
-
-
-
-
-
 

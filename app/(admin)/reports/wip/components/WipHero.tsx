@@ -1,9 +1,9 @@
-﻿"use client";
+"use client";
 
 import { RefreshCcw, Wrench } from "lucide-react";
 
 import OpenUploadCenterButton from "@/app/components/reports/OpenUploadCenterButton";
-import { badges, buttons, glass, spacing, typography } from "@/theme";
+import { buttons, glass, spacing, typography } from "@/theme";
 
 type WipHeroProps = {
   onRefresh: () => void;
@@ -15,7 +15,7 @@ export function WipHero({ onRefresh }: WipHeroProps) {
       <div className={spacing.card}>
         <div className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
-            <div className={badges.warning}>
+            <div className={glass.chip}>
               <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
               <span>Work In Progress Oversight</span>
             </div>

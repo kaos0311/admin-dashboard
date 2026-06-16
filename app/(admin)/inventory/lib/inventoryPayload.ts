@@ -20,6 +20,7 @@ export function buildInventoryPayload(input: InventoryPayloadInput): InventoryPa
     name: toSafeString(input.name),
     category: toSafeString(input.category),
     sku: toSafeString(input.sku),
+    hcpc: toSafeString(input.hcpc).toUpperCase(),
     barcode: toSafeString(input.barcode),
     serial: toSafeString(input.serial),
     lotNumber: toSafeString(input.lotNumber),

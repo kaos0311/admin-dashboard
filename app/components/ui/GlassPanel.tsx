@@ -1,5 +1,5 @@
 ﻿import type { ReactNode } from "react";
-import { glass } from "@/theme/glass";
+import { glass } from "@/theme";
 
 type GlassPanelProps = {
   children: ReactNode;

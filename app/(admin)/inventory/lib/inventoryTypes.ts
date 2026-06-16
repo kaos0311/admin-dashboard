@@ -1,5 +1,6 @@
 ﻿export const INVENTORY_STATUSES = [
   "available",
+  "rental_out",
   "inactive",
   "damaged",
   "lost",
@@ -38,7 +39,7 @@ export type InventoryStatus = (typeof INVENTORY_STATUSES)[number];
 
 export type LifecycleStatus = (typeof LIFECYCLE_STATUSES)[number];
 
-export type ScanTarget = "barcode" | "serial" | "lotNumber" | null;
+export type ScanTarget = "barcode" | "serial" | "lotNumber" | "scanIn" | "scanOut" | null;
 
 export type SortKey = (typeof SORT_KEYS)[number];
 
@@ -52,8 +53,11 @@ export type InventoryItem = {
   name: string;
   category: string;
   sku: string;
+  hcpc: string;
   barcode: string;
   serial: string;
+  assetTag?: string;
+  assetNumber?: string;
   lotNumber: string;
   locationName: string;
   binLocation: string;
@@ -79,6 +83,24 @@ export type InventoryItem = {
   nextServiceDate: string;
   lifecycleNotes: string;
   notes: string;
+  patientKey?: string;
+  patientId?: string;
+  patientName?: string;
+  patientDob?: string;
+  patientPhone?: string;
+  insuranceName?: string;
+  payor?: string;
+  planType?: string;
+  salesOrderId?: string;
+  salesOrderDetailId?: string;
+  originalDos?: string;
+  nextDos?: string;
+  nextBillingDate?: string;
+  parNumber?: string;
+  parExpiration?: string;
+  orderingDoctor?: string;
+  primaryDoctor?: string;
+  sourceReport?: string;
   searchText: string;
   isDeleted: boolean;
 };
@@ -89,6 +111,7 @@ export type InventoryForm = {
   name: string;
   category: string;
   sku: string;
+  hcpc: string;
   barcode: string;
   serial: string;
   lotNumber: string;

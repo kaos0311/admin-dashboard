@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { UserRound } from "lucide-react";
 

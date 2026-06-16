@@ -1,5 +1,6 @@
-﻿"use client";
+"use client";
 
+import { typography } from "@/theme";
 import type { ReactNode } from "react";
 import { PackageSearch } from "lucide-react";
 
@@ -27,7 +28,7 @@ export function EmptyState({
         {title}
       </h3>
 
-      <p className="mt-2 max-w-md break-words text-sm leading-6 ${typography.bodyMuted}">
+      <p className={`mt-2 max-w-md break-words text-sm leading-6 ${typography.bodyMuted}`}>
         {description}
       </p>
 

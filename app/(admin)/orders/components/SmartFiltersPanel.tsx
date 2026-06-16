@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Filter, RotateCcw } from "lucide-react";
 

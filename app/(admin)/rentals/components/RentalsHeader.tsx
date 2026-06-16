@@ -1,4 +1,6 @@
-﻿import { ShieldCheck, Truck } from "lucide-react";
+import { ShieldCheck, Truck } from "lucide-react";
+
+import { typography } from "@/theme";
 
 import { GlassCard } from "./shared/GlassCard";
 
@@ -12,11 +14,11 @@ export function RentalsHeader() {
             <span className="truncate">PHI-aware rental oversight</span>
           </div>
 
-          <h1 className="mt-4 break-words text-3xl font-bold tracking-tight text-white md:text-4xl">
+          <h1 className="mt-4 break-words text-3xl font-bold leading-[1.15] tracking-tight text-white md:text-4xl">
             Rental Equipment
           </h1>
 
-          <p className="mt-3 max-w-3xl break-words text-sm leading-6 ${typography.bodyMuted}">
+          <p className={`mt-3 max-w-3xl break-words text-sm leading-6 ${typography.bodyMuted}`}>
             Track rental inventory, patient assignments, return dates,
             maintenance status, and monthly revenue without letting equipment
             wander off into the abyss like every missing charger in human
@@ -30,7 +32,7 @@ export function RentalsHeader() {
           </div>
 
           <div className="min-w-0">
-            <p className="truncate text-xs uppercase tracking-[0.18em] ${typography.caption}">
+            <p className={`truncate text-xs uppercase tracking-[0.18em] ${typography.caption}`}>
               Operations
             </p>
 

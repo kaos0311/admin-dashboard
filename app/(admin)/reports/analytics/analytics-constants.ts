@@ -1,4 +1,4 @@
-﻿import type {
+import type {
   CountsByType,
   ReportsAnalyticsDoc,
   SelectedReportType,
@@ -11,6 +11,14 @@ export const FILTER_OPTIONS = [
   "items",
   "purchases",
   "rentals",
+  "orders",
+  "delivery",
+  "billing",
+  "insurance",
+  "hospice",
+  "wip",
+  "cpap",
+  "generic",
   "unknown",
 ] as const satisfies readonly SelectedReportType[];
 
@@ -20,6 +28,14 @@ export const emptyCounts: Readonly<CountsByType> = Object.freeze({
   items: 0,
   purchases: 0,
   rentals: 0,
+  orders: 0,
+  delivery: 0,
+  billing: 0,
+  insurance: 0,
+  hospice: 0,
+  wip: 0,
+  cpap: 0,
+  generic: 0,
   unknown: 0,
 });
 
@@ -33,7 +49,39 @@ export const emptyAnalytics: Readonly<ReportsAnalyticsDoc> = Object.freeze({
     items: 0,
     purchases: 0,
     rentals: 0,
+    orders: 0,
+    delivery: 0,
+    billing: 0,
+    insurance: 0,
+    hospice: 0,
+    wip: 0,
+    cpap: 0,
+    generic: 0,
     unknown: 0,
+  },
+
+  sourceBreakdown: [],
+
+  patientClassification: {
+    indexedPatients: 0,
+    hospicePatients: 0,
+    nonHospicePatients: 0,
+    patientSourceRows: 0,
+    generatedAtLabel: "",
+  },
+
+  retailFinancials: {
+    generatedAtLabel: "",
+    metrics: [],
+    purchasingSignals: [],
+    growthRecommendations: [],
+    missingInputs: [],
+    dataInputs: {
+      cogsRows: 0,
+      inventoryRows: 0,
+      productRows: 0,
+      orderRows: 0,
+    },
   },
 
   generatedAtLabel: "",
@@ -41,9 +89,8 @@ export const emptyAnalytics: Readonly<ReportsAnalyticsDoc> = Object.freeze({
 
   lastRebuiltByEmail: "",
   lastRebuiltByUid: "",
+  analyticsVersion: "",
 
   source: "",
   status: "missing",
 });
-
-

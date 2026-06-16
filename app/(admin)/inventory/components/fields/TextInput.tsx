@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useId } from "react";
 
@@ -8,6 +8,8 @@ type TextInputProps = {
   onChange: (value: string) => void;
   type?: string;
   required?: boolean;
+  list?: string;
+  autoComplete?: string;
 };
 
 export function TextInput({
@@ -16,6 +18,8 @@ export function TextInput({
   onChange,
   type = "text",
   required = false,
+  list,
+  autoComplete = "off",
 }: TextInputProps) {
   const inputId = useId();
 
@@ -34,6 +38,8 @@ export function TextInput({
         aria-label={label}
         placeholder={label}
         onChange={(event) => onChange(event.target.value)}
+        list={list}
+        autoComplete={autoComplete}
         className="w-full rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-white outline-none placeholder:text-slate-600 shadow-inner shadow-black/20 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/55"
       />
     </div>

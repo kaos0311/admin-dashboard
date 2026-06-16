@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { glass, tiles, typography } from "@/theme";
 
@@ -28,7 +28,7 @@ export function AnalyticsFilterCard({
         <div className="min-w-0 space-y-1">
           <h2
             id="analytics-report-filter-title"
-            className={[typography.sectionTitle, "truncate"].join(" ")}
+            className={typography.sectionTitle}
           >
             Report Type Filter
           </h2>
@@ -51,7 +51,7 @@ export function AnalyticsFilterCard({
             }
             className={[
   "w-full min-w-0 cursor-pointer rounded-2xl border border-white/10 bg-black/40 px-4 py-3",
-  "text-sm font-medium text-white outline-none transition placeholder:${typography.caption}",
+  `text-sm font-medium text-white outline-none transition placeholder:${typography.caption}`,
   "focus-visible:border-cyan-300/40 focus-visible:ring-2 focus-visible:ring-cyan-300/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950",
   "disabled:cursor-not-allowed disabled:opacity-60",
 ].join(" ")}

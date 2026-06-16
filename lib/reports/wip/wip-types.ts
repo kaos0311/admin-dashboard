@@ -6,6 +6,7 @@ export type WipAgingBucket = "all" | "fresh" | "warning" | "critical";
 
 export type WipRecord = {
   id: string;
+  patientKey?: string;
   patientName: string;
   orderNumber?: string;
   assignedTo: string;

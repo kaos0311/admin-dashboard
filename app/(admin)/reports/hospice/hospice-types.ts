@@ -13,6 +13,24 @@ export type RiskLevel =
 
 export type HospiceId = string;
 
+export type HospiceRentalItem = {
+  itemId?: string;
+  itemName: string;
+  itemGroup?: string;
+  procCode?: string;
+  hcpc?: string;
+  modifiers?: string;
+  serialNumber?: string;
+  salesOrderId?: string;
+  salesOrderDetailId?: string;
+  originalDos?: string;
+  nextDos?: string;
+  startDate?: string;
+  nextBillingDate?: string;
+  quantity?: number;
+  status?: string;
+};
+
 /**
  * Hospice patient record used by dashboard views,
  * analytics, routing, compliance, and operational reports.
@@ -23,6 +41,7 @@ export type HospicePatient = {
   patientId?: string;
   patientName: string;
   dateOfBirth?: string;
+  dateOfDeath?: string;
 
   status: HospiceStatus;
 
@@ -37,6 +56,7 @@ export type HospicePatient = {
   address?: string;
 
   equipment: readonly string[];
+  rentalItems: readonly HospiceRentalItem[];
   openIssues: readonly string[];
 
   notes?: string;
@@ -73,6 +93,14 @@ export type HospiceStats = Readonly<{
   highRisk: number;
   missingNurse: number;
   missingPayor: number;
+}>;
+
+export type MemorialPatient = Readonly<{
+  id: HospiceId;
+  patientName: string;
+  dateOfBirth: string;
+  dateOfDeath: string;
+  deathTime: number;
 }>;
 
 

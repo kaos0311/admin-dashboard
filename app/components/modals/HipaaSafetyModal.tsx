@@ -1,6 +1,6 @@
-﻿"use client";
+"use client";
 
-import { typography } from "@/theme";
+import { alerts, badges, buttons, glass, typography } from "@/theme";
 
 import { AlertTriangle, CheckCircle2, ShieldCheck } from "lucide-react";
 
@@ -69,14 +69,14 @@ const checklist: ChecklistItem[] = [
 function severityClasses(severity: ChecklistItem["severity"]) {
   if (severity === "required") {
     return {
-      icon: "text-emerald-300",
-      badge: "border-red-500/20 bg-red-500/10 text-red-200",
+      icon: "text-current",
+      badge: badges.danger,
     };
   }
 
   return {
-    icon: "text-sky-300",
-    badge: "border-sky-500/20 bg-sky-500/10 text-sky-200",
+    icon: "text-current",
+    badge: badges.info,
   };
 }
 
@@ -93,16 +93,16 @@ export default function HipaaSafetyModal({
         onClose={onClose}
         closeLabel="Close HIPAA safety check"
         icon={
-          <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-3 text-red-300">
+          <div className={`rounded-2xl p-3 ${badges.danger}`}>
             <AlertTriangle className="h-6 w-6" aria-hidden="true" />
           </div>
         }
       />
 
-      <div className="rounded-2xl border border-yellow-500/20 bg-yellow-500/10 p-4 text-sm text-yellow-100">
+      <div className={alerts.warning}>
         <p className="font-semibold">Public areas should never contain PHI.</p>
 
-        <p className="mt-1 text-yellow-100/80">
+        <p className={`mt-1 ${typography.body}`}>
           Patient, insurance, hospice, rental, order, WIP, and report data
           should remain behind authenticated Firebase rules.
         </p>
@@ -115,7 +115,7 @@ export default function HipaaSafetyModal({
           return (
             <div
               key={item.title}
-              className="rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 backdrop-blur-xl"
+              className={glass.insetPadded}
             >
               <div className="flex items-start gap-3">
                 <ShieldCheck
@@ -130,13 +130,13 @@ export default function HipaaSafetyModal({
                     </p>
 
                     <span
-                      className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${styles.badge}`}
+                      className={`rounded-full px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ${styles.badge}`}
                     >
                       {item.severity}
                     </span>
                   </div>
 
-                  <p className="mt-1 text-sm leading-6 text-neutral-400">
+                  <p className={`mt-1 ${typography.bodyMuted}`}>
                     {item.detail}
                   </p>
                 </div>
@@ -146,10 +146,10 @@ export default function HipaaSafetyModal({
         })}
       </div>
 
-      <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+      <div className={`mt-5 ${glass.insetPadded}`}>
         <div className="flex items-start gap-3">
           <CheckCircle2
-            className="mt-0.5 h-5 w-5 shrink-0 text-emerald-300"
+            className="mt-0.5 h-5 w-5 shrink-0"
             aria-hidden="true"
           />
 
@@ -158,7 +158,7 @@ export default function HipaaSafetyModal({
               Production reminder
             </p>
 
-            <p className="mt-1 text-sm leading-6 text-neutral-400">
+            <p className={`mt-1 ${typography.bodyMuted}`}>
               This modal is only a checklist. The real protection comes from
               Firestore rules, Storage rules, role checks, audit logs, and
               avoiding PHI in any public collection.
@@ -171,7 +171,7 @@ export default function HipaaSafetyModal({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-2xl border border-white/10 bg-white/10 px-5 py-3 text-sm font-semibold text-white transition hover:bg-white/15"
+          className={buttons.secondary}
         >
           Close
         </button>
@@ -179,7 +179,7 @@ export default function HipaaSafetyModal({
         <button
           type="button"
           onClick={onClose}
-          className="rounded-2xl bg-white px-5 py-3 text-sm font-semibold text-black transition hover:opacity-90"
+          className={buttons.primary}
         >
           I Reviewed This
         </button>

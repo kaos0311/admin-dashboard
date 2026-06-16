@@ -1,4 +1,6 @@
-﻿import type { RentalRecord } from "../rentals-types";
+import { glass, typography } from "@/theme";
+
+import type { RentalRecord } from "../rentals-types";
 import {
   formatCondition,
   formatCurrency,
@@ -21,15 +23,20 @@ export function RentalMobileCard({
   onMarkReturned,
 }: RentalMobileCardProps) {
   return (
-    <article className="min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-black/25 p-4 shadow-xl shadow-black/20 backdrop-blur-xl">
+    <article className={glass.cardPadded}>
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <h3 className="break-words font-semibold leading-5 text-white">
             {record.productName || "Unnamed rental asset"}
           </h3>
 
-          <p className="mt-1 break-words text-xs leading-5 ${typography.caption}">
-            SN: {record.serialNumber || "â€”"} Â· Asset: {record.assetTag || "â€”"}
+          <p className={`mt-1 break-words text-xs leading-5 ${typography.caption}`}>
+            SN: {record.serialNumber || "-"} | Asset: {record.assetTag || "-"}
+          </p>
+
+          <p className={`mt-1 break-words text-xs leading-5 ${typography.caption}`}>
+            {record.procCode || record.itemId || "No HCPCS"} |{" "}
+            {record.itemGroup || "No group"}
           </p>
         </div>
 
@@ -41,13 +48,20 @@ export function RentalMobileCard({
       <div className="mt-4 grid min-w-0 gap-3 text-sm sm:grid-cols-2">
         <RentalInfoBlock
           label="Patient"
-          primary={record.patientName || "â€”"}
-          secondary={record.patientId || "â€”"}
+          primary={record.patientName || "-"}
+          secondary={`${record.patientId || "-"} | DOB ${formatDate(record.patientDob)}`}
         />
 
         <RentalInfoBlock
-          label="Location"
-          primary={record.location || "â€”"}
+          label="Payor"
+          primary={record.insuranceName || record.payor || "-"}
+          secondary={record.planType || undefined}
+        />
+
+        <RentalInfoBlock
+          label="PAR"
+          primary={record.parNumber || "-"}
+          secondary={`Exp ${formatDate(record.parExpiration)}`}
         />
 
         <RentalInfoBlock
@@ -56,9 +70,15 @@ export function RentalMobileCard({
         />
 
         <RentalInfoBlock
-          label="Monthly"
+          label="Allowable"
           primary={formatCurrency(record.monthlyRate)}
+          secondary={`Charge ${formatCurrency(record.extCharge || record.charge)}`}
           strong
+        />
+
+        <RentalInfoBlock
+          label="Doctor"
+          primary={record.orderingDoctor || record.primaryDoctor || "-"}
         />
 
         <RentalInfoBlock
@@ -67,8 +87,8 @@ export function RentalMobileCard({
         />
 
         <RentalInfoBlock
-          label="Expected Return"
-          primary={formatDate(record.expectedReturnDate)}
+          label="Next Billing"
+          primary={formatDate(record.nextBillingDate || record.expectedReturnDate)}
         />
       </div>
 
@@ -103,7 +123,7 @@ function RentalInfoBlock({
 }) {
   return (
     <div className="min-w-0">
-      <p className="truncate text-xs uppercase tracking-[0.16em] ${typography.caption}">
+      <p className={`truncate text-xs uppercase tracking-[0.16em] ${typography.caption}`}>
         {label}
       </p>
 
@@ -117,13 +137,10 @@ function RentalInfoBlock({
       </p>
 
       {secondary ? (
-        <p className="min-w-0 break-words text-xs ${typography.caption}">
+        <p className={`min-w-0 break-words text-xs ${typography.caption}`}>
           {secondary}
         </p>
       ) : null}
     </div>
   );
 }
-
-
-

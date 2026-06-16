@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useMemo, useState } from "react";
 
@@ -20,6 +20,7 @@ import { SmartCommandStrip } from "./components/SmartCommandStrip";
 import { SmartFiltersPanel } from "./components/SmartFiltersPanel";
 
 import { useOrderFilters } from "./hooks/useOrderFilters";
+import { useOrderAutofill } from "./hooks/useOrderAutofill";
 import { useOrderImport } from "./hooks/useOrderImport";
 import { useOrderMutations } from "./hooks/useOrderMutations";
 import { useOrders } from "./hooks/useOrders";
@@ -42,6 +43,8 @@ export default function OrdersPage() {
     summary,
     isAuthed,
   } = useOrders();
+
+  const autofill = useOrderAutofill();
 
   const {
     search,
@@ -134,6 +137,22 @@ export default function OrdersPage() {
       summary.processing,
       summary.ready,
     ]
+  );
+
+  const smartFilterOptions = useMemo(
+    () => ({
+      ...filterOptions,
+      facilities: Array.from(
+        new Set([
+          ...filterOptions.facilities,
+          ...autofill.facilities.map((facility) => facility.name),
+        ])
+      ).sort(),
+      insurances: Array.from(
+        new Set([...filterOptions.insurances, ...autofill.insurances])
+      ).sort(),
+    }),
+    [autofill.facilities, autofill.insurances, filterOptions]
   );
 
   function resetCreateForm() {
@@ -258,7 +277,7 @@ export default function OrdersPage() {
       <div aria-hidden="true" className={colors.grid} />
 
       <div className={`${glass.shell} relative z-10`}>
-        <section className={`${glass.panel} relative overflow-hidden`}>
+        <section className={`${glass.panel} relative overflow-visible p-5 sm:p-6`}>
           <div aria-hidden="true" className={colors.grid} />
 
           <div className="relative z-10 flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
@@ -281,7 +300,7 @@ export default function OrdersPage() {
               </div>
             </div>
 
-            <div className={`${glass.card} max-w-sm`}>
+            <div className={`${glass.card} max-w-sm p-4 sm:p-5`}>
               <div className="flex items-center gap-4">
                 <div className={tiles.compact}>
                   <Truck className="h-6 w-6" />
@@ -299,13 +318,13 @@ export default function OrdersPage() {
                     </span>
                   </div>
 
-                  <p className="mt-1 text-xs ${typography.caption}">
+                  <p className={`mt-1 text-xs ${typography.caption}`}>
                     Smart routing + inventory matching online
                   </p>
                 </div>
               </div>
 
-              <div className="mt-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs ${typography.bodyMuted}">
+              <div className={`mt-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs ${typography.bodyMuted}`}>
                 <ClipboardList className="h-3.5 w-3.5 text-sky-200" />
                 Operational order intelligence active
               </div>
@@ -381,7 +400,7 @@ export default function OrdersPage() {
 
         <SmartFiltersPanel
           filters={smartFilters}
-          options={filterOptions}
+          options={smartFilterOptions}
           resultCount={filteredOrders.length}
           onChange={setSmartFilters}
           onReset={resetFilters}
@@ -426,6 +445,9 @@ export default function OrdersPage() {
             mode="create"
             onClose={closeCreateModal}
             onChange={handleCreateChange}
+            patientOptions={autofill.patients}
+            productOptions={autofill.products}
+            facilityOptions={autofill.facilities}
             onSave={() =>
               void createOrder({
                 form,
@@ -459,6 +481,9 @@ export default function OrdersPage() {
             mode="edit"
             onClose={closeEditModal}
             onChange={handleEditChange}
+            patientOptions={autofill.patients}
+            productOptions={autofill.products}
+            facilityOptions={autofill.facilities}
             onSave={() =>
               void saveEditOrder({
                 editingOrderId,

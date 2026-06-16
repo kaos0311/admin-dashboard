@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useState } from "react";
 
@@ -17,6 +17,7 @@ import { UploadDropzone } from "./components/UploadDropzone";
 import { UploadSettingsCards } from "./components/UploadSettingsCards";
 import { UploadQueueList } from "./components/UploadQueueList";
 import { PatientIndexPanel } from "./components/PatientIndexPanel";
+import { ResetReportsPanel } from "./components/ResetReportsPanel";
 import { UploadRulesPanel } from "./components/UploadRulesPanel";
 import { ImportJobsTable } from "./components/ImportJobsTable";
 import { uploadUi } from "./components/upload-ui";
@@ -85,8 +86,8 @@ function UploadReportsContent({
           onDismiss={() => importJobs.setPageError(null)}
         />
 
-        <section className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <div className="space-y-6">
+        <section className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(320px,380px)]">
+          <div className="min-w-0 space-y-6">
             <UploadDropzone
               fileInputRef={uploads.fileInputRef}
               hasActiveUploads={uploads.hasActiveUploads}
@@ -113,9 +114,37 @@ function UploadReportsContent({
                 uploads.handleRemoveQueuedUpload
               }
             />
+
+            <ImportJobsTable
+              filteredJobs={importJobs.filteredJobs}
+              selectedJobIds={importJobs.selectedJobIds}
+              selectedJobsCount={importJobs.selectedJobs.length}
+              jobsLoading={importJobs.jobsLoading}
+              busyJobIds={importJobs.busyJobIds}
+              bulkBusy={importJobs.bulkBusy}
+              queueFilter={importJobs.queueFilter}
+              setQueueFilter={importJobs.setQueueFilter}
+              queueSearch={importJobs.queueSearch}
+              setQueueSearch={importJobs.setQueueSearch}
+              queueCounts={importJobs.queueCounts}
+              refreshJob={importJobs.refreshJob}
+              deleteJob={importJobs.deleteJob}
+              handleRefreshSelected={
+                importJobs.handleRefreshSelected
+              }
+              handleDeleteSelected={
+                importJobs.handleDeleteSelected
+              }
+              toggleSelectedJob={
+                importJobs.toggleSelectedJob
+              }
+              toggleAllVisibleJobs={
+                importJobs.toggleAllVisibleJobs
+              }
+            />
           </div>
 
-          <aside className="space-y-6">
+          <aside className="min-w-0 space-y-6">
             <PatientIndexPanel
               patientIndex={patientAnalytics.patientIndex}
               analyticsLoading={
@@ -123,37 +152,11 @@ function UploadReportsContent({
               }
             />
 
+            <ResetReportsPanel canResetReports={role === "admin"} />
+
             <UploadRulesPanel />
           </aside>
         </section>
-
-        <ImportJobsTable
-          filteredJobs={importJobs.filteredJobs}
-          selectedJobIds={importJobs.selectedJobIds}
-          selectedJobsCount={importJobs.selectedJobs.length}
-          jobsLoading={importJobs.jobsLoading}
-          busyJobIds={importJobs.busyJobIds}
-          bulkBusy={importJobs.bulkBusy}
-          queueFilter={importJobs.queueFilter}
-          setQueueFilter={importJobs.setQueueFilter}
-          queueSearch={importJobs.queueSearch}
-          setQueueSearch={importJobs.setQueueSearch}
-          queueCounts={importJobs.queueCounts}
-          refreshJob={importJobs.refreshJob}
-          deleteJob={importJobs.deleteJob}
-          handleRefreshSelected={
-            importJobs.handleRefreshSelected
-          }
-          handleDeleteSelected={
-            importJobs.handleDeleteSelected
-          }
-          toggleSelectedJob={
-            importJobs.toggleSelectedJob
-          }
-          toggleAllVisibleJobs={
-            importJobs.toggleAllVisibleJobs
-          }
-        />
       </section>
     </main>
   );

@@ -4,6 +4,8 @@
   CheckCircle2,
   PackageCheck,
   PackageX,
+  ShieldCheck,
+  Users,
   Wrench,
 } from "lucide-react";
 
@@ -11,25 +13,45 @@ import type { RentalStats } from "../rentals-types";
 import { formatCurrency } from "../utils/formatters";
 import { StatCard } from "./StatCard";
 
+export type RentalReportKey =
+  | "total"
+  | "patients"
+  | "checked_out"
+  | "available"
+  | "overdue"
+  | "maintenance"
+  | "monthly"
+  | "pars";
+
 type RentalsStatsGridProps = {
   stats: RentalStats;
+  activeReport: RentalReportKey;
+  onSelectReport: (report: RentalReportKey) => void;
 };
 
-export function RentalsStatsGrid({ stats }: RentalsStatsGridProps) {
+export function RentalsStatsGrid({
+  stats,
+  activeReport,
+  onSelectReport,
+}: RentalsStatsGridProps) {
   return (
-    <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+    <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <StatCard
         label="Total"
         value={stats.total}
         description="All tracked rental assets"
         icon={<PackageCheck className="h-5 w-5" aria-hidden="true" />}
+        active={activeReport === "total"}
+        onClick={() => onSelectReport("total")}
       />
 
       <StatCard
-        label="Available"
-        value={stats.available}
-        description="Ready to issue"
-        icon={<CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
+        label="Patients"
+        value={stats.uniquePatients}
+        description="Unique rental patients"
+        icon={<Users className="h-5 w-5" aria-hidden="true" />}
+        active={activeReport === "patients"}
+        onClick={() => onSelectReport("patients")}
       />
 
       <StatCard
@@ -37,6 +59,17 @@ export function RentalsStatsGrid({ stats }: RentalsStatsGridProps) {
         value={stats.checkedOut}
         description="Currently assigned"
         icon={<PackageX className="h-5 w-5" aria-hidden="true" />}
+        active={activeReport === "checked_out"}
+        onClick={() => onSelectReport("checked_out")}
+      />
+
+      <StatCard
+        label="Available"
+        value={stats.available}
+        description="Ready to issue"
+        icon={<CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
+        active={activeReport === "available"}
+        onClick={() => onSelectReport("available")}
       />
 
       <StatCard
@@ -44,6 +77,8 @@ export function RentalsStatsGrid({ stats }: RentalsStatsGridProps) {
         value={stats.overdue}
         description="Past expected return"
         icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
+        active={activeReport === "overdue"}
+        onClick={() => onSelectReport("overdue")}
       />
 
       <StatCard
@@ -51,13 +86,26 @@ export function RentalsStatsGrid({ stats }: RentalsStatsGridProps) {
         value={stats.maintenance}
         description="Needs service"
         icon={<Wrench className="h-5 w-5" aria-hidden="true" />}
+        active={activeReport === "maintenance"}
+        onClick={() => onSelectReport("maintenance")}
       />
 
       <StatCard
         label="Monthly"
         value={formatCurrency(stats.monthlyRevenue)}
-        description="Active rental revenue"
+        description="Active rental allowable"
         icon={<BadgeDollarSign className="h-5 w-5" aria-hidden="true" />}
+        active={activeReport === "monthly"}
+        onClick={() => onSelectReport("monthly")}
+      />
+
+      <StatCard
+        label="PAR 30 Days"
+        value={stats.expiringPars}
+        description="Authorizations expiring soon"
+        icon={<ShieldCheck className="h-5 w-5" aria-hidden="true" />}
+        active={activeReport === "pars"}
+        onClick={() => onSelectReport("pars")}
       />
     </section>
   );

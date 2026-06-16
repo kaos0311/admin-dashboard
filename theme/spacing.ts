@@ -18,13 +18,13 @@ export const spacing = {
     "p-5 sm:p-6",
 
   stack:
-    "space-y-6",
+    "space-y-7",
 
   stackTight:
-    "space-y-4",
+    "space-y-5",
 
   stackLoose:
-    "space-y-8",
+    "space-y-10",
 
   inline:
     "flex items-center gap-2",
@@ -39,28 +39,28 @@ export const spacing = {
     "flex flex-wrap items-center gap-3",
 
   gridCards:
-    "grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-4",
+    "grid min-w-0 gap-5 md:grid-cols-2 xl:grid-cols-4",
 
   gridCardsThree:
-    "grid min-w-0 gap-4 md:grid-cols-3",
+    "grid min-w-0 gap-5 md:grid-cols-3",
 
   gridCardsTwo:
-    "grid min-w-0 gap-4 md:grid-cols-2",
+    "grid min-w-0 gap-5 md:grid-cols-2",
 
   gridResponsive:
-    "grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4",
+    "grid min-w-0 gap-5 sm:grid-cols-2 xl:grid-cols-4",
 
   gridTwo:
-    "grid min-w-0 gap-4 lg:grid-cols-2",
+    "grid min-w-0 gap-5 lg:grid-cols-2",
 
   gridThree:
-    "grid min-w-0 gap-4 lg:grid-cols-3",
+    "grid min-w-0 gap-5 lg:grid-cols-3",
 
   gridFour:
-    "grid min-w-0 gap-4 lg:grid-cols-4",
+    "grid min-w-0 gap-5 lg:grid-cols-4",
 
   split:
-    "grid min-w-0 gap-6 lg:grid-cols-[2fr_1fr]",
+    "grid min-w-0 gap-7 lg:grid-cols-[2fr_1fr]",
 
   content:
     "mx-auto w-full max-w-7xl",

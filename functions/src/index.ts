@@ -9,12 +9,17 @@ setGlobalOptions({
 export { createDashboardUser } from "./adminUsers";
 
 // Core app functions
-export { askAdminAi } from "./ai/askAdminAi";
+export { askAdminAi } from "./ai/callable/askAdminAi";
+export { scanDatabasePhiSafety } from "./ai/callable/scanDatabasePhiSafety";
+export { screenImportJobWithJarvis } from "./ai/callable/screenImportJobWithJarvis";
 
 // Import pipeline
 export { importFileFromStorage } from "./imports/importFileFromStorage";
 export { processImportWorkerQueue } from "./imports/workers/processImportWorkerQueue";
 export { reprocessImportJobFromFirestore } from "./imports/reprocessImportJobFromFirestore";
+export { processPatientDocumentFromStorage } from "./patientDocuments/processPatientDocumentFromStorage";
+export { trackQrScan } from "./qr/trackQrScan";
+export { searchRolodexContacts } from "./rolodex/searchRolodexContacts";
 
 // Maintenance / rebuild tools
 export { cleanDatabase } from "./maintenance/cleanDatabase";
@@ -32,4 +37,5 @@ export {
   disableDashboardUser,
   enableDashboardUser,
   deleteUserAccount,
+  resetUserPassword,
 } from "./adminUserManagement";

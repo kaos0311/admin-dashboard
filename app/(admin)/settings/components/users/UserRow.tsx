@@ -29,7 +29,9 @@ export function UserRow({
         <p className={typography.cardTitle}>
           {user.displayName || "Unnamed User"}
         </p>
-        <p className="mt-1 text-xs ${typography.caption}">{user.email || "No email"}</p>
+        <p className={`mt-1 text-xs ${typography.caption}`}>
+          {user.email || "No email"}
+        </p>
       </td>
 
       <td className="px-4 py-4">

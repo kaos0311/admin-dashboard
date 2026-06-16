@@ -1,15 +1,15 @@
 ﻿export const typography = {
   hero:
-    "text-4xl font-black tracking-tight text-white sm:text-5xl",
+    "break-words text-4xl font-black leading-[1.12] tracking-tight text-white sm:text-5xl",
 
   pageTitle:
-    "text-3xl font-black tracking-tight text-white sm:text-4xl",
+    "break-words text-3xl font-black leading-[1.15] tracking-tight text-white sm:text-4xl",
 
   sectionTitle:
-    "text-xl font-bold tracking-tight text-white sm:text-2xl",
+    "break-words text-xl font-bold leading-tight tracking-tight text-white sm:text-2xl",
 
   cardTitle:
-    "text-base font-bold tracking-tight text-white sm:text-lg",
+    "text-base font-bold leading-tight tracking-tight text-white sm:text-lg",
 
   subTitle:
     "text-sm font-semibold tracking-tight text-slate-200",

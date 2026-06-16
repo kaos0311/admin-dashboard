@@ -52,6 +52,34 @@ export type RecentPurchaseItem = {
   sourceFileName?: string;
 };
 
+export type PatientAuthorizationLine = {
+  id: string;
+  parNumber?: string;
+  parKey?: string;
+  parStatus?: string;
+  parExpiration?: string;
+  parInitialDate?: string;
+  policyNumber?: string;
+  insurance?: string;
+  insuranceStatus?: string;
+  salesOrderId?: string;
+  salesOrderStatus?: string;
+  itemId?: string;
+  itemName?: string;
+  quantity?: number;
+  procedureCode?: string;
+  modifiers?: string;
+  branchOffice?: string;
+  actualDeliveryDate?: string;
+  nextBillingDate?: string;
+  orderingDoctor?: string;
+  printedBy?: string;
+  printedAt?: string;
+  faxedBy?: string;
+  faxedAt?: string;
+  rowIndex?: number;
+};
+
 export type PatientTask = {
   id: string;
   title: string;
@@ -69,6 +97,7 @@ export type PatientRecord = {
   firstName: string;
   lastName: string;
   fullName: string;
+  patientId?: string;
   dateOfBirth: string;
   dateOfDeath?: string;
 
@@ -100,11 +129,13 @@ export type PatientRecord = {
 
   profile?: Record<string, unknown> | null;
   insurance?: Record<string, unknown> | null;
+  brightree?: Record<string, unknown> | null;
   cpap?: CpapInfo | null;
   currentEquipment?: CurrentEquipmentItem[];
   currentEquipmentCount?: number;
   purchasesLast90Days?: RecentPurchaseItem[];
   purchasesLast90DaysCount?: number;
+  authorizationLines?: PatientAuthorizationLine[];
   authorization?: Record<string, unknown> | null;
   cmn?: Record<string, unknown> | null;
   billing?: Record<string, unknown> | null;

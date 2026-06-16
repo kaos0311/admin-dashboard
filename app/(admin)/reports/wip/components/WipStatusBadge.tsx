@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   formatWipPriority,
@@ -6,6 +6,7 @@ import {
   type WipPriority,
   type WipStatus,
 } from "@/lib/reports/wip";
+import { badges } from "@/theme";
 
 type BadgeProps =
   | {
@@ -40,26 +41,26 @@ export function WipStatusBadge({ type, value }: BadgeProps) {
 function getStatusClass(status: WipStatus) {
   switch (status) {
     case "open":
-      return "border-amber-300/25 bg-amber-400/10 text-amber-200";
+      return badges.info;
     case "pending":
-      return "border-sky-300/25 bg-sky-400/10 text-sky-200";
+      return badges.info;
     case "completed":
-      return "border-emerald-300/25 bg-emerald-400/10 text-emerald-200";
+      return badges.success;
     case "cancelled":
-      return "border-slate-300/20 bg-slate-400/10 text-slate-300";
+      return badges.neutral;
   }
 }
 
 function getPriorityClass(priority: WipPriority) {
   switch (priority) {
     case "critical":
-      return "border-red-300/25 bg-red-400/10 text-red-200";
+      return badges.danger;
     case "high":
-      return "border-orange-300/25 bg-orange-400/10 text-orange-200";
+      return badges.warning;
     case "normal":
-      return "border-sky-300/25 bg-sky-400/10 text-sky-200";
+      return badges.info;
     case "low":
-      return "border-slate-300/20 bg-slate-400/10 text-slate-300";
+      return badges.neutral;
   }
 }
 

@@ -1,10 +1,9 @@
-﻿"use client";
+"use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   FileSpreadsheet,
-  FileText,
   HeartPulse,
   Loader2,
   Upload,
@@ -77,24 +76,12 @@ export default function ServerImportUploader() {
       ? Math.min(100, Math.round((processed / total) * 100))
       : 0;
 
-  const fileType = useMemo(() => {
-    if (!file) return null;
-
-    const lower = file.name.toLowerCase();
-
-    if (lower.endsWith(".pdf")) return "pdf";
-    if (lower.endsWith(".csv")) return "csv";
-
-    return "unknown";
-  }, [file]);
-
   function validateFile(selectedFile: File): boolean {
     const lowerName = selectedFile.name.toLowerCase();
     const isCsv = lowerName.endsWith(".csv");
-    const isPdf = lowerName.endsWith(".pdf");
 
-    if (!isCsv && !isPdf) {
-      toast.error("Only CSV and PDF files are supported.");
+    if (!isCsv) {
+      toast.error("Only CSV files are supported by the automated import pipeline.");
       return false;
     }
 
@@ -120,7 +107,7 @@ export default function ServerImportUploader() {
 
   async function handleUpload() {
     if (!file) {
-      toast.error("Choose a CSV or PDF file first.");
+      toast.error("Choose a CSV file first.");
       return;
     }
 
@@ -137,7 +124,7 @@ export default function ServerImportUploader() {
       setJobId(result.jobId);
 
       toast.success(
-        `${fileType === "pdf" ? "PDF" : "CSV"} uploaded. Server import started.`
+        "CSV uploaded. Server import started."
       );
 
       setFile(null);
@@ -167,7 +154,7 @@ export default function ServerImportUploader() {
           </h2>
 
           <p className={["mt-1 max-w-2xl", typography.bodyMuted].join(" ")}>
-            Upload CSV or text-based PDF files. Raw files are stored in Firebase
+            Upload CSV files. Raw files are stored in Firebase
             Storage while parsed rows are indexed into Firestore analytics.
           </p>
         </div>
@@ -246,7 +233,7 @@ export default function ServerImportUploader() {
             <input
               id="server-import-file"
               type="file"
-              accept=".csv,.pdf,text/csv,application/pdf"
+              accept=".csv,text/csv"
               disabled={uploading}
               onChange={(event) =>
                 handleFileSelection(event.target.files?.[0] ?? null)
@@ -254,24 +241,17 @@ export default function ServerImportUploader() {
               className="sr-only"
             />
 
-            {fileType === "pdf" ? (
-              <FileText
-                className={["h-10 w-10", colors.dangerPulse].join(" ")}
-                aria-hidden={true}
-              />
-            ) : (
-              <FileSpreadsheet
-                className={["h-10 w-10", colors.pulse].join(" ")}
-                aria-hidden={true}
-              />
-            )}
+            <FileSpreadsheet
+              className={["h-10 w-10", colors.pulse].join(" ")}
+              aria-hidden={true}
+            />
 
             <div className={["mt-4", typography.bodyStrong].join(" ")}>
-              {file ? file.name : "Drop CSV/PDF here or click to browse"}
+              {file ? file.name : "Drop CSV here or click to browse"}
             </div>
 
             <div className={["mt-2", typography.smallMuted].join(" ")}>
-              {file ? formatBytes(file.size) : "Supports CSV and text-based PDF files"}
+              {file ? formatBytes(file.size) : "Supports CSV files"}
             </div>
           </label>
         </div>

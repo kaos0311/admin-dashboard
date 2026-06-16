@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 
 import { typography } from "@/theme";
@@ -17,21 +17,23 @@ export function InventoryHeader({
 }: InventoryHeaderProps) {
   return (
     <section className="rounded-[2rem] border border-white/10 bg-white/[0.07] p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex items-center gap-3">
+      <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+        <div className="flex min-w-0 items-center gap-3">
           <div className="rounded-2xl border border-white/10 bg-white/10 p-3 shadow-inner shadow-white/5">
             <Boxes className="h-6 w-6" />
           </div>
 
-          <div>
-            <h1 className="text-2xl font-bold tracking-tight">Inventory</h1>
+          <div className="min-w-0">
+            <h1 className="break-words text-2xl font-bold leading-[1.15] tracking-tight">
+              Inventory
+            </h1>
 
             <p className={typography.body}>
               Stock, serials, lots, manufacturer data, warranty, lifecycle,
               service alerts, and batch controls.
             </p>
 
-            <p className="mt-1 text-xs ${typography.caption}">
+            <p className={`mt-1 text-xs ${typography.caption}`}>
               {lastLoadedAt
                 ? `Last synced: ${lastLoadedAt.toLocaleTimeString()}`
                 : "Waiting for inventory sync..."}

@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import type { ReactNode } from "react";
 
@@ -13,7 +13,7 @@ export default function StaffOrAdmin({
 }: StaffOrAdminProps) {
   return (
     <AuthGuard
-      allow={["staff", "admin"]}
+      allow={["staff", "admin", "tank"]}
       loadingMessage="Verifying staff access..."
       fallback={
         <div className="flex min-h-screen items-center justify-center bg-[radial-gradient(circle_at_top_left,_rgba(59,130,246,0.16),_transparent_34%),#020617] px-4 text-white">

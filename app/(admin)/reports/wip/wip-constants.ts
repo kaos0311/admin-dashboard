@@ -1,4 +1,6 @@
-﻿import type { WipStatus } from "./wip-types";
+import { badges } from "@/theme";
+
+import type { WipStatus } from "./wip-types";
 
 export const STATUS_LABELS: Record<WipStatus, string> = {
   open: "Open",
@@ -9,11 +11,11 @@ export const STATUS_LABELS: Record<WipStatus, string> = {
 };
 
 export const STATUS_BADGE_CLASSES: Record<WipStatus, string> = {
-  open: "border-sky-400/30 bg-sky-400/10 text-sky-200",
-  pending: "border-amber-400/30 bg-amber-400/10 text-amber-200",
-  completed: "border-emerald-400/30 bg-emerald-400/10 text-emerald-200",
-  cancelled: "border-rose-400/30 bg-rose-400/10 text-rose-200",
-  unknown: "border-slate-400/30 bg-slate-400/10 text-slate-200",
+  open: badges.info,
+  pending: badges.neutral,
+  completed: badges.success,
+  cancelled: badges.danger,
+  unknown: badges.neutral,
 };
 
 export const AGING_LABELS: Record<string, string> = {
@@ -25,12 +27,10 @@ export const AGING_LABELS: Record<string, string> = {
   "90+": "90+ days",
 };
 
-export const EMPTY_VALUE = "â€”";
+export const EMPTY_VALUE = "-";
 
 export const DATE_FORMAT: Intl.DateTimeFormatOptions = {
   month: "short",
   day: "numeric",
   year: "numeric",
 };
-
-

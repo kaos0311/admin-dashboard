@@ -1,7 +1,18 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
+import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import OpenAI from "openai";
+
+import {
+  createPhiAlert,
+  redactPhi,
+  scanTextForPhi,
+} from "../phiSafety";
+
+if (!getApps().length) {
+  initializeApp();
+}
 
 const db = getFirestore();
 
@@ -9,69 +20,78 @@ const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
 
 const MODEL = "gpt-4.1-mini";
 const MAX_PROMPT_LENGTH = 4000;
+const RECENT_DOC_LIMIT = 20;
+const SUMMARY_DOC_LIMIT = 1000;
 
-type PhiSeverity = "low" | "medium" | "high" | "critical";
-
-type PhiFinding = {
-  type: string;
-  severity: PhiSeverity;
-  fieldPath: string;
-  preview: string;
-  recommendation: string;
+type NumericSummary = {
+  count: number;
+  sum: number;
+  average: number;
+  min: number;
+  max: number;
 };
 
-type PhiPattern = {
-  type: string;
-  severity: PhiSeverity;
-  regex: RegExp;
-  recommendation: string;
+type CollectionSummary = {
+  collection: string;
+  loaded: number;
+  statusCounts: Record<string, number>;
+  numeric: Record<string, NumericSummary>;
+  missingKeyCounts: Record<string, number>;
 };
 
-const PHI_PATTERNS: PhiPattern[] = [
-  {
-    type: "SSN",
-    severity: "critical",
-    regex: /\b\d{3}-\d{2}-\d{4}\b/g,
-    recommendation: "Remove or redact Social Security numbers immediately.",
-  },
-  {
-    type: "DOB",
-    severity: "high",
-    regex:
-      /\b(?:DOB|Date of Birth|Birth Date|D\.O\.B\.)\s*[:\-]?\s*\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}\b/gi,
-    recommendation: "Remove or redact dates of birth from unsafe text fields.",
-  },
-  {
-    type: "Phone Number",
-    severity: "medium",
-    regex: /\b(?:\+1\s*)?(?:\(?\d{3}\)?[\s.-]?)\d{3}[\s.-]?\d{4}\b/g,
-    recommendation:
-      "Verify whether this phone number belongs to a patient before exposing or logging.",
-  },
-  {
-    type: "Email Address",
-    severity: "medium",
-    regex: /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/gi,
-    recommendation:
-      "Verify whether this email belongs to a patient before exposing or logging.",
-  },
-  {
-    type: "Insurance Identifier",
-    severity: "high",
-    regex:
-      /\b(?:Policy|Member|Insurance|Medicare|Medicaid|Subscriber)\s*(?:ID|#|Number)?\s*[:\-]?\s*[A-Z0-9]{6,24}\b/gi,
-    recommendation:
-      "Remove or redact insurance identifiers from unsafe fields.",
-  },
-  {
-    type: "Medical Record Identifier",
-    severity: "high",
-    regex:
-      /\b(?:MRN|Medical Record|Patient ID|Patient Number)\s*[:\-#]?\s*[A-Z0-9\-]{4,24}\b/gi,
-    recommendation:
-      "Remove or redact patient identifiers from unsafe fields.",
-  },
-];
+type ReportArtifact = {
+  type: "csv";
+  fileName: string;
+  title: string;
+  content: string;
+};
+
+const CORE_COLLECTIONS = [
+  "patients",
+  "patients_index",
+  "orders",
+  "inventory",
+  "products",
+  "rentals",
+  "hospicePatients",
+  "insuranceRecords",
+  "insurancePatients",
+  "wipRecords",
+  "patientDeliveryTickets",
+  "patientAuthorizations",
+  "importJobs",
+  "auditLogs",
+  "shopItems",
+  "shopCostOfGoodsSold",
+  "shopInventoryLots",
+  "shopInventorySerials",
+] as const;
+
+const SUMMARY_FIELDS: Record<string, string[]> = {
+  orders: ["quantity", "total", "amount", "chargeAmount"],
+  inventory: ["quantityOnHand", "available", "committed", "onRent", "totalValue", "unitCost"],
+  products: ["basePrice", "defaultPurchasePrice", "defaultRentalRate", "reorderLevel"],
+  shopCostOfGoodsSold: ["quantity", "revenue", "cost", "grossProfit", "grossProfitPct"],
+  shopInventoryLots: ["onHandQty", "onRentQty", "onOrderQty", "availableQty", "committedQty"],
+  shopInventorySerials: ["availableQty", "onRentQty"],
+  rentals: ["quantity", "monthlyRate", "total"],
+  wipRecords: ["daysOpen", "daysInState"],
+  patientAuthorizations: ["quantity"],
+  insuranceRecords: ["payPercentage"],
+};
+
+const REQUIRED_FIELDS: Record<string, string[]> = {
+  patients: ["patientName", "dob", "phone", "insurance"],
+  patients_index: ["patientName", "dob", "phone", "insuranceName"],
+  inventory: ["name", "sku", "hcpc", "barcode", "lotNumber"],
+  products: ["name", "sku", "hcpcs", "category"],
+  shopItems: ["name", "sku", "category"],
+  shopCostOfGoodsSold: ["itemName", "revenue", "cost", "quantity"],
+  hospicePatients: ["patientName", "nurseName", "nursePhone", "insuranceName"],
+  insuranceRecords: ["insuranceName", "payerName", "status"],
+  orders: ["patientName", "status", "productType"],
+  wipRecords: ["patientName", "assignedTo", "status"],
+};
 
 function requireAdmin(request: {
   auth?: {
@@ -83,8 +103,13 @@ function requireAdmin(request: {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
 
-  if (request.auth.token.role !== "admin") {
-    throw new HttpsError("permission-denied", "Admin access required.");
+  const role = request.auth.token.role;
+
+  if (role !== "admin" && role !== "tank") {
+    throw new HttpsError(
+      "permission-denied",
+      "Admin or Tank access required."
+    );
   }
 
   return {
@@ -116,91 +141,26 @@ function getPrompt(data: unknown): string {
   return prompt;
 }
 
-function redactValue(value: string): string {
-  if (!value) return "***REDACTED***";
-  if (value.length <= 4) return "***REDACTED***";
-
-  return `${value.slice(0, 2)}***REDACTED***${value.slice(-2)}`;
-}
-
-function scanTextForPhi(text: string, fieldPath: string): PhiFinding[] {
-  const findings: PhiFinding[] = [];
-
-  for (const pattern of PHI_PATTERNS) {
-    const matches = text.matchAll(pattern.regex);
-
-    for (const match of matches) {
-      const raw = match[0] ?? "";
-
-      findings.push({
-        type: pattern.type,
-        severity: pattern.severity,
-        fieldPath,
-        preview: redactValue(raw),
-        recommendation: pattern.recommendation,
-      });
-    }
-  }
-
-  return findings;
-}
-
-function redactPhi(text: string): string {
-  let clean = text;
-
-  for (const pattern of PHI_PATTERNS) {
-    clean = clean.replace(pattern.regex, "***REDACTED_PHI***");
-  }
-
-  return clean;
-}
-
-function highestSeverity(findings: PhiFinding[]): PhiSeverity {
-  const rank: Record<PhiSeverity, number> = {
-    low: 1,
-    medium: 2,
-    high: 3,
-    critical: 4,
-  };
-
-  return findings.reduce<PhiSeverity>((highest, finding) => {
-    return rank[finding.severity] > rank[highest]
-      ? finding.severity
-      : highest;
-  }, "low");
-}
-
-async function createPhiAlert(params: {
-  actorUid: string;
-  actorEmail: string | null;
-  source: "prompt" | "response";
-  findings: PhiFinding[];
-}): Promise<string | null> {
-  if (params.findings.length === 0) return null;
-
-  const alertRef = await db.collection("phiAlerts").add({
-    severity: highestSeverity(params.findings),
-    source: `jarvis.${params.source}`,
-    sourceCollection: "aiAuditLogs",
-    detectedTypes: Array.from(
-      new Set(params.findings.map((finding) => finding.type))
-    ),
-    findings: params.findings,
-    status: "open",
-    actorUid: params.actorUid,
-    actorEmail: params.actorEmail,
-    reviewedBy: null,
-    reviewedAt: null,
-    createdAt: FieldValue.serverTimestamp(),
-    recommendation:
-      "Review the Jarvis interaction and confirm whether unsafe PHI exposure occurred.",
-  });
-
-  return alertRef.id;
-}
-
 function inferIntent(prompt: string): string {
   const lower = prompt.toLowerCase();
+
+  if (
+    lower.includes("export") ||
+    lower.includes("report") ||
+    lower.includes("graph") ||
+    lower.includes("chart") ||
+    lower.includes("forecast") ||
+    lower.includes("average") ||
+    lower.includes("sum") ||
+    lower.includes("margin") ||
+    lower.includes("gmroi") ||
+    lower.includes("turnover") ||
+    lower.includes("sell-through") ||
+    lower.includes("growth") ||
+    lower.includes("purchase")
+  ) {
+    return "analysis-reporting";
+  }
 
   if (lower.includes("phi") || lower.includes("hipaa") || lower.includes("leak")) {
     return "phi-risk";
@@ -212,6 +172,15 @@ function inferIntent(prompt: string): string {
 
   if (lower.includes("audit") || lower.includes("security")) {
     return "audit";
+  }
+
+  if (
+    lower.includes("api") ||
+    lower.includes("integration") ||
+    lower.includes("tool") ||
+    lower.includes("growth")
+  ) {
+    return "api-registry";
   }
 
   if (lower.includes("order")) {
@@ -251,6 +220,281 @@ async function getRecentCollectionDocs(collectionName: string, limit: number) {
   }));
 }
 
+function safeNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(String(value).replace(/[$,% ,]/g, ""));
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function getNestedValue(source: Record<string, unknown>, key: string): unknown {
+  if (!key.includes(".")) return source[key];
+
+  return key.split(".").reduce<unknown>((current, part) => {
+    if (!current || typeof current !== "object") return undefined;
+    return (current as Record<string, unknown>)[part];
+  }, source);
+}
+
+function getStatusValue(data: Record<string, unknown>): string {
+  const value =
+    data.status ||
+    data.hospiceStatus ||
+    data.patientStatus ||
+    data.lifecycleStatus ||
+    data.importStatus ||
+    data.parseStatus ||
+    "unknown";
+
+  return String(value || "unknown").toLowerCase().trim() || "unknown";
+}
+
+function updateNumericSummary(
+  current: NumericSummary | undefined,
+  value: number
+): NumericSummary {
+  if (!current) {
+    return { count: 1, sum: value, average: value, min: value, max: value };
+  }
+
+  const count = current.count + 1;
+  const sum = current.sum + value;
+
+  return {
+    count,
+    sum,
+    average: sum / count,
+    min: Math.min(current.min, value),
+    max: Math.max(current.max, value),
+  };
+}
+
+function summarizeDocs(
+  collectionName: string,
+  docs: Array<Record<string, unknown>>
+): CollectionSummary {
+  const statusCounts: Record<string, number> = {};
+  const numeric: Record<string, NumericSummary> = {};
+  const missingKeyCounts: Record<string, number> = {};
+
+  for (const doc of docs) {
+    const status = getStatusValue(doc);
+    statusCounts[status] = (statusCounts[status] ?? 0) + 1;
+
+    for (const field of SUMMARY_FIELDS[collectionName] ?? []) {
+      const value = safeNumber(getNestedValue(doc, field));
+      if (value === null) continue;
+      numeric[field] = updateNumericSummary(numeric[field], value);
+    }
+
+    for (const field of REQUIRED_FIELDS[collectionName] ?? []) {
+      const value = getNestedValue(doc, field);
+      if (value === null || value === undefined || value === "") {
+        missingKeyCounts[field] = (missingKeyCounts[field] ?? 0) + 1;
+      }
+    }
+  }
+
+  return {
+    collection: collectionName,
+    loaded: docs.length,
+    statusCounts,
+    numeric,
+    missingKeyCounts,
+  };
+}
+
+function redactContextDoc(data: Record<string, unknown>): Record<string, unknown> {
+  const redacted: Record<string, unknown> = {};
+  const allowed = [
+    "id",
+    "status",
+    "fileName",
+    "reportType",
+    "detectedReportKind",
+    "rowCount",
+    "processedRows",
+    "writtenRows",
+    "failedRows",
+    "issueCount",
+    "createdAt",
+    "updatedAt",
+    "category",
+    "name",
+    "sku",
+    "hcpcs",
+    "hcpc",
+    "quantityOnHand",
+    "available",
+    "onRent",
+    "totalValue",
+    "assignedTo",
+    "daysOpen",
+    "priority",
+    "source",
+  ];
+
+  for (const key of allowed) {
+    if (data[key] !== undefined) redacted[key] = data[key];
+  }
+
+  return redacted;
+}
+
+function hasPossibleApiSecret(data: Record<string, unknown>): boolean {
+  const text = [
+    data.sampleCode,
+    data.notes,
+    data.keyLocation,
+  ].join("\n");
+
+  return /(api[_-]?key|secret|token|bearer|sk_live|AIza)[\s:=]+[A-Za-z0-9_\-.]{10,}/i.test(
+    text
+  );
+}
+
+function redactApiRegistryDoc(data: Record<string, unknown>) {
+  return {
+    id: data.id,
+    name: data.name ?? "",
+    provider: data.provider ?? "",
+    status: data.status ?? "",
+    category: data.category ?? "",
+    purpose: data.purpose ?? "",
+    docsUrl: data.docsUrl ?? "",
+    baseUrl: data.baseUrl ?? "",
+    keyLocation: data.keyLocation ? "documented" : "missing",
+    notes: data.notes ?? "",
+    sampleCodePresent: Boolean(data.sampleCode),
+    possibleSecretInRegistry: hasPossibleApiSecret(data),
+    updatedAt: data.updatedAt ?? null,
+  };
+}
+
+async function getCollectionSample(collectionName: string, limitValue: number) {
+  const snapshot = await db.collection(collectionName).limit(limitValue).get();
+  return snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+}
+
+async function buildOperationsOverview() {
+  const summaries: CollectionSummary[] = [];
+  const samples: Record<string, unknown[]> = {};
+
+  await Promise.all(
+    CORE_COLLECTIONS.map(async (collectionName) => {
+      const docs = await getCollectionSample(collectionName, SUMMARY_DOC_LIMIT).catch(() => []);
+      summaries.push(summarizeDocs(collectionName, docs));
+      samples[collectionName] = docs.slice(0, 10).map(redactContextDoc);
+    })
+  );
+
+  summaries.sort((a, b) => a.collection.localeCompare(b.collection));
+
+  const totalRecordsLoaded = summaries.reduce((sum, item) => sum + item.loaded, 0);
+  const dataQualityAlerts = summaries.flatMap((summary) =>
+    Object.entries(summary.missingKeyCounts)
+      .filter(([, count]) => count > 0)
+      .map(([field, count]) => ({
+        collection: summary.collection,
+        field,
+        missing: count,
+        loaded: summary.loaded,
+      }))
+  );
+
+  return {
+    generatedAt: new Date().toISOString(),
+    totalRecordsLoaded,
+    summaries,
+    samples,
+    dataQualityAlerts: dataQualityAlerts.slice(0, 50),
+    reportingCapabilities: [
+      "CSV export artifact from current operational summary",
+      "Markdown executive summary",
+      "Averages, sums, counts, missing-data checks, and status grouping",
+      "Simple trend/forecast guidance when date fields exist in context",
+      "Patient-care guardrails: administrative support only, no clinical replacement",
+    ],
+  };
+}
+
+async function buildRetailFinancialContext() {
+  const analyticsSnap = await db.collection("analytics").doc("reports").get();
+  const analytics = analyticsSnap.data() ?? {};
+  const retailFinancials =
+    typeof analytics.retailFinancials === "object" &&
+    analytics.retailFinancials !== null
+      ? (analytics.retailFinancials as Record<string, unknown>)
+      : {};
+
+  return {
+    generatedAtLabel: retailFinancials.generatedAtLabel ?? "",
+    dataInputs: retailFinancials.dataInputs ?? {},
+    metrics: Array.isArray(retailFinancials.metrics)
+      ? retailFinancials.metrics.map((metric) => {
+          const item =
+            typeof metric === "object" && metric !== null
+              ? (metric as Record<string, unknown>)
+              : {};
+
+          return {
+            key: item.key ?? "",
+            label: item.label ?? "",
+            formattedValue: item.formattedValue ?? "",
+            status: item.status ?? "missing",
+            formula: item.formula ?? "",
+            insight: item.insight ?? "",
+            recommendation: item.recommendation ?? "",
+            missingInputs: item.missingInputs ?? [],
+          };
+        })
+      : [],
+    purchasingSignals: retailFinancials.purchasingSignals ?? [],
+    growthRecommendations: retailFinancials.growthRecommendations ?? [],
+    missingInputs: retailFinancials.missingInputs ?? [],
+    guardrails: [
+      "Use only stored metrics and available source rows.",
+      "Never invent foot traffic, store square footage, marketing spend, liquidity, or prior-period sales.",
+      "When a measure is missing, recommend the data source needed before making a decision.",
+      "Purchasing recommendations should consider in-stock percentage, sell-through, GMROI, turnover, margin, and patient/order demand together.",
+    ],
+  };
+}
+
+function csvEscape(value: unknown): string {
+  const text = String(value ?? "");
+  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
+  return text;
+}
+
+function buildCsvReport(context: Record<string, unknown>, intent: string): ReportArtifact | null {
+  const overview = context.operationsOverview as
+    | { summaries?: CollectionSummary[]; dataQualityAlerts?: unknown[] }
+    | undefined;
+
+  if (!overview?.summaries?.length) return null;
+
+  const rows = [
+    ["Collection", "Loaded Rows", "Statuses", "Numeric Summaries", "Missing Field Counts"],
+    ...overview.summaries.map((summary) => [
+      summary.collection,
+      summary.loaded,
+      JSON.stringify(summary.statusCounts),
+      JSON.stringify(summary.numeric),
+      JSON.stringify(summary.missingKeyCounts),
+    ]),
+  ];
+
+  return {
+    type: "csv",
+    title: "Jarvis Operations Summary",
+    fileName: `jarvis-${intent}-${new Date().toISOString().slice(0, 10)}.csv`,
+    content: rows.map((row) => row.map(csvEscape).join(",")).join("\n"),
+  };
+}
+
 async function buildAiContext(intent: string) {
   const [dashboardSnap, auditLogsSnap, importJobsSnap] = await Promise.all([
     db.collection("analytics").doc("dashboard").get(),
@@ -288,22 +532,30 @@ async function buildAiContext(intent: string) {
     dashboard,
     recentAuditLogs,
     recentImportJobs,
+    operationsOverview: await buildOperationsOverview(),
+    retailFinancialInsights: await buildRetailFinancialContext(),
   };
 
-  const collectionsUsed = ["analytics/dashboard", "auditLogs", "importJobs"];
+  const collectionsUsed = [
+    "analytics/dashboard",
+    "analytics/reports",
+    "auditLogs",
+    "importJobs",
+    ...CORE_COLLECTIONS,
+  ];
 
   if (intent === "orders" || intent === "general") {
-    context.recentOrders = await getRecentCollectionDocs("orders", 15);
+    context.recentOrders = await getRecentCollectionDocs("orders", RECENT_DOC_LIMIT);
     collectionsUsed.push("orders");
   }
 
   if (intent === "rentals" || intent === "general") {
-    context.recentRentals = await getRecentCollectionDocs("rentals", 15);
+    context.recentRentals = await getRecentCollectionDocs("rentals", RECENT_DOC_LIMIT);
     collectionsUsed.push("rentals");
   }
 
   if (intent === "inventory" || intent === "general") {
-    context.recentProducts = await getRecentCollectionDocs("products", 20);
+    context.recentProducts = await getRecentCollectionDocs("products", RECENT_DOC_LIMIT);
     collectionsUsed.push("products");
   }
 
@@ -326,6 +578,20 @@ async function buildAiContext(intent: string) {
   if (intent === "phi-risk") {
     context.recentPhiAlerts = await getRecentCollectionDocs("phiAlerts", 15);
     collectionsUsed.push("phiAlerts");
+  }
+
+  if (intent === "api-registry" || intent === "general" || intent === "audit") {
+    const apiDocs = await getRecentCollectionDocs("apiRegistry", 50).catch(
+      () => []
+    );
+    context.apiRegistry = apiDocs.map(redactApiRegistryDoc);
+    context.apiRegistryGuidance = [
+      "Never recommend storing raw API secrets in Firestore.",
+      "Prefer Firebase Functions secrets or environment variables for API keys.",
+      "Recommend APIs only as candidates for human approval and security review.",
+      "Flag missing docs, unclear key handling, stale records, and possible pasted secrets.",
+    ];
+    collectionsUsed.push("apiRegistry");
   }
 
   return {
@@ -371,6 +637,9 @@ Hard rules:
 - If evidence is missing, say what is missing.
 - Prioritize compliance, auditability, accuracy, and system health.
 - Recommend actions, but do not claim you changed database records.
+- You are an administrative decision-support tool, not a replacement for patient care staff.
+- Do not make clinical judgments, diagnosis decisions, or treatment decisions.
+- When asked for patient-care decisions, provide operational checks and advise human review.
 
 Focus areas:
 - Imports
@@ -381,15 +650,31 @@ Focus areas:
 - Orders
 - Rentals
 - Inventory
+- Retail financial analytics: gross margin, inventory turnover, GMROI, sales per square foot, average transaction value, profit margin, sell-through rate, CAC, conversion rate, foot traffic, in-stock percentage, net sales, returns and allowances, current ratio, quick ratio, and revenue growth
+- Growth and item-purchasing recommendations grounded in margin, turnover, stock availability, sell-through, GMROI, and order demand
 - Hospice
 - Insurance
+- API registry and integration governance
 - Operational bottlenecks
+- Exportable reports
+- Counts, sums, averages, missing-data checks, and record keeping
+- Basic forecasting from available operational history
+- Graph-ready data summaries
+- Missing-input guidance for any metric that cannot be calculated yet
+- API recommendations for growth, but always include security and key-management cautions
+
+Retail recommendation rules:
+- Use the retailFinancialInsights context first when answering retail, growth, graph, or purchasing questions.
+- If a metric is marked missing or partial, explain what source data is needed before relying on it.
+- Do not recommend buying more of an item from one metric alone; combine margin, turnover, GMROI, sell-through, in-stock status, and known order/patient demand.
+- For growth recommendations, separate proven findings from suggested data improvements.
 
 Response style:
 - Start with the direct answer.
 - Then list key evidence.
 - Then list recommended next actions.
 - Keep it concise unless the question requires depth.
+- If a CSV artifact is available, mention that a downloadable report was generated.
 `;
 
 export const askAdminAi = onCall(
@@ -406,16 +691,28 @@ export const askAdminAi = onCall(
     const intent = inferIntent(prompt);
 
     const promptPhiFindings = scanTextForPhi(prompt, "prompt");
-    const promptPhiAlertId = await createPhiAlert({
+    const promptPhiAlertId = await createPhiAlert(db, {
       actorUid: actor.uid,
       actorEmail: actor.email,
-      source: "prompt",
+      source: "jarvis.prompt",
+      sourceCollection: "aiAuditLogs",
       findings: promptPhiFindings,
+      recommendation:
+        "Review the Jarvis interaction and confirm whether unsafe PHI was entered into the assistant prompt.",
+      correctiveMeasures: [
+        "Coach users to ask operational questions without patient identifiers.",
+        "Redact PHI from stored prompt previews and chat history when needed.",
+        "Confirm the related conversation is not visible outside authenticated staff/admin views.",
+      ],
     });
 
     const safePrompt = redactPhi(prompt);
 
     const { context, collectionsUsed } = await buildAiContext(intent);
+    const reportArtifact =
+      intent === "analysis-reporting" || /export|csv|report|graph|chart|summary/i.test(safePrompt)
+        ? buildCsvReport(context, intent)
+        : null;
 
     const openai = new OpenAI({
       apiKey: OPENAI_API_KEY.value(),
@@ -431,10 +728,17 @@ export const askAdminAi = onCall(
         },
         {
           role: "user",
-          content: JSON.stringify({
+      content: JSON.stringify({
             question: safePrompt,
             intent,
             context,
+            availableArtifact: reportArtifact
+              ? {
+                  type: reportArtifact.type,
+                  fileName: reportArtifact.fileName,
+                  title: reportArtifact.title,
+                }
+              : null,
           }),
         },
       ],
@@ -443,11 +747,19 @@ export const askAdminAi = onCall(
     const rawAnswer = response.output_text?.trim() || "No response generated.";
 
     const responsePhiFindings = scanTextForPhi(rawAnswer, "response");
-    const responsePhiAlertId = await createPhiAlert({
+    const responsePhiAlertId = await createPhiAlert(db, {
       actorUid: actor.uid,
       actorEmail: actor.email,
-      source: "response",
+      source: "jarvis.response",
+      sourceCollection: "aiAuditLogs",
       findings: responsePhiFindings,
+      recommendation:
+        "Review the Jarvis response and confirm whether unsafe PHI was generated before the response was redacted.",
+      correctiveMeasures: [
+        "Keep the redacted response in place.",
+        "Inspect the database context that fed the response for unnecessary PHI.",
+        "Tighten summary fields if PHI was exposed through operational context.",
+      ],
     });
 
     const answer =
@@ -472,6 +784,7 @@ export const askAdminAi = onCall(
       promptPhiFindingCount: promptPhiFindings.length,
       responsePhiFindingCount: responsePhiFindings.length,
       phiAlertIds,
+      reportArtifactCreated: Boolean(reportArtifact),
       createdAt: FieldValue.serverTimestamp(),
     });
 
@@ -486,6 +799,7 @@ export const askAdminAi = onCall(
       answer,
       intent,
       collectionsUsed,
+      reportArtifact,
       memoryLogged: true,
       phiRisk: {
         promptFindings: promptPhiFindings.length,

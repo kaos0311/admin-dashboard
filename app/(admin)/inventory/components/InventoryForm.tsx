@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 
 import {
@@ -28,6 +28,14 @@ import { TextInput } from "./fields/TextInput";
 
 type InventoryFormProps = {
   form: InventoryFormType;
+  autofillOptions: {
+    itemNames: string[];
+    categories: string[];
+    skus: string[];
+    hcpcs: string[];
+    manufacturers: string[];
+    locations: string[];
+  };
 
   saving: boolean;
   canWrite: boolean;
@@ -48,6 +56,7 @@ type InventoryFormProps = {
 
 export function InventoryForm({
   form,
+  autofillOptions,
   saving,
   canWrite,
   onSubmit,
@@ -97,8 +106,11 @@ export function InventoryForm({
             onChange={(value) =>
               onUpdate("name", value)
             }
+            list="inventory-item-name-options"
             required
           />
+
+          <SuggestionList id="inventory-item-name-options" values={autofillOptions.itemNames} />
 
           <TextInput
             label="Category"
@@ -106,16 +118,29 @@ export function InventoryForm({
             onChange={(value) =>
               onUpdate("category", value)
             }
+            list="inventory-category-options"
             required
           />
 
-          <div className="grid gap-3 md:grid-cols-2">
+          <SuggestionList id="inventory-category-options" values={autofillOptions.categories} />
+
+          <div className="grid gap-3 md:grid-cols-3">
             <TextInput
               label="SKU"
               value={form.sku}
               onChange={(value) =>
                 onUpdate("sku", value)
               }
+              list="inventory-sku-options"
+            />
+
+            <TextInput
+              label="HCPCS"
+              value={form.hcpc}
+              onChange={(value) =>
+                onUpdate("hcpc", value.toUpperCase())
+              }
+              list="inventory-hcpcs-options"
             />
 
             <ScanInput
@@ -129,6 +154,9 @@ export function InventoryForm({
               }
             />
           </div>
+
+          <SuggestionList id="inventory-sku-options" values={autofillOptions.skus} />
+          <SuggestionList id="inventory-hcpcs-options" values={autofillOptions.hcpcs} />
 
           <div className="grid gap-3 md:grid-cols-2">
             <ScanInput
@@ -162,7 +190,10 @@ export function InventoryForm({
             onChange={(value) =>
               onUpdate("manufacturer", value)
             }
+            list="inventory-manufacturer-options"
           />
+
+          <SuggestionList id="inventory-manufacturer-options" values={autofillOptions.manufacturers} />
 
           <div className="grid gap-3 md:grid-cols-2">
             <TextInput
@@ -191,6 +222,7 @@ export function InventoryForm({
               onChange={(value) =>
                 onUpdate("locationName", value)
               }
+              list="inventory-location-options"
             />
 
             <TextInput
@@ -201,6 +233,8 @@ export function InventoryForm({
               }
             />
           </div>
+
+          <SuggestionList id="inventory-location-options" values={autofillOptions.locations} />
 
           <div className="grid gap-3 md:grid-cols-2">
             <TextInput
@@ -423,6 +457,22 @@ export function InventoryForm({
         </div>
       </div>
     </form>
+  );
+}
+
+function SuggestionList({
+  id,
+  values,
+}: {
+  id: string;
+  values: string[];
+}) {
+  return (
+    <datalist id={id}>
+      {values.map((value) => (
+        <option key={`${id}-${value}`} value={value} />
+      ))}
+    </datalist>
   );
 }
 

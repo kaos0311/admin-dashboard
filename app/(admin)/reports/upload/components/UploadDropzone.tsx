@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { FileArchive, UploadCloud } from "lucide-react";
 import type { RefObject } from "react";
@@ -28,7 +28,7 @@ export function UploadDropzone({
             Batch upload
           </div>
 
-          <h2 className={typography.sectionTitle}>Upload CSV/PDF reports</h2>
+          <h2 className={typography.sectionTitle}>Upload CSV reports</h2>
 
           <p className={cn(typography.bodyMuted, "mt-2 max-w-2xl")}>
             Files are validated locally, uploaded with Firebase Storage progress,
@@ -38,8 +38,8 @@ export function UploadDropzone({
 
         <button
           type="button"
-          title="Choose CSV or PDF report files"
-          aria-label="Choose CSV or PDF report files"
+          title="Choose CSV report files"
+          aria-label="Choose CSV report files"
           className={uploadUi.buttonPrimary}
           disabled={hasActiveUploads}
           onClick={() => fileInputRef.current?.click()}
@@ -49,7 +49,7 @@ export function UploadDropzone({
         </button>
 
         <label htmlFor="report-upload-files" className="sr-only">
-          Choose CSV or PDF report files
+          Choose CSV report files
         </label>
 
         <input
@@ -57,9 +57,9 @@ export function UploadDropzone({
           ref={fileInputRef}
           name="reportUploadFiles"
           type="file"
-          title="Choose CSV or PDF report files"
-          aria-label="Choose CSV or PDF report files"
-          accept=".csv,.pdf,text/csv,application/pdf"
+          title="Choose CSV report files"
+          aria-label="Choose CSV report files"
+          accept=".csv,text/csv"
           multiple
           className="hidden"
           onChange={(event) => {
@@ -88,7 +88,7 @@ export function UploadDropzone({
         </h3>
 
         <p className={cn(typography.bodyMuted, "mx-auto mt-2 max-w-xl")}>
-          Supports batch CSV/PDF uploads up to 50 MB each.
+          Supports batch CSV uploads up to 50 MB each.
         </p>
       </div>
     </div>

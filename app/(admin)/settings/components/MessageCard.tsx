@@ -1,4 +1,7 @@
-﻿import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Info } from "lucide-react";
+
+import { alerts } from "@/theme";
+
 import type { SettingsMessage } from "../settings-types";
 
 type MessageCardProps = {
@@ -8,16 +11,16 @@ type MessageCardProps = {
 export function MessageCard({ message }: MessageCardProps) {
   const config = {
     success: {
-      icon: <CheckCircle2 className="h-5 w-5 text-emerald-200" />,
-      className: "border-emerald-300/20 bg-emerald-400/10 text-emerald-50",
+      icon: <CheckCircle2 className="h-5 w-5" />,
+      className: alerts.success,
     },
     error: {
-      icon: <AlertTriangle className="h-5 w-5 text-red-200" />,
-      className: "border-red-300/20 bg-red-500/10 text-red-50",
+      icon: <AlertTriangle className="h-5 w-5" />,
+      className: alerts.danger,
     },
     info: {
-      icon: <Info className="h-5 w-5 text-cyan-200" />,
-      className: "border-cyan-300/20 bg-cyan-400/10 text-cyan-50",
+      icon: <Info className="h-5 w-5" />,
+      className: alerts.info,
     },
   }[message.type];
 
@@ -33,6 +36,3 @@ export function MessageCard({ message }: MessageCardProps) {
     </div>
   );
 }
-
-
-

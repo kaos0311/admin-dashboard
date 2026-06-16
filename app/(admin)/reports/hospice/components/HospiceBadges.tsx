@@ -14,7 +14,7 @@ export function HospiceBadge({
   return (
     <span
       aria-label={label}
-      className={`inline-flex min-w-0 max-w-full items-center rounded-full border px-3 py-1 text-xs font-semibold leading-none ${badgeStyles}`}
+      className={`inline-flex min-w-0 max-w-full items-center rounded-full border px-3 py-1 text-xs font-semibold leading-5 ${badgeStyles}`}
     >
       <span className="truncate">
         {label}

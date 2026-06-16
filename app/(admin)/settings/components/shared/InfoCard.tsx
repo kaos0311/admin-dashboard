@@ -1,8 +1,5 @@
-﻿import { typography } from "@/theme";
-
 import type { ReactNode } from "react";
-
-import { glassPanelSoft } from "../../styles/glass";
+import { glass, typography } from "@/theme";
 
 type InfoCardProps = {
   title: string;
@@ -12,21 +9,16 @@ type InfoCardProps = {
 
 export function InfoCard({ title, description, children }: InfoCardProps) {
   return (
-    <div className={`${glassPanelSoft} p-4`}>
+    <div className={`${glass.inset} p-4`}>
       <h3 className={typography.cardTitle}>{title}</h3>
 
       {description ? (
-        <p className="mt-2 text-sm leading-6 ${typography.bodyMuted}">{description}</p>
+        <p className={`mt-2 text-sm leading-6 ${typography.bodyMuted}`}>
+          {description}
+        </p>
       ) : null}
 
       {children ? <div className="mt-4">{children}</div> : null}
     </div>
   );
 }
-
-
-
-
-
-
-

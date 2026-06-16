@@ -1,6 +1,6 @@
 ﻿export const tiles = {
   base:
-    "relative flex min-w-0 flex-col overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045] shadow-xl shadow-black/25 backdrop-blur-xl",
+    "relative flex min-w-0 flex-col overflow-visible rounded-3xl border border-white/10 bg-white/[0.045] shadow-xl shadow-black/25 backdrop-blur-xl",
 
   hover:
     "transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-white/[0.07]",
@@ -22,13 +22,13 @@
     "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.08] p-3 text-cyan-200 shadow-lg shadow-black/20",
 
   label:
-    "block truncate text-xs font-semibold uppercase leading-5 tracking-[0.14em] text-slate-400",
+    "block break-words text-xs font-semibold uppercase leading-5 tracking-[0.14em] text-slate-400",
 
   title:
     "min-w-0 break-words text-base font-bold leading-6 tracking-tight text-white sm:text-lg sm:leading-7",
 
   value:
-    "mt-3 min-w-0 break-words text-3xl font-black leading-none tracking-tight text-white",
+    "mt-3 min-w-0 break-words text-3xl font-black leading-[1.15] tracking-tight text-white",
 
   helper:
     "mt-2 min-w-0 break-words text-xs leading-5 text-slate-400",
@@ -37,22 +37,22 @@
     "min-w-0 break-words text-sm leading-6 text-slate-400",
 
   badge:
-    "inline-flex max-w-full min-w-0 shrink-0 items-center truncate rounded-full border border-white/10 bg-white/[0.08] px-3 py-1.5 text-[0.68rem] font-black uppercase leading-none tracking-[0.18em] text-slate-200",
+    "inline-flex max-w-full min-w-0 shrink-0 items-center break-words rounded-full border border-white/10 bg-white/[0.08] px-3 py-1.5 text-[0.68rem] font-black uppercase leading-5 tracking-[0.18em] text-slate-200",
 
   tag:
-    "min-w-0 max-w-full truncate rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-xs text-slate-300",
+    "min-w-0 max-w-full break-words rounded-full border border-white/10 bg-black/40 px-2.5 py-1 text-xs leading-5 text-slate-300",
 
   tagMuted:
     "rounded-full border border-white/10 bg-white/[0.05] px-2.5 py-1 text-xs text-slate-400",
 
   gridMetrics:
-    "grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0",
+    "grid min-w-0 gap-5 sm:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0",
 
   gridSections:
-    "grid min-w-0 gap-4 lg:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0",
+    "grid min-w-0 gap-5 lg:grid-cols-2 xl:grid-cols-4 [&>*]:min-w-0",
 
   gridTwo:
-    "grid min-w-0 gap-4 lg:grid-cols-2 [&>*]:min-w-0",
+    "grid min-w-0 gap-5 lg:grid-cols-2 [&>*]:min-w-0",
 } as const;
 
 export type TileKey = keyof typeof tiles;

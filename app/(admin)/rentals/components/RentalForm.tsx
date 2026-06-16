@@ -1,3 +1,4 @@
+import { typography } from "@/theme";
 ﻿import type { Dispatch, SetStateAction } from "react";
 import { Loader2, Plus, Save, X } from "lucide-react";
 import {
@@ -67,7 +68,7 @@ export function RentalForm({
 
       <div className="mt-6 grid gap-4 lg:grid-cols-4">
         <label className="block lg:col-span-2" htmlFor="rental-product">
-          <span className="text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}">
+          <span className={`text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}`}>
             Product
           </span>
 

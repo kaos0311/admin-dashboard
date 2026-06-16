@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { typography } from "@/theme";
 
@@ -8,20 +8,15 @@ export function InventoryEmptyState() {
   return (
     <div className="rounded-2xl border border-white/10 bg-black/30 p-8 text-center shadow-inner shadow-black/20">
       <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
-        <ClipboardList className="h-6 w-6 text-slate-300" />
+        <ClipboardList className={`h-6 w-6 ${typography.bodyMuted}`} />
       </div>
 
       <h3 className={typography.cardTitle}>No inventory records found.</h3>
 
-      <p className="mt-1 text-sm ${typography.bodyMuted}">
+      <p className={`mt-1 text-sm ${typography.bodyMuted}`}>
         Adjust filters or add a new item. Truly advanced civilization stuff.
       </p>
     </div>
   );
 }
-
-
-
-
-
 

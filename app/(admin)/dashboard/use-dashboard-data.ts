@@ -1,28 +1,32 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   collection,
   doc,
+  getCountFromServer,
   getDocs,
   limit,
   onSnapshot,
   orderBy,
   query,
   type Unsubscribe,
+  where,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 
 import type {
   BirthdayAnalytics,
+  BirthdayItem,
   DashboardSummary,
   InventoryAnalytics,
   MovementRow,
   OrderRow,
   ProductRow,
   RentalRow,
+  ShopOverview,
   WipEmployeeSummary,
 } from "./dashboard-types";
 
@@ -45,11 +49,34 @@ const RENTAL_PREVIEW_LIMIT = 15;
 const PRODUCT_PREVIEW_LIMIT = 100;
 const MOVEMENT_LIMIT = 8;
 const WIP_EMPLOYEE_LIMIT = 12;
+const IMPORT_SUMMARY_LIMIT = 100;
+const BIRTHDAY_PATIENT_SCAN_LIMIT = 10000;
+
+const EMPTY_SHOP_OVERVIEW: ShopOverview = {
+  patients: 0,
+  hospicePatients: 0,
+  physicians: 0,
+  referrals: 0,
+  rolodexContacts: 0,
+  products: 0,
+  inventoryLots: 0,
+  inventorySerials: 0,
+  glDetails: 0,
+  costRows: 0,
+  importJobs: 0,
+  importedReports: 0,
+  importedRows: 0,
+  importQueueJobs: 0,
+  completedQueueJobs: 0,
+  deadLetteredQueueJobs: 0,
+  importIssues: 0,
+};
 
 export type DashboardDataState = {
   summary: DashboardSummary;
   birthdays: BirthdayAnalytics;
   inventoryAnalytics: InventoryAnalytics;
+  shopOverview: ShopOverview;
 
   orders: OrderRow[];
   rentals: RentalRow[];
@@ -86,6 +113,224 @@ function withDocId<T extends Record<string, unknown>>(
   };
 }
 
+function startOfLocalDay(date: Date): Date {
+  return new Date(
+    date.getFullYear(),
+    date.getMonth(),
+    date.getDate()
+  );
+}
+
+function parseDateOfBirth(value: unknown): Date | null {
+  if (typeof value !== "string") {
+    return null;
+  }
+
+  const text = value.trim();
+
+  if (!text) {
+    return null;
+  }
+
+  const isoMatch = text.match(
+    /^(\d{4})-(\d{1,2})-(\d{1,2})/
+  );
+
+  if (isoMatch) {
+    const [, year, month, day] = isoMatch;
+    const parsed = new Date(
+      Number(year),
+      Number(month) - 1,
+      Number(day)
+    );
+
+    return Number.isNaN(parsed.getTime())
+      ? null
+      : parsed;
+  }
+
+  const slashMatch = text.match(
+    /^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/
+  );
+
+  if (slashMatch) {
+    const [, month, day, rawYear] = slashMatch;
+    const year =
+      rawYear.length === 2
+        ? Number(`19${rawYear}`)
+        : Number(rawYear);
+    const parsed = new Date(
+      year,
+      Number(month) - 1,
+      Number(day)
+    );
+
+    return Number.isNaN(parsed.getTime())
+      ? null
+      : parsed;
+  }
+
+  return null;
+}
+
+function getBirthdayForYear(
+  year: number,
+  monthIndex: number,
+  day: number
+): Date {
+  const lastDayOfMonth = new Date(
+    year,
+    monthIndex + 1,
+    0
+  ).getDate();
+
+  return new Date(
+    year,
+    monthIndex,
+    Math.min(day, lastDayOfMonth)
+  );
+}
+
+function getStringField(
+  record: Record<string, unknown>,
+  keys: string[]
+): string {
+  for (const key of keys) {
+    const value = record[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value.trim();
+    }
+  }
+
+  return "";
+}
+
+function buildBirthdayAnalyticsFromPatients(
+  patients: Array<{ id: string; data: Record<string, unknown> }>
+): BirthdayAnalytics {
+  const now = startOfLocalDay(new Date());
+  const currentMonth = now.getMonth();
+
+  const items: BirthdayItem[] = patients.flatMap(
+    ({ id, data }) => {
+      const dateOfBirthText = getStringField(data, [
+        "dateOfBirth",
+        "dob",
+        "birthDate",
+      ]);
+      const parsedDob = parseDateOfBirth(dateOfBirthText);
+
+      if (!parsedDob) {
+        return [];
+      }
+
+      const dateOfDeath = getStringField(data, [
+        "dateOfDeath",
+        "dod",
+      ]);
+
+      if (dateOfDeath) {
+        return [];
+      }
+
+      const birthMonth = parsedDob.getMonth() + 1;
+      const birthDay = parsedDob.getDate();
+      let nextBirthday = getBirthdayForYear(
+        now.getFullYear(),
+        parsedDob.getMonth(),
+        birthDay
+      );
+
+      if (nextBirthday < now) {
+        nextBirthday = getBirthdayForYear(
+          now.getFullYear() + 1,
+          parsedDob.getMonth(),
+          birthDay
+        );
+      }
+
+      const daysUntilBirthday = Math.round(
+        (nextBirthday.getTime() - now.getTime()) /
+          86400000
+      );
+      const fullName =
+        getStringField(data, ["fullName", "patientName", "name"]) ||
+        "Unknown Patient";
+      const patientId =
+        getStringField(data, ["patientId", "patientKey"]) || id;
+      const age =
+        now.getFullYear() - parsedDob.getFullYear();
+      const nextAge =
+        nextBirthday.getFullYear() -
+        parsedDob.getFullYear();
+
+      const item: BirthdayItem = {
+        id,
+        patientId,
+        fullName,
+        phone: getStringField(data, ["phone"]),
+        primaryInsurance: getStringField(data, [
+          "primaryInsurance",
+          "payor",
+        ]),
+        birthday: dateOfBirthText,
+        dateOfBirth: dateOfBirthText,
+        dateOfDeath,
+        dod: dateOfDeath,
+        age,
+        nextAge,
+        birthMonth,
+        birthDay,
+        daysUntilBirthday,
+        nextBirthdayIso:
+          nextBirthday.toISOString().slice(0, 10),
+      };
+
+      return [item];
+    }
+  );
+
+  const upcomingBirthdays = [...items].sort(
+    (a, b) =>
+      (a.daysUntilBirthday ?? 0) -
+        (b.daysUntilBirthday ?? 0) ||
+      a.fullName.localeCompare(b.fullName)
+  );
+
+  const today = upcomingBirthdays.filter(
+    (item) => item.daysUntilBirthday === 0
+  );
+  const next7Days = upcomingBirthdays.filter(
+    (item) => (item.daysUntilBirthday ?? 999) <= 7
+  );
+  const next30Days = upcomingBirthdays.filter(
+    (item) => (item.daysUntilBirthday ?? 999) <= 30
+  );
+  const thisMonth = items
+    .filter(
+      (item) => (item.birthMonth ?? 0) === currentMonth + 1
+    )
+    .sort(
+      (a, b) =>
+        (a.birthDay ?? 0) - (b.birthDay ?? 0) ||
+        a.fullName.localeCompare(b.fullName)
+    );
+
+  return {
+    today,
+    next7Days,
+    next30Days,
+    thisMonth,
+    upcomingBirthdays: upcomingBirthdays.slice(0, 100),
+
+    todayCount: today.length,
+    next7DaysCount: next7Days.length,
+    next30DaysCount: next30Days.length,
+    thisMonthCount: thisMonth.length,
+  };
+}
+
 export function useDashboardData(): DashboardDataState {
   const [summary, setSummary] =
     useState<DashboardSummary>(EMPTY_SUMMARY);
@@ -97,6 +342,9 @@ export function useDashboardData(): DashboardDataState {
     useState<InventoryAnalytics>(
       EMPTY_INVENTORY_ANALYTICS
     );
+
+  const [shopOverview, setShopOverview] =
+    useState<ShopOverview>(EMPTY_SHOP_OVERVIEW);
 
   const [orders, setOrders] =
     useState<OrderRow[]>([]);
@@ -141,6 +389,23 @@ export function useDashboardData(): DashboardDataState {
         rentalsSnap,
         productsSnap,
         movementsSnap,
+        patientsCount,
+        hospicePatientsCount,
+        physiciansCount,
+        referralsCount,
+        rolodexContactsCount,
+        shopItemsCount,
+        lotsCount,
+        serialsCount,
+        glDetailsCount,
+        costRowsCount,
+        importJobsCount,
+        importedReportsCount,
+        importQueueCount,
+        completedQueueCount,
+        deadLetteredQueueCount,
+        importSummarySnap,
+        birthdayPatientsSnap,
       ] = await Promise.all([
         getDocs(
           query(
@@ -184,6 +449,45 @@ export function useDashboardData(): DashboardDataState {
             collection(db, "stockMovements"),
             orderBy("createdAt", "desc"),
             limit(MOVEMENT_LIMIT)
+          )
+        ),
+
+        getCountFromServer(collection(db, "patients_index")),
+        getCountFromServer(collection(db, "hospicePatients")),
+        getCountFromServer(collection(db, "patientPhysicians")),
+        getCountFromServer(collection(db, "patientReferrals")),
+        getCountFromServer(collection(db, "rolodexContacts")),
+        getCountFromServer(collection(db, "shopItems")),
+        getCountFromServer(collection(db, "shopInventoryLots")),
+        getCountFromServer(collection(db, "shopInventorySerials")),
+        getCountFromServer(collection(db, "shopGlDetails")),
+        getCountFromServer(collection(db, "shopCostOfGoodsSold")),
+        getCountFromServer(collection(db, "importJobs")),
+        getCountFromServer(collection(db, "importedReports")),
+        getCountFromServer(collection(db, "importQueue")),
+        getCountFromServer(
+          query(
+            collection(db, "importQueue"),
+            where("status", "==", "complete")
+          )
+        ),
+        getCountFromServer(
+          query(
+            collection(db, "importQueue"),
+            where("status", "==", "dead_lettered")
+          )
+        ),
+        getDocs(
+          query(
+            collection(db, "importJobs"),
+            orderBy("createdAt", "desc"),
+            limit(IMPORT_SUMMARY_LIMIT)
+          )
+        ),
+        getDocs(
+          query(
+            collection(db, "patients_index"),
+            limit(BIRTHDAY_PATIENT_SCAN_LIMIT)
           )
         ),
       ]);
@@ -253,11 +557,76 @@ export function useDashboardData(): DashboardDataState {
           )
         );
 
+      const importTotals =
+        importSummarySnap.docs.reduce(
+          (totals, docSnap) => {
+            const data = docSnap.data() as Record<
+              string,
+              unknown
+            >;
+            const processedRows =
+              typeof data.processedRows === "number"
+                ? data.processedRows
+                : 0;
+            const totalRows =
+              typeof data.totalRows === "number"
+                ? data.totalRows
+                : 0;
+            const writtenRows =
+              typeof data.writtenRows === "number"
+                ? data.writtenRows
+                : 0;
+            const issueCount =
+              typeof data.issueCount === "number"
+                ? data.issueCount
+                : 0;
+
+            totals.rows +=
+              processedRows || totalRows || writtenRows;
+            totals.issues += issueCount;
+
+            return totals;
+          },
+          {
+            rows: 0,
+            issues: 0,
+          }
+        );
+
+      const nextBirthdays =
+        buildBirthdayAnalyticsFromPatients(
+          birthdayPatientsSnap.docs.map((docSnap) => ({
+            id: docSnap.id,
+            data: docSnap.data() as Record<string, unknown>,
+          }))
+        );
+
       setWipEmployees(nextWipEmployees);
       setOrders(nextOrders);
       setRentals(nextRentals);
       setProducts(nextProducts);
       setMovements(nextMovements);
+      setBirthdays(nextBirthdays);
+      setShopOverview({
+        patients: patientsCount.data().count,
+        hospicePatients: hospicePatientsCount.data().count,
+        physicians: physiciansCount.data().count,
+        referrals: referralsCount.data().count,
+        rolodexContacts: rolodexContactsCount.data().count,
+        products: shopItemsCount.data().count,
+        inventoryLots: lotsCount.data().count,
+        inventorySerials: serialsCount.data().count,
+        glDetails: glDetailsCount.data().count,
+        costRows: costRowsCount.data().count,
+        importJobs: importJobsCount.data().count,
+        importedReports: importedReportsCount.data().count,
+        importedRows: importTotals.rows,
+        importQueueJobs: importQueueCount.data().count,
+        completedQueueJobs: completedQueueCount.data().count,
+        deadLetteredQueueJobs:
+          deadLetteredQueueCount.data().count,
+        importIssues: importTotals.issues,
+      });
 
       setPreviewsLoaded(true);
     } catch (loadError) {
@@ -271,6 +640,7 @@ export function useDashboardData(): DashboardDataState {
       setProducts([]);
       setMovements([]);
       setWipEmployees([]);
+      setShopOverview(EMPTY_SHOP_OVERVIEW);
 
       setPreviewsLoaded(true);
 
@@ -319,11 +689,15 @@ export function useDashboardData(): DashboardDataState {
     const birthdaysUnsubscribe = onSnapshot(
       doc(db, "analytics", "birthdays"),
       (snapshot) => {
-        const nextBirthdays = snapshot.exists()
-          ? normalizeBirthdayAnalytics(
-              snapshot.data() as Partial<BirthdayAnalytics>
-            )
-          : EMPTY_BIRTHDAYS;
+        if (!snapshot.exists()) {
+          setBirthdaysLoaded(true);
+          return;
+        }
+
+        const nextBirthdays =
+          normalizeBirthdayAnalytics(
+            snapshot.data() as Partial<BirthdayAnalytics>
+          );
 
         setBirthdays(nextBirthdays);
         setBirthdaysLoaded(true);
@@ -392,6 +766,7 @@ export function useDashboardData(): DashboardDataState {
     summary,
     birthdays,
     inventoryAnalytics,
+    shopOverview,
 
     orders,
     rentals,

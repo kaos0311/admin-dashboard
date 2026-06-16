@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import type {
   AlertFilter,
@@ -72,6 +72,7 @@ export function InventoryFilters({
         options={[
           ["all", "All statuses"],
           ["available", "Available"],
+          ["rental_out", "Rental Out"],
           ["inactive", "Inactive"],
           ["damaged", "Damaged"],
           ["lost", "Lost"],

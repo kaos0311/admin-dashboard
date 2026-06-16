@@ -5,6 +5,12 @@ import { onObjectFinalized } from "firebase-functions/v2/storage";
 import Papa from "papaparse";
 
 import { createImportQueue } from "./queues/createImportQueue";
+import {
+  buildImportRouteMap,
+  detectReportContract,
+  validateHeaders,
+} from "./reportContracts";
+import { writeImportIssues } from "./issues/writeImportIssues";
 import { resolveProcessors } from "./resolveProcessors";
 import { writeStagingChunks } from "./staging/writeStagingChunks";
 import type { ImportRow } from "./types/stagingChunk";
@@ -46,7 +52,10 @@ export const importFileFromStorage = onObjectFinalized(
     }
 
     const fileName = storagePath.split("/").pop() ?? "import.csv";
-    const importId = buildImportId(storagePath, object.generation);
+    const metadata = object.metadata ?? {};
+    const importId =
+      cleanImportId(metadata.jobId ?? metadata.importId) ||
+      buildImportId(storagePath, object.generation);
 
     console.log(`BEFORE IMPORT JOB ${importId}`);
 
@@ -81,7 +90,23 @@ export const importFileFromStorage = onObjectFinalized(
 
       console.log(`ROWS READ ${rows.length}`);
 
-      const processors = resolveProcessors(fileName, undefined, rows);
+      const headers = Object.keys(rows[0] ?? {});
+      const contract = detectReportContract(fileName, headers);
+      const headerValidation = validateHeaders(contract, headers);
+      const importRoute = buildImportRouteMap(contract);
+      const processors = resolveProcessors(fileName, contract.processor, rows);
+
+      await writeImportIssues(
+        importId,
+        "header",
+        headerValidation.missingRequiredLabels.map((label, index) => ({
+          rowIndex: 0,
+          severity: "warning",
+          code: "missing_required_header",
+          field: headerValidation.missingHeaders[index] ?? label,
+          message: `Missing expected header group: ${label}.`,
+        }))
+      );
 
       console.log(`PROCESSORS ${processors.join(",")}`);
 
@@ -101,6 +126,11 @@ export const importFileFromStorage = onObjectFinalized(
         {
           status: "queued",
           processors,
+          reportType: contract.processor,
+          detectedReportKind: contract.kind,
+          detectedReportLabel: contract.label,
+          headerValidation,
+          importRoute,
           totalRows: rows.length,
           chunkCount,
           queuedTaskCount: queueCount,
@@ -157,5 +187,12 @@ function buildImportId(
 ): string {
   return Buffer.from(`${storagePath}:${generation ?? Date.now()}`)
     .toString("base64url")
+    .slice(0, 120);
+}
+
+function cleanImportId(value: unknown): string {
+  return String(value ?? "")
+    .trim()
+    .replace(/\//g, "_")
     .slice(0, 120);
 }

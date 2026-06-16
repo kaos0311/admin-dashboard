@@ -9,7 +9,6 @@ export const STATUS_OPTIONS = [
   { label: "All Statuses", value: "all" },
   { label: "Active", value: "active" },
   { label: "Living", value: "living" },
-  { label: "Deceased", value: "deceased" },
   { label: "Discharged", value: "discharged" },
   { label: "Pending Pickup", value: "pending_pickup" },
   { label: "Unknown", value: "unknown" },

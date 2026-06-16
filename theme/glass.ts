@@ -3,37 +3,40 @@
     "relative min-h-screen w-full overflow-x-hidden text-white",
 
   shell:
-    "relative z-10 mx-auto w-full max-w-7xl min-w-0",
+    "relative z-10 mx-auto flex w-full max-w-7xl min-w-0 flex-col gap-7",
 
   shellTight:
-    "relative z-10 mx-auto w-full max-w-6xl min-w-0",
+    "relative z-10 mx-auto flex w-full max-w-6xl min-w-0 flex-col gap-7",
 
   shellFull:
-    "relative z-10 w-full min-w-0",
+    "relative z-10 flex w-full min-w-0 flex-col gap-7",
 
   panel:
-    "relative min-w-0 overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/48 shadow-xl shadow-black/30 backdrop-blur-2xl",
+    "relative min-w-0 overflow-visible rounded-3xl border border-white/10 bg-white/[0.06] shadow-xl shadow-black/20 backdrop-blur-2xl",
 
   panelBefore:
     "before:pointer-events-none before:absolute before:inset-0 before:rounded-[2rem] before:bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.08),transparent_42%)] before:opacity-70",
 
   panelPadded:
-    "relative min-w-0 overflow-hidden rounded-[2rem] border border-white/10 bg-slate-950/48 p-5 shadow-xl shadow-black/30 backdrop-blur-2xl sm:p-6",
+    "relative min-w-0 overflow-visible rounded-3xl border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/20 backdrop-blur-2xl sm:p-6",
 
   card:
-    "relative min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045] shadow-xl shadow-black/25 backdrop-blur-xl",
+    "relative min-w-0 overflow-visible rounded-3xl border border-white/10 bg-white/[0.06] shadow-xl shadow-black/20 backdrop-blur-2xl",
 
   cardPadded:
-    "relative min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045] p-4 shadow-xl shadow-black/25 backdrop-blur-xl sm:p-5",
+    "relative min-w-0 overflow-visible rounded-3xl border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/20 backdrop-blur-2xl sm:p-6",
 
   cardHover:
     "transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-white/[0.07]",
 
   statCard:
-    "relative min-w-0 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.045] p-5 shadow-xl shadow-black/25 backdrop-blur-xl sm:p-6",
+    "relative min-w-0 overflow-visible rounded-3xl border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/20 backdrop-blur-2xl sm:p-6",
 
   listItem:
-    "relative min-w-0 rounded-2xl border border-white/10 bg-white/[0.045] p-4 backdrop-blur-xl transition hover:border-cyan-300/30 hover:bg-white/[0.07]",
+    "relative min-w-0 rounded-2xl border border-white/10 bg-white/[0.06] p-4 backdrop-blur-xl transition hover:border-cyan-300/30 hover:bg-white/[0.08]",
+
+  menuItem:
+    "flex gap-3 border-b border-white/5 px-4 py-3 transition last:border-b-0 hover:bg-white/10",
 
   selectedListItem:
     "border-cyan-300/35 bg-cyan-300/10",
@@ -63,7 +66,7 @@
     "w-full rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-white outline-none shadow-inner shadow-black/20 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/55 disabled:cursor-not-allowed disabled:opacity-60",
 
   chip:
-    "inline-flex max-w-full min-w-0 items-center gap-2 truncate rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-slate-300 backdrop-blur-xl",
+    "inline-flex max-w-full min-w-0 items-center gap-2 break-words rounded-full border border-white/10 bg-white/[0.06] px-3 py-1 text-xs font-semibold uppercase leading-5 tracking-[0.16em] text-slate-300 backdrop-blur-xl",
 
   iconBox:
     "inline-flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.08] text-cyan-200 shadow-lg shadow-black/20 backdrop-blur-xl",
@@ -134,8 +137,4 @@
 } as const;
 
 export type GlassKey = keyof typeof glass;
-
-
-
-
 

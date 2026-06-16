@@ -7,7 +7,7 @@ if (!getApps().length) {
   initializeApp();
 }
 
-type Role = "admin" | "staff";
+type Role = "admin" | "staff" | "tank";
 
 type UpdateUserRolePayload = {
   uid?: string;
@@ -16,6 +16,11 @@ type UpdateUserRolePayload = {
 
 type UserUidPayload = {
   uid?: string;
+};
+
+type ResetUserPasswordPayload = {
+  uid?: string;
+  newPassword?: string;
 };
 
 function assertAdmin(request: Parameters<Parameters<typeof onCall>[0]>[0]) {
@@ -41,8 +46,22 @@ function requireUid(value: unknown): string {
 }
 
 function requireRole(value: unknown): Role {
-  if (value !== "admin" && value !== "staff") {
-    throw new HttpsError("invalid-argument", "Role must be admin or staff.");
+  if (value !== "admin" && value !== "staff" && value !== "tank") {
+    throw new HttpsError(
+      "invalid-argument",
+      "Role must be admin, staff, or tank."
+    );
+  }
+
+  return value;
+}
+
+function requirePassword(value: unknown): string {
+  if (typeof value !== "string" || value.length < 8) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Password must be at least 8 characters."
+    );
   }
 
   return value;
@@ -170,3 +189,33 @@ export const deleteUserAccount = onCall<UserUidPayload>(async (request) => {
     deleted: true,
   };
 });
+
+export const resetUserPassword = onCall<ResetUserPasswordPayload>(
+  async (request) => {
+    const actorUid = assertAdmin(request);
+    const uid = requireUid(request.data?.uid);
+    const newPassword = requirePassword(request.data?.newPassword);
+
+    await getAuth().updateUser(uid, {
+      password: newPassword,
+    });
+
+    await getFirestore()
+      .collection("users")
+      .doc(uid)
+      .set(
+        {
+          passwordResetAt: FieldValue.serverTimestamp(),
+          passwordResetBy: actorUid,
+          updatedAt: FieldValue.serverTimestamp(),
+          updatedBy: actorUid,
+        },
+        { merge: true }
+      );
+
+    return {
+      ok: true,
+      uid,
+    };
+  }
+);

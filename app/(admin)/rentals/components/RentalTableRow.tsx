@@ -33,6 +33,11 @@ export function RentalTableRow({
           <p className={`${typography.smallMuted} mt-1 break-words leading-5`}>
             SN: {record.serialNumber || "—"} · Asset: {record.assetTag || "—"}
           </p>
+
+          <p className={`${typography.smallMuted} mt-1 break-words leading-5`}>
+            {record.procCode || record.itemId || "No HCPCS"} ·{" "}
+            {record.itemGroup || "No group"}
+          </p>
         </div>
       </td>
 
@@ -44,6 +49,10 @@ export function RentalTableRow({
 
           <p className={`${typography.smallMuted} mt-1 break-words leading-5`}>
             ID: {record.patientId || "—"}
+          </p>
+
+          <p className={`${typography.smallMuted} mt-1 break-words leading-5`}>
+            DOB: {formatDate(record.patientDob)} · {record.phone || "No phone"}
           </p>
         </div>
       </td>
@@ -61,9 +70,32 @@ export function RentalTableRow({
         width="w-[150px]"
       />
 
-      <td className={`w-[180px] px-4 py-4 align-top ${typography.bodyMuted}`}>
-        <div className="min-w-0 break-words leading-5">
-          {record.location || "—"}
+      <td className={`w-[240px] px-4 py-4 align-top ${typography.bodyMuted}`}>
+        <div className="min-w-0 space-y-1 leading-5">
+          <p className="break-words">
+            {record.insuranceName || record.payor || "—"}
+          </p>
+
+          <p className="break-words">
+            Plan: {record.planType || "—"}
+          </p>
+
+          <p className="break-words">
+            PAR: {record.parNumber || "—"} · Exp:{" "}
+            {formatDate(record.parExpiration)}
+          </p>
+        </div>
+      </td>
+
+      <td className={`w-[220px] px-4 py-4 align-top ${typography.bodyMuted}`}>
+        <div className="min-w-0 space-y-1 leading-5">
+          <p className="break-words">
+            Ordering: {record.orderingDoctor || "—"}
+          </p>
+
+          <p className="break-words">
+            Primary: {record.primaryDoctor || "—"}
+          </p>
         </div>
       </td>
 
@@ -80,6 +112,10 @@ export function RentalTableRow({
           <p className="break-words">
             Back: {formatDate(record.returnedDate)}
           </p>
+
+          <p className="break-words">
+            Next bill: {formatDate(record.nextBillingDate)}
+          </p>
         </div>
       </td>
 
@@ -87,6 +123,9 @@ export function RentalTableRow({
         <div className={`${typography.cardTitle} min-w-0 break-words`}>
           {formatCurrency(record.monthlyRate)}
         </div>
+        <p className={`${typography.smallMuted} mt-1 break-words leading-5`}>
+          Chg: {formatCurrency(record.extCharge || record.charge)}
+        </p>
       </td>
 
       <td className="w-[260px] px-4 py-4 align-top">

@@ -27,6 +27,21 @@ function asRecord(value: unknown): UnknownRecord {
 }
 
 function safeNullableString(value: unknown): string | null {
+  if (
+    value &&
+    typeof value === "object" &&
+    "toDate" in value &&
+    typeof (value as { toDate?: unknown }).toDate === "function"
+  ) {
+    const date = (
+      value as { toDate: () => Date }
+    ).toDate();
+
+    return Number.isNaN(date.getTime())
+      ? null
+      : date.toISOString();
+  }
+
   const text = safeString(value);
 
   return text.length > 0 ? text : null;
@@ -37,6 +52,10 @@ function normalizeBirthdayItem(value: unknown): BirthdayItem {
 
   return {
     id: safeString(record.id),
+    patientId:
+      safeString(record.patientId) ||
+      safeString(record.patientKey) ||
+      safeString(record.id),
     fullName:
       safeString(record.fullName) ||
       safeString(record.patientName) ||
@@ -45,7 +64,25 @@ function normalizeBirthdayItem(value: unknown): BirthdayItem {
     phone: safeString(record.phone),
     primaryInsurance: safeString(record.primaryInsurance),
     birthday: safeString(record.birthday),
+    dateOfBirth:
+      safeString(record.dateOfBirth) ||
+      safeString(record.dob),
+    dateOfDeath:
+      safeString(record.dateOfDeath) ||
+      safeString(record.dod),
+    dod:
+      safeString(record.dod) ||
+      safeString(record.dateOfDeath),
     age: safeNumber(record.age),
+    nextAge: safeNumber(record.nextAge),
+    birthMonth: safeNumber(record.birthMonth),
+    birthDay: safeNumber(record.birthDay),
+    daysUntilBirthday: safeNumber(
+      record.daysUntilBirthday
+    ),
+    nextBirthdayIso: safeString(
+      record.nextBirthdayIso
+    ),
   };
 }
 
@@ -336,5 +373,3 @@ export function normalizeRental(value: unknown): RentalRow {
     ),
   };
 }
-
-

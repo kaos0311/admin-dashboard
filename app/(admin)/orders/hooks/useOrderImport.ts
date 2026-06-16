@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { type RefObject, useRef, useState } from "react";
 import {
@@ -36,6 +36,15 @@ function getCurrentUserLabel(): string {
   );
 }
 
+function isCsvFile(file: File): boolean {
+  const lowerName = file.name.toLowerCase();
+  return (
+    lowerName.endsWith(".csv") ||
+    file.type.includes("csv") ||
+    file.type.includes("text")
+  );
+}
+
 export function useOrderImport(): {
   importType: ImportReportType;
   setImportType: (value: ImportReportType) => void;
@@ -66,6 +75,12 @@ export function useOrderImport(): {
       return;
     }
 
+    if (!isCsvFile(file)) {
+      setDetectedImport(null);
+      toast.error("Only CSV files are supported by the automated import pipeline.");
+      return;
+    }
+
     try {
       const detection = await detectImportType(file)
       setDetectedImport(detection);
@@ -79,6 +94,11 @@ export function useOrderImport(): {
 
   async function handleImportFile(file: File | null): Promise<void> {
     if (!file || importing) return;
+
+    if (!isCsvFile(file)) {
+      toast.error("Only CSV files are supported by the automated import pipeline.");
+      return;
+    }
 
     try {
       setImporting(true);

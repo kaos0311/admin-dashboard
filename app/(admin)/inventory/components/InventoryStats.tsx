@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 
 import { typography } from "@/theme";
@@ -24,7 +24,7 @@ export function InventoryStats({
   totalValue,
 }: InventoryStatsProps) {
   return (
-    <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-7">
+    <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
       <StatCard label="Items" value={totalItems} />
       <StatCard label="Available" value={available} />
       <StatCard label="Low Stock" value={lowStock} warning />
@@ -47,14 +47,14 @@ function StatCard({
 }) {
   return (
     <div
-      className={`rounded-[1.5rem] border p-5 shadow-2xl shadow-black/20 backdrop-blur-xl ${
+      className={`min-w-0 rounded-[1.5rem] border p-5 shadow-2xl shadow-black/20 backdrop-blur-xl ${
         warning
           ? "border-yellow-500/20 bg-yellow-500/10"
           : "border-white/10 bg-white/[0.07]"
       }`}
     >
-      <div className="flex items-center gap-3">
-        <div className="rounded-2xl bg-white/10 p-3 shadow-inner shadow-white/5">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className="shrink-0 rounded-2xl bg-white/10 p-3 shadow-inner shadow-white/5">
           {warning ? (
             <AlertTriangle className="h-5 w-5 text-yellow-300" />
           ) : (
@@ -62,9 +62,9 @@ function StatCard({
           )}
         </div>
 
-        <div>
-          <p className={typography.bodyMuted}>{label}</p>
-          <p className="text-2xl font-bold text-white">
+        <div className="min-w-0">
+          <p className={`${typography.smallMuted} break-words`}>{label}</p>
+          <p className="mt-1 break-words text-2xl font-bold leading-tight text-white">
             {typeof value === "number" ? value.toLocaleString() : value}
           </p>
         </div>

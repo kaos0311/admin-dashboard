@@ -1,3 +1,4 @@
+import { typography } from "@/theme";
 ﻿import type { ReactNode } from "react";
 
 type SectionHeaderProps = {
@@ -27,7 +28,7 @@ export function SectionHeader({
         </h2>
 
         {description ? (
-          <p className="mt-2 max-w-3xl break-words text-sm leading-6 ${typography.bodyMuted}">
+          <p className={`mt-2 max-w-3xl break-words text-sm leading-6 ${typography.bodyMuted}`}>
             {description}
           </p>
         ) : null}

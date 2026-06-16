@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import {
   type ReactNode,
@@ -44,7 +44,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   }, [sidebarOpen, closeSidebar]);
 
   return (
-    <div className="min-h-screen bg-[#07090d] text-white antialiased">
+    <div className="admin-page min-h-screen bg-[#07090d] text-white antialiased">
       <a
         href="#admin-main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-black focus:outline-none focus:ring-2 focus:ring-white/40"

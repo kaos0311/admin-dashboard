@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { Plus, RefreshCcw, Search, Sparkles } from "lucide-react";
 
@@ -21,13 +21,13 @@ export function OrdersHeader({
 }) {
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-      <div>
+      <div className="min-w-0">
         <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-200 shadow-lg shadow-cyan-950/20 backdrop-blur-xl">
           <Sparkles className="h-3.5 w-3.5" aria-hidden={true} />
           Smart Intake Enabled
         </div>
 
-        <h1 className="mt-3 text-3xl font-bold tracking-tight text-white">
+        <h1 className="mt-3 break-words text-3xl font-bold leading-[1.15] tracking-tight text-white">
           Orders
         </h1>
 

@@ -8,7 +8,12 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
-import { normalizeWipRecord, type WipRecord } from "@/lib/reports/wip";
+import {
+  isActionableWipData,
+  isRecentWipData,
+  normalizeWipRecord,
+  type WipRecord,
+} from "@/lib/reports/wip";
 
 type SubscribeWipRecordsParams = {
   limitCount?: number;
@@ -17,20 +22,27 @@ type SubscribeWipRecordsParams = {
 };
 
 export function subscribeWipRecords({
-  limitCount = 500,
+  limitCount,
   onData,
   onError,
 }: SubscribeWipRecordsParams): Unsubscribe {
-  const wipQuery = query(
-    collection(db, "wipRecords"),
-    orderBy("updatedAt", "desc"),
-    limit(limitCount),
-  );
+  const constraints = limitCount
+    ? [orderBy("updatedAt", "desc"), limit(limitCount)]
+    : [orderBy("updatedAt", "desc")];
+  const wipQuery = query(collection(db, "wipRecords"), ...constraints);
 
   return onSnapshot(
     wipQuery,
     (snapshot) => {
-      onData(snapshot.docs.map(normalizeWipRecord));
+      onData(
+        snapshot.docs
+          .filter((doc) => {
+            const data = doc.data();
+
+            return isActionableWipData(data) && isRecentWipData(data);
+          })
+          .map(normalizeWipRecord)
+      );
     },
     (error) => {
       console.error("Failed to subscribe to WIP records:", error);

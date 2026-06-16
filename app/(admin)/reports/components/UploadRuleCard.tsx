@@ -11,7 +11,7 @@ export function UploadRuleCard() {
       <div className="grid min-w-0 gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
         <div className="flex min-w-0 items-start gap-4">
           <div
-            className="shrink-0 rounded-2xl border border-white/10 bg-white/10 p-3 text-slate-300"
+            className={`shrink-0 rounded-2xl border border-white/10 bg-white/10 p-3 ${typography.bodyMuted}`}
             aria-hidden="true"
           >
             <FileText className="h-5 w-5" />
@@ -56,6 +56,4 @@ export function UploadRuleCard() {
     </section>
   );
 }
-
-
 

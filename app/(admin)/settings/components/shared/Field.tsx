@@ -1,12 +1,12 @@
 ﻿import type { ChangeEvent } from "react";
-import { glassInput, glassTextarea } from "../../styles/glass";
+import { forms, typography } from "@/theme";
 
 type FieldProps = {
   id: string;
   label: string;
   value: string | number;
   onChange: (value: string) => void;
-  type?: "text" | "email" | "tel" | "url" | "number";
+  type?: "text" | "email" | "tel" | "url" | "number" | "password";
   placeholder?: string;
   textarea?: boolean;
 };
@@ -23,7 +23,9 @@ export function Field({
   if (textarea) {
     return (
       <label className="block" htmlFor={id}>
-        <span className="text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}">
+        <span
+          className={`text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}`}
+        >
           {label}
         </span>
 
@@ -35,7 +37,7 @@ export function Field({
           }
           placeholder={placeholder}
           rows={4}
-          className={`${glassTextarea} mt-2`}
+          className={`${forms.textarea} mt-2`}
         />
       </label>
     );
@@ -43,7 +45,9 @@ export function Field({
 
   return (
     <label className="block" htmlFor={id}>
-      <span className="text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}">
+      <span
+        className={`text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}`}
+      >
         {label}
       </span>
 
@@ -55,7 +59,7 @@ export function Field({
           onChange(event.target.value)
         }
         placeholder={placeholder}
-        className={`${glassInput} mt-2`}
+        className={`${forms.input} mt-2`}
       />
     </label>
   );

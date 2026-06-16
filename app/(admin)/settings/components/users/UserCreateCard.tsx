@@ -1,8 +1,8 @@
 ﻿import type { Dispatch, SetStateAction } from "react";
 import { Plus } from "lucide-react";
+import { buttons, forms, typography } from "@/theme";
 import { DEFAULT_USER_DRAFT, USER_ROLE_OPTIONS } from "../../settings-constants";
 import type { UserDraft, UserRole } from "../../settings-types";
-import { glassButton, primaryButton } from "../../styles/glass";
 import { Field } from "../shared/Field";
 import { InfoCard } from "../shared/InfoCard";
 
@@ -19,10 +19,10 @@ export function UserCreateCard({
 }: UserCreateCardProps) {
   return (
     <InfoCard
-      title="Create User Record"
-      description="This creates an app user document. Firebase Auth account and custom claims still need to be handled through your admin workflow."
+      title="Create Employee Login"
+      description="Creates the Firebase Auth account, assigns the dashboard role claim, and writes the app user record."
     >
-      <div className="grid gap-4 lg:grid-cols-[1fr_1fr_180px_auto_auto]">
+      <div className="grid gap-5 lg:grid-cols-[1fr_1fr_220px_180px_auto_auto]">
         <Field
           id="new-user-email"
           label="Email"
@@ -50,8 +50,24 @@ export function UserCreateCard({
           placeholder="Full name"
         />
 
+        <Field
+          id="new-user-password"
+          label="Temporary Password"
+          type="password"
+          value={userDraft.password}
+          onChange={(value) =>
+            setUserDraft((current) => ({
+              ...current,
+              password: value,
+            }))
+          }
+          placeholder="Minimum 8 characters"
+        />
+
         <label className="block" htmlFor="new-user-role">
-          <span className="text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}">
+          <span
+            className={`text-xs font-medium uppercase tracking-[0.16em] ${typography.bodyMuted}`}
+          >
             Role
           </span>
 
@@ -65,7 +81,7 @@ export function UserCreateCard({
                 role: event.target.value as UserRole,
               }))
             }
-            className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:ring-4 focus:ring-cyan-400/10"
+            className={`${forms.select} mt-2`}
           >
             {USER_ROLE_OPTIONS.map((option) => (
               <option
@@ -82,7 +98,7 @@ export function UserCreateCard({
         <button
           type="button"
           onClick={() => setUserDraft(DEFAULT_USER_DRAFT)}
-          className={glassButton}
+          className={buttons.secondary}
         >
           Clear
         </button>
@@ -90,7 +106,11 @@ export function UserCreateCard({
         <button
           type="button"
           onClick={onCreateUser}
-          className={primaryButton}
+          disabled={
+            !userDraft.email.trim() ||
+            userDraft.password.length < 8
+          }
+          className={buttons.primary}
         >
           <Plus className="h-4 w-4" />
           Create

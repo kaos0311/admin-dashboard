@@ -1,5 +1,6 @@
-﻿"use client";
+"use client";
 
+import { typography } from "@/theme";
 import { CheckSquare } from "lucide-react";
 
 type InventoryBatchActionsProps = {
@@ -46,7 +47,7 @@ export function InventoryBatchActions({
         Archive Selected
       </button>
 
-      <span className="rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-sm ${typography.bodyMuted} shadow-inner shadow-black/20 backdrop-blur-xl">
+      <span className={`rounded-2xl border border-white/10 bg-black/40 px-4 py-2 text-sm ${typography.bodyMuted} shadow-inner shadow-black/20 backdrop-blur-xl`}>
         Selected: {selectedCount}
         {selectedVisibleCount !== selectedCount
           ? ` (${selectedVisibleCount} visible)`

@@ -122,13 +122,22 @@ export type WipEmployeeSummary = {
 
 export type BirthdayItem = {
   id: string;
+  patientId?: string;
 
   fullName: string;
 
   phone?: string;
   primaryInsurance?: string;
   birthday?: string;
+  dateOfBirth?: string;
+  dateOfDeath?: string;
+  dod?: string;
   age?: number;
+  nextAge?: number;
+  birthMonth?: number;
+  birthDay?: number;
+  daysUntilBirthday?: number;
+  nextBirthdayIso?: string;
 };
 
 export type BirthdayAnalytics = {
@@ -151,6 +160,26 @@ export type InventoryAnalytics = {
   totalInventoryCommitted: number;
 
   lowStockItems: ProductRow[];
+};
+
+export type ShopOverview = {
+  patients: number;
+  hospicePatients: number;
+  physicians: number;
+  referrals: number;
+  rolodexContacts: number;
+  products: number;
+  inventoryLots: number;
+  inventorySerials: number;
+  glDetails: number;
+  costRows: number;
+  importJobs: number;
+  importedReports: number;
+  importedRows: number;
+  importQueueJobs: number;
+  completedQueueJobs: number;
+  deadLetteredQueueJobs: number;
+  importIssues: number;
 };
 
 export type CleanDatabaseResult = {

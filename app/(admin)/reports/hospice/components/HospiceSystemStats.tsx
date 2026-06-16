@@ -17,7 +17,7 @@ export function HospiceSystemStats({
   return (
     <section
       aria-label="Hospice operational statistics"
-      className="grid min-w-0 gap-4 md:grid-cols-3"
+      className="grid min-w-0 gap-5 md:grid-cols-3"
     >
       <MiniStat
         title="Deceased"
@@ -43,7 +43,7 @@ function MiniStat({
 }: MiniStatProps) {
   return (
     <article
-      className={`${glass.card} min-w-0 overflow-hidden`}
+      className={`${glass.card} min-w-0 overflow-visible p-5`}
     >
       <p
         className={`${typography.caption} break-words ${typography.caption}`}

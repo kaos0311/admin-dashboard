@@ -5,7 +5,7 @@
 
 import {
   INDEX_VERSION,
-  MAX_BIRTHDAY_ANALYTICS_ROWS
+  MAX_BIRTHDAY_PATIENT_SCAN_ROWS
 } from "./constants";
 
 import type {
@@ -13,6 +13,10 @@ import type {
   CpapInfo,
   InsuranceSnapshot
 } from "./types";
+
+import {
+  buildBirthdayFields
+} from "./birthdays";
 
 import {
   normalizeString
@@ -33,34 +37,49 @@ function sortBirthdayItems(items: BirthdayAnalyticsItem[]): BirthdayAnalyticsIte
 export async function rebuildBirthdayAnalyticsFromPatients(): Promise<void> {
   const snapshot = await db
     .collection("patients_index")
-    .where("hasBirthday", "==", true)
-    .where("dateOfDeath", "==", "")
-    .orderBy("daysUntilBirthday", "asc")
-    .limit(MAX_BIRTHDAY_ANALYTICS_ROWS)
+    .limit(MAX_BIRTHDAY_PATIENT_SCAN_ROWS)
     .get();
 
   const items: BirthdayAnalyticsItem[] = snapshot.docs
     .map((docSnap) => {
       const data = docSnap.data();
+      const dateOfDeath =
+        normalizeString(data.dateOfDeath) || normalizeString(data.dod);
+
+      if (dateOfDeath) return null;
+
+      const dateOfBirth =
+        normalizeString(data.dateOfBirth) || normalizeString(data.dob);
+      const birthday = buildBirthdayFields(dateOfBirth);
+
+      if (!birthday.hasBirthday || birthday.daysUntilBirthday === null) {
+        return null;
+      }
 
       const daysUntilBirthday =
-        typeof data.daysUntilBirthday === "number" ? data.daysUntilBirthday : null;
-
-      if (daysUntilBirthday === null) return null;
+        typeof data.daysUntilBirthday === "number"
+          ? data.daysUntilBirthday
+          : birthday.daysUntilBirthday;
 
       return {
         id: docSnap.id,
         patientId: docSnap.id,
-        fullName: normalizeString(data.fullName),
+        fullName:
+          normalizeString(data.fullName) || normalizeString(data.patientName),
         firstName: normalizeString(data.firstName),
         lastName: normalizeString(data.lastName),
-        dateOfBirth: normalizeString(data.dateOfBirth),
-        birthMonth: typeof data.birthMonth === "number" ? data.birthMonth : 0,
-        birthDay: typeof data.birthDay === "number" ? data.birthDay : 0,
-        birthMonthDay: normalizeString(data.birthMonthDay),
-        age: typeof data.age === "number" ? data.age : null,
-        nextAge: typeof data.nextAge === "number" ? data.nextAge : null,
-        nextBirthdayIso: normalizeString(data.nextBirthdayIso),
+        dateOfBirth,
+        birthMonth:
+          typeof data.birthMonth === "number" ? data.birthMonth : birthday.birthMonth,
+        birthDay:
+          typeof data.birthDay === "number" ? data.birthDay : birthday.birthDay,
+        birthMonthDay:
+          normalizeString(data.birthMonthDay) || birthday.birthMonthDay,
+        age: typeof data.age === "number" ? data.age : birthday.age,
+        nextAge:
+          typeof data.nextAge === "number" ? data.nextAge : birthday.nextAge,
+        nextBirthdayIso:
+          normalizeString(data.nextBirthdayIso) || birthday.nextBirthdayIso,
         daysUntilBirthday,
         phone: normalizeString(data.phone),
         city: normalizeString(data.city),

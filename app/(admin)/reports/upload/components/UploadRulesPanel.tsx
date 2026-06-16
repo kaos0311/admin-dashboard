@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { glass, typography } from "@/theme";
 
@@ -12,7 +12,7 @@ type UploadRule = {
 const UPLOAD_RULES: UploadRule[] = [
   {
     id: "approved-files",
-    text: "Use Brightree exports or approved CSV/PDF report files only.",
+    text: "Use Brightree exports or approved CSV report files only.",
   },
   {
     id: "auto-detect",
@@ -35,56 +35,56 @@ const UPLOAD_RULES: UploadRule[] = [
 export function UploadRulesPanel() {
   return (
     <section
-      className={glass.card}
+      className={[glass.card, "min-w-0 overflow-hidden p-5"].join(" ")}
       aria-labelledby="upload-rules-panel-title"
       aria-describedby="upload-rules-panel-description"
     >
-      <div className="flex items-start gap-4">
+      <div className="flex min-w-0 items-start gap-4">
         <div
-          className={`${glass.card} p-3 ${typography.bodyMuted}`}
+          className={`${glass.iconBox} shrink-0 ${typography.bodyMuted}`}
           aria-hidden="true"
         >
           <ShieldCheck className="h-5 w-5" />
         </div>
 
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] ${typography.caption}">
+          <p className={`break-words text-xs font-semibold uppercase tracking-[0.18em] ${typography.caption}`}>
             Guardrails
           </p>
 
           <h2
             id="upload-rules-panel-title"
-            className={typography.metricCompact}
+            className={`${typography.metricCompact} break-words`}
           >
             Upload Rules
           </h2>
 
           <p
             id="upload-rules-panel-description"
-            className="mt-2 text-sm leading-6 ${typography.bodyMuted}"
+            className={`mt-2 break-words text-sm leading-6 ${typography.bodyMuted}`}
           >
             Keep imports clean, traceable, and HIPAA-minded.
           </p>
         </div>
       </div>
 
-      <ul className="mt-6 space-y-3" aria-label="Upload rules checklist">
+      <ul className="mt-5 min-w-0 space-y-3" aria-label="Upload rules checklist">
         {UPLOAD_RULES.map((rule) => (
           <li
             key={rule.id}
-            className={`${glass.inset} flex gap-3 p-3 ${typography.body}`}
+            className={`${glass.inset} flex min-w-0 gap-3 p-3 ${typography.body}`}
           >
             <FileCheck2
-              className="mt-0.5 h-4 w-4 shrink-0 ${typography.bodyMuted}"
+              className={`mt-0.5 h-4 w-4 shrink-0 ${typography.bodyMuted}`}
               aria-hidden="true"
             />
 
-            <span>{rule.text}</span>
+            <span className="min-w-0 break-words">{rule.text}</span>
           </li>
         ))}
       </ul>
 
-      <div className="mt-5 rounded-2xl border border-blue-400/15 bg-blue-500/10 p-3 text-xs leading-5 text-blue-100/85">
+      <div className="mt-5 break-words rounded-2xl border border-blue-400/15 bg-blue-500/10 p-3 text-xs leading-5 text-blue-100/85">
         Upload choices are written into import job metadata and audit logs for
         traceability.
       </div>

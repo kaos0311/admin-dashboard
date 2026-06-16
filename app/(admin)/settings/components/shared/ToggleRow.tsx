@@ -17,7 +17,7 @@ export function ToggleRow({
     <div className="flex items-start justify-between gap-4 rounded-2xl border border-white/10 bg-black/20 p-4">
       <div>
         <p className={typography.cardTitle}>{title}</p>
-        <p className="mt-1 text-sm leading-6 ${typography.bodyMuted}">
+        <p className={`mt-1 text-sm leading-6 ${typography.bodyMuted}`}>
           {description}
         </p>
       </div>

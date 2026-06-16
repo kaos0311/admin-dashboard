@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import type { ReactNode } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
@@ -31,7 +31,12 @@ export function UploadAccessGate({ children }: UploadAccessGateProps) {
       : authRole.error?.message ?? null;
 
   const canManageUploads = Boolean(
-    authRole.isAdmin || authRole.isStaff || role === "admin" || role === "staff"
+    authRole.isAdmin ||
+      authRole.isStaff ||
+      authRole.isTank ||
+      role === "admin" ||
+      role === "staff" ||
+      role === "tank"
   );
 
   if (roleLoading) {
@@ -82,7 +87,7 @@ export function UploadAccessGate({ children }: UploadAccessGateProps) {
             </h1>
 
             <p className={cn(typography.bodyMuted, "mt-3")}>
-              You need staff or admin permissions to upload reports.
+              You need staff, admin, or Tank permissions to upload reports.
             </p>
 
             {roleError ? (

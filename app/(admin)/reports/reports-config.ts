@@ -1,5 +1,6 @@
 ﻿import {
   BarChart3,
+  CalendarDays,
   HeartPulse,
   type LucideIcon,
   ShieldCheck,
@@ -59,6 +60,16 @@ export const reportPages: readonly ReportPageConfig[] = [
     href: "/reports/patients",
     icon: Users,
     tone: "text-sky-200",
+    category: "clinical",
+  },
+
+  {
+    title: "CPAP Calendar",
+    description:
+      "Setup appointments, pickup readiness, supply intervals, and Medicare-aware resupply checks.",
+    href: "/reports/cpap",
+    icon: CalendarDays,
+    tone: "text-cyan-200",
     category: "clinical",
   },
 

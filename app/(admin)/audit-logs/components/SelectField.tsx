@@ -1,3 +1,4 @@
+import { typography } from "@/theme";
 ﻿export function SelectField({
   id,
   label,
@@ -15,7 +16,7 @@
     <div className="min-w-[180px]">
       <label
         htmlFor={id}
-        className="mb-2 block text-xs uppercase tracking-[0.15em] ${typography.caption} dark:${typography.bodyMuted}"
+        className={`mb-2 block text-xs uppercase tracking-[0.15em] ${typography.caption} dark:${typography.bodyMuted}`}
       >
         {label}
       </label>

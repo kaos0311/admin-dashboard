@@ -1,7 +1,7 @@
-﻿"use client";
+"use client";
 
 
-import { typography } from "@/theme";
+import { badges, typography } from "@/theme";
 import type { Product, ProductStatus } from "../utils/productTypes";
 import { productRiskScore, qualityWarnings } from "../utils/productValidation";
 
@@ -35,8 +35,8 @@ export function ProductFlags({ product }: { product: Product }) {
             key={flag}
             className={
               warning
-                ? "rounded-full border border-amber-300/20 bg-amber-300/10 px-2 py-1 text-xs text-amber-200"
-                : "rounded-full border border-white/10 bg-white/[0.08] px-2 py-1 text-xs text-slate-300"
+                ? `rounded-full px-2 py-1 text-xs ${badges.warning}`
+                : `rounded-full px-2 py-1 text-xs ${badges.neutral}`
             }
           >
             {flag}
@@ -50,7 +50,7 @@ export function ProductFlags({ product }: { product: Product }) {
 export function RiskBadge({ score }: { score: number }) {
   if (score >= 50) {
     return (
-      <span className="rounded-full border border-red-400/20 bg-red-400/10 px-3 py-1 text-xs font-semibold text-red-200">
+      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badges.danger}`}>
         High {score}
       </span>
     );
@@ -58,14 +58,14 @@ export function RiskBadge({ score }: { score: number }) {
 
   if (score >= 20) {
     return (
-      <span className="rounded-full border border-amber-300/20 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-200">
+      <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badges.warning}`}>
         Medium {score}
       </span>
     );
   }
 
   return (
-    <span className="rounded-full border border-emerald-300/20 bg-emerald-300/10 px-3 py-1 text-xs font-semibold text-emerald-200">
+    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${badges.success}`}>
       Low {score}
     </span>
   );
@@ -77,9 +77,9 @@ export function ProductRiskBadge({ product }: { product: Product }) {
 
 export function StatusBadge({ status }: { status: ProductStatus }) {
   const styles: Record<ProductStatus, string> = {
-    active: "border-emerald-300/20 bg-emerald-300/10 text-emerald-200",
-    inactive: "border-slate-300/20 bg-slate-300/10 text-slate-200",
-    discontinued: "border-red-400/20 bg-red-400/10 text-red-200",
+    active: badges.success,
+    inactive: badges.neutral,
+    discontinued: badges.danger,
   };
 
   return (
@@ -90,8 +90,4 @@ export function StatusBadge({ status }: { status: ProductStatus }) {
     </span>
   );
 }
-
-
-
-
 

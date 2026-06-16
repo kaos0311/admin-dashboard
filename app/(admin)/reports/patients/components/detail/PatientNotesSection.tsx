@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { NotebookPen, Save } from "lucide-react";
 

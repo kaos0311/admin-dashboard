@@ -2,13 +2,12 @@
 
 export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024;
 
-export const ALLOWED_EXTENSIONS = new Set(["csv", "pdf"]);
+export const ALLOWED_EXTENSIONS = new Set(["csv"]);
 
 export const ALLOWED_MIME_TYPES = new Set([
   "text/csv",
   "application/csv",
   "application/vnd.ms-excel",
-  "application/pdf",
   "text/plain",
   "",
 ]);

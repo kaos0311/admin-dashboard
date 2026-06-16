@@ -4,6 +4,7 @@
 import { useDeferredValue, useMemo, useState } from "react";
 
 import {
+  type InventoryThresholdSettings,
   isLowStock,
   isServiceDue,
   isWarrantyExpired,
@@ -19,7 +20,10 @@ import type {
   SortKey,
 } from "../lib/inventoryTypes";
 
-export function useInventoryFilters(items: InventoryItem[]) {
+export function useInventoryFilters(
+  items: InventoryItem[],
+  thresholds?: InventoryThresholdSettings
+) {
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
 
@@ -47,7 +51,7 @@ export function useInventoryFilters(items: InventoryItem[]) {
         return false;
       }
 
-      if (alertFilter === "lowStock" && !isLowStock(item)) return false;
+      if (alertFilter === "lowStock" && !isLowStock(item, thresholds)) return false;
       if (alertFilter === "serviceDue" && !isServiceDue(item)) return false;
 
       if (
@@ -71,13 +75,14 @@ export function useInventoryFilters(items: InventoryItem[]) {
     alertFilter,
     sortKey,
     sortDirection,
+    thresholds,
   ]);
 
   const summary = useMemo(() => {
     return {
       totalItems: items.length,
       available: items.filter((item) => item.status === "available").length,
-      lowStock: items.filter(isLowStock).length,
+      lowStock: items.filter((item) => isLowStock(item, thresholds)).length,
       discontinued: items.filter((item) => item.status === "discontinued")
         .length,
       serviceDue: items.filter(isServiceDue).length,
@@ -86,7 +91,7 @@ export function useInventoryFilters(items: InventoryItem[]) {
         items.reduce((sum, item) => sum + item.totalValue, 0)
       ),
     };
-  }, [items]);
+  }, [items, thresholds]);
 
   function resetFilters() {
     setSearch("");

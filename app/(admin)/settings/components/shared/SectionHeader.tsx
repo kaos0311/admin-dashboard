@@ -1,4 +1,5 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
+import { typography } from "@/theme";
 
 type SectionHeaderProps = {
   eyebrow?: string;
@@ -27,7 +28,7 @@ export function SectionHeader({
         </h2>
 
         {description ? (
-          <p className="mt-2 max-w-3xl text-sm leading-6 ${typography.bodyMuted}">
+          <p className={`mt-2 max-w-3xl text-sm leading-6 ${typography.bodyMuted}`}>
             {description}
           </p>
         ) : null}
@@ -37,6 +38,3 @@ export function SectionHeader({
     </div>
   );
 }
-
-
-
