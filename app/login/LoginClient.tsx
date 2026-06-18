@@ -18,20 +18,20 @@ import { auth } from "@/lib/firebase";
 import { badges, buttons, forms, glass, typography } from "@/theme";
 
 function getSafeNextPath(rawNext: string | null): string {
-  if (!rawNext) return "/dashboard";
-  if (!rawNext.startsWith("/")) return "/dashboard";
-  if (rawNext.startsWith("//")) return "/dashboard";
+  if (!rawNext) return "/command-center";
+  if (!rawNext.startsWith("/")) return "/command-center";
+  if (rawNext.startsWith("//")) return "/command-center";
 
   try {
     const decoded = decodeURIComponent(rawNext);
 
-    if (!decoded.startsWith("/")) return "/dashboard";
-    if (decoded.startsWith("//")) return "/dashboard";
-    if (decoded.includes("://")) return "/dashboard";
+    if (!decoded.startsWith("/")) return "/command-center";
+    if (decoded.startsWith("//")) return "/command-center";
+    if (decoded.includes("://")) return "/command-center";
 
     return decoded;
   } catch {
-    return "/dashboard";
+    return "/command-center";
   }
 }
 
@@ -128,7 +128,7 @@ export default function LoginPage() {
       <div className={glass.pageCenter}>
         <div className={glass.loadingCard}>
           <Loader2 className="h-4 w-4 animate-spin" />
-          Loading dashboard...
+          Loading command center...
         </div>
       </div>
     );
@@ -148,7 +148,7 @@ export default function LoginPage() {
           <h1 className={typography.sectionTitle}>Sign in</h1>
 
           <p className={typography.bodyMuted}>
-            Access the Advanced Home Medical admin dashboard.
+            Access the Advanced Home Medical command center.
           </p>
         </div>
 

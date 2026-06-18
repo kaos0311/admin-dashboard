@@ -4,7 +4,12 @@ import { useEffect, useState } from "react";
 import { getApp } from "firebase/app";
 import { doc, onSnapshot } from "firebase/firestore";
 import { getFunctions, httpsCallable } from "firebase/functions";
-import { AlertTriangle, Loader2, RotateCcw } from "lucide-react";
+import {
+  AlertTriangle,
+  Loader2,
+  RefreshCw,
+  RotateCcw,
+} from "lucide-react";
 
 import { db } from "@/lib/firebase";
 import { alerts, badges, buttons, forms, glass, typography } from "@/theme";
@@ -22,11 +27,23 @@ type ResetProgress = {
   status: string;
   stage: string;
   currentCollection: string;
+  currentFileName: string;
   deletedDocuments: number;
   totalDocuments: number;
   completedCollections: number;
   totalCollections: number;
+  processedFiles: number;
+  totalFiles: number;
   progressPercent: number;
+};
+
+type RebuildEverythingResult = {
+  ok?: boolean;
+  totalFiles?: number;
+  successfulFiles?: number;
+  failedFiles?: number;
+  totalRowsProcessed?: number;
+  message?: string;
 };
 
 type ResetReportsPanelProps = {
@@ -37,19 +54,25 @@ export function ResetReportsPanel({
   canResetReports,
 }: ResetReportsPanelProps) {
   const [confirmation, setConfirmation] = useState("");
-  const [running, setRunning] = useState(false);
+  const [runningOperation, setRunningOperation] = useState<
+    "reset" | "rebuild" | null
+  >(null);
   const [status, setStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [resetJobId, setResetJobId] = useState("");
+  const [jobId, setJobId] = useState("");
   const [progress, setProgress] = useState<ResetProgress | null>(null);
 
   const canRunReset =
-    canResetReports && confirmation.trim() === CONFIRM_TEXT && !running;
+    canResetReports &&
+    confirmation.trim() === CONFIRM_TEXT &&
+    runningOperation === null;
+  const canRunRebuild =
+    canResetReports && runningOperation === null;
 
   useEffect(() => {
-    if (!resetJobId) return undefined;
+    if (!jobId) return undefined;
 
-    return onSnapshot(doc(db, "systemJobs", resetJobId), (snapshot) => {
+    return onSnapshot(doc(db, "systemJobs", jobId), (snapshot) => {
       if (!snapshot.exists()) return;
 
       const data = snapshot.data();
@@ -58,17 +81,46 @@ export function ResetReportsPanel({
         status: String(data.status ?? ""),
         stage: String(data.stage ?? ""),
         currentCollection: String(data.currentCollection ?? ""),
+        currentFileName: String(data.currentFileName ?? ""),
         deletedDocuments: Number(data.deletedDocuments ?? 0),
         totalDocuments: Number(data.totalDocuments ?? 0),
         completedCollections: Number(data.completedCollections ?? 0),
         totalCollections: Number(data.totalCollections ?? 0),
+        processedFiles: Number(data.processedFiles ?? 0),
+        totalFiles: Number(data.totalFiles ?? 0),
         progressPercent: Math.max(
           0,
           Math.min(100, Number(data.progressPercent ?? 0))
         ),
       });
     });
-  }, [resetJobId]);
+  }, [jobId]);
+
+  function buildJobId(prefix: "reports-reset" | "reports-rebuild") {
+    return `${prefix}-${Date.now()}-${Math.random()
+      .toString(36)
+      .slice(2, 10)}`;
+  }
+
+  function startProgress(operation: "reset" | "rebuild", nextJobId: string) {
+    setRunningOperation(operation);
+    setStatus(null);
+    setError(null);
+    setJobId(nextJobId);
+    setProgress({
+      status: "processing",
+      stage: "starting",
+      currentCollection: "",
+      currentFileName: "",
+      deletedDocuments: 0,
+      totalDocuments: 0,
+      completedCollections: 0,
+      totalCollections: 0,
+      processedFiles: 0,
+      totalFiles: 0,
+      progressPercent: 0,
+    });
+  }
 
   async function handleResetReports() {
     if (!canRunReset) return;
@@ -79,24 +131,8 @@ export function ResetReportsPanel({
 
     if (!finalConfirm) return;
 
-    setRunning(true);
-    setStatus(null);
-    setError(null);
-    setProgress({
-      status: "processing",
-      stage: "starting",
-      currentCollection: "",
-      deletedDocuments: 0,
-      totalDocuments: 0,
-      completedCollections: 0,
-      totalCollections: 0,
-      progressPercent: 0,
-    });
-
-    const nextResetJobId = `reports-reset-${Date.now()}-${Math.random()
-      .toString(36)
-      .slice(2, 10)}`;
-    setResetJobId(nextResetJobId);
+    const nextResetJobId = buildJobId("reports-reset");
+    startProgress("reset", nextResetJobId);
 
     try {
       const functions = getFunctions(getApp(), "us-central1");
@@ -112,7 +148,7 @@ export function ResetReportsPanel({
 
       setStatus(
         result.data.message ||
-          "Report data reset completed. Upload fresh reports to rebuild the database views."
+          "Operational report data reset completed."
       );
       setConfirmation("");
     } catch (caught) {
@@ -123,13 +159,59 @@ export function ResetReportsPanel({
 
       setError(message);
     } finally {
-      setRunning(false);
+      setRunningOperation(null);
     }
   }
 
-  const visibleProgress = progress && (running || progress.progressPercent > 0);
+  async function handleRebuildEverything() {
+    if (!canRunRebuild) return;
+
+    const finalConfirm = window.confirm(
+      "This will rebuild operational report data from the latest uploaded files. Continue?"
+    );
+
+    if (!finalConfirm) return;
+
+    const nextRebuildJobId = buildJobId("reports-rebuild");
+    startProgress("rebuild", nextRebuildJobId);
+
+    try {
+      const functions = getFunctions(getApp(), "us-central1");
+      const rebuildEverything = httpsCallable<
+        { rebuildJobId: string; clearDerivedData: boolean },
+        RebuildEverythingResult
+      >(functions, "rebuildEverything");
+
+      const result = await rebuildEverything({
+        rebuildJobId: nextRebuildJobId,
+        clearDerivedData: true,
+      });
+
+      setStatus(
+        result.data.message ||
+          `Rebuild completed for ${Number(
+            result.data.successfulFiles ?? 0
+          ).toLocaleString()} files.`
+      );
+    } catch (caught) {
+      const message =
+        caught instanceof Error
+          ? caught.message
+          : "Rebuild failed. Check Cloud Function logs.";
+
+      setError(message);
+    } finally {
+      setRunningOperation(null);
+    }
+  }
+
+  const visibleProgress =
+    progress &&
+    (runningOperation !== null || progress.progressPercent > 0);
   const progressLabel = progress
-    ? progress.totalDocuments > 0
+    ? runningOperation === "rebuild" || progress.totalFiles > 0
+      ? `${progress.processedFiles.toLocaleString()} of ${progress.totalFiles.toLocaleString()} files rebuilt`
+      : progress.totalDocuments > 0
       ? `${progress.deletedDocuments.toLocaleString()} of ${progress.totalDocuments.toLocaleString()} report records deleted`
       : `${progress.completedCollections.toLocaleString()} of ${progress.totalCollections.toLocaleString()} report areas cleared`
     : "";
@@ -155,12 +237,13 @@ export function ResetReportsPanel({
           </p>
 
           <h2 id="reset-reports-title" className={`${typography.metricCompact} break-words`}>
-            Zero Out Report Data
+            Reset And Rebuild
           </h2>
 
           <p className={`mt-2 break-words text-sm leading-6 ${typography.bodyMuted}`}>
-            Clears imported reports, rows, indexes, analytics, and report-built
-            views so new uploads can rebuild cleanly.
+            Reset clears operational report-built collections. Rebuild reprocesses
+            the latest uploaded source files into fresh patient, order, rental,
+            inventory, and analytics views.
           </p>
         </div>
       </div>
@@ -168,13 +251,14 @@ export function ResetReportsPanel({
       <div className={`mt-5 min-w-0 ${alerts.danger}`}>
         <p className="break-words text-sm leading-6">
           Type <span className="font-bold">{CONFIRM_TEXT}</span> to
-          unlock the reset button. Admin access is required.
+          unlock the reset button. Rebuild can run without the typed confirmation.
+          Admin access is required.
         </p>
 
         <input
           value={confirmation}
           onChange={(event) => setConfirmation(event.target.value)}
-          disabled={running || !canResetReports}
+          disabled={runningOperation !== null || !canResetReports}
           placeholder={CONFIRM_TEXT}
           className={`${forms.input} mt-4 w-full min-w-0`}
         />
@@ -220,24 +304,46 @@ export function ResetReportsPanel({
               {progressLabel}
               {progress.currentCollection
                 ? ` · Current: ${progress.currentCollection}`
-                : ""}
+                : progress.currentFileName
+                  ? ` · Current: ${progress.currentFileName}`
+                  : ""}
             </p>
           </div>
         ) : null}
 
-        <button
-          type="button"
-          onClick={handleResetReports}
-          disabled={!canRunReset}
-          className={`${buttons.danger} mt-4 disabled:cursor-not-allowed disabled:opacity-40`}
-        >
-          {running ? (
-            <Loader2 className="h-4 w-4 animate-spin" />
-          ) : (
-            <RotateCcw className="h-4 w-4" />
-          )}
-          {running ? "Rebooting..." : "System Reboot"}
-        </button>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <button
+            type="button"
+            onClick={handleResetReports}
+            disabled={!canRunReset}
+            className={`${buttons.danger} disabled:cursor-not-allowed disabled:opacity-40`}
+          >
+            {runningOperation === "reset" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RotateCcw className="h-4 w-4" />
+            )}
+            {runningOperation === "reset"
+              ? "Resetting..."
+              : "Operational Reset"}
+          </button>
+
+          <button
+            type="button"
+            onClick={handleRebuildEverything}
+            disabled={!canRunRebuild}
+            className={`${buttons.secondary} disabled:cursor-not-allowed disabled:opacity-40`}
+          >
+            {runningOperation === "rebuild" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4" />
+            )}
+            {runningOperation === "rebuild"
+              ? "Rebuilding..."
+              : "Full Rebuild"}
+          </button>
+        </div>
       </div>
     </section>
   );

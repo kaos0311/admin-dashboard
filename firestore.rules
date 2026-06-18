@@ -7,7 +7,9 @@ service cloud.firestore {
     }
 
     function role() {
-      return claimRole() != "" ? claimRole() : profileRole();
+      return isActiveProfile()
+        ? (claimRole() != "" ? claimRole() : profileRole())
+        : "";
     }
 
     function claimRole() {
@@ -24,8 +26,20 @@ service cloud.firestore {
           : "";
     }
 
+    function profileData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    function isActiveProfile() {
+      return isSignedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && profileData().active != false
+        && profileData().disabled != true
+        && profileData().deleted != true;
+    }
+
     function isAdmin() {
-      return role() == "admin";
+      return role() == "admin" || role() == "tank";
     }
 
     function isStaff() {
@@ -49,6 +63,16 @@ service cloud.firestore {
         && request.resource.data.createdBy == request.auth.uid;
     }
 
+    function safeSelfUserUpdate() {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny([
+        "active",
+        "deleted",
+        "disabled",
+        "role",
+        "uid",
+      ]);
+    }
+
     match /settings/{docId} {
       allow read: if isStaffOrAdmin();
       allow write: if isAdmin();
@@ -57,6 +81,11 @@ service cloud.firestore {
     match /analytics/{docId} {
       allow read: if isStaffOrAdmin();
       allow write: if isAdmin();
+
+      match /{document=**} {
+        allow read: if isStaffOrAdmin();
+        allow write: if isAdmin();
+      }
     }
 
     match /patientIndex/{docId} {
@@ -65,6 +94,11 @@ service cloud.firestore {
     }
 
     match /apiRegistry/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /vendorResearchSites/{docId} {
       allow read: if isStaffOrAdmin();
       allow create, update, delete: if isAdmin();
     }
@@ -136,7 +170,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isSelf(userId) || isAdmin();
       allow create: if isAdmin();
-      allow update: if isSelf(userId) || isAdmin();
+      allow update: if isAdmin() || (isSelf(userId) && safeSelfUserUpdate());
       allow delete: if isAdmin();
     }
 

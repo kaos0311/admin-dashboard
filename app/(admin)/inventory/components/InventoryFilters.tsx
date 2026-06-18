@@ -10,6 +10,7 @@ import type {
 
 import { FilterSelect } from "./fields/FilterSelect";
 import { SearchInput } from "./fields/SearchInput";
+import { spacing } from "@/theme";
 
 type InventoryFiltersProps = {
   search: string;
@@ -55,7 +56,7 @@ export function InventoryFilters({
   onSortChange,
 }: InventoryFiltersProps) {
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+    <div className={`${spacing.gridResponsive} xl:grid-cols-5`}>
       <SearchInput
         value={search}
         onChange={onSearchChange}

@@ -7,6 +7,7 @@ import { doc, getDoc } from "firebase/firestore";
 import { ShieldAlert } from "lucide-react";
 
 import { auth, db } from "@/lib/firebase";
+import { glass, typography } from "@/theme";
 
 type AllowedRole = "admin" | "staff" | "tank";
 type ResolvedRole = AllowedRole | null;
@@ -24,6 +25,12 @@ function parseRole(value: unknown): ResolvedRole {
   return value === "admin" || value === "staff" || value === "tank"
     ? value
     : null;
+}
+
+function roleIsAllowed(role: ResolvedRole, allowedRoles: AllowedRole[]): boolean {
+  if (!role) return false;
+  if (allowedRoles.includes(role)) return true;
+  return role === "tank" && allowedRoles.includes("admin");
 }
 
 export default function AuthGuard({
@@ -58,7 +65,7 @@ export default function AuthGuard({
           if (!redirectedRef.current) {
             redirectedRef.current = true;
             router.replace(
-              `/login?next=${encodeURIComponent(pathname || "/dashboard")}`
+              `/login?next=${encodeURIComponent(pathname || "/command-center")}`
             );
           }
 
@@ -75,7 +82,11 @@ export default function AuthGuard({
         if (userSnap.exists()) {
           const data = userSnap.data() as Record<string, unknown>;
 
-          if (data.active === false) {
+          if (
+            data.active === false ||
+            data.disabled === true ||
+            data.deleted === true
+          ) {
             await auth.signOut();
 
             if (!cancelled) {
@@ -93,13 +104,13 @@ export default function AuthGuard({
 
         const allowedRoles = allowKey.split("|") as AllowedRole[];
 
-        if (!resolvedRole || !allowedRoles.includes(resolvedRole)) {
+        if (!roleIsAllowed(resolvedRole, allowedRoles)) {
           if (!cancelled) {
             setGuardState("forbidden");
             setMessage(
               resolvedRole
                 ? `Your role "${resolvedRole}" is not allowed here.`
-                : "No dashboard role was found on your account."
+                : "No command center role was found on your account."
             );
           }
 
@@ -129,8 +140,8 @@ export default function AuthGuard({
     return (
       <>
         {fallback ?? (
-          <div className="flex min-h-screen items-center justify-center bg-[#020617] px-4 text-white">
-            <div className="rounded-3xl border border-white/10 bg-white/[0.06] px-6 py-4 text-sm text-zinc-300 shadow-2xl shadow-black/30 backdrop-blur-2xl">
+          <div className={glass.pageCenter}>
+            <div className={glass.loadingCard}>
               {loadingMessage}
             </div>
           </div>
@@ -141,19 +152,19 @@ export default function AuthGuard({
 
   if (guardState !== "authorized") {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-[#07090d] p-6 text-white">
-        <section className="w-full max-w-md rounded-3xl border border-red-500/20 bg-red-950/20 p-8 text-red-200 shadow-2xl shadow-black/40">
+      <main className={`${glass.pageCenter} p-6`}>
+        <section className={glass.dangerPanel}>
           <div className="flex gap-4">
-            <div className="rounded-2xl border border-red-500/20 bg-red-500/10 p-3">
+            <div className={glass.alertDanger}>
               <ShieldAlert className="h-5 w-5" aria-hidden="true" />
             </div>
 
             <div>
-              <h1 className="text-xl font-semibold text-white">
+              <h1 className={typography.sectionTitle}>
                 Access blocked
               </h1>
 
-              <p className="mt-2 text-sm leading-6">
+              <p className={`${typography.body} mt-2`}>
                 {message || "You are not authorized to view this page."}
               </p>
             </div>

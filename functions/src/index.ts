@@ -24,7 +24,6 @@ export { searchRolodexContacts } from "./rolodex/searchRolodexContacts";
 // Maintenance / rebuild tools
 export { cleanDatabase } from "./maintenance/cleanDatabase";
 export { rebuildEverything } from "./maintenance/rebuildEverything";
-export { rebuildPatientsIndex } from "./maintenance/rebuildPatientsIndex";
 export { rebuildReportsAnalytics } from "./maintenance/rebuildReportsAnalytics";
 export { reprocessImportJob } from "./maintenance/reprocessImportJob";
 export { softResetReports } from "./maintenance/softResetReports";

@@ -8,6 +8,7 @@ const nextConfig: NextConfig = {
     "localhost",
     "127.0.0.1",
     "192.168.68.56",
+    "mathematical-monetary-outer-babies.trycloudflare.com",
   ],
 
   experimental: {

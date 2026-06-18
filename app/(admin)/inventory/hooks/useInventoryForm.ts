@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { initialInventoryForm } from "../lib/inventoryConstants";
 import type { InventoryForm, InventoryItem } from "../lib/inventoryTypes";
@@ -8,11 +8,11 @@ import type { InventoryForm, InventoryItem } from "../lib/inventoryTypes";
 export function useInventoryForm() {
   const [form, setForm] = useState<InventoryForm>(initialInventoryForm);
 
-  function resetForm() {
+  const resetForm = useCallback(function resetForm() {
     setForm(initialInventoryForm);
-  }
+  }, []);
 
-  function updateForm<K extends keyof InventoryForm>(
+  const updateForm = useCallback(function updateForm<K extends keyof InventoryForm>(
     key: K,
     value: InventoryForm[K]
   ) {
@@ -20,9 +20,12 @@ export function useInventoryForm() {
       ...prev,
       [key]: value,
     }));
-  }
+  }, []);
 
-  function editItem(item: InventoryItem) {
+  const editItem = useCallback(function editItem(
+    item: InventoryItem,
+    options: { scroll?: boolean } = {}
+  ) {
     setForm({
       id: item.id,
       productId: item.productId,
@@ -57,8 +60,10 @@ export function useInventoryForm() {
       notes: item.notes,
     });
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
-  }
+    if (options.scroll !== false) {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  }, []);
 
   return {
     form,

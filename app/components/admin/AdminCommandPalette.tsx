@@ -7,9 +7,8 @@ import { buttons, forms, glass, typography } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
 
 const commands = [
-  { label: "Open Dashboard", href: "/dashboard" },
-  { label: "Open Upload Center", href: "/reports/upload" },
   { label: "Open Command Center", href: "/command-center" },
+  { label: "Open Upload Center", href: "/reports/upload" },
   { label: "Open Rolodex", href: "/rolodex" },
   { label: "Open Patients", href: "/reports/patients" },
   { label: "Open Hospice", href: "/reports/hospice" },

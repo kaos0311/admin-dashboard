@@ -19,10 +19,32 @@ type CreateDashboardUserInput = {
   role?: unknown;
 };
 
-function requireAdmin(request: { auth?: { token?: Record<string, unknown> } }) {
-  const role = request.auth?.token?.role;
+function isAdminRole(value: unknown): boolean {
+  return value === "admin" || value === "tank";
+}
 
-  if (role !== "admin") {
+async function requireAdmin(request: {
+  auth?: { uid?: string; token?: Record<string, unknown> };
+}) {
+  const role = request.auth?.token?.role;
+  const uid = request.auth?.uid;
+
+  if (!uid) {
+    throw new HttpsError(
+      "permission-denied",
+      "Only admins can create dashboard users."
+    );
+  }
+
+  const userSnap = await db.collection("users").doc(uid).get();
+  const userData = userSnap.exists ? userSnap.data() : null;
+  const docRole = userData?.role;
+  const isDisabled =
+    userData?.active === false ||
+    userData?.disabled === true ||
+    userData?.deleted === true;
+
+  if (isDisabled || (!isAdminRole(role) && !isAdminRole(docRole))) {
     throw new HttpsError(
       "permission-denied",
       "Only admins can create dashboard users."
@@ -131,7 +153,7 @@ export const createDashboardUser = onCall(
       throw new HttpsError("unauthenticated", "You must be signed in.");
     }
 
-    requireAdmin(request);
+    await requireAdmin(request);
 
     const { email, password, displayName, role } = validatePayload(
       request.data ?? {}

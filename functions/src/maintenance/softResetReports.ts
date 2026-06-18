@@ -13,7 +13,6 @@ const DELETE_BATCH_SIZE = 100;
 const DELETE_DELAY_MS = 250;
 
 const COLLECTIONS_TO_CLEAR = [
-  "importedReports",
   "importJobs",
   "patients",
   "patients_index",
@@ -58,7 +57,10 @@ function requireAdmin(request: CallableRequestLike): void {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
 
-  if (request.auth.token.role !== "admin") {
+  if (
+    request.auth.token.role !== "admin" &&
+    request.auth.token.role !== "tank"
+  ) {
     throw new HttpsError(
       "permission-denied",
       "Only admins can reset imported reports."
@@ -254,6 +256,7 @@ export const softResetReports = onCall(
           countsByType: {},
           filesByType: {},
           resetAt: FieldValue.serverTimestamp(),
+          resetScope: "operational_collections_only",
           resetByUid: uid,
           resetByEmail: email,
           updatedAt: FieldValue.serverTimestamp(),

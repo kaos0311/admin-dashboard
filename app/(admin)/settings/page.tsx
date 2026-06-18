@@ -6,6 +6,7 @@ import {
   Building2,
   ClipboardList,
   Code2,
+  Globe2,
   Loader2,
   LockKeyhole,
   PackageCheck,
@@ -37,6 +38,7 @@ import { PreferencesTab } from "./components/preferences/PreferencesTab";
 import { SecurityTab } from "./components/security/SecurityTab";
 import { TabBar } from "./components/TabBar";
 import { UsersTab } from "./components/users/UsersTab";
+import { VendorResearchTab } from "./components/vendor-research/VendorResearchTab";
 
 const tabIcons: Record<SettingsTabKey, React.ReactNode> = {
   company: <Building2 className="h-4 w-4" />,
@@ -44,6 +46,7 @@ const tabIcons: Record<SettingsTabKey, React.ReactNode> = {
   inventory: <PackageCheck className="h-4 w-4" />,
   brightree: <ClipboardList className="h-4 w-4" />,
   apis: <Code2 className="h-4 w-4" />,
+  "vendor-research": <Globe2 className="h-4 w-4" />,
   users: <Users className="h-4 w-4" />,
   security: <LockKeyhole className="h-4 w-4" />,
   danger: <ShieldAlert className="h-4 w-4" />,
@@ -105,7 +108,7 @@ export default function SettingsPage() {
                 </h1>
 
                 <p className={`mt-3 max-w-3xl ${typography.body}`}>
-                  Manage company defaults, dashboard behavior, user access,
+                  Manage company defaults, Command Center behavior, user access,
                   role controls, security settings, maintenance mode, and reset
                   tools. This is the room where one bad click can make the whole
                   building smell like burnt wiring.
@@ -184,6 +187,10 @@ export default function SettingsPage() {
             ) : null}
 
             {activeTab === "apis" ? <ApiRegistryTab /> : null}
+
+            {activeTab === "vendor-research" ? (
+              <VendorResearchTab />
+            ) : null}
 
             {activeTab === "users" ? (
               <UsersTab

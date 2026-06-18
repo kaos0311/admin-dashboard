@@ -2,12 +2,10 @@
 
 import { UploadCloud } from "lucide-react";
 
-import { typography } from "@/theme";
+import { typography, uploadUi } from "@/theme";
 
 import type { QueueFilter } from "../upload-types";
 import { cn } from "../upload-utils";
-import { uploadUi } from "./upload-ui";
-
 type UploadHeroProps = {
   recentJobsCount: number;
   queueCounts: Record<QueueFilter, number>;

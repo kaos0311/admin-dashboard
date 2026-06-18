@@ -116,7 +116,7 @@ export default function MaintenanceGate({
     return (
       <GateMessage
         title="Checking Session"
-        message="Verifying your dashboard access..."
+        message="Verifying your Command Center access..."
         loading
       />
     );
@@ -126,7 +126,7 @@ export default function MaintenanceGate({
     return (
       <GateMessage
         title="Sign In Required"
-        message="You must be signed in to access this dashboard."
+        message="You must be signed in to access this Command Center."
         tone="danger"
       />
     );
@@ -136,7 +136,7 @@ export default function MaintenanceGate({
     return (
       <GateMessage
         title="Access Denied"
-        message="Your account does not have permission to access this dashboard."
+        message="Your account does not have permission to access this Command Center."
         tone="danger"
       />
     );
@@ -146,7 +146,7 @@ export default function MaintenanceGate({
     return (
       <GateMessage
         title="Loading Settings"
-        message="Checking dashboard configuration..."
+        message="Checking Command Center configuration..."
         loading
       />
     );
@@ -160,7 +160,7 @@ export default function MaintenanceGate({
     return (
       <GateMessage
         title="Maintenance Mode"
-        message="The dashboard is temporarily unavailable while maintenance mode is enabled."
+        message="The Command Center is temporarily unavailable while maintenance mode is enabled."
         tone="warning"
       />
     );

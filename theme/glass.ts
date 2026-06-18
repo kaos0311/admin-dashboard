@@ -123,13 +123,16 @@
   focus:
     "focus:outline-none focus:ring-2 focus:ring-cyan-300/40 focus:ring-offset-0",
   pageCenter:
-    "flex min-h-screen items-center justify-center bg-black px-4 text-white",
+    "flex min-h-screen items-center justify-center bg-[#020617] px-4 text-white",
 
   loadingCard:
-    "flex items-center gap-3 rounded-3xl border border-white/10 bg-neutral-950 px-6 py-4 text-sm text-zinc-300 shadow-2xl shadow-black/30",
+    "rounded-3xl border border-white/10 bg-white/[0.06] px-6 py-4 text-sm text-slate-300 shadow-2xl shadow-black/30 backdrop-blur-2xl",
 
   authCard:
-    "w-full max-w-md space-y-5 rounded-3xl border border-white/10 bg-neutral-950 p-6 shadow-2xl shadow-black/40",
+    "w-full max-w-md space-y-5 rounded-3xl border border-white/10 bg-white/[0.06] p-6 shadow-2xl shadow-black/40 backdrop-blur-2xl",
+
+  dangerPanel:
+    "w-full max-w-md rounded-3xl border border-rose-500/20 bg-rose-950/20 p-8 text-rose-200 shadow-2xl shadow-black/40",
 
   inputIcon:
     "pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500",

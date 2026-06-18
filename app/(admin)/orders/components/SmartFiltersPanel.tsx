@@ -3,13 +3,8 @@
 import { Filter, RotateCcw } from "lucide-react";
 
 import { getReportTypeLabel } from "../lib/orderImportDetection";
-import {
-  glassButton,
-  glassPanel,
-  glassSelect,
-  labelText,
-} from "../lib/orderUi";
 import type { SmartFilters } from "../lib/orderTypes";
+import { badges, buttons, forms, glass, typography } from "@/theme";
 
 export function SmartFiltersPanel({
   filters,
@@ -29,21 +24,21 @@ export function SmartFiltersPanel({
   onReset: () => void;
 }) {
   return (
-    <section className={`${glassPanel} p-5`}>
+    <section className={glass.cardPadded}>
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-white">
-            <Filter className="h-5 w-5 text-zinc-300" aria-hidden={true} />
+          <h2 className={`inline-flex items-center gap-2 ${typography.cardTitle}`}>
+            <Filter className="h-5 w-5" aria-hidden={true} />
             Adaptive Filters
           </h2>
 
-          <p className="mt-1 text-sm text-zinc-400">
+          <p className={`${typography.bodyMuted} mt-1`}>
             {resultCount.toLocaleString()} result{resultCount === 1 ? "" : "s"}{" "}
             after filters.
           </p>
         </div>
 
-        <button type="button" onClick={onReset} className={glassButton}>
+        <button type="button" onClick={onReset} className={buttons.secondary}>
           <RotateCcw className="h-4 w-4" aria-hidden={true} />
           Reset Filters
         </button>
@@ -142,7 +137,7 @@ function FilterSelect({
 }) {
   return (
     <div>
-      <label htmlFor={id} className={labelText}>
+      <label htmlFor={id} className={typography.label}>
         {label}
       </label>
 
@@ -150,7 +145,7 @@ function FilterSelect({
         id={id}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className={glassSelect}
+        className={forms.select}
       >
         <option value="">All</option>
 
@@ -178,11 +173,7 @@ function ToggleFilter({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-2xl border px-4 py-2 text-sm font-semibold shadow-inner shadow-black/20 backdrop-blur-xl transition ${
-        active
-          ? "border-cyan-400/30 bg-cyan-400/15 text-cyan-100"
-          : "border-white/10 bg-white/[0.05] text-zinc-300 hover:bg-white/[0.09]"
-      }`}
+      className={`rounded-2xl px-4 py-2 text-sm font-semibold shadow-inner shadow-black/20 backdrop-blur-xl transition ${active ? badges.active : badges.neutral}`}
     >
       {label}
     </button>

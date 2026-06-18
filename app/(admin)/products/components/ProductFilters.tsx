@@ -163,6 +163,7 @@ export function ProductFilters({
             options={[
               ["all", "All records"],
               ["missing-info", "Needs cleanup"],
+              ["high-risk", "High risk"],
               ["recall", "Recall flagged"],
               ["serialized", "Serialized"],
               ["rental", "Rental"],

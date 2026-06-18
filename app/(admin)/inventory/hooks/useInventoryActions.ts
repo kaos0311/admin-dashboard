@@ -5,6 +5,7 @@ import {
   collection,
   deleteDoc,
   doc,
+  getDoc,
   getDocs,
   limit,
   query,
@@ -16,7 +17,7 @@ import {
 import toast from "react-hot-toast";
 
 import { normalizeBarcode } from "@/lib/barcode";
-import { db } from "@/lib/firebase";
+import { auth, db } from "@/lib/firebase";
 import { smartMergeInventory } from "@/lib/inventory/smartMergeInventory";
 
 import { FIRESTORE_BATCH_LIMIT } from "../lib/inventoryConstants";
@@ -25,6 +26,22 @@ import { buildSearchText, chunkArray, toSafeNumber } from "../lib/inventoryNorma
 import { logInventoryMovement } from "../lib/inventoryMovements";
 import { ensureProductFromInventory } from "../lib/inventoryProductSync";
 import type { InventoryForm, InventoryItem } from "../lib/inventoryTypes";
+
+type ProductScanMatch = {
+  id: string;
+  name: string;
+  category: string;
+  sku: string;
+  hcpcs: string;
+  upc: string;
+  manufacturer: string;
+  manufacturerItemId: string;
+  model: string;
+  defaultPurchasePrice: number;
+  reorderLevel: number;
+  status: string;
+  deleted: boolean;
+};
 
 type UseInventoryActionsArgs = {
   form: InventoryForm;
@@ -113,6 +130,8 @@ export function useInventoryActions({
           nextServiceDate: String(data.nextServiceDate ?? ""),
           lifecycleNotes: String(data.lifecycleNotes ?? ""),
           notes: String(data.notes ?? ""),
+          pendingScanReview: data.pendingScanReview === true,
+          scanSource: String(data.scanSource ?? ""),
           searchText: String(data.searchText ?? ""),
           isDeleted: data.isDeleted === true,
         };
@@ -122,22 +141,336 @@ export function useInventoryActions({
     return null;
   }
 
-  async function handleScanMovement(rawCode: string, direction: "in" | "out") {
+  async function findProductByScan(rawCode: string): Promise<ProductScanMatch | null> {
+    const clean = normalizeBarcode(rawCode);
+    const upper = clean.toUpperCase();
+    const checks: Array<[string, string]> = [
+      ["upc", clean],
+      ["sku", clean],
+      ["hcpcs", upper],
+      ["manufacturerItemId", clean],
+    ];
+
+    const directSnap = await getDoc(doc(db, "products", clean.toLowerCase()));
+    if (directSnap.exists() && directSnap.data().deleted !== true) {
+      const data = directSnap.data() as Record<string, unknown>;
+
+      return {
+        id: directSnap.id,
+        name: String(data.name ?? ""),
+        category: String(data.category ?? ""),
+        sku: String(data.sku ?? ""),
+        hcpcs: String(data.hcpcs ?? ""),
+        upc: String(data.upc ?? ""),
+        manufacturer: String(data.manufacturer ?? data.brand ?? ""),
+        manufacturerItemId: String(data.manufacturerItemId ?? ""),
+        model: String(data.model ?? ""),
+        defaultPurchasePrice: Number(data.defaultPurchasePrice ?? 0),
+        reorderLevel: Number(data.reorderLevel ?? 0),
+        status: String(data.status ?? "active"),
+        deleted: data.deleted === true,
+      };
+    }
+
+    for (const [field, value] of checks) {
+      if (!value) continue;
+
+      const snap = await getDocs(
+        query(collection(db, "products"), where(field, "==", value), limit(1))
+      );
+      const match = snap.docs.find((product) => product.data().deleted !== true);
+
+      if (match) {
+        const data = match.data() as Record<string, unknown>;
+
+        return {
+          id: match.id,
+          name: String(data.name ?? ""),
+          category: String(data.category ?? ""),
+          sku: String(data.sku ?? ""),
+          hcpcs: String(data.hcpcs ?? ""),
+          upc: String(data.upc ?? ""),
+          manufacturer: String(data.manufacturer ?? data.brand ?? ""),
+          manufacturerItemId: String(data.manufacturerItemId ?? ""),
+          model: String(data.model ?? ""),
+          defaultPurchasePrice: Number(data.defaultPurchasePrice ?? 0),
+          reorderLevel: Number(data.reorderLevel ?? 0),
+          status: String(data.status ?? "active"),
+          deleted: data.deleted === true,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  async function createInventoryFromProductScan(rawCode: string, product: ProductScanMatch) {
+    const clean = normalizeBarcode(rawCode);
+    const barcode = product.upc ? normalizeBarcode(product.upc) : clean;
+    const payload: Omit<InventoryItem, "id" | "searchText" | "isDeleted"> = {
+      productId: product.id,
+      name: product.name || `Scanned product ${clean}`,
+      category: product.category || "Uncategorized",
+      sku: product.sku || clean,
+      hcpc: product.hcpcs.toUpperCase(),
+      barcode,
+      serial: "",
+      lotNumber: "",
+      locationName: "Main Location",
+      binLocation: "",
+      quantityOnHand: 1,
+      committed: 0,
+      onRent: 0,
+      onOrder: 0,
+      available: 1,
+      reorderLevel: product.reorderLevel,
+      unitCost: product.defaultPurchasePrice,
+      totalValue: product.defaultPurchasePrice,
+      status: product.status === "discontinued" ? "discontinued" : "available",
+      manufacturer: product.manufacturer,
+      manufacturerItemId: product.manufacturerItemId,
+      modelNumber: product.model,
+      warrantyProvider: "",
+      warrantyStartDate: "",
+      warrantyEndDate: "",
+      warrantyNotes: "",
+      purchaseDate: "",
+      usefulLifeMonths: 0,
+      lifecycleStatus: "active",
+      nextServiceDate: "",
+      lifecycleNotes: "",
+      notes: `Created automatically from product catalog scan ${clean}.`,
+    };
+    const searchText = buildSearchText(payload);
+
+    const result = await smartMergeInventory({
+      productId: product.id,
+      name: payload.name,
+      category: payload.category,
+      manufacturer: payload.manufacturer,
+      manufacturerItemId: payload.manufacturerItemId,
+      sku: payload.sku,
+      hcpc: payload.hcpc,
+      barcode: payload.barcode,
+      serial: "",
+      lotNumber: "",
+      expirationDate: "",
+      locationName: payload.locationName,
+      binLocation: "",
+      quantityOnHand: 1,
+      committed: 0,
+      onRent: 0,
+      onOrder: 0,
+      reorderLevel: payload.reorderLevel,
+      unitCost: payload.unitCost,
+      status: payload.status === "discontinued" ? "inactive" : "available",
+      notes: payload.notes,
+      source: "inventory_product_scan",
+      sourceId: product.id,
+    });
+
+    await updateDoc(doc(db, "inventory", result.inventoryId), {
+      ...payload,
+      searchText,
+      isDeleted: false,
+      pendingScanReview: false,
+      scanSource: "product_catalog_scan",
+      lastScannedAt: serverTimestamp(),
+      lastScanDirection: "in",
+      updatedAt: serverTimestamp(),
+    });
+
+    await logInventoryMovement({
+      productId: product.id,
+      productName: payload.name,
+      barcode: payload.barcode,
+      serial: "",
+      lotNumber: "",
+      type: result.action === "created" ? "scan_in_product_created" : "scan_in",
+      quantity: 1,
+      sourceId: result.inventoryId,
+      notes: "Scanned in from matching product catalog record.",
+    });
+
+    toast.success(`${payload.name} scanned in from product catalog.`);
+  }
+
+  async function runJarvisInventoryIdentification(inventoryId: string, rawCode: string) {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      toast.error("Scan saved, but Jarvis identify needs a signed-in user.");
+      return false;
+    }
+
+    try {
+      const token = await currentUser.getIdToken();
+      const response = await fetch("/api/jarvis/product-enrichment", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          mode: "identifyInventory",
+          inventoryId,
+          code: normalizeBarcode(rawCode),
+        }),
+      });
+      const result = (await response.json()) as {
+        error?: string;
+        product?: {
+          name?: string;
+        };
+      };
+
+      if (!response.ok) {
+        throw new Error(result.error || "Jarvis could not identify the scanned product.");
+      }
+
+      toast.success(
+        result.product?.name
+          ? `Jarvis identified ${result.product.name}.`
+          : "Jarvis identified the scanned product."
+      );
+      return true;
+    } catch (error) {
+      toast.error(
+        error instanceof Error
+          ? `Scan saved for review. ${error.message}`
+          : "Scan saved for review. Jarvis could not identify the product."
+      );
+      return false;
+    }
+  }
+
+  async function createPendingScanIn(rawCode: string) {
+    const clean = normalizeBarcode(rawCode);
+    const name = `Pending scanned item ${clean}`;
+    const payload: Omit<InventoryItem, "id" | "searchText" | "isDeleted"> = {
+      productId: "",
+      name,
+      category: "Pending Scan Review",
+      sku: "",
+      hcpc: "",
+      barcode: "",
+      serial: clean,
+      lotNumber: "",
+      locationName: "Main Location",
+      binLocation: "",
+      quantityOnHand: 1,
+      committed: 0,
+      onRent: 0,
+      onOrder: 0,
+      available: 1,
+      reorderLevel: 0,
+      unitCost: 0,
+      totalValue: 0,
+      status: "available",
+      manufacturer: "",
+      manufacturerItemId: "",
+      modelNumber: "",
+      warrantyProvider: "",
+      warrantyStartDate: "",
+      warrantyEndDate: "",
+      warrantyNotes: "",
+      purchaseDate: "",
+      usefulLifeMonths: 0,
+      lifecycleStatus: "active",
+      nextServiceDate: "",
+      lifecycleNotes: "",
+      notes: "Created automatically from an unmatched Scan In. Review and complete item details.",
+    };
+    const searchText = buildSearchText(payload);
+
+    const result = await smartMergeInventory({
+      productId: "",
+      name,
+      category: payload.category,
+      manufacturer: "",
+      manufacturerItemId: "",
+      sku: "",
+      hcpc: "",
+      barcode: "",
+      serial: clean,
+      lotNumber: "",
+      expirationDate: "",
+      locationName: payload.locationName,
+      binLocation: "",
+      quantityOnHand: 1,
+      committed: 0,
+      onRent: 0,
+      onOrder: 0,
+      reorderLevel: 0,
+      unitCost: 0,
+      status: "available",
+      notes: payload.notes,
+      source: "inventory_scan",
+      sourceId: clean,
+    });
+
+    await updateDoc(doc(db, "inventory", result.inventoryId), {
+      ...payload,
+      productId: "",
+      searchText,
+      isDeleted: false,
+      pendingScanReview: true,
+      scanSource: "scan_in_unmatched",
+      lastScannedAt: serverTimestamp(),
+      lastScanDirection: "in",
+      updatedAt: serverTimestamp(),
+    });
+
+    await logInventoryMovement({
+      productId: "",
+      productName: name,
+      barcode: "",
+      serial: clean,
+      lotNumber: "",
+      type: "scan_in_pending_created",
+      quantity: 1,
+      sourceId: result.inventoryId,
+      notes: "Created pending inventory record from unmatched Scan In.",
+    });
+
+    const identified = await runJarvisInventoryIdentification(result.inventoryId, clean);
+
+    if (!identified) {
+      toast.success(
+        result.action === "created"
+          ? "Scan intake record created for review."
+          : "Existing scanned product quantity updated for review."
+      );
+    }
+  }
+
+  async function handleScanMovement(rawCode: string, direction: "in" | "out"): Promise<boolean> {
     if (!canWrite) {
       toast.error("You do not have permission to move inventory.");
-      return;
+      return false;
     }
 
     const item = await findInventoryByScan(rawCode);
 
     if (!item) {
+      if (direction === "in") {
+        const product = await findProductByScan(rawCode);
+
+        if (product) {
+          await createInventoryFromProductScan(rawCode, product);
+          return true;
+        }
+
+        await createPendingScanIn(rawCode);
+        return true;
+      }
+
       toast.error("No inventory match found for that scan.");
-      return;
+      return false;
     }
 
     if (direction === "out" && item.available <= 0) {
       toast.error("That item has no available stock to scan out.");
-      return;
+      return false;
     }
 
     const quantityOnHand =
@@ -166,17 +499,22 @@ export function useInventoryActions({
     });
 
     if (direction === "in") {
-      void ensureProductFromInventory({
-        ...item,
-        quantityOnHand,
-        available,
-      }).catch((error) => {
-        console.error("INVENTORY PRODUCT SYNC ERROR:", error);
-        toast.error("Inventory moved, but product catalog sync needs review.");
-      });
+      if (item.pendingScanReview) {
+        await runJarvisInventoryIdentification(item.id, rawCode);
+      } else {
+        void ensureProductFromInventory({
+          ...item,
+          quantityOnHand,
+          available,
+        }).catch((error) => {
+          console.error("INVENTORY PRODUCT SYNC ERROR:", error);
+          toast.error("Inventory moved, but product catalog sync needs review.");
+        });
+      }
     }
 
     toast.success(`${item.name} scanned ${direction}.`);
+    return true;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -268,6 +606,9 @@ export function useInventoryActions({
     };
 
     const searchText = buildSearchText(payload);
+    const pendingReview =
+      payload.name.toLowerCase().startsWith("pending scanned item") ||
+      payload.category === "Pending Scan Review";
 
     setSaving(true);
 
@@ -285,6 +626,8 @@ export function useInventoryActions({
           productId: syncedProductId ?? payload.productId,
           searchText,
           isDeleted: false,
+          pendingScanReview: pendingReview,
+          scanSource: pendingReview ? "scan_in_unmatched" : "inventory_review_completed",
           lowStock: isLowStock({
             id: form.id,
             ...payload,
@@ -349,6 +692,8 @@ export function useInventoryActions({
           productId: syncedProductId ?? payload.productId,
           searchText,
           isDeleted: false,
+          pendingScanReview: pendingReview,
+          scanSource: pendingReview ? "scan_in_unmatched" : "inventory_review_completed",
           lowStock: isLowStock({
             id: result.inventoryId,
             ...payload,

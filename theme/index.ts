@@ -11,5 +11,6 @@ export * from "./typography";
 export * from "./tileSystem";
 export * from "./orderStatus";
 export * from "./navigation";
+export * from "./upload";
 export * from "./ThemeProvider";
 export { default as ThemeToggle } from "./ThemeToggle";

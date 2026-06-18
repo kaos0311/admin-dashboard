@@ -6,11 +6,10 @@ import {
   ArrowLeft,
   CalendarClock,
   ClipboardList,
-  FileDown,
   FileText,
   HeartPulse,
-  NotebookPen,
   PackageCheck,
+  ReceiptText,
   ShieldCheck,
   UserRound,
   X,
@@ -18,7 +17,6 @@ import {
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
-import PatientDocumentsPanel from "@/app/components/patients/PatientDocumentsPanel";
 
 import { addTimelineEntry, writeAuditLog } from "../lib/patientActions";
 import {
@@ -38,36 +36,33 @@ import {
 } from "./patient-detail-utils";
 import { usePatientDetail } from "./use-patient-detail";
 
-import { PatientBirthdayPanel } from "./components/PatientBirthdayPanel";
+import {
+  ClinicalTab,
+  CustomFieldsTab,
+  HistoryTab,
+  InsuranceTab,
+  ItemsTab,
+  MessagesTab,
+  OrderTab,
+  PatientResponsibilityTab,
+  ScheduleTab,
+} from "./components/PatientBrightreeTabSections";
 import { PatientDetailHeader } from "./components/PatientDetailHeader";
-import { PatientExportReadinessSection } from "./components/PatientExportReadinessSection";
 import {
   GlassPanel,
   LoadingState,
   PageShell,
-  RecordCompletePanel,
-  RiskFlagPanel,
-  Section,
 } from "./components/PatientDetailPrimitives";
-import {
-  PatientCpapEquipmentSections,
-  PatientIdentityClinicalSections,
-  PatientOrdersBillingSections,
-} from "./components/PatientInfoSections";
-import { PatientNotesSection } from "./components/PatientNotesSection";
-import { PatientReportSources } from "./components/PatientReportSources";
-import { PatientRetentionSection } from "./components/PatientRetentionSection";
-import { PatientStatsGrid } from "./components/PatientStatsGrid";
-import { PatientTasksSection } from "./components/PatientTasksSection";
-import { PatientTimelineSection } from "./components/PatientTimelineSection";
 
 type PatientRecordTab =
-  | "overview"
-  | "profile"
-  | "equipment"
-  | "billing"
-  | "documents"
-  | "tasks"
+  | "order"
+  | "clinical"
+  | "insurance"
+  | "patient-responsibility"
+  | "items"
+  | "schedule"
+  | "messages"
+  | "custom-fields"
   | "history";
 
 const patientRecordTabs: Array<{
@@ -76,34 +71,44 @@ const patientRecordTabs: Array<{
   icon: ReactNode;
 }> = [
   {
-    id: "overview",
-    label: "Overview",
+    id: "order",
+    label: "Order",
     icon: <ShieldCheck className="h-4 w-4" />,
   },
   {
-    id: "profile",
-    label: "Identity & Clinical",
+    id: "clinical",
+    label: "Clinical",
     icon: <UserRound className="h-4 w-4" />,
   },
   {
-    id: "equipment",
-    label: "CPAP & Equipment",
+    id: "insurance",
+    label: "Insurance",
     icon: <HeartPulse className="h-4 w-4" />,
   },
   {
-    id: "billing",
-    label: "Orders & Billing",
+    id: "patient-responsibility",
+    label: "Patient Responsibility",
+    icon: <ReceiptText className="h-4 w-4" />,
+  },
+  {
+    id: "items",
+    label: "Items",
     icon: <PackageCheck className="h-4 w-4" />,
   },
   {
-    id: "documents",
-    label: "Documents",
-    icon: <FileText className="h-4 w-4" />,
+    id: "schedule",
+    label: "Schedule",
+    icon: <CalendarClock className="h-4 w-4" />,
   },
   {
-    id: "tasks",
-    label: "Tasks & Notes",
+    id: "messages",
+    label: "Messages",
     icon: <ClipboardList className="h-4 w-4" />,
+  },
+  {
+    id: "custom-fields",
+    label: "Custom Fields",
+    icon: <FileText className="h-4 w-4" />,
   },
   {
     id: "history",
@@ -111,6 +116,25 @@ const patientRecordTabs: Array<{
     icon: <CalendarClock className="h-4 w-4" />,
   },
 ];
+
+const patientRecordTabIds = new Set<PatientRecordTab>(
+  patientRecordTabs.map((tab) => tab.id)
+);
+
+function isPatientRecordTab(value: string | null): value is PatientRecordTab {
+  return Boolean(value && patientRecordTabIds.has(value as PatientRecordTab));
+}
+
+function legacyTab(value: string | null): PatientRecordTab | null {
+  if (value === "billing") return "patient-responsibility";
+  if (value === "documents") return "custom-fields";
+  if (value === "tasks") return "schedule";
+  if (value === "profile") return "clinical";
+  if (value === "equipment") return "items";
+  if (value === "overview") return "order";
+
+  return null;
+}
 
 export default function PatientDetailPage() {
   const params = useParams<{ patientId: string }>();
@@ -124,7 +148,7 @@ export default function PatientDetailPage() {
   const [savingStatus, setSavingStatus] = useState(false);
   const [savingNotes, setSavingNotes] = useState(false);
   const [savingTask, setSavingTask] = useState(false);
-  const [activeTab, setActiveTab] = useState<PatientRecordTab>("overview");
+  const [activeTab, setActiveTab] = useState<PatientRecordTab>("order");
 
   const [notesDraft, setNotesDraft] = useState("");
   const [careNotesDraft, setCareNotesDraft] = useState("");
@@ -140,13 +164,25 @@ export default function PatientDetailPage() {
   useEffect(() => {
     const requestedTab = searchParams.get("tab");
 
-    if (requestedTab === "billing" || window.location.hash === "#wip") {
-      setActiveTab("billing");
+    if (isPatientRecordTab(requestedTab)) {
+      setActiveTab(requestedTab);
+      return;
+    }
+
+    const mappedTab = legacyTab(requestedTab);
+
+    if (mappedTab) {
+      setActiveTab(mappedTab);
+      return;
+    }
+
+    if (window.location.hash === "#wip") {
+      setActiveTab("schedule");
     }
   }, [searchParams]);
 
   useEffect(() => {
-    if (activeTab !== "billing" || window.location.hash !== "#wip") {
+    if (activeTab !== "schedule" || window.location.hash !== "#wip") {
       return;
     }
 
@@ -497,106 +533,80 @@ export default function PatientDetailPage() {
 
       <PatientRecordTabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      {activeTab === "overview" ? (
-        <>
-          {riskFlags.length ? (
-            <RiskFlagPanel flags={riskFlags} />
-          ) : (
-            <RecordCompletePanel />
-          )}
-
-          {birthdayInfo ? (
-            <PatientBirthdayPanel
-              fullName={patient.fullName}
-              isThisMonth={birthdayInfo.isThisMonth}
-              birthday={birthdayInfo.birthday}
-              ageTurning={birthdayInfo.ageTurning}
-            />
-          ) : null}
-
-          <PatientStatsGrid
-            patient={patient}
-            openTasks={openTasks}
-            riskScore={riskScore}
-          />
-        </>
+      {activeTab === "order" ? (
+        <OrderTab
+          patient={patient}
+          openTasks={openTasks}
+          riskScore={riskScore}
+          riskFlags={riskFlags}
+          birthdayInfo={birthdayInfo}
+        />
       ) : null}
 
-      {activeTab === "profile" ? (
-        <PatientIdentityClinicalSections patient={patient} />
+      {activeTab === "clinical" ? (
+        <ClinicalTab patient={patient} />
       ) : null}
 
-      {activeTab === "equipment" ? (
-        <PatientCpapEquipmentSections patient={patient} />
+      {activeTab === "insurance" ? (
+        <InsuranceTab patient={patient} />
       ) : null}
 
-      {activeTab === "billing" ? (
-        <PatientOrdersBillingSections patient={patient} />
+      {activeTab === "patient-responsibility" ? (
+        <PatientResponsibilityTab patient={patient} />
       ) : null}
 
-      {activeTab === "documents" ? (
-        <>
-          <Section title="Chart Export Readiness" icon={<FileDown className="h-5 w-5" />}>
-            <PatientExportReadinessSection patient={patient} />
-          </Section>
-
-          <Section title="Digital Chart Documents" icon={<FileText className="h-5 w-5" />}>
-            <PatientDocumentsPanel patientId={patient.id} patientName={patient.fullName} />
-          </Section>
-        </>
+      {activeTab === "items" ? (
+        <ItemsTab patient={patient} />
       ) : null}
 
-      {activeTab === "tasks" ? (
-        <>
-          <Section
-            title="Care Coordination Tasks"
-            icon={<CalendarClock className="h-5 w-5" />}
-          >
-            <PatientTasksSection
-              openTasks={openTasks}
-              completedTasks={completedTasks}
-              savingTask={savingTask}
-              newTaskTitle={newTaskTitle}
-              setNewTaskTitle={setNewTaskTitle}
-              newTaskAssignedTo={newTaskAssignedTo}
-              setNewTaskAssignedTo={setNewTaskAssignedTo}
-              newTaskDueDate={newTaskDueDate}
-              setNewTaskDueDate={setNewTaskDueDate}
-              newTaskPriority={newTaskPriority}
-              setNewTaskPriority={setNewTaskPriority}
-              addTask={addTask}
-              updateTaskStatus={updateTaskStatus}
-            />
-          </Section>
+      {activeTab === "schedule" ? (
+        <ScheduleTab
+          patient={patient}
+          taskProps={{
+            openTasks,
+            completedTasks,
+            savingTask,
+            newTaskTitle,
+            setNewTaskTitle,
+            newTaskAssignedTo,
+            setNewTaskAssignedTo,
+            newTaskDueDate,
+            setNewTaskDueDate,
+            newTaskPriority,
+            setNewTaskPriority,
+            addTask,
+            updateTaskStatus,
+          }}
+        />
+      ) : null}
 
-          <Section title="Internal Notes" icon={<NotebookPen className="h-5 w-5" />}>
-            <PatientNotesSection
-              notesDraft={notesDraft}
-              setNotesDraft={setNotesDraft}
-              careNotesDraft={careNotesDraft}
-              setCareNotesDraft={setCareNotesDraft}
-              equipmentNotesDraft={equipmentNotesDraft}
-              setEquipmentNotesDraft={setEquipmentNotesDraft}
-              billingNotesDraft={billingNotesDraft}
-              setBillingNotesDraft={setBillingNotesDraft}
-              savingNotes={savingNotes}
-              saveNotes={saveNotes}
-            />
-          </Section>
-        </>
+      {activeTab === "messages" ? (
+        <MessagesTab
+          patient={patient}
+          notesProps={{
+            notesDraft,
+            setNotesDraft,
+            careNotesDraft,
+            setCareNotesDraft,
+            equipmentNotesDraft,
+            setEquipmentNotesDraft,
+            billingNotesDraft,
+            setBillingNotesDraft,
+            savingNotes,
+            saveNotes,
+          }}
+        />
+      ) : null}
+
+      {activeTab === "custom-fields" ? (
+        <CustomFieldsTab patient={patient} />
       ) : null}
 
       {activeTab === "history" ? (
-        <>
-          <Section title="Patient Timeline" icon={<CalendarClock className="h-5 w-5" />}>
-            <PatientTimelineSection patientId={patient.id} />
-          </Section>
-
-          <PatientRetentionSection patient={patient} />
-
-          <PatientReportSources reportTypes={patient.reportTypes} />
-        </>
+        <HistoryTab patient={patient} />
       ) : null}
+
+      <PatientRecordTabs activeTab={activeTab} setActiveTab={setActiveTab} />
     </PageShell>
   );
 }

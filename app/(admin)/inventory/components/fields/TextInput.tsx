@@ -2,6 +2,8 @@
 
 import { useId } from "react";
 
+import { forms, typography } from "@/theme";
+
 type TextInputProps = {
   label: string;
   value: string;
@@ -25,7 +27,7 @@ export function TextInput({
 
   return (
     <div>
-      <label htmlFor={inputId} className="mb-2 block text-sm text-slate-300">
+      <label htmlFor={inputId} className={`${typography.body} mb-2 block`}>
         {label}
       </label>
 
@@ -40,7 +42,7 @@ export function TextInput({
         onChange={(event) => onChange(event.target.value)}
         list={list}
         autoComplete={autoComplete}
-        className="w-full rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-white outline-none placeholder:text-slate-600 shadow-inner shadow-black/20 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/55"
+        className={forms.input}
       />
     </div>
   );

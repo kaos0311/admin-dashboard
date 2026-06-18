@@ -96,6 +96,15 @@ export type InventoryItem = {
   originalDos?: string;
   nextDos?: string;
   nextBillingDate?: string;
+  lastDeliveredAt?: string;
+  lastReturnedAt?: string;
+  returnedFromPatientKey?: string;
+  returnedFromPatientName?: string;
+  activeAssetArchived?: boolean;
+  patientEquipmentArchived?: boolean;
+  returnReason?: string;
+  pendingScanReview?: boolean;
+  scanSource?: string;
   parNumber?: string;
   parExpiration?: string;
   orderingDoctor?: string;

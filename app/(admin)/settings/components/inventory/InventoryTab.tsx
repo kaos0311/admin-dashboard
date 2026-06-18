@@ -1,7 +1,7 @@
 "use client";
 
 import type { Dispatch, SetStateAction } from "react";
-import { PackageCheck } from "lucide-react";
+import { PackageCheck, RadioTower } from "lucide-react";
 
 import { glass, typography } from "@/theme";
 
@@ -125,6 +125,62 @@ export function InventoryTab({
               no reorder level set, the inventory page falls back to these
               thresholds by category so resupply warnings stay active.
             </p>
+          </div>
+        </InfoCard>
+
+        <InfoCard
+          title="Jarvis Recall Watch"
+          description="These settings are shared with the Product Command Center recall watch."
+        >
+          <div className="grid gap-5">
+            <div className="flex gap-3">
+              <RadioTower className="mt-1 h-5 w-5 shrink-0 text-cyan-200" />
+              <p className={typography.bodyMuted}>
+                Jarvis uses these switches to determine when product recall
+                monitoring should run against current and future catalog items.
+              </p>
+            </div>
+
+            <ToggleRow
+              title="Internet Recall Scan"
+              description="Allow Jarvis recall jobs to check external recall sources for product catalog items."
+              checked={settings.inventory.jarvisRecallInternetScanEnabled}
+              onChange={(checked) =>
+                updateInventory("jarvisRecallInternetScanEnabled", checked)
+              }
+            />
+
+            <ToggleRow
+              title="Scan New Products Automatically"
+              description="Apply recall checking to products added after this setting is enabled."
+              checked={settings.inventory.jarvisRecallScanNewProductsEnabled}
+              onChange={(checked) =>
+                updateInventory("jarvisRecallScanNewProductsEnabled", checked)
+              }
+            />
+
+            <ToggleRow
+              title="Discontinued Product Search"
+              description="Allow Jarvis to check external sources and internal catalog signals for discontinued product status."
+              checked={settings.inventory.jarvisDiscontinuedInternetScanEnabled}
+              onChange={(checked) =>
+                updateInventory("jarvisDiscontinuedInternetScanEnabled", checked)
+              }
+            />
+
+            <ToggleRow
+              title="Check New Products For Discontinuation"
+              description="Apply discontinued-product checking to catalog items added after this setting is enabled."
+              checked={
+                settings.inventory.jarvisDiscontinuedScanNewProductsEnabled
+              }
+              onChange={(checked) =>
+                updateInventory(
+                  "jarvisDiscontinuedScanNewProductsEnabled",
+                  checked
+                )
+              }
+            />
           </div>
         </InfoCard>
       </div>

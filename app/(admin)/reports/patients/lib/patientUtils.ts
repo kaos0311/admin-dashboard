@@ -24,6 +24,7 @@ import type {
 export const PATIENT_LIMIT = 500;
 export const SEVEN_YEARS_MS = 1000 * 60 * 60 * 24 * 365.25 * 7;
 export const EMPTY_DISPLAY = "—";
+export const PATIENT_ARCHIVE_MONTHS = 60;
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -251,6 +252,104 @@ export function getLastActivityDate(patient: PatientIndex): string {
     patient.purchasesLast90Days?.[0]?.purchaseDate ||
     ""
   );
+}
+
+export function getLatestPickupDate(patient: PatientIndex): string {
+  return (
+    textField(patient.billing, "lastPickupDate") ||
+    patient.lastEquipmentDate ||
+    ""
+  );
+}
+
+export function getLatestDeliveryDate(patient: PatientIndex): string {
+  return (
+    textField(patient.deliverySummary, "actualDeliveryDate") ||
+    textField(patient.deliverySummary, "scheduledDeliveryDate") ||
+    patient.lastTreatmentDate ||
+    patient.currentEquipment?.[0]?.startDate ||
+    ""
+  );
+}
+
+export type PatientServiceStatus = "active" | "nonActive" | "unknown";
+
+export function getPatientServiceStatus(
+  patient: PatientIndex,
+): PatientServiceStatus {
+  const deliveryDate = parseDate(getLatestDeliveryDate(patient));
+  const pickupDate = parseDate(getLatestPickupDate(patient));
+
+  if (!deliveryDate) return "unknown";
+  if (!pickupDate) return "active";
+
+  if (pickupDate.getTime() > deliveryDate.getTime()) {
+    return "nonActive";
+  }
+
+  if (deliveryDate.getTime() > pickupDate.getTime()) {
+    return "active";
+  }
+
+  return "unknown";
+}
+
+export function hasActivePatientService(patient: PatientIndex): boolean {
+  return getPatientServiceStatus(patient) === "active";
+}
+
+export function hasNoActivePatientService(patient: PatientIndex): boolean {
+  return getPatientServiceStatus(patient) === "nonActive";
+}
+
+export function getPatientArchiveCutoff(now = new Date()): Date {
+  const cutoff = new Date(now);
+  cutoff.setHours(0, 0, 0, 0);
+  cutoff.setMonth(cutoff.getMonth() - PATIENT_ARCHIVE_MONTHS);
+  return cutoff;
+}
+
+function normalizeTimestampDate(value?: Timestamp): Date | null {
+  if (!value) return null;
+
+  const parsed = value.toDate();
+  if (Number.isNaN(parsed.getTime())) return null;
+
+  parsed.setHours(0, 0, 0, 0);
+  return parsed;
+}
+
+export function getPatientArchiveAnchorDate(
+  patient: PatientIndex,
+): Date | null {
+  const activityDate =
+    parseDate(getLastActivityDate(patient)) ??
+    parseDate(patient.lastActivityDate) ??
+    parseDate(patient.lastEquipmentDate) ??
+    parseDate(patient.lastTreatmentDate);
+
+  if (activityDate) {
+    activityDate.setHours(0, 0, 0, 0);
+    return activityDate;
+  }
+
+  return (
+    normalizeTimestampDate(patient.archivedAt) ??
+    normalizeTimestampDate(patient.restoredAt) ??
+    normalizeTimestampDate(patient.updatedAt) ??
+    normalizeTimestampDate(patient.createdAt)
+  );
+}
+
+export function isPatientWithinArchiveWindow(
+  patient: PatientIndex,
+  now = new Date(),
+): boolean {
+  const anchor = getPatientArchiveAnchorDate(patient);
+
+  if (!anchor) return true;
+
+  return anchor >= getPatientArchiveCutoff(now);
 }
 
 export function getDestroyEligibleDate(patient: PatientIndex): string {

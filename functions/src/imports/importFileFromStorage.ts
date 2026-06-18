@@ -14,6 +14,12 @@ import { writeImportIssues } from "./issues/writeImportIssues";
 import { resolveProcessors } from "./resolveProcessors";
 import { writeStagingChunks } from "./staging/writeStagingChunks";
 import type { ImportRow } from "./types/stagingChunk";
+import {
+  filterRowsToImportRetentionWindow,
+  getImportRetentionCutoffIso,
+  getImportRetentionMonthsForScope,
+  IMPORT_RETENTION_MONTHS,
+} from "../importRetention";
 
 const STORAGE_BUCKET = "advanced-home-medical-55772.firebasestorage.app";
 
@@ -87,14 +93,33 @@ export const importFileFromStorage = onObjectFinalized(
 
     try {
       const rows = await readCsvRows(storagePath);
-
-      console.log(`ROWS READ ${rows.length}`);
-
       const headers = Object.keys(rows[0] ?? {});
       const contract = detectReportContract(fileName, headers);
-      const headerValidation = validateHeaders(contract, headers);
+      const rawProcessors = resolveProcessors(fileName, contract.processor, rows);
+      const retentionWindowMonths = getImportRetentionMonthsForScope({
+        detectedKind: contract.kind,
+        reportType: contract.kind,
+        processor: contract.processor,
+        processors: rawProcessors,
+      });
+      const retainedRows = filterRowsToImportRetentionWindow(rows, new Date(), {
+        retentionMonths: retentionWindowMonths,
+      });
+      const retentionSkippedRows = rows.length - retainedRows.length;
+
+      console.log(`ROWS READ ${rows.length}`);
+      console.log(
+        `ROWS RETAINED ${retainedRows.length}; RETENTION SKIPPED ${retentionSkippedRows}; WINDOW ${retentionWindowMonths} months`
+      );
+
+      const retainedHeaders = Object.keys(retainedRows[0] ?? rows[0] ?? {});
+      const headerValidation = validateHeaders(contract, retainedHeaders);
       const importRoute = buildImportRouteMap(contract);
-      const processors = resolveProcessors(fileName, contract.processor, rows);
+      const processors = resolveProcessors(
+        fileName,
+        contract.processor,
+        retainedRows.length > 0 ? retainedRows : rows
+      );
 
       await writeImportIssues(
         importId,
@@ -110,7 +135,7 @@ export const importFileFromStorage = onObjectFinalized(
 
       console.log(`PROCESSORS ${processors.join(",")}`);
 
-      const chunkCount = await writeStagingChunks(importId, rows, 250);
+      const chunkCount = await writeStagingChunks(importId, retainedRows, 250);
 
       console.log(`CHUNKS WRITTEN ${chunkCount}`);
 
@@ -124,16 +149,27 @@ export const importFileFromStorage = onObjectFinalized(
 
       await db.collection("importJobs").doc(importId).set(
         {
-          status: "queued",
+          status: queueCount > 0 ? "queued" : "completed",
           processors,
           reportType: contract.processor,
           detectedReportKind: contract.kind,
           detectedReportLabel: contract.label,
           headerValidation,
           importRoute,
-          totalRows: rows.length,
+          totalRows: retainedRows.length,
+          originalRows: rows.length,
+          rowsFilteredByRetention: retentionSkippedRows,
+          retentionWindowMonths:
+            retentionWindowMonths || IMPORT_RETENTION_MONTHS,
+          retentionCutoffDate: getImportRetentionCutoffIso(new Date(), {
+            retentionMonths: retentionWindowMonths,
+          }),
           chunkCount,
           queuedTaskCount: queueCount,
+          completedAt:
+            queueCount > 0
+              ? FieldValue.delete()
+              : FieldValue.serverTimestamp(),
           updatedAt: FieldValue.serverTimestamp(),
         },
         { merge: true }

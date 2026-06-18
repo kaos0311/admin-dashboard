@@ -12,7 +12,6 @@ import {
   collection,
   doc,
   type DocumentData,
-  getCountFromServer,
   getDoc,
   getDocs,
   limit,
@@ -20,7 +19,6 @@ import {
   query,
   type QueryDocumentSnapshot,
   startAfter,
-  where,
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
@@ -74,6 +72,10 @@ function useDebouncedValue<T>(value: T, delay = 250): T {
   }, [value, delay]);
 
   return debounced;
+}
+
+function isAdminLevelRole(role: UserRole): boolean {
+  return role === "admin" || role === "tank";
 }
 
 export function useSettingsPage() {
@@ -156,7 +158,7 @@ export function useSettingsPage() {
     let disabled = 0;
 
     for (const user of users) {
-      if (user.role === "admin") admins += 1;
+      if (isAdminLevelRole(user.role)) admins += 1;
       if (user.role === "staff") staff += 1;
       if (user.active) active += 1;
       else disabled += 1;
@@ -188,19 +190,8 @@ export function useSettingsPage() {
   const refreshAdminCount = useCallback(async () => {
     if (!isAdmin) return;
 
-    try {
-      const countQuery = query(
-        collection(db, "users"),
-        where("role", "==", "admin")
-      );
-
-      const result = await getCountFromServer(countQuery);
-      setAdminCount(result.data().count);
-    } catch (error) {
-      console.error("ADMIN COUNT ERROR:", error);
-      setAdminCount(null);
-    }
-  }, [isAdmin]);
+    setAdminCount(users.filter((user) => isAdminLevelRole(user.role)).length);
+  }, [isAdmin, users]);
 
   const loadRecentActivity = useCallback(async () => {
     if (!isAdmin) return;
@@ -651,12 +642,20 @@ export function useSettingsPage() {
   }
 
   async function setRole(user: UserRow, role: UserRole) {
-    if (user.uid === currentUid && user.role === "admin" && role !== "admin") {
+    if (
+      user.uid === currentUid &&
+      isAdminLevelRole(user.role) &&
+      !isAdminLevelRole(role)
+    ) {
       setErrorMessage("You cannot remove your own admin role.");
       return;
     }
 
-    if (user.role === "admin" && role !== "admin" && adminCount === 1) {
+    if (
+      isAdminLevelRole(user.role) &&
+      !isAdminLevelRole(role) &&
+      adminCount === 1
+    ) {
       setErrorMessage("You cannot remove the last remaining admin.");
       return;
     }
@@ -697,7 +696,7 @@ export function useSettingsPage() {
       return;
     }
 
-    if (user.role === "admin" && !active && adminCount === 1) {
+    if (isAdminLevelRole(user.role) && !active && adminCount === 1) {
       setErrorMessage("You cannot disable the last remaining admin.");
       return;
     }
@@ -737,7 +736,7 @@ export function useSettingsPage() {
       return;
     }
 
-    if (user.role === "admin" && adminCount === 1) {
+    if (isAdminLevelRole(user.role) && adminCount === 1) {
       setErrorMessage("You cannot delete the last remaining admin.");
       return;
     }

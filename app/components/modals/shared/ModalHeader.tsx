@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { X } from "lucide-react";
+import { buttons, typography } from "@/theme";
 
 type ModalHeaderProps = {
   title: string;
@@ -26,12 +27,12 @@ export function ModalHeader({
         {icon ? <div>{icon}</div> : null}
 
         <div>
-          <h2 id={titleId} className="text-2xl font-bold tracking-tight">
+          <h2 id={titleId} className={typography.sectionTitle}>
             {title}
           </h2>
 
           {description ? (
-            <p className="mt-1 text-sm leading-6 text-neutral-400">
+            <p className={`${typography.bodyMuted} mt-1`}>
               {description}
             </p>
           ) : null}
@@ -41,7 +42,7 @@ export function ModalHeader({
       <button
         type="button"
         onClick={onClose}
-        className="rounded-xl border border-white/10 bg-white/5 p-2 text-neutral-300 transition hover:bg-white/10 hover:text-white"
+        className={buttons.icon}
         aria-label={closeLabel}
         title={closeLabel}
       >

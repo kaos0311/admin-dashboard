@@ -3,7 +3,7 @@
 import { AlertTriangle, X } from "lucide-react";
 
 import { cn } from "../upload-utils";
-import { uploadUi } from "./upload-ui";
+import { uploadUi } from "@/theme";
 
 type PageErrorBannerProps = {
   message: string | null;

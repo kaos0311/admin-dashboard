@@ -3,11 +3,9 @@
 import { FileArchive, UploadCloud } from "lucide-react";
 import type { RefObject } from "react";
 
-import { typography } from "@/theme";
+import { typography, uploadUi } from "@/theme";
 
 import { cn } from "../upload-utils";
-import { uploadUi } from "./upload-ui";
-
 type UploadDropzoneProps = {
   fileInputRef: RefObject<HTMLInputElement | null>;
   hasActiveUploads: boolean;

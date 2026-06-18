@@ -12,7 +12,7 @@ export const buttons = {
   primary:
     [
       base,
-      "bg-cyan-600 text-white hover:bg-cyan-500",
+      "bg-cyan-300 text-slate-950 shadow-lg shadow-cyan-500/20 hover:bg-cyan-200",
     ].join(" "),
 
   secondary:
@@ -22,6 +22,16 @@ export const buttons = {
       colors.surface,
       colors.textPrimary,
       colors.surfaceHover,
+    ].join(" "),
+
+  upload:
+    [
+      base,
+      "min-w-0 px-4 py-3",
+      "border border-cyan-300/20 bg-cyan-400/10 text-cyan-100",
+      "shadow-lg shadow-cyan-950/20 transition-all duration-200",
+      "hover:border-cyan-200/40 hover:bg-cyan-400/15",
+      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950",
     ].join(" "),
 
   danger:

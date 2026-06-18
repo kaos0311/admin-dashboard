@@ -1,4 +1,6 @@
-﻿import { Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+
+import { glass, typography } from "@/theme";
 
 type CommandHeroProps = {
   loading: boolean;
@@ -7,25 +9,21 @@ type CommandHeroProps = {
 
 export function CommandHero({ loading, openIssues }: CommandHeroProps) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-gradient-to-br from-white/[0.08] via-neutral-950/90 to-red-950/30 p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl">
+    <section className={glass.cardPadded}>
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div className="min-w-0">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-red-300">
-            Operations Intelligence
-          </p>
+          <p className={typography.dangerText}>Operations Intelligence</p>
 
-          <h1 className="mt-2 break-words text-3xl font-bold leading-[1.15] tracking-tight text-white md:text-4xl">
-            Command Center
-          </h1>
+          <h1 className={`${typography.pageTitle} mt-2`}>Command Center</h1>
 
-          <p className="mt-3 max-w-3xl text-sm leading-6 text-neutral-300">
+          <p className={`${typography.body} mt-3 max-w-3xl`}>
             Central oversight for compliance problems, task escalation, hospice
             risk, recalls, and patient operations. This is where the database
             stops being a junk drawer with Wi-Fi.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-neutral-300 backdrop-blur-xl">
+        <div className={glass.insetPadded}>
           {loading ? (
             <span className="flex items-center gap-2">
               <Loader2 className="h-4 w-4 animate-spin" />
@@ -33,7 +31,7 @@ export function CommandHero({ loading, openIssues }: CommandHeroProps) {
             </span>
           ) : (
             <span>
-              Monitoring <strong className="text-white">{openIssues}</strong>{" "}
+              Monitoring <strong className={typography.bodyStrong}>{openIssues}</strong>{" "}
               open issues
             </span>
           )}
@@ -42,6 +40,3 @@ export function CommandHero({ loading, openIssues }: CommandHeroProps) {
     </section>
   );
 }
-
-
-

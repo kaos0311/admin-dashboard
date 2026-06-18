@@ -20,7 +20,6 @@ import {
 } from "@/theme";
 
 import { formatCurrency, formatDate } from "../lib/orderFormat";
-import { glassPanel } from "../lib/orderUi";
 import type { OrderRow, OrderStatus } from "../lib/orderTypes";
 import { InventoryBadge } from "./InventoryBadge";
 import { SmartReviewBadges } from "./SmartReviewBadges";
@@ -44,7 +43,7 @@ export function OrdersTable({
   onRestore: (orderId: string) => Promise<void>;
 }) {
   return (
-    <div className={`${glassPanel} overflow-hidden`}>
+    <div className={`${glass.panel} overflow-hidden`}>
       <div className="overflow-x-auto">
         <table className="min-w-full text-left text-sm">
           <caption className="sr-only">Orders table</caption>

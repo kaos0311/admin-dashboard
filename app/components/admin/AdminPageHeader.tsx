@@ -1,5 +1,5 @@
 ﻿import type { ReactNode } from "react";
-import { typography } from "@/theme";
+import { glass, typography } from "@/theme";
 
 type AdminPageHeaderProps = {
   eyebrow?: string;
@@ -15,7 +15,7 @@ export function AdminPageHeader({
   actions,
 }: AdminPageHeaderProps) {
   return (
-    <header className="mb-6 rounded-3xl border border-white/10 bg-white/[0.06] p-6 shadow-xl shadow-black/20 backdrop-blur-2xl">
+    <header className={`${glass.cardPadded} mb-6`}>
       <div className="flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
           {eyebrow ? <p className={typography.caption}>{eyebrow}</p> : null}

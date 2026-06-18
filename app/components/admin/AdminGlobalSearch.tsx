@@ -7,7 +7,6 @@ import { useMemo, useState } from "react";
 import { glass, typography } from "@/theme";
 
 const searchableRoutes = [
-  { label: "Dashboard", href: "/dashboard", keywords: "home summary metrics" },
   { label: "Command Center", href: "/command-center", keywords: "operations alerts ai" },
   { label: "Products", href: "/products", keywords: "catalog inventory items" },
   { label: "Inventory", href: "/inventory", keywords: "stock equipment resupply" },

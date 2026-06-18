@@ -12,6 +12,7 @@
 import type { RentalStats } from "../rentals-types";
 import { formatCurrency } from "../utils/formatters";
 import { StatCard } from "./StatCard";
+import { spacing } from "@/theme";
 
 export type RentalReportKey =
   | "total"
@@ -35,7 +36,7 @@ export function RentalsStatsGrid({
   onSelectReport,
 }: RentalsStatsGridProps) {
   return (
-    <section className="grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+    <section className={spacing.gridResponsive}>
       <StatCard
         label="Total"
         value={stats.total}

@@ -1,4 +1,6 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
+
+import { glass, typography } from "@/theme";
 
 type PanelProps = {
   title: string;
@@ -9,15 +11,13 @@ type PanelProps = {
 
 export function Panel({ title, subtitle, icon, children }: PanelProps) {
   return (
-    <section className="rounded-3xl border border-white/10 bg-white/[0.06] p-5 shadow-xl shadow-black/20 backdrop-blur-2xl">
+    <section className={glass.cardPadded}>
       <div className="mb-5 flex items-start gap-3">
-        <div className="rounded-2xl border border-white/10 bg-white/5 p-2">
-          {icon}
-        </div>
+        <div className={glass.iconBoxSm}>{icon}</div>
 
         <div>
-          <h2 className="text-lg font-bold text-white">{title}</h2>
-          <p className="mt-1 text-sm text-neutral-400">{subtitle}</p>
+          <h2 className={typography.cardTitle}>{title}</h2>
+          <p className={`${typography.bodyMuted} mt-1`}>{subtitle}</p>
         </div>
       </div>
 
@@ -25,6 +25,3 @@ export function Panel({ title, subtitle, icon, children }: PanelProps) {
     </section>
   );
 }
-
-
-

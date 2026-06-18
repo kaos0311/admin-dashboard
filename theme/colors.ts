@@ -13,6 +13,11 @@ export const colors = {
   textMuted: "text-slate-400",
   textFaint: "text-slate-500",
   textInverse: "text-slate-950",
+  textDisabled: "text-white/50",
+  textInfo: "text-cyan-200",
+  textSuccess: "text-emerald-200",
+  textWarning: "text-amber-200",
+  textDanger: "text-rose-300",
 
   border: "border-white/10",
   borderStrong: "border-white/15",
@@ -36,6 +41,9 @@ export const colors = {
   surfaceInputFocus:
     "focus:bg-black/55",
 
+  adminShell:
+    "bg-[#07090d] text-white",
+
   overlay:
     "bg-slate-950/70",
 
@@ -50,6 +58,9 @@ export const colors = {
 
   warning:
     "border-amber-400/25 bg-amber-400/10 text-amber-100",
+
+  warningBanner:
+    "border-amber-300/10 bg-amber-500/10 text-amber-100",
 
   danger:
     "border-rose-400/25 bg-rose-400/10 text-rose-100",

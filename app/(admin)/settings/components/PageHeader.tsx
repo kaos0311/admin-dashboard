@@ -12,11 +12,11 @@ export function PageHeader({ title, description, action }: PageHeaderProps) {
     <header className={`${glass.card} p-5`}>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0">
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200/80">
+          <p className={typography.caption}>
             Admin Controls
           </p>
 
-          <h1 className="mt-2 break-words text-3xl font-bold leading-[1.15] tracking-tight text-white">
+          <h1 className={`${typography.pageTitle} mt-2`}>
             {title}
           </h1>
 

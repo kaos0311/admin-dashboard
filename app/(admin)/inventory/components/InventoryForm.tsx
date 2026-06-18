@@ -52,6 +52,8 @@ type InventoryFormProps = {
   ) => void;
 
   onOpenScanner: (target: ScanTarget) => void;
+  onJarvisIdentify?: () => void;
+  jarvisIdentifying?: boolean;
 };
 
 export function InventoryForm({
@@ -63,6 +65,8 @@ export function InventoryForm({
   onReset,
   onUpdate,
   onOpenScanner,
+  onJarvisIdentify,
+  jarvisIdentifying = false,
 }: InventoryFormProps) {
   const available =
     toSafeNumber(form.quantityOnHand) -
@@ -143,14 +147,11 @@ export function InventoryForm({
               list="inventory-hcpcs-options"
             />
 
-            <ScanInput
+            <TextInput
               label="Barcode"
               value={form.barcode}
               onChange={(value) =>
                 onUpdate("barcode", value)
-              }
-              onScan={() =>
-                onOpenScanner("barcode")
               }
             />
           </div>
@@ -182,6 +183,32 @@ export function InventoryForm({
             />
           </div>
         </FieldGroup>
+
+        {form.id ? (
+          <div className={`${glass.insetPadded} flex min-w-0 flex-col gap-3 sm:flex-row sm:items-center sm:justify-between`}>
+            <div className="min-w-0">
+              <p className={typography.bodyStrong}>Jarvis Product Identify</p>
+              <p className={`${typography.smallMuted} mt-1`}>
+                Search the internet for this scanned code, create/update the
+                product, and attach a stock image when found.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              className={buttons.secondary}
+              disabled={!canWrite || jarvisIdentifying || !onJarvisIdentify}
+              onClick={onJarvisIdentify}
+            >
+              {jarvisIdentifying ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <PackagePlus className="h-4 w-4" />
+              )}
+              Identify Online
+            </button>
+          </div>
+        ) : null}
 
         <FieldGroup title="Manufacturer">
           <TextInput

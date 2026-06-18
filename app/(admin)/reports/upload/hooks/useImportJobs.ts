@@ -14,11 +14,13 @@ import {
   serverTimestamp,
   setDoc,
   updateDoc,
+  where,
 } from "firebase/firestore";
 import { deleteObject, ref } from "firebase/storage";
 import { httpsCallable } from "firebase/functions";
 
 import { db, functions, storage } from "@/lib/firebase";
+import { getImportRetentionCutoff } from "@/lib/importRetention";
 import type {
   AuthRoleState,
   QueueFilter,
@@ -247,6 +249,7 @@ export function useImportJobs({
 
     const jobsQuery = query(
       collection(db, "importJobs"),
+      where("createdAt", ">=", getImportRetentionCutoff()),
       orderBy("createdAt", "desc"),
       limit(RECENT_IMPORT_LIMIT),
     );

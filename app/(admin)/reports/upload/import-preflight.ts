@@ -172,6 +172,31 @@ const REPORT_CONTRACTS: ReportContract[] = [
     ],
   },
   {
+    kind: "ar_activity_by_patient",
+    label: "AR Activity by Patient",
+    fileKeywords: ["ar activity by patient"],
+    headerSignals: [
+      "acctnbr",
+      "invnbrdisplay",
+      "invdt",
+      "pmtdt",
+      "fullname",
+      "orderingdoctor",
+    ],
+    requiredHeaders: [
+      ...PATIENT_IDENTITY,
+      { label: "AR billing detail", aliases: ["InvNbrDisplay", "InvDt", "PmtDt", "Charge"] },
+    ],
+    destinations: [
+      { collection: "patients", label: "Patient records", page: "/reports/patients" },
+      { collection: "patients_index", label: "Patient search index", page: "/reports/patients" },
+      { collection: "patientPhysicians", label: "Patient physician summary", page: "/reports/patients" },
+      { collection: "patientReferrals", label: "Patient referral summary", page: "/reports/patients" },
+      { collection: "insurance", label: "Insurance payers", page: "/reports/insurance" },
+      { collection: "insuranceRecords", label: "Patient coverage records", page: "/reports/insurance" },
+    ],
+  },
+  {
     kind: "hospice_clinical_status",
     label: "Hospice Clinical Status",
     fileKeywords: ["hospice", "clinical"],
@@ -233,6 +258,7 @@ const REPORT_CONTRACTS: ReportContract[] = [
     destinations: [
       { collection: "wipRecords", label: "WIP records", page: "/reports/wip" },
       { collection: "patients", label: "Patient WIP summary", page: "/reports/patients" },
+      { collection: "patients_index", label: "Patient search index", page: "/reports/patients" },
       {
         collection: "hcpcsCodes",
         label: "HCPCS reference",

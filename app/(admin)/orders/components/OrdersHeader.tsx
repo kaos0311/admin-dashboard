@@ -2,7 +2,7 @@
 
 import { Plus, RefreshCcw, Search, Sparkles } from "lucide-react";
 
-import { glassButton, glassInput, primaryButton, smallMutedText } from "../lib/orderUi";
+import { badges, buttons, colors, forms, typography } from "@/theme";
 
 export function OrdersHeader({
   loadedCount,
@@ -22,22 +22,22 @@ export function OrdersHeader({
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div className="min-w-0">
-        <div className="inline-flex items-center gap-2 rounded-full border border-cyan-400/25 bg-cyan-400/10 px-3 py-1 text-xs font-semibold text-cyan-200 shadow-lg shadow-cyan-950/20 backdrop-blur-xl">
+        <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold shadow-lg shadow-cyan-950/20 backdrop-blur-xl ${badges.info}`}>
           <Sparkles className="h-3.5 w-3.5" aria-hidden={true} />
           Smart Intake Enabled
         </div>
 
-        <h1 className="mt-3 break-words text-3xl font-bold leading-[1.15] tracking-tight text-white">
+        <h1 className={`${typography.pageTitle} mt-3`}>
           Orders
         </h1>
 
-        <p className="mt-1 max-w-3xl text-sm text-zinc-400">
+        <p className={`${typography.bodyMuted} mt-1 max-w-3xl`}>
           Track patient orders, imported report orders, inventory allocation,
           review flags, and delivery progress without turning production into a
           clipboard hostage situation.
         </p>
 
-        <p className={`mt-1 ${smallMutedText}`}>
+        <p className={`mt-1 ${typography.caption}`}>
           Showing {loadedCount.toLocaleString()} loaded order
           {loadedCount === 1 ? "" : "s"} for the selected tab.
         </p>
@@ -46,7 +46,7 @@ export function OrdersHeader({
       <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         <label className="relative w-full max-w-md">
           <Search
-            className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500"
+            className={`pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${colors.textFaint}`}
             aria-hidden={true}
           />
           <span className="sr-only">Search orders</span>
@@ -54,7 +54,7 @@ export function OrdersHeader({
             value={search}
             onChange={(event) => onSearchChange(event.target.value)}
             placeholder="Search patient, product, sales order, phone..."
-            className={`${glassInput} pl-10`}
+            className={`${forms.input} pl-10`}
           />
         </label>
 
@@ -62,7 +62,7 @@ export function OrdersHeader({
           type="button"
           onClick={onRefresh}
           disabled={refreshing}
-          className={glassButton}
+          className={buttons.secondary}
         >
           <RefreshCcw
             className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`}
@@ -71,7 +71,7 @@ export function OrdersHeader({
           {refreshing ? "Refreshing..." : "Refresh"}
         </button>
 
-        <button type="button" onClick={onCreate} className={primaryButton}>
+        <button type="button" onClick={onCreate} className={buttons.primary}>
           <Plus className="h-4 w-4" aria-hidden={true} />
           Create Order
         </button>

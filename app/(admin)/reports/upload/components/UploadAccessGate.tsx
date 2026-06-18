@@ -3,13 +3,11 @@
 import type { ReactNode } from "react";
 import { Loader2, ShieldCheck } from "lucide-react";
 
-import { colors, typography } from "@/theme";
+import { colors, typography, uploadUi } from "@/theme";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 
 import type { AuthRoleState } from "../upload-types";
 import { cn } from "../upload-utils";
-import { uploadUi } from "./upload-ui";
-
 type UploadAccessGateProps = {
   children: (context: {
     authRole: AuthRoleState;

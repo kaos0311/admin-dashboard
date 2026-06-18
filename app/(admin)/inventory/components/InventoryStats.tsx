@@ -4,6 +4,15 @@
 import { typography } from "@/theme";
 import { AlertTriangle, Boxes } from "lucide-react";
 
+export type InventoryStatKey =
+  | "items"
+  | "available"
+  | "lowStock"
+  | "discontinued"
+  | "serviceDue"
+  | "warrantyExpired"
+  | "value";
+
 type InventoryStatsProps = {
   totalItems: number;
   available: number;
@@ -12,6 +21,7 @@ type InventoryStatsProps = {
   serviceDue: number;
   warrantyExpired: number;
   totalValue: string;
+  onSelect: (statKey: InventoryStatKey) => void;
 };
 
 export function InventoryStats({
@@ -22,16 +32,17 @@ export function InventoryStats({
   serviceDue,
   warrantyExpired,
   totalValue,
+  onSelect,
 }: InventoryStatsProps) {
   return (
     <section className="grid gap-5 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-7">
-      <StatCard label="Items" value={totalItems} />
-      <StatCard label="Available" value={available} />
-      <StatCard label="Low Stock" value={lowStock} warning />
-      <StatCard label="Discontinued" value={discontinued} />
-      <StatCard label="Service Due" value={serviceDue} warning />
-      <StatCard label="Warranty Expired" value={warrantyExpired} warning />
-      <StatCard label="Value" value={totalValue} />
+      <StatCard label="Items" value={totalItems} onClick={() => onSelect("items")} />
+      <StatCard label="Available" value={available} onClick={() => onSelect("available")} />
+      <StatCard label="Low Stock" value={lowStock} warning onClick={() => onSelect("lowStock")} />
+      <StatCard label="Discontinued" value={discontinued} onClick={() => onSelect("discontinued")} />
+      <StatCard label="Service Due" value={serviceDue} warning onClick={() => onSelect("serviceDue")} />
+      <StatCard label="Warranty Expired" value={warrantyExpired} warning onClick={() => onSelect("warrantyExpired")} />
+      <StatCard label="Value" value={totalValue} onClick={() => onSelect("value")} />
     </section>
   );
 }
@@ -40,18 +51,23 @@ function StatCard({
   label,
   value,
   warning = false,
+  onClick,
 }: {
   label: string;
   value: string | number;
   warning?: boolean;
+  onClick: () => void;
 }) {
   return (
-    <div
-      className={`min-w-0 rounded-[1.5rem] border p-5 shadow-2xl shadow-black/20 backdrop-blur-xl ${
+    <button
+      type="button"
+      onClick={onClick}
+      className={`min-w-0 rounded-[1.5rem] border p-5 text-left shadow-2xl shadow-black/20 backdrop-blur-xl transition hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-white/[0.09] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50 ${
         warning
           ? "border-yellow-500/20 bg-yellow-500/10"
           : "border-white/10 bg-white/[0.07]"
       }`}
+      aria-label={`Open ${label} inventory products`}
     >
       <div className="flex min-w-0 items-center gap-3">
         <div className="shrink-0 rounded-2xl bg-white/10 p-3 shadow-inner shadow-white/5">
@@ -69,7 +85,7 @@ function StatCard({
           </p>
         </div>
       </div>
-    </div>
+    </button>
   );
 }
 

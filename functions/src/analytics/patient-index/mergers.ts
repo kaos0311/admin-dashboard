@@ -38,12 +38,24 @@ export function mergeBilling(
   return {
     lastInvoiceDate: next.lastInvoiceDate || existing.lastInvoiceDate,
     lastPaymentDate: next.lastPaymentDate || existing.lastPaymentDate,
+    invoiceCreateDate: next.invoiceCreateDate || existing.invoiceCreateDate,
+    invoiceOpenDate: next.invoiceOpenDate || existing.invoiceOpenDate,
+    invoiceServiceDate: next.invoiceServiceDate || existing.invoiceServiceDate,
+    invoiceDocumentDate: next.invoiceDocumentDate || existing.invoiceDocumentDate,
+    paymentCreateDate: next.paymentCreateDate || existing.paymentCreateDate,
+    paymentPostedDate: next.paymentPostedDate || existing.paymentPostedDate,
+    paymentDos: next.paymentDos || existing.paymentDos,
+    paymentReason: next.paymentReason || existing.paymentReason,
+    saleType: next.saleType || existing.saleType,
+    transactionType: next.transactionType || existing.transactionType,
+    lastPickupDate: next.lastPickupDate || existing.lastPickupDate,
     totalCharges90Days: existing.totalCharges90Days + next.totalCharges90Days,
     totalAllowed90Days: existing.totalAllowed90Days + next.totalAllowed90Days,
     totalPayments90Days: existing.totalPayments90Days + next.totalPayments90Days,
     totalAdjustments90Days:
       existing.totalAdjustments90Days + next.totalAdjustments90Days,
     openBalanceEstimate: existing.openBalanceEstimate + next.openBalanceEstimate,
+    appliedPayment: existing.appliedPayment + next.appliedPayment,
     invoiceStatus: next.invoiceStatus || existing.invoiceStatus,
   };
 }

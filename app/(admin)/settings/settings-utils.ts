@@ -200,6 +200,22 @@ export function normalizeInventorySettings(
       source.lowStockWarningEnabled,
       fallback.lowStockWarningEnabled
     ),
+    jarvisRecallInternetScanEnabled: readBoolean(
+      source.jarvisRecallInternetScanEnabled,
+      fallback.jarvisRecallInternetScanEnabled
+    ),
+    jarvisRecallScanNewProductsEnabled: readBoolean(
+      source.jarvisRecallScanNewProductsEnabled,
+      fallback.jarvisRecallScanNewProductsEnabled
+    ),
+    jarvisDiscontinuedInternetScanEnabled: readBoolean(
+      source.jarvisDiscontinuedInternetScanEnabled,
+      fallback.jarvisDiscontinuedInternetScanEnabled
+    ),
+    jarvisDiscontinuedScanNewProductsEnabled: readBoolean(
+      source.jarvisDiscontinuedScanNewProductsEnabled,
+      fallback.jarvisDiscontinuedScanNewProductsEnabled
+    ),
   };
 }
 

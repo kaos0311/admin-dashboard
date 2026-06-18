@@ -137,7 +137,7 @@ export function DatabaseHealthPanel({
               <span className="min-w-0 break-words">Database Health</span>
             </p>
             <p className={["mt-1", typography.smallMuted].join(" ")}>
-              Live operational pulse from protected dashboard records.
+              Live operational pulse from protected Command Center records.
             </p>
           </div>
 

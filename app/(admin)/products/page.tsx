@@ -25,7 +25,11 @@ import { ProductCatalog } from "./components/ProductCatalog";
 import { ProductFilters } from "./components/ProductFilters";
 import { ProductForm } from "./components/ProductForm";
 import { ProductHero } from "./components/ProductHero";
-import { ProductStatsGrid } from "./components/ProductStatsGrid";
+import { ProductRecallWatch } from "./components/ProductRecallWatch";
+import {
+  type ProductStatsAction,
+  ProductStatsGrid,
+} from "./components/ProductStatsGrid";
 
 import { useProducts } from "./hooks/useProducts";
 
@@ -98,6 +102,11 @@ export default function ProductsPage() {
   const [
     showAdvanced,
     setShowAdvanced,
+  ] = useState(false);
+
+  const [
+    recallFindingsOpen,
+    setRecallFindingsOpen,
   ] = useState(false);
 
   /*
@@ -212,6 +221,36 @@ export default function ProductsPage() {
     setFilters(
       initialProductFilters
     );
+  }
+
+  function handleStatsAction(
+    action: ProductStatsAction
+  ) {
+    if (action === "all") {
+      resetFilters();
+      return;
+    }
+
+    if (
+      action === "active" ||
+      action === "inactive" ||
+      action === "discontinued"
+    ) {
+      setFilters({
+        ...initialProductFilters,
+        statusFilter: action,
+      });
+      return;
+    }
+
+    setFilters({
+      ...initialProductFilters,
+      issueFilter: action,
+    });
+
+    if (action === "recall") {
+      setRecallFindingsOpen(true);
+    }
   }
 
   function handleEdit(
@@ -454,6 +493,20 @@ export default function ProductsPage() {
 
         <ProductStatsGrid
           stats={stats}
+          onAction={handleStatsAction}
+        />
+
+        <ProductRecallWatch
+          products={products}
+          canRead={canRead}
+          canWrite={canWrite}
+          open={recallFindingsOpen}
+          onOpenChange={setRecallFindingsOpen}
+          onRefreshProducts={() => {
+            void loadProducts("reset");
+          }}
+          onShowRecallProducts={() => handleStatsAction("recall")}
+          onShowDiscontinuedProducts={() => handleStatsAction("discontinued")}
         />
 
         {stats.highRisk >

@@ -357,6 +357,28 @@ function extractRecentPurchase(
   };
 }
 
+function sortEquipmentItems(items: CurrentEquipmentItem[]): CurrentEquipmentItem[] {
+  return items.slice().sort((left, right) => {
+    const leftDate = Date.parse(left.lastUpdated || left.startDate || "") || 0;
+    const rightDate = Date.parse(right.lastUpdated || right.startDate || "") || 0;
+    return rightDate - leftDate;
+  });
+}
+
+function sortPurchaseItems(items: RecentPurchaseItem[]): RecentPurchaseItem[] {
+  return items.slice().sort((left, right) => {
+    const leftDate = Date.parse(left.purchaseDate || "") || 0;
+    const rightDate = Date.parse(right.purchaseDate || "") || 0;
+    return rightDate - leftDate;
+  });
+}
+
+function latestDate(...values: Array<string | undefined>): string {
+  return values
+    .filter(Boolean)
+    .sort((left, right) => (Date.parse(right ?? "") || 0) - (Date.parse(left ?? "") || 0))[0] ?? "";
+}
+
 function rowLooksCpap(row: Record<string, unknown>): boolean {
   const haystack = [
     extractItemId(row),
@@ -577,14 +599,36 @@ export async function updatePatientIndexFromRows(args: {
 
     patientRollups.set(patientId, rollup);
 
-    const equipmentItems = Array.from(rollup.equipment.values());
-    const purchaseItems = Array.from(rollup.purchases.values());
+    const equipmentItems = sortEquipmentItems(Array.from(rollup.equipment.values()));
+    const purchaseItems = sortPurchaseItems(Array.from(rollup.purchases.values()));
+    const currentEquipment = equipmentItems.slice(0, 50);
+    const purchasesLast90Days = purchaseItems.slice(0, 50);
+    const latestEquipment = equipmentItems[0] ?? null;
+    const latestPurchase = purchaseItems[0] ?? null;
+    const lastEquipmentDate = latestDate(
+      latestEquipment?.lastUpdated,
+      latestEquipment?.startDate
+    );
+    const lastTreatmentDate = latestDate(
+      latestPurchase?.purchaseDate,
+      rollup.deliverySummary?.actualDeliveryDate,
+      rollup.deliverySummary?.scheduledDeliveryDate
+    );
+    const lastActivityDate = latestDate(
+      lastEquipmentDate,
+      lastTreatmentDate,
+      rollup.billing?.lastPaymentDate,
+      rollup.billing?.lastInvoiceDate,
+      rollup.deliverySummary?.actualDeliveryDate,
+      rollup.deliverySummary?.scheduledDeliveryDate
+    );
 
     const insurance = rollup.insurance;
     const billing = rollup.billing;
     const wip = rollup.wip;
 
     const patientRef = db.collection("patients_index").doc(patientId);
+    const patientChartRef = db.collection("patients").doc(patientId);
 
     const snapshot = buildPatientSnapshot({
       fullName: patient.fullName || "Unnamed Patient",
@@ -654,16 +698,15 @@ export async function updatePatientIndexFromRows(args: {
         },
 
         currentEquipmentCount: equipmentItems.length,
-        latestEquipment:
-          equipmentItems
-            .slice()
-            .sort((a, b) => b.lastUpdated.localeCompare(a.lastUpdated))[0] ?? null,
+        currentEquipment,
+        latestEquipment,
+        lastEquipmentDate,
 
         purchasesLast90DaysCount: purchaseItems.length,
-        latestPurchase:
-          purchaseItems
-            .slice()
-            .sort((a, b) => b.purchaseDate.localeCompare(a.purchaseDate))[0] ?? null,
+        purchasesLast90Days,
+        latestPurchase,
+        lastTreatmentDate,
+        lastActivityDate,
 
         authorization: rollup.authorization ?? null,
         cmn: rollup.cmn ?? null,
@@ -678,6 +721,47 @@ export async function updatePatientIndexFromRows(args: {
         rowCount: FieldValue.increment(1),
 
         indexVersion: INDEX_VERSION,
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+
+    writer.set(
+      patientChartRef,
+      {
+        patientId,
+        firstName: patient.firstName,
+        lastName: patient.lastName,
+        fullName: patient.fullName || "Unnamed Patient",
+        dateOfBirth: patient.dateOfBirth,
+        dateOfDeath: patient.dateOfDeath,
+        dob: patient.dateOfBirth,
+        dod: patient.dateOfDeath,
+        phone: patient.phone,
+        email: patient.email,
+        address: patient.address,
+        city: patient.city,
+        state: patient.state,
+        zip: patient.zip,
+        hospice: isHospice,
+        profile: rollup.profile ?? null,
+        insurance: rollup.insurance ?? null,
+        cpap: rollup.cpap ?? null,
+        currentEquipmentCount: equipmentItems.length,
+        currentEquipment,
+        latestEquipment,
+        purchasesLast90DaysCount: purchaseItems.length,
+        purchasesLast90Days,
+        latestPurchase,
+        authorization: rollup.authorization ?? null,
+        cmn: rollup.cmn ?? null,
+        billing: rollup.billing ?? null,
+        wip: rollup.wip ?? null,
+        deliverySummary: rollup.deliverySummary ?? null,
+        lastEquipmentDate,
+        lastTreatmentDate,
+        lastActivityDate,
+        reportTypes: FieldValue.arrayUnion(args.reportLabel),
         updatedAt: FieldValue.serverTimestamp(),
       },
       { merge: true }

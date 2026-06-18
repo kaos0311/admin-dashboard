@@ -3,11 +3,16 @@ import {
   FieldValue,
   getFirestore,
   QueryDocumentSnapshot,
+  Timestamp,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 
 import { resolveReportType } from "../imports/reportRegistry.js";
 import { cleanText } from "../imports/utils/normalize.js";
+import {
+  getImportRetentionCutoff,
+  getImportRetentionMetadata,
+} from "../importRetention.js";
 
 const db = getFirestore();
 
@@ -59,6 +64,13 @@ const REPORT_TYPES: ReportType[] = [
 
 type RebuildReportsAnalyticsPayload = {
   includeRowScan?: boolean;
+};
+
+type RunReportsAnalyticsRebuildParams = {
+  includeRowScan?: boolean;
+  requestedByUid: string;
+  requestedByEmail?: string;
+  jobType?: string;
 };
 
 type CallableRequestLike = {
@@ -196,6 +208,30 @@ function reportTypeFromCandidate(value: unknown): ReportType | null {
   return REPORT_TYPES.includes(resolved as ReportType)
     ? (resolved as ReportType)
     : null;
+}
+
+function getDocumentDate(data: FirebaseFirestore.DocumentData): Date | null {
+  const value =
+    data.createdAt ??
+    data.uploadedAt ??
+    data.updatedAt ??
+    data.completedAt;
+
+  if (value instanceof Timestamp) {
+    return value.toDate();
+  }
+
+  if (
+    value &&
+    typeof value === "object" &&
+    "toDate" in value &&
+    typeof (value as { toDate?: () => Date }).toDate === "function"
+  ) {
+    return (value as { toDate: () => Date }).toDate();
+  }
+
+  const parsed = new Date(String(value ?? ""));
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
 function normalizeReportType(...values: unknown[]): ReportType {
@@ -1029,6 +1065,267 @@ async function updateJobProgress(
   );
 }
 
+export async function runReportsAnalyticsRebuild({
+  includeRowScan = false,
+  requestedByUid,
+  requestedByEmail = "",
+  jobType = "rebuildReportsAnalytics",
+}: RunReportsAnalyticsRebuildParams) {
+  const uid = requestedByUid;
+  const email = requestedByEmail;
+  const startedAtMs = Date.now();
+
+  const jobRef = await db.collection("systemJobs").add({
+    type: jobType,
+    status: "processing",
+    stage: "starting",
+    includeRowScan,
+    requestedBy: uid,
+    requestedByEmail: email,
+    startedAt: FieldValue.serverTimestamp(),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  try {
+    const countsByType = emptyCounts();
+    const filesByType = emptyCounts();
+    const sourceBreakdownMap = new Map<string, SourceBreakdownRow>();
+    const uniqueFiles = new Set<string>();
+    const importCutoff = getImportRetentionCutoff();
+
+    let totalRows = 0;
+    let totalReportDocs = 0;
+    let reportsWithZeroRows = 0;
+    let scannedRowDocs = 0;
+
+    await updateJobProgress(jobRef, {
+      stage: "reading_reports",
+    });
+
+    const reportsSnap = await db.collection("importJobs").get();
+    totalReportDocs = reportsSnap.size;
+
+    for (const reportDoc of reportsSnap.docs) {
+      const data = reportDoc.data();
+      const documentDate = getDocumentDate(data);
+
+      if (documentDate && documentDate < importCutoff) {
+        continue;
+      }
+
+      uniqueFiles.add(reportDoc.id);
+
+      const reportType = normalizeReportType(
+        data.detectedReportKind,
+        data.detectedReportType,
+        data.sourceReportType,
+        data.reportType,
+        data.fileName,
+        reportDoc.id
+      );
+      const sourceKind = normalizeSourceKind(
+        data.detectedReportKind,
+        data.detectedReportType,
+        data.sourceReportType,
+        data.fileName,
+        reportDoc.id
+      );
+
+      filesByType[reportType] += 1;
+
+      const rowCount =
+        safeNumber(data.totalRows) ||
+        safeNumber(data.rowCount) ||
+        safeNumber(data.processedRows);
+
+      if (rowCount > 0) {
+        totalRows += rowCount;
+        countsByType[reportType] += rowCount;
+      } else {
+        reportsWithZeroRows += 1;
+      }
+
+      updateSourceBreakdown(sourceBreakdownMap, {
+        key: sourceKind,
+        category: reportType,
+        rows: rowCount,
+      });
+    }
+
+    if (includeRowScan) {
+      await updateJobProgress(jobRef, {
+        stage: "scanning_rows",
+        scannedRowDocs: 0,
+      });
+
+      const rowCounts = emptyCounts();
+      let lastDoc: QueryDocumentSnapshot | undefined;
+
+      while (true) {
+        let rowsQuery = db
+          .collectionGroup("rows")
+          .orderBy("__name__")
+          .limit(ROW_SCAN_PAGE_SIZE);
+
+        if (lastDoc) {
+          rowsQuery = rowsQuery.startAfter(lastDoc);
+        }
+
+        const rowsSnap = await rowsQuery.get();
+
+        if (rowsSnap.empty) break;
+
+        for (const rowDoc of rowsSnap.docs) {
+          scannedRowDocs += 1;
+
+          if (scannedRowDocs > MAX_ANALYTICS_ROWS) {
+            throw new Error(
+              `Row scan exceeded max allowed rows (${MAX_ANALYTICS_ROWS})`
+            );
+          }
+
+          const data = rowDoc.data();
+          if (!getImportRetentionMetadata(data).keep) {
+            continue;
+          }
+
+          const parentReportId = rowDoc.ref.parent.parent?.id;
+
+          if (parentReportId) {
+            uniqueFiles.add(parentReportId);
+          }
+
+          const reportType = normalizeReportType(
+            data.detectedReportKind,
+            data.detectedReportType,
+            data.sourceReportType,
+            data.reportType,
+            data.fileName,
+            parentReportId
+          );
+
+          rowCounts[reportType] += 1;
+        }
+
+        lastDoc = rowsSnap.docs.at(-1);
+
+        if (scannedRowDocs % JOB_PROGRESS_EVERY_ROWS === 0) {
+          await updateJobProgress(jobRef, {
+            stage: "scanning_rows",
+            scannedRowDocs,
+          });
+        }
+
+        if (rowsSnap.size < ROW_SCAN_PAGE_SIZE) break;
+      }
+
+      totalRows = scannedRowDocs;
+
+      for (const type of REPORT_TYPES) {
+        countsByType[type] = rowCounts[type];
+      }
+    }
+
+    const durationMs = Date.now() - startedAtMs;
+    const generatedAtLabel = formatGeneratedAtLabel();
+    const sourceBreakdown = Array.from(sourceBreakdownMap.values()).sort(
+      (a, b) => b.rows - a.rows || a.label.localeCompare(b.label)
+    );
+    const [patientClassification, retailFinancials] = await Promise.all([
+      buildPatientClassificationAnalytics({
+        countsByType,
+        generatedAtLabel,
+      }),
+      buildRetailFinancialAnalytics(generatedAtLabel),
+    ]);
+
+    const analyticsPayload = {
+      totalRows,
+      totalFiles: uniqueFiles.size,
+      totalReportDocs,
+      reportsWithZeroRows,
+      scannedRowDocs,
+      countsByType,
+      filesByType,
+      sourceBreakdown,
+      includeRowScan,
+      generatedAtLabel,
+      patientClassification,
+      retailFinancials,
+      rebuiltByUid: uid,
+      rebuiltByEmail: email,
+      durationMs,
+      analyticsVersion: ANALYTICS_VERSION,
+      status: "ready",
+      source: "Firestore analytics document",
+      lastRebuiltByUid: uid,
+      lastRebuiltByEmail: email,
+      analyticsGeneratedAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+
+    await db.collection("analytics").doc("reports").set(analyticsPayload, {
+      merge: true,
+    });
+
+    await updateJobProgress(jobRef, {
+      status: "completed",
+      stage: "completed",
+      totalRows,
+      totalFiles: uniqueFiles.size,
+      totalReportDocs,
+      reportsWithZeroRows,
+      scannedRowDocs,
+      countsByType,
+      filesByType,
+      sourceBreakdown,
+      patientClassification,
+      retailFinancials,
+      durationMs,
+      completedAt: FieldValue.serverTimestamp(),
+    });
+
+    logger.info("Reports analytics rebuilt", {
+      analyticsVersion: ANALYTICS_VERSION,
+      totalRows,
+      totalFiles: uniqueFiles.size,
+      totalReportDocs,
+      scannedRowDocs,
+      countsByType,
+      sourceBreakdown,
+      patientClassification,
+      durationMs,
+    });
+
+    return {
+      ok: true,
+      totalRows,
+      totalFiles: uniqueFiles.size,
+      totalReportDocs,
+      scannedRowDocs,
+      analyticsVersion: ANALYTICS_VERSION,
+      retailMeasures: retailFinancials.metrics.length,
+      durationMs,
+    };
+  } catch (error) {
+    const message =
+      error instanceof Error ? error.message : "Failed rebuilding analytics";
+
+    logger.error("rebuildReportsAnalytics failed", {
+      error: message,
+    });
+
+    await updateJobProgress(jobRef, {
+      status: "failed",
+      stage: "failed",
+      error: message,
+      failedAt: FieldValue.serverTimestamp(),
+    });
+
+    throw new HttpsError("internal", message);
+  }
+}
+
 export const rebuildReportsAnalytics = onCall(
   {
     region: "us-central1",
@@ -1039,251 +1336,11 @@ export const rebuildReportsAnalytics = onCall(
     requireStaffOrAdmin(request as CallableRequestLike);
 
     const payload = getPayload(request.data);
-    const includeRowScan = payload.includeRowScan === true;
-
-    const uid = request.auth!.uid;
-    const email = getAuthEmail(request as CallableRequestLike);
-    const startedAtMs = Date.now();
-
-    const jobRef = await db.collection("systemJobs").add({
-      type: "rebuildReportsAnalytics",
-      status: "processing",
-      stage: "starting",
-      includeRowScan,
-      requestedBy: uid,
-      requestedByEmail: email,
-      startedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+    return runReportsAnalyticsRebuild({
+      includeRowScan: payload.includeRowScan === true,
+      requestedByUid: request.auth!.uid,
+      requestedByEmail: getAuthEmail(request as CallableRequestLike),
     });
-
-    try {
-      const countsByType = emptyCounts();
-      const filesByType = emptyCounts();
-      const sourceBreakdownMap = new Map<string, SourceBreakdownRow>();
-      const uniqueFiles = new Set<string>();
-
-      let totalRows = 0;
-      let totalReportDocs = 0;
-      let reportsWithZeroRows = 0;
-      let scannedRowDocs = 0;
-
-      await updateJobProgress(jobRef, {
-        stage: "reading_reports",
-      });
-
-      const reportsSnap = await db.collection("importJobs").get();
-      totalReportDocs = reportsSnap.size;
-
-      for (const reportDoc of reportsSnap.docs) {
-        const data = reportDoc.data();
-
-        uniqueFiles.add(reportDoc.id);
-
-        const reportType = normalizeReportType(
-          data.detectedReportKind,
-          data.detectedReportType,
-          data.sourceReportType,
-          data.reportType,
-          data.fileName,
-          reportDoc.id
-        );
-        const sourceKind = normalizeSourceKind(
-          data.detectedReportKind,
-          data.detectedReportType,
-          data.sourceReportType,
-          data.fileName,
-          reportDoc.id
-        );
-
-        filesByType[reportType] += 1;
-
-        const rowCount =
-          safeNumber(data.totalRows) ||
-          safeNumber(data.rowCount) ||
-          safeNumber(data.processedRows);
-
-        if (rowCount > 0) {
-          totalRows += rowCount;
-          countsByType[reportType] += rowCount;
-        } else {
-          reportsWithZeroRows += 1;
-        }
-
-        updateSourceBreakdown(sourceBreakdownMap, {
-          key: sourceKind,
-          category: reportType,
-          rows: rowCount,
-        });
-      }
-
-      if (includeRowScan) {
-        await updateJobProgress(jobRef, {
-          stage: "scanning_rows",
-          scannedRowDocs: 0,
-        });
-
-        const rowCounts = emptyCounts();
-        let lastDoc: QueryDocumentSnapshot | undefined;
-
-        while (true) {
-          let rowsQuery = db
-            .collectionGroup("rows")
-            .orderBy("__name__")
-            .limit(ROW_SCAN_PAGE_SIZE);
-
-          if (lastDoc) {
-            rowsQuery = rowsQuery.startAfter(lastDoc);
-          }
-
-          const rowsSnap = await rowsQuery.get();
-
-          if (rowsSnap.empty) break;
-
-          for (const rowDoc of rowsSnap.docs) {
-            scannedRowDocs += 1;
-
-            if (scannedRowDocs > MAX_ANALYTICS_ROWS) {
-              throw new Error(
-                `Row scan exceeded max allowed rows (${MAX_ANALYTICS_ROWS})`
-              );
-            }
-
-            const data = rowDoc.data();
-            const parentReportId = rowDoc.ref.parent.parent?.id;
-
-            if (parentReportId) {
-              uniqueFiles.add(parentReportId);
-            }
-
-            const reportType = normalizeReportType(
-              data.detectedReportKind,
-              data.detectedReportType,
-              data.sourceReportType,
-              data.reportType,
-              data.fileName,
-              parentReportId
-            );
-
-            rowCounts[reportType] += 1;
-          }
-
-          lastDoc = rowsSnap.docs.at(-1);
-
-          if (scannedRowDocs % JOB_PROGRESS_EVERY_ROWS === 0) {
-            await updateJobProgress(jobRef, {
-              stage: "scanning_rows",
-              scannedRowDocs,
-            });
-          }
-
-          if (rowsSnap.size < ROW_SCAN_PAGE_SIZE) break;
-        }
-
-        totalRows = scannedRowDocs;
-
-        for (const type of REPORT_TYPES) {
-          countsByType[type] = rowCounts[type];
-        }
-      }
-
-      const durationMs = Date.now() - startedAtMs;
-      const generatedAtLabel = formatGeneratedAtLabel();
-      const sourceBreakdown = Array.from(sourceBreakdownMap.values()).sort(
-        (a, b) => b.rows - a.rows || a.label.localeCompare(b.label)
-      );
-      const [patientClassification, retailFinancials] = await Promise.all([
-        buildPatientClassificationAnalytics({
-          countsByType,
-          generatedAtLabel,
-        }),
-        buildRetailFinancialAnalytics(generatedAtLabel),
-      ]);
-
-      const analyticsPayload = {
-        totalRows,
-        totalFiles: uniqueFiles.size,
-        totalReportDocs,
-        reportsWithZeroRows,
-        scannedRowDocs,
-        countsByType,
-        filesByType,
-        sourceBreakdown,
-        includeRowScan,
-        generatedAtLabel,
-        patientClassification,
-        retailFinancials,
-        rebuiltByUid: uid,
-        rebuiltByEmail: email,
-        durationMs,
-        analyticsVersion: ANALYTICS_VERSION,
-        status: "ready",
-        source: "Firestore analytics document",
-        lastRebuiltByUid: uid,
-        lastRebuiltByEmail: email,
-        analyticsGeneratedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      };
-
-      await db.collection("analytics").doc("reports").set(analyticsPayload, {
-        merge: true,
-      });
-
-      await updateJobProgress(jobRef, {
-        status: "completed",
-        stage: "completed",
-        totalRows,
-        totalFiles: uniqueFiles.size,
-        totalReportDocs,
-        reportsWithZeroRows,
-        scannedRowDocs,
-        countsByType,
-        filesByType,
-        sourceBreakdown,
-        patientClassification,
-        retailFinancials,
-        durationMs,
-        completedAt: FieldValue.serverTimestamp(),
-      });
-
-      logger.info("Reports analytics rebuilt", {
-        analyticsVersion: ANALYTICS_VERSION,
-        totalRows,
-        totalFiles: uniqueFiles.size,
-        totalReportDocs,
-        scannedRowDocs,
-        countsByType,
-        sourceBreakdown,
-        patientClassification,
-        durationMs,
-      });
-
-      return {
-        ok: true,
-        totalRows,
-        totalFiles: uniqueFiles.size,
-        totalReportDocs,
-        scannedRowDocs,
-        analyticsVersion: ANALYTICS_VERSION,
-        retailMeasures: retailFinancials.metrics.length,
-        durationMs,
-      };
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Failed rebuilding analytics";
-
-      logger.error("rebuildReportsAnalytics failed", {
-        error: message,
-      });
-
-      await updateJobProgress(jobRef, {
-        status: "failed",
-        stage: "failed",
-        error: message,
-        failedAt: FieldValue.serverTimestamp(),
-      });
-
-      throw new HttpsError("internal", message);
-    }
   }
 );
 

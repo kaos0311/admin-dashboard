@@ -47,7 +47,7 @@ export const SETTINGS_TABS: {
   {
     key: "preferences",
     label: "Preferences",
-    description: "Dashboard behavior and display options.",
+    description: "Command Center behavior and display options.",
   },
   {
     key: "inventory",
@@ -63,6 +63,11 @@ export const SETTINGS_TABS: {
     key: "apis",
     label: "APIs",
     description: "Track useful APIs, status, docs, and key handling.",
+  },
+  {
+    key: "vendor-research",
+    label: "Vendor Research",
+    description: "Document vendor sites Jarvis can use for product research.",
   },
   {
     key: "users",
@@ -142,7 +147,7 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
   },
 
   preferences: {
-    defaultDashboardRoute: "/dashboard",
+    defaultDashboardRoute: "/command-center",
     compactTables: false,
     enableAnimations: true,
     showPhiWarnings: true,
@@ -166,6 +171,10 @@ export const DEFAULT_APP_SETTINGS: AppSettings = {
     rentalEquipmentReorderLevel: 2,
     highDemandReorderLevel: 15,
     lowStockWarningEnabled: true,
+    jarvisRecallInternetScanEnabled: false,
+    jarvisRecallScanNewProductsEnabled: true,
+    jarvisDiscontinuedInternetScanEnabled: false,
+    jarvisDiscontinuedScanNewProductsEnabled: true,
   },
 
   brightreeReferences: DEFAULT_BRIGHTREE_REFERENCES,

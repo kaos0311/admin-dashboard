@@ -50,15 +50,19 @@ service firebase.storage {
     }
 
     function isAdmin() {
-      return hasRole("admin");
+      return hasRole("admin") || hasRole("tank");
     }
 
     function isStaff() {
       return hasRole("staff");
     }
 
+    function isTank() {
+      return hasRole("tank");
+    }
+
     function isStaffOrAdmin() {
-      return isAdmin() || isStaff();
+      return isAdmin() || isStaff() || isTank();
     }
 
     /*

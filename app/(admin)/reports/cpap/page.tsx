@@ -16,7 +16,9 @@ import {
   AlertCircle,
   CalendarClock,
   CalendarDays,
+  ChevronDown,
   ClipboardCheck,
+  ExternalLink,
   PackageCheck,
   Phone,
   Plus,
@@ -34,7 +36,11 @@ import {
   hasCpapEquipment,
   isMedicarePatient,
 } from "../patients/lib/cpapEligibility";
-import type { PatientIndex, PatientWithDerived } from "../patients/lib/patientTypes";
+import type {
+  CurrentEquipmentItem,
+  PatientIndex,
+  PatientWithDerived,
+} from "../patients/lib/patientTypes";
 import {
   derivePatient,
   formatDate,
@@ -47,11 +53,25 @@ type PickupRow = {
   eligibility: CpapEligibilityRow;
 };
 
+type PickupPatientTile = {
+  patient: PatientWithDerived;
+  rows: CpapEligibilityRow[];
+  machineType: string;
+  maskType: string;
+  readyCount: number;
+  soonCount: number;
+  verifyCount: number;
+};
+
 type SetupRow = {
   patient: PatientWithDerived;
   date: string;
   label: string;
 };
+
+type StatTileId = "cpap" | "ready" | "soon" | "verify";
+
+type StatPatientGroups = Record<StatTileId, PatientWithDerived[]>;
 
 type ManualSetupAppointment = {
   id: string;
@@ -68,6 +88,60 @@ function cx(...classes: Array<string | false | null | undefined>) {
 
 function mapPatientDoc(id: string, data: DocumentData): PatientWithDerived {
   return derivePatient(normalizePatient(id, data as Partial<PatientIndex>));
+}
+
+function cleanText(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function firstText(...values: unknown[]): string {
+  for (const value of values) {
+    const text = cleanText(value);
+    if (text) return text;
+  }
+
+  return "";
+}
+
+function equipmentDateMs(item: CurrentEquipmentItem): number {
+  for (const value of [item.lastUpdated, item.startDate, item.replacementDueDate]) {
+    const parsed = Date.parse(cleanText(value));
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+
+  return 0;
+}
+
+function equipmentText(patient: PatientWithDerived, category: "machine" | "mask"): string {
+  const matches = (patient.currentEquipment ?? [])
+    .filter((equipment) => {
+      const name = cleanText(equipment.itemName).toLowerCase();
+      const hcpc = cleanText(equipment.hcpc).toLowerCase();
+      const equipmentCategory = cleanText(equipment.category).toLowerCase();
+
+      if (category === "machine") {
+        return /cpap|bipap|pap/.test(name) || /e0601|e0470|e0471|e0472/.test(hcpc);
+      }
+
+      return equipmentCategory.includes("mask") || name.includes("mask") || /a7030|a7034/.test(hcpc);
+    })
+    .sort((a, b) => equipmentDateMs(b) - equipmentDateMs(a));
+
+  const item = matches[0];
+
+  return firstText(item?.itemName, item?.hcpc);
+}
+
+function uniquePatients(patients: PatientWithDerived[]): PatientWithDerived[] {
+  const byId = new Map<string, PatientWithDerived>();
+
+  for (const patient of patients) {
+    byId.set(patient.id, patient);
+  }
+
+  return Array.from(byId.values()).sort((a, b) =>
+    a.fullName.localeCompare(b.fullName),
+  );
 }
 
 function statusLabel(row: CpapEligibilityRow): string {
@@ -126,6 +200,8 @@ export default function CpapCalendarPage() {
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
   const [appointmentNotes, setAppointmentNotes] = useState("");
+  const [expandedPickupPatientId, setExpandedPickupPatientId] = useState<string | null>(null);
+  const [expandedStatTile, setExpandedStatTile] = useState<StatTileId | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -237,6 +313,61 @@ export default function CpapCalendarPage() {
 
   const setupRows = useMemo(() => nextSetupRows(cpapPatients), [cpapPatients]);
 
+  const statPatients = useMemo<StatPatientGroups>(() => {
+    const ready: PatientWithDerived[] = [];
+    const soon: PatientWithDerived[] = [];
+    const verify: PatientWithDerived[] = [];
+
+    for (const patient of cpapPatients) {
+      const rows = getCpapReadyRows(patient);
+
+      if (rows.some((row) => row.status === "ready")) ready.push(patient);
+      if (rows.some((row) => row.status === "soon")) soon.push(patient);
+      if (rows.some((row) => row.status === "missing")) verify.push(patient);
+    }
+
+    return {
+      cpap: uniquePatients(cpapPatients),
+      ready: uniquePatients(ready),
+      soon: uniquePatients(soon),
+      verify: uniquePatients(verify),
+    };
+  }, [cpapPatients]);
+
+  const pickupPatientTiles = useMemo<PickupPatientTile[]>(() => {
+    const byPatient = new Map<string, PickupPatientTile>();
+
+    for (const { patient, eligibility } of pickupRows) {
+      const existing = byPatient.get(patient.id);
+
+      if (existing) {
+        existing.rows.push(eligibility);
+        existing.readyCount += eligibility.status === "ready" ? 1 : 0;
+        existing.soonCount += eligibility.status === "soon" ? 1 : 0;
+        existing.verifyCount += eligibility.status === "missing" ? 1 : 0;
+        continue;
+      }
+
+      byPatient.set(patient.id, {
+        patient,
+        rows: [eligibility],
+        machineType: firstText(patient.cpap?.machine, equipmentText(patient, "machine"), "Machine not listed"),
+        maskType: firstText(equipmentText(patient, "mask"), patient.cpap?.maskType, "Mask not listed"),
+        readyCount: eligibility.status === "ready" ? 1 : 0,
+        soonCount: eligibility.status === "soon" ? 1 : 0,
+        verifyCount: eligibility.status === "missing" ? 1 : 0,
+      });
+    }
+
+    return Array.from(byPatient.values()).sort((a, b) => {
+      return (
+        b.readyCount - a.readyCount ||
+        b.soonCount - a.soonCount ||
+        a.patient.fullName.localeCompare(b.patient.fullName)
+      );
+    });
+  }, [pickupRows]);
+
   const appointmentsWithPatient = useMemo(() => {
     return appointments.map((appointment) => {
       const normalizedName = appointment.patientName.trim().toLowerCase();
@@ -251,13 +382,47 @@ export default function CpapCalendarPage() {
     });
   }, [appointments, patients]);
 
-  const stats = useMemo(() => {
-    const ready = pickupRows.filter((row) => row.eligibility.status === "ready").length;
-    const soon = pickupRows.filter((row) => row.eligibility.status === "soon").length;
-    const verify = pickupRows.filter((row) => row.eligibility.status === "missing").length;
+  const stats = useMemo(
+    () => ({
+      cpapPatients: statPatients.cpap.length,
+      ready: statPatients.ready.length,
+      soon: statPatients.soon.length,
+      verify: statPatients.verify.length,
+    }),
+    [statPatients],
+  );
 
-    return { cpapPatients: cpapPatients.length, ready, soon, verify };
-  }, [cpapPatients.length, pickupRows]);
+  const statTiles = useMemo(
+    () => [
+      {
+        id: "cpap" as const,
+        label: "CPAP Patients",
+        value: stats.cpapPatients,
+        patients: statPatients.cpap,
+      },
+      {
+        id: "ready" as const,
+        label: "Ready Now",
+        value: stats.ready,
+        patients: statPatients.ready,
+      },
+      {
+        id: "soon" as const,
+        label: "Due Soon",
+        value: stats.soon,
+        patients: statPatients.soon,
+      },
+      {
+        id: "verify" as const,
+        label: "Verify History",
+        value: stats.verify,
+        patients: statPatients.verify,
+      },
+    ],
+    [statPatients, stats],
+  );
+
+  const activeStat = statTiles.find((tile) => tile.id === expandedStatTile) ?? null;
 
   async function saveSetupAppointment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -325,31 +490,84 @@ export default function CpapCalendarPage() {
         </section>
 
         <section className={spacing.gridResponsive}>
-          <article className={glass.statCard}>
-            <p className={typography.caption}>CPAP Patients</p>
-            <p className={cx(typography.metricCompact, "mt-2")}>
-              {stats.cpapPatients.toLocaleString()}
-            </p>
-          </article>
-          <article className={glass.statCard}>
-            <p className={typography.caption}>Ready Now</p>
-            <p className={cx(typography.metricCompact, "mt-2")}>
-              {stats.ready.toLocaleString()}
-            </p>
-          </article>
-          <article className={glass.statCard}>
-            <p className={typography.caption}>Due Soon</p>
-            <p className={cx(typography.metricCompact, "mt-2")}>
-              {stats.soon.toLocaleString()}
-            </p>
-          </article>
-          <article className={glass.statCard}>
-            <p className={typography.caption}>Verify History</p>
-            <p className={cx(typography.metricCompact, "mt-2")}>
-              {stats.verify.toLocaleString()}
-            </p>
-          </article>
+          {statTiles.map((tile) => {
+            const selected = expandedStatTile === tile.id;
+
+            return (
+              <button
+                key={tile.id}
+                type="button"
+                aria-expanded={selected}
+                onClick={() => setExpandedStatTile(selected ? null : tile.id)}
+                className={cx(
+                  glass.statCard,
+                  glass.cardHover,
+                  "min-w-0 text-left",
+                  selected && "ring-1 ring-cyan-300/60",
+                )}
+              >
+                <span className={typography.caption}>{tile.label}</span>
+                <span className={cx(typography.metricCompact, "mt-2 block")}>
+                  {tile.value.toLocaleString()}
+                </span>
+                <span className={cx(typography.smallMuted, "mt-2 block")}>
+                  {selected ? "Hide patients" : "Show patients"}
+                </span>
+              </button>
+            );
+          })}
         </section>
+
+        {activeStat ? (
+          <section className={glass.panelPadded}>
+            <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
+              <div className="min-w-0">
+                <h2 className={typography.cardTitle}>{activeStat.label}</h2>
+                <p className={cx(typography.smallMuted, "mt-1")}>
+                  Unique patients counted in this CPAP calendar tile.
+                </p>
+              </div>
+
+              <span className={glass.chip}>
+                {activeStat.patients.length.toLocaleString()} patients
+              </span>
+            </div>
+
+            {activeStat.patients.length === 0 ? (
+              <p className={cx(glass.emptyState, "text-center")}>
+                No patients found for this tile.
+              </p>
+            ) : (
+              <div className="grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
+                {activeStat.patients.map((patient) => (
+                  <Link
+                    key={`${activeStat.id}-${patient.id}`}
+                    href={`/reports/patients/${patient.id}?tab=items`}
+                    className={cx(glass.insetPadded, glass.cardHover, "block min-w-0")}
+                  >
+                    <p className={cx(typography.bodyStrong, "break-words")}>
+                      {patient.fullName || "Unnamed Patient"}
+                    </p>
+                    <dl className="mt-3 grid min-w-0 gap-2">
+                      <div className="flex min-w-0 items-center justify-between gap-3">
+                        <dt className={typography.caption}>DOB</dt>
+                        <dd className={cx(typography.small, "break-words text-right")}>
+                          {formatDate(patient.dateOfBirth || patient.dob)}
+                        </dd>
+                      </div>
+                      <div className="flex min-w-0 items-center justify-between gap-3">
+                        <dt className={typography.caption}>Phone</dt>
+                        <dd className={cx(typography.small, "break-words text-right")}>
+                          {patient.phone || "No phone listed"}
+                        </dd>
+                      </div>
+                    </dl>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </section>
+        ) : null}
 
         <section className={glass.panelPadded}>
           <label htmlFor="cpap-search" className={typography.formLabel}>
@@ -518,79 +736,140 @@ export default function CpapCalendarPage() {
             <h2 className={typography.cardTitle}>Ready For Pickup</h2>
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full table-fixed border-separate border-spacing-y-2 text-left">
-              <thead>
-                <tr className={typography.caption}>
-                  <th className="w-[22%] px-3 py-2">Patient</th>
-                  <th className="w-[22%] px-3 py-2">Supply</th>
-                  <th className="w-[14%] px-3 py-2">HCPCS</th>
-                  <th className="w-[14%] px-3 py-2">Eligible</th>
-                  <th className="w-[12%] px-3 py-2">Qty</th>
-                  <th className="w-[16%] px-3 py-2">Status</th>
-                </tr>
-              </thead>
+          {pickupPatientTiles.length === 0 ? (
+            <p className={cx(glass.emptyState, "text-center")}>
+              {loading ? "Loading CPAP worklist..." : "No matching CPAP pickup patients."}
+            </p>
+          ) : (
+            <div className="grid min-w-0 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+              {pickupPatientTiles.map((tile) => {
+                const medicare = isMedicarePatient(tile.patient);
+                const equipmentExpanded = expandedPickupPatientId === tile.patient.id;
 
-              <tbody>
-                {pickupRows.length === 0 ? (
-                  <tr>
-                    <td colSpan={6} className={cx(glass.emptyState, "text-center")}>
-                      {loading ? "Loading CPAP worklist..." : "No matching CPAP pickup rows."}
-                    </td>
-                  </tr>
-                ) : (
-                  pickupRows.map(({ patient, eligibility }) => {
-                    const medicare = isMedicarePatient(patient);
+                return (
+                  <article
+                    key={tile.patient.id}
+                    className={cx(glass.cardPadded, "min-w-0")}
+                  >
+                    <div className="flex min-w-0 items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <Link
+                          href={`/reports/patients/${tile.patient.id}?tab=items`}
+                          className="group flex min-w-0 items-center gap-2"
+                        >
+                          <UserRound className="h-4 w-4 shrink-0 text-cyan-200" aria-hidden />
+                          <h3 className={cx(typography.bodyStrong, "break-words group-hover:text-cyan-100")}>
+                            {tile.patient.fullName || "Unnamed Patient"}
+                          </h3>
+                        </Link>
+                        <p className={cx(typography.smallMuted, "mt-1 break-words")}>
+                          {tile.patient.insurance?.primaryInsurance ||
+                            tile.patient.insurance?.payor ||
+                            "No insurance listed"}
+                        </p>
+                      </div>
 
-                    return (
-                      <tr key={`${patient.id}-${eligibility.rule.id}`} className={glass.inset}>
-                        <td className="rounded-l-lg px-3 py-3 align-top">
-                          <Link
-                            href={`/reports/patients/${patient.id}`}
-                            className="group inline-flex min-w-0 items-center gap-2"
-                          >
-                            <UserRound className="h-4 w-4 shrink-0 text-cyan-200" aria-hidden />
-                            <span className={cx(typography.bodyStrong, "break-words group-hover:text-cyan-100")}>
-                              {patient.fullName || "Unnamed Patient"}
-                            </span>
-                          </Link>
-                          <p className={cx(typography.smallMuted, "mt-1 break-words")}>
-                            {patient.insurance?.primaryInsurance ||
-                              patient.insurance?.payor ||
-                              "No insurance listed"}
-                          </p>
-                        </td>
-                        <td className="px-3 py-3 align-top">
-                          <p className={typography.bodyStrong}>
-                            {eligibility.rule.label}
-                          </p>
-                          <p className={typography.smallMuted}>
-                            {eligibility.rule.description}
-                          </p>
-                        </td>
-                        <td className={`${typography.small} px-3 py-3 align-top`}>
-                          {eligibility.rule.hcpcs.join(", ")}
-                        </td>
-                        <td className={`${typography.small} px-3 py-3 align-top`}>
-                          {formatDate(eligibility.nextEligibleDate)}
-                        </td>
-                        <td className={`${typography.small} px-3 py-3 align-top`}>
-                          {medicare
-                            ? eligibility.rule.medicareThreeMonthQuantity
-                            : eligibility.rule.standardQuantity}
-                        </td>
-                        <td className="rounded-r-lg px-3 py-3 align-top">
-                          <span className={`${glass.chip} ${statusClass(eligibility)}`}>
-                            {statusLabel(eligibility)}
+                      <div className="flex shrink-0 flex-wrap justify-end gap-1 text-right">
+                        {tile.readyCount > 0 ? (
+                          <span className={`${glass.chip} ${badges.success}`}>
+                            {tile.readyCount} ready
                           </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-                )}
-              </tbody>
-            </table>
-          </div>
+                        ) : null}
+                        {tile.soonCount > 0 ? (
+                          <span className={`${glass.chip} ${badges.warning}`}>
+                            {tile.soonCount} soon
+                          </span>
+                        ) : null}
+                        {tile.verifyCount > 0 ? (
+                          <span className={`${glass.chip} ${badges.info}`}>
+                            {tile.verifyCount} verify
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+
+                    <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
+                      <div className={glass.insetPadded}>
+                        <p className={typography.caption}>Machine Type</p>
+                        <p className={cx(typography.bodyStrong, "mt-1 break-words")}>
+                          {tile.machineType}
+                        </p>
+                      </div>
+                      <div className={glass.insetPadded}>
+                        <p className={typography.caption}>Mask Type</p>
+                        <p className={cx(typography.bodyStrong, "mt-1 break-words")}>
+                          {tile.maskType}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        aria-expanded={equipmentExpanded}
+                        onClick={() =>
+                          setExpandedPickupPatientId(equipmentExpanded ? null : tile.patient.id)
+                        }
+                        className={buttons.secondary}
+                      >
+                        <PackageCheck className="h-4 w-4" aria-hidden />
+                        {equipmentExpanded ? "Hide equipment" : `Show ${tile.rows.length} equipment`}
+                        <ChevronDown
+                          className={cx(
+                            "h-4 w-4 transition-transform",
+                            equipmentExpanded && "rotate-180",
+                          )}
+                          aria-hidden
+                        />
+                      </button>
+
+                      <Link
+                        href={`/reports/patients/${tile.patient.id}?tab=items`}
+                        className={buttons.ghost}
+                      >
+                        <ExternalLink className="h-4 w-4" aria-hidden />
+                        Open Items
+                      </Link>
+                    </div>
+
+                    {equipmentExpanded ? (
+                      <div className="mt-4 space-y-2">
+                        {tile.rows.map((eligibility) => (
+                          <div key={eligibility.rule.id} className={glass.insetPadded}>
+                            <div className="flex min-w-0 items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className={cx(typography.bodyStrong, "break-words")}>
+                                  {eligibility.rule.label}
+                                </p>
+                                <p className={cx(typography.smallMuted, "mt-1 break-words")}>
+                                  {eligibility.rule.hcpcs.join(", ")}
+                                </p>
+                              </div>
+                              <span className={`${glass.chip} ${statusClass(eligibility)} shrink-0`}>
+                                {statusLabel(eligibility)}
+                              </span>
+                            </div>
+
+                            <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2">
+                              <p className={typography.smallMuted}>
+                                Eligible: {formatDate(eligibility.nextEligibleDate)}
+                              </p>
+                              <p className={typography.smallMuted}>
+                                Qty:{" "}
+                                {medicare
+                                  ? eligibility.rule.medicareThreeMonthQuantity
+                                  : eligibility.rule.standardQuantity}
+                              </p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : null}
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </section>
 
         <section className={glass.panelPadded}>

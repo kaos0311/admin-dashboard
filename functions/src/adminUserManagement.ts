@@ -23,14 +23,28 @@ type ResetUserPasswordPayload = {
   newPassword?: string;
 };
 
-function assertAdmin(request: Parameters<Parameters<typeof onCall>[0]>[0]) {
+function isAdminRole(value: unknown): boolean {
+  return value === "admin" || value === "tank";
+}
+
+async function assertAdmin(request: Parameters<Parameters<typeof onCall>[0]>[0]) {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "Authentication required.");
   }
 
   const role = request.auth.token.role;
+  const userSnap = await getFirestore()
+    .collection("users")
+    .doc(request.auth.uid)
+    .get();
+  const userData = userSnap.exists ? userSnap.data() : null;
+  const docRole = userData?.role;
+  const isDisabled =
+    userData?.active === false ||
+    userData?.disabled === true ||
+    userData?.deleted === true;
 
-  if (role !== "admin") {
+  if (isDisabled || (!isAdminRole(role) && !isAdminRole(docRole))) {
     throw new HttpsError("permission-denied", "Admin access required.");
   }
 
@@ -68,7 +82,7 @@ function requirePassword(value: unknown): string {
 }
 
 export const updateUserRole = onCall<UpdateUserRolePayload>(async (request) => {
-  const actorUid = assertAdmin(request);
+  const actorUid = await assertAdmin(request);
   const uid = requireUid(request.data?.uid);
   const role = requireRole(request.data?.role);
 
@@ -95,7 +109,7 @@ export const updateUserRole = onCall<UpdateUserRolePayload>(async (request) => {
 });
 
 export const disableDashboardUser = onCall<UserUidPayload>(async (request) => {
-  const actorUid = assertAdmin(request);
+  const actorUid = await assertAdmin(request);
   const uid = requireUid(request.data?.uid);
 
   if (uid === actorUid) {
@@ -129,7 +143,7 @@ export const disableDashboardUser = onCall<UserUidPayload>(async (request) => {
 });
 
 export const enableDashboardUser = onCall<UserUidPayload>(async (request) => {
-  const actorUid = assertAdmin(request);
+  const actorUid = await assertAdmin(request);
   const uid = requireUid(request.data?.uid);
 
   await getAuth().updateUser(uid, {
@@ -156,7 +170,7 @@ export const enableDashboardUser = onCall<UserUidPayload>(async (request) => {
 });
 
 export const deleteUserAccount = onCall<UserUidPayload>(async (request) => {
-  const actorUid = assertAdmin(request);
+  const actorUid = await assertAdmin(request);
   const uid = requireUid(request.data?.uid);
 
   if (uid === actorUid) {
@@ -192,7 +206,7 @@ export const deleteUserAccount = onCall<UserUidPayload>(async (request) => {
 
 export const resetUserPassword = onCall<ResetUserPasswordPayload>(
   async (request) => {
-    const actorUid = assertAdmin(request);
+    const actorUid = await assertAdmin(request);
     const uid = requireUid(request.data?.uid);
     const newPassword = requirePassword(request.data?.newPassword);
 

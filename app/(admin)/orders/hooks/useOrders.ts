@@ -16,6 +16,7 @@ import {
 import toast from "react-hot-toast";
 
 import { auth, db } from "@/lib/firebase";
+import { getImportRetentionCutoff } from "@/lib/importRetention";
 
 import { ORDERS_PAGE_SIZE } from "../lib/orderConstants";
 import { normalizeOrder } from "../lib/orderNormalize";
@@ -54,12 +55,14 @@ export function useOrders() {
       cursor?: QueryDocumentSnapshot<DocumentData> | null
     ) => {
       const baseCollection = collection(db, "orders");
+      const importCutoff = getImportRetentionCutoff();
 
       if (currentTab === "all") {
         return cursor
           ? query(
               baseCollection,
               where("isHospice", "==", false),
+              where("createdAt", ">=", importCutoff),
               orderBy("createdAt", "desc"),
               startAfter(cursor),
               limit(ORDERS_PAGE_SIZE)
@@ -67,6 +70,7 @@ export function useOrders() {
           : query(
               baseCollection,
               where("isHospice", "==", false),
+              where("createdAt", ">=", importCutoff),
               orderBy("createdAt", "desc"),
               limit(ORDERS_PAGE_SIZE)
             );
@@ -77,6 +81,7 @@ export function useOrders() {
             baseCollection,
             where("status", "==", currentTab),
             where("isHospice", "==", false),
+            where("createdAt", ">=", importCutoff),
             orderBy("createdAt", "desc"),
             startAfter(cursor),
             limit(ORDERS_PAGE_SIZE)
@@ -85,6 +90,7 @@ export function useOrders() {
             baseCollection,
             where("status", "==", currentTab),
             where("isHospice", "==", false),
+            where("createdAt", ">=", importCutoff),
             orderBy("createdAt", "desc"),
             limit(ORDERS_PAGE_SIZE)
           );

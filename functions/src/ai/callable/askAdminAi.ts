@@ -145,6 +145,44 @@ function inferIntent(prompt: string): string {
   const lower = prompt.toLowerCase();
 
   if (
+    (lower.includes("deal") ||
+      lower.includes("sale") ||
+      lower.includes("sales") ||
+      lower.includes("clearance") ||
+      lower.includes("discount") ||
+      lower.includes("promotion") ||
+      lower.includes("promo")) &&
+    (lower.includes("dme") ||
+      lower.includes("durable medical") ||
+      lower.includes("home medical") ||
+      lower.includes("hme") ||
+      lower.includes("equipment") ||
+      lower.includes("product"))
+  ) {
+    return "dme-deals-web-search";
+  }
+
+  if (
+    lower.includes("insurance") &&
+    (lower.includes("change") ||
+      lower.includes("changes") ||
+      lower.includes("update") ||
+      lower.includes("updates") ||
+      lower.includes("requirement") ||
+      lower.includes("requirements") ||
+      lower.includes("authorization") ||
+      lower.includes("prior auth") ||
+      lower.includes("preauth") ||
+      lower.includes("billing") ||
+      lower.includes("coverage") ||
+      lower.includes("payer") ||
+      lower.includes("medicare") ||
+      lower.includes("medicaid"))
+  ) {
+    return "insurance-web-search";
+  }
+
+  if (
     lower.includes("export") ||
     lower.includes("report") ||
     lower.includes("graph") ||
@@ -191,7 +229,12 @@ function inferIntent(prompt: string): string {
     return "rentals";
   }
 
-  if (lower.includes("inventory") || lower.includes("product") || lower.includes("stock")) {
+  if (
+    lower.includes("inventory") ||
+    lower.includes("product") ||
+    lower.includes("stock") ||
+    lower.includes("discontinued")
+  ) {
     return "inventory";
   }
 
@@ -204,6 +247,21 @@ function inferIntent(prompt: string): string {
   }
 
   return "general";
+}
+
+function isPublicWebSearchIntent(intent: string): boolean {
+  return intent === "dme-deals-web-search" || intent === "insurance-web-search";
+}
+
+function filterPublicWebResponsePhiFindings(
+  findings: ReturnType<typeof scanTextForPhi>
+) {
+  return findings.filter(
+    (finding) =>
+      finding.type !== "Phone Number" &&
+      finding.type !== "Email Address" &&
+      finding.type !== "Insurance Identifier"
+  );
 }
 
 async function getRecentCollectionDocs(collectionName: string, limit: number) {
@@ -372,6 +430,24 @@ function redactApiRegistryDoc(data: Record<string, unknown>) {
 
 async function getCollectionSample(collectionName: string, limitValue: number) {
   const snapshot = await db.collection(collectionName).limit(limitValue).get();
+  return snapshot.docs.map((doc) => ({
+    id: doc.id,
+    ...doc.data(),
+  }));
+}
+
+async function getCollectionDocsWhereEquals(
+  collectionName: string,
+  field: string,
+  value: string | number | boolean,
+  limit: number
+) {
+  const snapshot = await db
+    .collection(collectionName)
+    .where(field, "==", value)
+    .limit(limit)
+    .get();
+
   return snapshot.docs.map((doc) => ({
     id: doc.id,
     ...doc.data(),
@@ -556,6 +632,17 @@ async function buildAiContext(intent: string) {
 
   if (intent === "inventory" || intent === "general") {
     context.recentProducts = await getRecentCollectionDocs("products", RECENT_DOC_LIMIT);
+    context.discontinuedProducts = await getCollectionDocsWhereEquals(
+      "products",
+      "status",
+      "discontinued",
+      50
+    );
+    context.productStatusGuidance = [
+      "Use discontinuedProducts when the admin asks Jarvis to find discontinued products.",
+      "Treat product status='discontinued' as the internal source of truth unless external scan results are stored in the database.",
+      "If external discontinuation scan results are missing, say that the database has no external-source match yet.",
+    ];
     collectionsUsed.push("products");
   }
 
@@ -650,6 +737,8 @@ Focus areas:
 - Orders
 - Rentals
 - Inventory
+- Discontinued product review and product lifecycle status
+- Internet search for Home Medical Equipment and Durable Medical Equipment sales, deals, clearance items, and purchasing opportunities when explicitly prompted
 - Retail financial analytics: gross margin, inventory turnover, GMROI, sales per square foot, average transaction value, profit margin, sell-through rate, CAC, conversion rate, foot traffic, in-stock percentage, net sales, returns and allowances, current ratio, quick ratio, and revenue growth
 - Growth and item-purchasing recommendations grounded in margin, turnover, stock availability, sell-through, GMROI, and order demand
 - Hospice
@@ -668,6 +757,20 @@ Retail recommendation rules:
 - If a metric is marked missing or partial, explain what source data is needed before relying on it.
 - Do not recommend buying more of an item from one metric alone; combine margin, turnover, GMROI, sell-through, in-stock status, and known order/patient demand.
 - For growth recommendations, separate proven findings from suggested data improvements.
+
+DME/HME web search rules:
+- Only search the internet when the user explicitly asks for DME/HME/home medical deals, sales, discounts, clearance, promotions, or market purchasing opportunities.
+- Prioritize reputable Home Medical Equipment and Durable Medical Equipment suppliers, manufacturer direct stores, and specialty equipment retailers.
+- Look for CPAP/sleep therapy, oxygen, mobility, bath safety, incontinence, wound care, orthotics, lift chairs, hospital beds, wheelchair, walker, and general DME/HME categories when relevant.
+- Return each finding with item/category, vendor, sale/deal/clearance evidence, price or discount when visible, URL, date checked, and a caution if eligibility, shipping, prescription, MAP pricing, or stock status needs human verification.
+- Do not invent deals or prices. If the page does not clearly show the deal, say it needs verification.
+
+Insurance web search rules:
+- Only search the internet when the user explicitly asks for insurance changes, updates, payer requirements, authorization requirements, billing requirements, coverage rules, or related insurance operations.
+- Prioritize reliable sources: CMS, Medicare, Medicaid, state Medicaid programs, payer provider bulletins, payer medical policies, payer prior authorization pages, MAC/DME MAC guidance, and official regulator pages.
+- For each finding, return source organization, topic, what changed or what requirement applies, effective date if visible, billing or authorization impact, direct URL, date checked, and what staff should verify before changing workflow.
+- Do not provide legal or clinical advice. Treat findings as operational guidance requiring human payer-policy verification.
+- Do not invent requirements, effective dates, codes, or payer rules. If the source is unclear, say it needs payer verification.
 
 Response style:
 - Start with the direct answer.
@@ -718,9 +821,26 @@ export const askAdminAi = onCall(
       apiKey: OPENAI_API_KEY.value(),
     });
 
+    const shouldSearchWeb = isPublicWebSearchIntent(intent);
+
     const response = await openai.responses.create({
       model: MODEL,
       temperature: 0.25,
+      ...(shouldSearchWeb
+        ? {
+            tools: [
+              {
+                type: "web_search",
+                search_context_size: "low",
+                user_location: {
+                  type: "approximate",
+                  country: "US",
+                },
+              },
+            ],
+            tool_choice: "required",
+          }
+        : {}),
       input: [
         {
           role: "system",
@@ -728,10 +848,67 @@ export const askAdminAi = onCall(
         },
         {
           role: "user",
-      content: JSON.stringify({
+          content: JSON.stringify({
             question: safePrompt,
             intent,
             context,
+            webSearchInstructions: shouldSearchWeb
+              ? {
+                  objective:
+                    intent === "insurance-web-search"
+                      ? "Search the live internet for reliable insurance changes, payer updates, authorization requirements, and billing requirements relevant to Home Medical Equipment and Durable Medical Equipment operations."
+                      : "Search the live internet for current Home Medical Equipment and Durable Medical Equipment sales, deals, promotions, and clearance items.",
+                  preferredSearchAreas: [
+                    ...(intent === "insurance-web-search"
+                      ? [
+                          "CMS and Medicare DME coverage updates",
+                          "DME MAC billing and prior authorization guidance",
+                          "state Medicaid DME provider bulletins",
+                          "commercial payer DME medical policies",
+                          "payer prior authorization and documentation requirements",
+                          "CPAP, oxygen, mobility, hospital bed, wheelchair, and supplies billing requirements",
+                        ]
+                      : [
+                          "CPAP and sleep therapy supplies",
+                          "oxygen concentrators and oxygen accessories",
+                          "mobility aids, wheelchairs, walkers, rollators, scooters",
+                          "bath safety and transfer equipment",
+                          "hospital beds, support surfaces, lift chairs",
+                          "wound care, incontinence, braces, orthotics, general DME",
+                        ]),
+                  ],
+                  suggestedSourcesToCheck:
+                    intent === "insurance-web-search"
+                      ? [
+                          "CMS",
+                          "Medicare",
+                          "CGS Medicare",
+                          "Noridian Medicare",
+                          "Palmetto GBA",
+                          "state Medicaid provider bulletins",
+                          "Anthem provider medical policies",
+                          "UnitedHealthcare provider policies",
+                          "Aetna clinical policy bulletins",
+                          "Humana provider policies",
+                        ]
+                      : [
+                          "Direct Home Medical",
+                          "CPAP.com",
+                          "The CPAP Shop",
+                          "1800Wheelchair",
+                          "Rehabmart",
+                          "Vitality Medical",
+                          "Carewell",
+                          "Oxygen Concentrator Store",
+                          "Respshop",
+                          "Sleep Direct",
+                        ],
+                  requiredOutput:
+                    intent === "insurance-web-search"
+                      ? "Return a concise table or bullets with source organization, topic, change or requirement, effective date if visible, billing/authorization impact, direct URL, date checked, and human verification steps."
+                      : "Return a concise table or bullets with vendor, category/item, deal evidence, price/discount if visible, direct URL, date checked, and human verification steps.",
+                }
+              : null,
             availableArtifact: reportArtifact
               ? {
                   type: reportArtifact.type,
@@ -746,7 +923,9 @@ export const askAdminAi = onCall(
 
     const rawAnswer = response.output_text?.trim() || "No response generated.";
 
-    const responsePhiFindings = scanTextForPhi(rawAnswer, "response");
+    const responsePhiFindings = isPublicWebSearchIntent(intent)
+      ? filterPublicWebResponsePhiFindings(scanTextForPhi(rawAnswer, "response"))
+      : scanTextForPhi(rawAnswer, "response");
     const responsePhiAlertId = await createPhiAlert(db, {
       actorUid: actor.uid,
       actorEmail: actor.email,

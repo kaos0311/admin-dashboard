@@ -3,13 +3,11 @@
 import { useMemo } from "react";
 import { ChevronDown, Lock } from "lucide-react";
 
-import { typography } from "@/theme";
+import { typography, uploadUi } from "@/theme";
 
 import { IMPORT_MODES, REPORT_TYPES } from "../upload-constants";
 import type { ImportMode, ReportType } from "../upload-types";
 import { cn } from "../upload-utils";
-import { uploadUi } from "./upload-ui";
-
 type UploadSettingsCardsProps = {
   reportType: ReportType;
   setReportType: (value: ReportType) => void;

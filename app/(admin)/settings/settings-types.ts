@@ -4,6 +4,7 @@
   | "inventory"
   | "brightree"
   | "apis"
+  | "vendor-research"
   | "users"
   | "security"
   | "danger";
@@ -54,6 +55,10 @@ export type InventorySettings = {
   rentalEquipmentReorderLevel: number;
   highDemandReorderLevel: number;
   lowStockWarningEnabled: boolean;
+  jarvisRecallInternetScanEnabled: boolean;
+  jarvisRecallScanNewProductsEnabled: boolean;
+  jarvisDiscontinuedInternetScanEnabled: boolean;
+  jarvisDiscontinuedScanNewProductsEnabled: boolean;
 };
 
 export type BrightreeReferenceRecord = {
@@ -152,6 +157,17 @@ export type AuditLogRow = {
   timestamp?: unknown;
   createdAtText?: string;
   metadata?: Record<string, unknown>;
+};
+
+export type VendorResearchSite = {
+  id: string;
+  name: string;
+  url: string;
+  category: string;
+  notes: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+  updatedByEmail?: string;
 };
 
 export type SettingsMessage = {

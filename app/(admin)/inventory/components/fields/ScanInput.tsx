@@ -2,6 +2,7 @@
 
 import { useId } from "react";
 import { Barcode } from "lucide-react";
+import { buttons, forms, typography } from "@/theme";
 
 type ScanInputProps = {
   label: string;
@@ -20,7 +21,7 @@ export function ScanInput({
 
   return (
     <div>
-      <label htmlFor={inputId} className="mb-2 block text-sm text-slate-300">
+      <label htmlFor={inputId} className={`${typography.body} mb-2 block`}>
         {label}
       </label>
 
@@ -32,13 +33,13 @@ export function ScanInput({
           aria-label={label}
           placeholder={label}
           onChange={(event) => onChange(event.target.value)}
-          className="w-full rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-white outline-none placeholder:text-slate-600 shadow-inner shadow-black/20 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/55"
+          className={forms.input}
         />
 
         <button
           type="button"
           onClick={onScan}
-          className="rounded-2xl border border-white/10 bg-white/10 px-4 text-white shadow-lg shadow-black/20 backdrop-blur-xl transition hover:bg-white/15"
+          className={buttons.secondary}
           title={`Scan ${label}`}
           aria-label={`Scan ${label}`}
         >

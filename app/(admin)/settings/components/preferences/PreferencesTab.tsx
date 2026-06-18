@@ -41,12 +41,12 @@ export function PreferencesTab({
           <div className="grid gap-5">
             <Field
               id="default-dashboard-route"
-              label="Default Dashboard Route"
+              label="Default Command Center Route"
               value={settings.preferences.defaultDashboardRoute}
               onChange={(value) =>
                 updatePreferences("defaultDashboardRoute", value)
               }
-              placeholder="/dashboard"
+              placeholder="/command-center"
             />
 
             <Field

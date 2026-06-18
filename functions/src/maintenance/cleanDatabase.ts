@@ -95,7 +95,10 @@ function requireAdmin(request: CallableRequestLike): void {
     );
   }
 
-  if (request.auth.token.role !== "admin") {
+  if (
+    request.auth.token.role !== "admin" &&
+    request.auth.token.role !== "tank"
+  ) {
     throw new HttpsError(
       "permission-denied",
       "Only admins can clean the database."

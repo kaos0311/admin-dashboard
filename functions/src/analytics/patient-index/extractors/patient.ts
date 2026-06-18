@@ -11,6 +11,7 @@ import {
 } from "../utils";
 export function extractPatient(row: Record<string, unknown>) {
   const fullNameRaw = valueFromAliases(row, [
+    "FullName",
     "fullname",
     "full_name",
     "patient_name",
@@ -103,9 +104,9 @@ export function extractPatient(row: Record<string, unknown>) {
       "Bill To",
       "Deliver To",
     ]),
-    city: valueFromAliases(row, ["city", "patient_city"]),
-    state: valueFromAliases(row, ["state", "patient_state"]),
-    zip: valueFromAliases(row, ["zip", "zipcode", "zip_code", "postal_code"]),
+    city: valueFromAliases(row, ["city", "patient_city", "City"]),
+    state: valueFromAliases(row, ["state", "patient_state", "StateName"]),
+    zip: valueFromAliases(row, ["zip", "zipcode", "zip_code", "postal_code", "Zip"]),
   };
 }
 
@@ -128,6 +129,7 @@ export function extractPatientProfile(row: Record<string, unknown>): PatientProf
     ]),
     patientKey: valueFromAliases(row, ["PtKey", "PatientKey"]),
     accountNumber: valueFromAliases(row, [
+      "AcctNbr",
       "AcctNo",
       "AccountNumber",
       "Account Number",
@@ -142,6 +144,8 @@ export function extractPatientProfile(row: Record<string, unknown>): PatientProf
       "status",
     ]),
     patientHubStatus: valueFromAliases(row, [
+      "BranchOffice",
+      "PatientBranch",
       "Patient Hub Status",
       "PatientHubStatus",
       "HubStatus",
@@ -153,15 +157,33 @@ export function extractPatientProfile(row: Record<string, unknown>): PatientProf
       valueFromAliases(row, ["Last Login Date", "LastLoginDate"])
     ),
     primaryDoctor: valueFromAliases(row, [
+      "PrimaryDoctor",
       "PrimaryDocname",
       "Primary Doctor",
       "PrimaryDocName",
     ]),
     orderingDoctor: valueFromAliases(row, [
+      "OrderingDoctor",
       "OrderingDocname",
       "Ordering Doctor",
       "OrderingDocName",
     ]),
+    branchOffice: valueFromAliases(row, ["BranchOffice", "PatientBranch"]),
+    branchGroup: valueFromAliases(row, ["BranchGroup"]),
+    parentBranchGroup: valueFromAliases(row, ["ParentBranchGroup"]),
+    accountGroup: valueFromAliases(row, ["AccountGroup"]),
+    doctorGroup: valueFromAliases(row, ["DoctorGroup"]),
+    referralName: valueFromAliases(row, ["Referral"]),
+    referralType: valueFromAliases(row, ["ReferralType"]),
+    marketingRep: valueFromAliases(row, ["MarketingRep"]),
+    practitionerName: valueFromAliases(row, ["PractitionerName"]),
+    therapyName: valueFromAliases(row, ["TherapyName"]),
+    therapyType: valueFromAliases(row, ["TherapyType"]),
+    glAccountGroupName: valueFromAliases(row, ["GlAcctGrpName"]),
+    deliveryCounty: valueFromAliases(row, ["DeliveryCounty"]),
+    restrictedAccess: valueFromAliases(row, ["RestrictedAccess"]),
+    patientBranch: valueFromAliases(row, ["PatientBranch"]),
+    acceptAssignment: valueFromAliases(row, ["AcceptAssignment"]),
     diagnosisCodes: diagnosisRaw
       .split(/[,\s]+/)
       .map((item) => item.trim())
@@ -173,6 +195,9 @@ export function extractPatientProfile(row: Record<string, unknown>): PatientProf
 export function extractInsurance(row: Record<string, unknown>): InsuranceSnapshot {
   return {
     primaryInsurance: valueFromAliases(row, [
+      "InsName",
+      "InsNameWithKey",
+      "InsuranceCompany",
       "PrimaryInsuranceName",
       "Primary Insurance",
       "Primary Insurance (Active only) Primary Name",
@@ -196,11 +221,15 @@ export function extractInsurance(row: Record<string, unknown>): InsuranceSnapsho
       "Insurance Status",
     ]),
     coverageTypes: valueFromAliases(row, [
+      "PayorLevel",
+      "InsuranceGroup",
       "PayorCoverageTypeNames",
       "Coverage Type",
       "Coverage Types",
     ]),
     payor: valueFromAliases(row, [
+      "InsName",
+      "InsuranceCompany",
       "Payor",
       "PayorName",
       "Payer",
@@ -208,6 +237,10 @@ export function extractInsurance(row: Record<string, unknown>): InsuranceSnapsho
       "payor",
       "payer",
     ]),
+    payorKey: valueFromAliases(row, ["PayorKey"]),
+    insuranceGroup: valueFromAliases(row, ["InsuranceGroup"]),
+    insuranceNameWithKey: valueFromAliases(row, ["InsNameWithKey"]),
+    acceptAssignment: valueFromAliases(row, ["AcceptAssignment"]),
   };
 }
 

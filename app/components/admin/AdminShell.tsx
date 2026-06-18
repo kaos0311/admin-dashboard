@@ -10,6 +10,7 @@ import {
 
 import AdminSidebar from "@/app/components/admin/AdminSidebar";
 import { AdminShellTopbar } from "@/app/components/admin/AdminShellTopbar";
+import { colors } from "@/theme";
 
 export default function AdminShell({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -44,7 +45,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
   }, [sidebarOpen, closeSidebar]);
 
   return (
-    <div className="admin-page min-h-screen bg-[#07090d] text-white antialiased">
+    <div className={`admin-page min-h-screen ${colors.adminShell} antialiased`}>
       <a
         href="#admin-main-content"
         className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-black focus:outline-none focus:ring-2 focus:ring-white/40"
@@ -61,7 +62,7 @@ export default function AdminShell({ children }: { children: ReactNode }) {
           <main
             id="admin-main-content"
             tabIndex={-1}
-            className="min-w-0 flex-1 overflow-x-hidden bg-[#07090d] outline-none"
+            className={`min-w-0 flex-1 overflow-x-hidden ${colors.adminShell} outline-none`}
           >
             <div className="min-h-[calc(100vh-65px)] w-full px-2 py-3 sm:px-3 md:px-4 lg:px-5 xl:px-6">
               {children}

@@ -79,6 +79,7 @@ export function filterAndSortProducts(
       filters.issueFilter === "all" ||
       (filters.issueFilter === "recall" && product.recallFlagged) ||
       (filters.issueFilter === "missing-info" && warnings.length > 0) ||
+      (filters.issueFilter === "high-risk" && productRiskScore(product) >= 50) ||
       (filters.issueFilter === "serialized" && product.isSerialized) ||
       (filters.issueFilter === "rental" && product.isRentalItem) ||
       (filters.issueFilter === "rx" && product.requiresPrescription);

@@ -28,6 +28,22 @@ export type PatientProfile = {
   lastLoginDate: string;
   primaryDoctor: string;
   orderingDoctor: string;
+  branchOffice: string;
+  branchGroup: string;
+  parentBranchGroup: string;
+  accountGroup: string;
+  doctorGroup: string;
+  referralName: string;
+  referralType: string;
+  marketingRep: string;
+  practitionerName: string;
+  therapyName: string;
+  therapyType: string;
+  glAccountGroupName: string;
+  deliveryCounty: string;
+  restrictedAccess: string;
+  patientBranch: string;
+  acceptAssignment: string;
   diagnosisCodes: string[];
 };
 
@@ -38,6 +54,10 @@ export type InsuranceSnapshot = {
   insuranceStatus: string;
   coverageTypes: string;
   payor: string;
+  payorKey: string;
+  insuranceGroup: string;
+  insuranceNameWithKey: string;
+  acceptAssignment: string;
 };
 
 export type CurrentEquipmentItem = {
@@ -109,11 +129,23 @@ export type CmnSnapshot = {
 export type BillingSnapshot = {
   lastInvoiceDate: string;
   lastPaymentDate: string;
+  invoiceCreateDate: string;
+  invoiceOpenDate: string;
+  invoiceServiceDate: string;
+  invoiceDocumentDate: string;
+  paymentCreateDate: string;
+  paymentPostedDate: string;
+  paymentDos: string;
+  paymentReason: string;
+  saleType: string;
+  transactionType: string;
+  lastPickupDate: string;
   totalCharges90Days: number;
   totalAllowed90Days: number;
   totalPayments90Days: number;
   totalAdjustments90Days: number;
   openBalanceEstimate: number;
+  appliedPayment: number;
   invoiceStatus: string;
 };
 

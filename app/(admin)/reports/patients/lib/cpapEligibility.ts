@@ -21,6 +21,7 @@ export type CpapEligibilityRow = {
 };
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
+const MASK_RULE_IDS = new Set(["nasal-mask", "full-face-mask"]);
 
 export const CPAP_SUPPLY_RULES: CpapSupplyRule[] = [
   {
@@ -185,6 +186,24 @@ function equipmentMatchesRule(item: CurrentEquipmentItem, rule: CpapSupplyRule):
   );
 }
 
+function latestMaskRuleId(equipment: CurrentEquipmentItem[]): string | null {
+  const maskCandidates = CPAP_SUPPLY_RULES.filter((rule) => MASK_RULE_IDS.has(rule.id))
+    .flatMap((rule) =>
+      equipment
+        .filter((item) => equipmentMatchesRule(item, rule))
+        .map((item) => ({
+          ruleId: rule.id,
+          date: equipmentDate(item),
+        })),
+    )
+    .filter((candidate): candidate is { ruleId: string; date: Date } =>
+      Boolean(candidate.date),
+    )
+    .sort((a, b) => b.date.getTime() - a.date.getTime());
+
+  return maskCandidates[0]?.ruleId ?? null;
+}
+
 export function isMedicarePatient(patient: Pick<PatientWithDerived, "insurance">): boolean {
   const insurance = [
     patient.insurance?.primaryInsurance,
@@ -204,8 +223,13 @@ export function getCpapEligibility(
   today = new Date(),
 ): CpapEligibilityRow[] {
   const equipment = patient.currentEquipment ?? [];
+  const activeMaskRuleId = latestMaskRuleId(equipment);
 
-  return CPAP_SUPPLY_RULES.map((rule) => {
+  return CPAP_SUPPLY_RULES.flatMap<CpapEligibilityRow>((rule) => {
+    if (activeMaskRuleId && MASK_RULE_IDS.has(rule.id) && rule.id !== activeMaskRuleId) {
+      return [];
+    }
+
     const matchingItems = equipment.filter((item) => equipmentMatchesRule(item, rule));
     const lastDate = matchingItems
       .map(equipmentDate)
@@ -213,14 +237,14 @@ export function getCpapEligibility(
       .sort((a, b) => b.getTime() - a.getTime())[0];
 
     if (!lastDate) {
-      return {
+      return [{
         rule,
         lastReceivedDate: "",
         nextEligibleDate: "",
         status: "missing",
         daysUntilEligible: null,
         matchingItems,
-      };
+      }];
     }
 
     const nextEligible = addMonths(lastDate, rule.intervalMonths);
@@ -228,14 +252,14 @@ export function getCpapEligibility(
     const status =
       daysUntilEligible <= 0 ? "ready" : daysUntilEligible <= 30 ? "soon" : "future";
 
-    return {
+    return [{
       rule,
       lastReceivedDate: toIsoDate(lastDate),
       nextEligibleDate: toIsoDate(nextEligible),
       status,
       daysUntilEligible,
       matchingItems,
-    };
+    }];
   });
 }
 

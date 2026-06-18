@@ -3,7 +3,7 @@
 import AuthGuard from "@/app/components/auth/AuthGuard";
 import { colors, glass, spacing, typography } from "@/theme";
 
-import { EmployeeEvaluationSection } from "../dashboard/components/sections/EmployeeEvaluationSection";
+import { EmployeeEvaluationSection } from "./components/EmployeeEvaluationSection";
 
 export default function EmployeeEvaluationsPage() {
   return (

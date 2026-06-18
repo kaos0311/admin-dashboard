@@ -51,7 +51,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     return (
       <div className={`${colors.app} flex min-h-screen items-center justify-center px-4`}>
         <div className={`${glass.card} ${spacing.section}`}>
-          <p className={typography.bodyMuted}>Loading dashboard...</p>
+          <p className={typography.bodyMuted}>Loading command center...</p>
         </div>
       </div>
     );

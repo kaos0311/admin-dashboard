@@ -2,6 +2,8 @@
 
 import { useId } from "react";
 
+import { forms, typography } from "@/theme";
+
 type TextareaProps = {
   label: string;
   value: string;
@@ -13,7 +15,7 @@ export function Textarea({ label, value, onChange }: TextareaProps) {
 
   return (
     <div>
-      <label htmlFor={textareaId} className="mb-2 block text-sm text-slate-300">
+      <label htmlFor={textareaId} className={`${typography.body} mb-2 block`}>
         {label}
       </label>
 
@@ -25,7 +27,7 @@ export function Textarea({ label, value, onChange }: TextareaProps) {
         aria-label={label}
         placeholder={label}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full resize-none rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-white outline-none placeholder:text-slate-600 shadow-inner shadow-black/20 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/55"
+        className={forms.textareaCompact}
       />
     </div>
   );

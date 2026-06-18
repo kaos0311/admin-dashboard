@@ -3,6 +3,7 @@
 import type { RefObject } from "react";
 import { Camera } from "lucide-react";
 import type { CameraEngine } from "../types";
+import { colors, glass, typography } from "@/theme";
 
 type CameraScannerPanelProps = {
   videoRef: RefObject<HTMLVideoElement | null>;
@@ -43,19 +44,19 @@ export default function CameraScannerPanel({
         </div>
       </div>
 
-      <div className="rounded-3xl border border-white/10 bg-white/[0.04] p-4 text-sm text-zinc-300 backdrop-blur-xl">
+      <div className={`${glass.cardPadded} ${typography.body}`}>
         <div className="flex items-center gap-2">
-          <Camera className="h-4 w-4 text-emerald-200" />
+          <Camera className={`h-4 w-4 ${colors.textSuccess}`} />
           <span>{statusText}</span>
         </div>
 
         {cameraError ? (
-          <p className="mt-2 text-sm font-medium text-red-300">
+          <p className={`${typography.dangerText} mt-2 font-medium`}>
             {cameraError}
           </p>
         ) : null}
 
-        <p className="mt-2 text-xs leading-5 text-zinc-500">
+        <p className={`${typography.smallMuted} mt-2`}>
           Supports QR, UPC, EAN, Code 39, Code 128, Data Matrix, PDF417,
           Aztec, ITF, Codabar, and other formats supported by the browser or
           ZXing.

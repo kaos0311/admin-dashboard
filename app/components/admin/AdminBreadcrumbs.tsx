@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { ChevronRight, Home } from "lucide-react";
 import { usePathname } from "next/navigation";
+import { colors } from "@/theme";
 
 function toTitle(value: string): string {
   return value
@@ -18,18 +19,18 @@ export function AdminBreadcrumbs() {
   return (
     <nav
       aria-label="Breadcrumb"
-      className="mt-0.5 flex items-center gap-1 text-xs text-white/50"
+      className={`mt-0.5 flex items-center gap-1 text-xs ${colors.textDisabled}`}
     >
       <Link
-        href="/dashboard"
+        href="/command-center"
         className="inline-flex items-center gap-1 transition hover:text-white"
       >
         <Home className="h-3.5 w-3.5" aria-hidden="true" />
-        Dashboard
+        Command Center
       </Link>
 
       {parts
-        .filter((part) => part !== "dashboard")
+        .filter((part) => part !== "command-center")
         .map((part, index) => {
           const href = `/${parts.slice(0, index + 1).join("/")}`;
 

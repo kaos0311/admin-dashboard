@@ -3,6 +3,7 @@
 import { isSuspiciousAuditEvent } from "../utils/auditRisk";
 import type { AuditLogRow } from "../utils/auditTypes";
 import { SummaryCard } from "./SummaryCard";
+import { spacing } from "@/theme";
 
 export function AuditStats({ logs }: { logs: AuditLogRow[] }) {
   const stats = useMemo(() => {
@@ -33,7 +34,7 @@ export function AuditStats({ logs }: { logs: AuditLogRow[] }) {
   }, [logs]);
 
   return (
-    <section className="grid gap-5 md:grid-cols-2 xl:grid-cols-6">
+    <section className={`${spacing.gridCardsTwo} xl:grid-cols-6`}>
       <SummaryCard label="Loaded Logs" value={stats.total} />
       <SummaryCard label="High Risk" value={stats.highRisk} critical />
       <SummaryCard label="Suspicious" value={stats.suspicious} critical />

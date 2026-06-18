@@ -3,6 +3,7 @@
 import { useId } from "react";
 
 import { humanize } from "../../lib/inventoryNormalize";
+import { forms, typography } from "@/theme";
 
 type SelectInputProps = {
   label: string;
@@ -21,7 +22,7 @@ export function SelectInput({
 
   return (
     <div>
-      <label htmlFor={selectId} className="mb-2 block text-sm text-slate-300">
+      <label htmlFor={selectId} className={`${typography.body} mb-2 block`}>
         {label}
       </label>
 
@@ -31,7 +32,7 @@ export function SelectInput({
         aria-label={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-white outline-none shadow-inner shadow-black/20 backdrop-blur-xl transition focus:border-white/30 focus:bg-black/55"
+        className={forms.select}
       >
         {options.map((option) => (
           <option key={option} value={option}>

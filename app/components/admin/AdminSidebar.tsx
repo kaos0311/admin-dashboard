@@ -13,7 +13,6 @@ import {
   FileText,
   Hammer,
   HeartPulse,
-  Home,
   Medal,
   Package,
   Repeat,
@@ -51,14 +50,6 @@ type GroupedNavItems = Record<
 >;
 
 const NAV_ITEMS: NavItem[] = [
-  {
-    id: "dashboard",
-    label: "Dashboard",
-    href: "/dashboard",
-    icon: Home,
-    section: "core",
-    exact: true,
-  },
   {
     id: "command-center",
     label: "Command Center",
@@ -174,7 +165,6 @@ const NAV_ITEMS: NavItem[] = [
     href: "/settings",
     icon: Settings,
     section: "system",
-    roles: ["admin"],
   },
 ];
 
@@ -188,12 +178,18 @@ function isActivePath(pathname: string | null, item: NavItem): boolean {
   return pathname === item.href || pathname.startsWith(`${item.href}/`);
 }
 
+function roleCanSeeItem(userRole: UserRole, item: NavItem): boolean {
+  if (!item.roles) return true;
+  if (item.roles.includes(userRole)) return true;
+  return userRole === "tank" && item.roles.includes("admin");
+}
+
 function getVisibleGroupedItems(
   pathname: string | null,
   userRole: UserRole
 ): GroupedNavItems {
   const visibleItems = NAV_ITEMS.filter((item) => {
-    return !item.roles || item.roles.includes(userRole);
+    return roleCanSeeItem(userRole, item);
   }).map((item) => ({
     ...item,
     isActive: isActivePath(pathname, item),
@@ -298,7 +294,7 @@ function SidebarInner({
         </div>
 
         <div className={`mt-2 ${typography.sectionTitle}`}>
-          Admin Dashboard
+          Command Center
         </div>
 
         <div className={`mt-2 ${typography.bodyMuted}`}>

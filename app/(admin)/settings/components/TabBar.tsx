@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { glass, typography } from "@/theme";
+import { badges, colors, glass, typography } from "@/theme";
 import type { SettingsTabKey } from "../settings-types";
 
 type TabItem = {
@@ -29,8 +29,8 @@ export function TabBar({ tabs, activeTab, onChange }: TabBarProps) {
               className={[
                 "inline-flex h-10 items-center gap-2 rounded-2xl px-4 text-sm font-semibold transition",
                 active
-                  ? "border border-cyan-300/50 bg-cyan-300/15 text-cyan-100 shadow-lg shadow-cyan-950/25"
-                  : `border border-transparent ${typography.bodyMuted} hover:bg-white/[0.06] hover:text-slate-100`,
+                  ? badges.active
+                  : `border border-transparent ${typography.bodyMuted} ${colors.surfaceHover} hover:text-slate-100`,
               ].join(" ")}
             >
               {tab.icon}

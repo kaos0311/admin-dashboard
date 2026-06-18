@@ -2,6 +2,8 @@
 
 import type { ReactNode } from "react";
 
+import { glass } from "@/theme";
+
 type ModalShellProps = {
   open: boolean;
   children: ReactNode;
@@ -27,7 +29,7 @@ export function ModalShell({
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-md"
     >
       <section
-        className={`max-h-[90vh] w-full overflow-y-auto rounded-3xl border border-white/10 bg-[rgba(10,10,10,0.88)] p-6 text-white shadow-2xl shadow-black/40 backdrop-blur-2xl ${maxWidthClassName}`}
+        className={`${glass.cardPadded} max-h-[90vh] w-full overflow-y-auto ${maxWidthClassName}`}
       >
         {children}
       </section>

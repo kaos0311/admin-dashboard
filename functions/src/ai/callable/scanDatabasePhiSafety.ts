@@ -68,7 +68,10 @@ function requireAdmin(request: {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
 
-  if (request.auth.token.role !== "admin") {
+  if (
+    request.auth.token.role !== "admin" &&
+    request.auth.token.role !== "tank"
+  ) {
     throw new HttpsError("permission-denied", "Admin access required.");
   }
 

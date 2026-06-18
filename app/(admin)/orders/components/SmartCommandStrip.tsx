@@ -2,7 +2,7 @@
 
 import { ShieldAlert } from "lucide-react";
 
-import { glassPanel, smallMutedText } from "../lib/orderUi";
+import { badges, glass, typography } from "@/theme";
 
 export function SmartCommandStrip({
   needsReview,
@@ -28,15 +28,15 @@ export function SmartCommandStrip({
   onArchiveReadyOnly: () => void;
 }) {
   return (
-    <section className={`${glassPanel} p-5`}>
+    <section className={glass.cardPadded}>
       <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div>
-          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-white">
-            <ShieldAlert className="h-5 w-5 text-cyan-200" aria-hidden={true} />
+          <h2 className={`inline-flex items-center gap-2 ${typography.cardTitle}`}>
+            <ShieldAlert className="h-5 w-5" aria-hidden={true} />
             Smart Review Queue
           </h2>
 
-          <p className="mt-1 text-sm text-zinc-400">
+          <p className={`${typography.bodyMuted} mt-1`}>
             Fast filters for bad data, missing inventory links, hospice leakage,
             and archive cleanup.
           </p>
@@ -89,14 +89,10 @@ function SmartQueueButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-2xl border px-4 py-3 text-left shadow-inner shadow-black/20 backdrop-blur-xl transition ${
-        hasWork
-          ? "border-cyan-400/25 bg-cyan-400/10 hover:bg-cyan-400/15"
-          : "border-white/10 bg-white/[0.04] hover:bg-white/[0.08]"
-      }`}
+      className={`rounded-2xl px-4 py-3 text-left shadow-inner shadow-black/20 backdrop-blur-xl transition ${hasWork ? badges.info : badges.neutral}`}
     >
-      <div className={smallMutedText}>{label}</div>
-      <div className="mt-1 text-2xl font-bold text-white">
+      <div className={typography.caption}>{label}</div>
+      <div className={`${typography.metricCompact} mt-1`}>
         {value.toLocaleString()}
       </div>
     </button>

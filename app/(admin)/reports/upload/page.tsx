@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 
-import { colors } from "@/theme";
+import { colors, uploadUi } from "@/theme";
 
 import type { ImportMode, ReportType } from "./upload-types";
 
@@ -20,8 +20,6 @@ import { PatientIndexPanel } from "./components/PatientIndexPanel";
 import { ResetReportsPanel } from "./components/ResetReportsPanel";
 import { UploadRulesPanel } from "./components/UploadRulesPanel";
 import { ImportJobsTable } from "./components/ImportJobsTable";
-import { uploadUi } from "./components/upload-ui";
-
 export default function UploadReportsPage() {
   return (
     <UploadAccessGate>
@@ -152,7 +150,9 @@ function UploadReportsContent({
               }
             />
 
-            <ResetReportsPanel canResetReports={role === "admin"} />
+            <ResetReportsPanel
+              canResetReports={role === "admin" || role === "tank"}
+            />
 
             <UploadRulesPanel />
           </aside>

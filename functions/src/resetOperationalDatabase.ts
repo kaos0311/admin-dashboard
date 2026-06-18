@@ -44,7 +44,7 @@ function requireAdmin(request: CallableRequest<unknown>) {
 
   const token = request.auth.token as Record<string, unknown>;
 
-  if (token.role !== "admin") {
+  if (token.role !== "admin" && token.role !== "tank") {
     throw new HttpsError(
       "permission-denied",
       "Only admins can reset the operational database."

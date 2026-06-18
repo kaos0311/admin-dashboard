@@ -71,6 +71,20 @@ const QUICK_ACTIONS = [
       "Summarize current compliance risks across CMN queue, PAR alerts, recalls, hospice oversight, audit logs, and open tasks.",
   },
   {
+    label: "Discontinued Products",
+    icon: FileSearch,
+    action: "prompt",
+    prompt:
+      "Search product records for discontinued products. Summarize matching products, status evidence, operational risk, and next actions for inventory, ordering, and patient-facing workflows.",
+  },
+  {
+    label: "DME Deals Scan",
+    icon: Sparkles,
+    action: "prompt",
+    prompt:
+      "Search the internet for current Home Medical Equipment and Durable Medical Equipment sales, deals, discounts, promotions, and clearance items. Prioritize reputable HME/DME suppliers and manufacturer stores. Return vendor, item/category, deal evidence, price or discount when visible, direct web page link, date checked, and what a human needs to verify before purchasing.",
+  },
+  {
     label: "Daily Ops Brief",
     icon: ClipboardCheck,
     action: "prompt",
@@ -258,7 +272,7 @@ export function JarvisPanel({
               <p className={["mt-1 max-w-2xl break-words", typography.small].join(" ")}>
                 Database-aware Stark-style operations intelligence for imports,
                 queues, compliance, recalls, hospice oversight, audit activity,
-                and dashboard health.
+                and Command Center health.
               </p>
             </div>
           </div>

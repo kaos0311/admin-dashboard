@@ -1,6 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { spacing } from "@/theme";
 
 type ModalFooterProps = {
   children: ReactNode;
@@ -8,7 +9,7 @@ type ModalFooterProps = {
 
 export function ModalFooter({ children }: ModalFooterProps) {
   return (
-    <div className="mt-6 flex flex-col gap-2 sm:flex-row sm:justify-end">
+    <div className={`${spacing.actions} mt-6 sm:justify-end`}>
       {children}
     </div>
   );

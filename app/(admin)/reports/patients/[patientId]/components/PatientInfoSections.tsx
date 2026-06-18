@@ -195,6 +195,14 @@ export function PatientIdentityClinicalSections({
           label="Hub Status"
           value={firstText(textField(patient.profile, "patientHubStatus"), textField(patient.profile, "branchOffice"), profileSectionField(patient, "demographics", "branchOffice"), sectionField(patient, "demographics", "Patient Branch Office"))}
         />
+        <Info
+          label="Branch Group"
+          value={textField(patient.profile, "branchGroup")}
+        />
+        <Info
+          label="Account Group"
+          value={textField(patient.profile, "accountGroup")}
+        />
       </Section>
 
       <Section
@@ -240,6 +248,14 @@ export function PatientIdentityClinicalSections({
         <Info
           label="Last Portal Login"
           value={formatDate(textField(patient.profile, "lastLoginDate"))}
+        />
+        <Info
+          label="Referral"
+          value={firstText(textField(patient.profile, "referralName"), sectionField(patient, "referrals", "Referral Name"))}
+        />
+        <Info
+          label="Therapy"
+          value={firstText(textField(patient.profile, "therapyName"), textField(patient.profile, "therapyType"))}
         />
       </Section>
     </>
@@ -520,6 +536,22 @@ export function PatientOrdersBillingSections({
           value={formatMoney(
             numberField(patient.billing, "openBalanceEstimate")
           )}
+        />
+        <Info
+          label="Invoice Status"
+          value={textField(patient.billing, "invoiceStatus")}
+        />
+        <Info
+          label="Service Date"
+          value={formatDate(textField(patient.billing, "invoiceServiceDate"))}
+        />
+        <Info
+          label="Payment Posted"
+          value={formatDate(textField(patient.billing, "paymentPostedDate"))}
+        />
+        <Info
+          label="Payment Reason"
+          value={textField(patient.billing, "paymentReason")}
         />
       </Section>
     </>

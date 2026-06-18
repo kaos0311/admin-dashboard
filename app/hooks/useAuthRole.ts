@@ -25,7 +25,7 @@ type UseAuthRoleResult = {
   isStaff: boolean;
   isTank: boolean;
   isAdminOrStaff: boolean;
-  canAccessDashboard: boolean;
+  canAccessCommandCenter: boolean;
   canUploadReports: boolean;
   canRefreshImports: boolean;
   canDeleteImports: boolean;
@@ -134,7 +134,10 @@ export function useAuthRole(): UseAuthRoleResult {
         if (userSnap.exists()) {
           const data = userSnap.data() as Record<string, unknown>;
 
-          resolvedActive = data.active !== false;
+          resolvedActive =
+            data.active !== false &&
+            data.disabled !== true &&
+            data.deleted !== true;
 
           const dbRole = parseRole(data.role);
 
@@ -142,7 +145,11 @@ export function useAuthRole(): UseAuthRoleResult {
             resolvedRole = dbRole;
           }
 
-          if (data.active === false) {
+          if (
+            data.active === false ||
+            data.disabled === true ||
+            data.deleted === true
+          ) {
             roleCache = null;
             await signOut(auth);
 
@@ -188,12 +195,12 @@ export function useAuthRole(): UseAuthRoleResult {
   }, []);
 
   return useMemo(() => {
-    const isAdmin = role === "admin";
-    const isStaff = role === "staff";
     const isTank = role === "tank";
+    const isAdmin = role === "admin" || isTank;
+    const isStaff = role === "staff";
     const isAdminOrStaff = isAdmin || isStaff || isTank;
     const isActiveUser = active !== false;
-    const canAccessDashboard = Boolean(user && isActiveUser && isAdminOrStaff);
+    const canAccessCommandCenter = Boolean(user && isActiveUser && isAdminOrStaff);
 
     return {
       user,
@@ -205,11 +212,11 @@ export function useAuthRole(): UseAuthRoleResult {
       isStaff,
       isTank,
       isAdminOrStaff,
-      canAccessDashboard,
-      canUploadReports: canAccessDashboard,
-      canRefreshImports: canAccessDashboard,
-      canDeleteImports: canAccessDashboard && isAdmin,
-      canReadAuditLogs: canAccessDashboard && isAdmin,
+      canAccessCommandCenter,
+      canUploadReports: canAccessCommandCenter,
+      canRefreshImports: canAccessCommandCenter,
+      canDeleteImports: canAccessCommandCenter && isAdmin,
+      canReadAuditLogs: canAccessCommandCenter && isAdmin,
     };
   }, [user, role, loading, error, active]);
 }

@@ -1,0 +1,66 @@
+"use client";
+
+import { CheckCircle2, X } from "lucide-react";
+
+import { buttons, glass, tiles, typography } from "@/theme";
+
+type ScanSuccessModalProps = {
+  open: boolean;
+  title: string;
+  message: string;
+  onClose: () => void;
+};
+
+export function ScanSuccessModal({
+  open,
+  title,
+  message,
+  onClose,
+}: ScanSuccessModalProps) {
+  if (!open) return null;
+
+  return (
+    <div
+      className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xl"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="scan-success-title"
+    >
+      <section className={`${glass.panel} w-full max-w-md p-5 sm:p-6`}>
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 items-start gap-3">
+            <span className={tiles.icon}>
+              <CheckCircle2 className="h-6 w-6 text-emerald-200" />
+            </span>
+
+            <div className="min-w-0">
+              <h2 id="scan-success-title" className={typography.sectionTitle}>
+                {title}
+              </h2>
+              <p className={`${typography.bodyMuted} mt-2`}>
+                {message}
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className={buttons.icon}
+            onClick={onClose}
+            aria-label="Close scan confirmation"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <button
+          type="button"
+          className={`${buttons.success} mt-5 w-full`}
+          onClick={onClose}
+        >
+          Done
+        </button>
+      </section>
+    </div>
+  );
+}

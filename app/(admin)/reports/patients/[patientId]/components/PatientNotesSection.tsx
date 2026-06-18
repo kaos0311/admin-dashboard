@@ -1,5 +1,7 @@
 "use client";
 
+import { buttons, forms, typography } from "@/theme";
+
 function NoteBox({
   id,
   label,
@@ -13,7 +15,7 @@ function NoteBox({
 }) {
   return (
     <div>
-      <label htmlFor={id} className="mb-2 block text-sm text-zinc-400">
+      <label htmlFor={id} className={`${typography.bodyMuted} mb-2 block`}>
         {label}
       </label>
 
@@ -23,7 +25,7 @@ function NoteBox({
         value={value}
         onChange={(event) => onChange(event.target.value)}
         rows={6}
-        className="w-full resize-y rounded-3xl border border-white/10 bg-black/30 p-4 text-sm text-white outline-none backdrop-blur-xl focus:border-cyan-400/30"
+        className={forms.textarea}
       />
     </div>
   );
@@ -84,7 +86,7 @@ export function PatientNotesSection(props: Props) {
           type="button"
           onClick={() => void props.saveNotes()}
           disabled={props.savingNotes}
-          className="rounded-2xl border border-cyan-500/20 bg-cyan-500/10 px-4 py-3 text-sm font-semibold text-cyan-100 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className={buttons.primary}
         >
           {props.savingNotes ? "Saving Notes..." : "Save Notes"}
         </button>
@@ -92,4 +94,3 @@ export function PatientNotesSection(props: Props) {
     </>
   );
 }
-

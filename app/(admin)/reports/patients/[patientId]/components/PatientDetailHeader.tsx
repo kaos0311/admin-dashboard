@@ -9,6 +9,8 @@ import {
   UserRound,
 } from "lucide-react";
 
+import { badges, buttons, glass, typography } from "@/theme";
+
 import type { PatientRecord } from "../patient-detail-types";
 
 import {
@@ -38,24 +40,21 @@ export function PatientDetailHeader({
   destroyPatient,
 }: Props) {
   return (
-    <header className="rounded-[2rem] border border-white/10 bg-gradient-to-br from-white/[0.12] via-white/[0.055] to-black/40 p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl">
-      <Link
-        href="/reports/patients"
-        className="mb-5 inline-flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
-      >
+    <header className={glass.cardPadded}>
+      <Link href="/reports/patients" className={`${buttons.ghost} mb-5`}>
         <ArrowLeft className="h-4 w-4" />
         Back to Patient Index
       </Link>
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-zinc-300">
+          <div className={`mb-2 inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs ${badges.neutral}`}>
             <UserRound className="h-3.5 w-3.5" />
             Patient command record
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="min-w-0 break-words text-3xl font-bold leading-[1.15] tracking-tight text-white">
+            <h1 className={`${typography.pageTitle} min-w-0`}>
               {patient.fullName}
             </h1>
 
@@ -68,13 +67,13 @@ export function PatientDetailHeader({
             {patient.hospice ? <Badge label="Hospice" /> : null}
           </div>
 
-          <p className="mt-2 text-sm text-zinc-400">
+          <p className={`${typography.bodyMuted} mt-2`}>
             DOB: {formatDate(patient.dateOfBirth)} | DOD:{" "}
             {formatDate(patient.dateOfDeath)}
           </p>
 
           {patient.snapshot || patient.patientSnapshot ? (
-            <p className="mt-4 max-w-4xl rounded-3xl border border-white/10 bg-black/25 p-4 text-sm leading-6 text-zinc-300 backdrop-blur-xl">
+            <p className={`${glass.insetPadded} ${typography.body} mt-4 max-w-4xl`}>
               {patient.snapshot || patient.patientSnapshot}
             </p>
           ) : null}
@@ -115,4 +114,3 @@ export function PatientDetailHeader({
     </header>
   );
 }
-

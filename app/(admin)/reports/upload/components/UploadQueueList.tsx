@@ -10,7 +10,7 @@ import {
   X,
 } from "lucide-react";
 
-import { alerts, badges, glass, typography } from "@/theme";
+import { alerts, badges, glass, typography, uploadUi } from "@/theme";
 
 import type { UploadQueueItem } from "../upload-types";
 import {
@@ -20,8 +20,6 @@ import {
   isActiveUpload,
   uploadStatusLabel,
 } from "../upload-utils";
-import { uploadUi } from "./upload-ui";
-
 const uploadQueueStyles = {
   statusDanger: badges.danger,
   statusSuccess: badges.success,
