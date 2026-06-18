@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue as AdminFieldValue } from "firebase-admin/firestore";
 
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
 import { normalizeBarcode } from "@/lib/barcode";
@@ -23,6 +23,13 @@ type ProductGuess = {
   imageUrl: string;
   sourceUrl: string;
   confidence: number;
+  warrantyMonths: number;
+};
+
+type VendorResearchSite = {
+  id: string;
+  name: string;
+  url: string;
 };
 
 function text(value: unknown): string {
@@ -35,6 +42,67 @@ function normalizeSearchText(value: string): string {
 
 function buildSearchKeywords(values: string[]): string[] {
   return Array.from(new Set(normalizeSearchText(values.join(" ")).split(" ").filter(Boolean))).slice(0, 100);
+}
+
+function normalizeVendorSite(
+  id: string,
+  data: Record<string, unknown>
+): VendorResearchSite {
+  const url = typeof data.url === "string" ? data.url.trim() : "";
+  return { id, name: typeof data.name === "string" ? data.name.trim() : id, url };
+}
+
+function extractDomain(url: string): string {
+  try {
+    return new URL(url).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+function domainFromRecord(record: { url?: string }): string {
+  const url = typeof record.url === "string" ? record.url : "";
+  return extractDomain(url);
+}
+
+function rankSearchResults(
+  results: SearchResult[],
+  preferredDomains: string[]
+): SearchResult[] {
+  if (!preferredDomains.length || !results.length) return results;
+
+  const preferred = new Set(
+    preferredDomains
+      .map((domain) => domain.toLowerCase())
+      .filter((domain) => domain.length > 0)
+  );
+
+  const preferredResults: SearchResult[] = [];
+  const otherResults: SearchResult[] = [];
+
+  for (const result of results) {
+    const domain = extractDomain(result.url);
+    if (domain && preferred.has(domain)) {
+      preferredResults.push(result);
+    } else {
+      otherResults.push(result);
+    }
+  }
+
+  return [...preferredResults, ...otherResults];
+}
+
+async function loadVendorResearchSites(): Promise<VendorResearchSite[]> {
+  try {
+    const snapshot = await adminDb
+      .collection("vendorResearchSites")
+      .limit(200)
+      .get();
+
+    return snapshot.docs.map((docSnap) => normalizeVendorSite(docSnap.id, docSnap.data()));
+  } catch {
+    return [];
+  }
 }
 
 function decodeHtml(value: string): string {
@@ -89,6 +157,34 @@ function guessManufacturer(value: string): string {
   return match ?? "";
 }
 
+function extractWarrantyMonths(value: string): number {
+  const text = value.toLowerCase();
+
+  const yearMatch = /\b(\d+)\s*-?\s*year\b/.exec(text);
+  if (yearMatch) {
+    const years = Number(yearMatch[1]);
+    if (Number.isFinite(years)) {
+      return Math.round(years * 12);
+    }
+  }
+
+  const monthMatch = /\b(\d+)\s*-?\s*month\b/.exec(text);
+  if (monthMatch) {
+    const months = Number(monthMatch[1]);
+    if (Number.isFinite(months)) {
+      return months;
+    }
+  }
+
+  return 0;
+}
+
+function extractModelNumber(value: string): string {
+  const match = /(?:model|part)[\s:#-]*([A-Z0-9][A-Z0-9\-\._\/]{2,})/i.exec(value);
+  if (!match) return "";
+  return match[1].replace(/[\s]+/g, " ").trim();
+}
+
 function extractDuckResults(html: string): SearchResult[] {
   const results: SearchResult[] = [];
   const resultPattern = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
@@ -115,7 +211,7 @@ function extractDuckResults(html: string): SearchResult[] {
   return results;
 }
 
-async function webSearch(query: string): Promise<SearchResult[]> {
+async function webSearch(query: string, preferredDomains: string[] = []): Promise<SearchResult[]> {
   const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
   const response = await fetch(url, {
     headers: {
@@ -125,7 +221,50 @@ async function webSearch(query: string): Promise<SearchResult[]> {
   });
 
   if (!response.ok) return [];
-  return extractDuckResults(await response.text());
+  const results = extractDuckResults(await response.text());
+  return rankSearchResults(results, preferredDomains);
+}
+
+async function identifySku(
+  sku: string,
+  preferredDomains: string[] = [],
+  preferredSiteNames: string[] = []
+): Promise<ProductGuess | null> {
+  const query = [
+    sku,
+    "home medical equipment product",
+  ].join(" ");
+  const baseResults = await webSearch(query, preferredDomains);
+  const results =
+    preferredSiteNames.length && baseResults.length
+      ? rankSearchResults(
+          baseResults,
+          preferredSiteNames
+            .map((name) => name.trim())
+            .filter((name) => name.length > 0)
+        )
+      : baseResults;
+  const best = results[0];
+
+  if (!best) return null;
+
+  const combined = `${best.title} ${best.snippet}`;
+  const name = cleanTitle(best.title) || cleanTitle(best.snippet);
+  const imageUrl = await findImageUrl(results);
+
+  return {
+    name: name || sku,
+    category: inferCategory(combined),
+    manufacturer: guessManufacturer(combined),
+    model: extractModelNumber(combined),
+    sku,
+    upc: "",
+    hcpcs: "",
+    imageUrl,
+    sourceUrl: best.url,
+    confidence: name ? 0.6 : 0.35,
+    warrantyMonths: extractWarrantyMonths(combined),
+  };
 }
 
 function extractMetaImage(html: string): string {
@@ -166,7 +305,11 @@ async function findImageUrl(results: SearchResult[]): Promise<string> {
   return "";
 }
 
-async function identifyProduct(queryParts: string[]): Promise<ProductGuess | null> {
+async function identifyProduct(
+  queryParts: string[],
+  preferredDomains: string[] = [],
+  preferredSiteNames: string[] = []
+): Promise<ProductGuess | null> {
   const strongIdentifiers = queryParts
     .map((part) => part.trim())
     .filter((part) => /^[A-Z0-9-]{6,}$/i.test(part));
@@ -174,7 +317,16 @@ async function identifyProduct(queryParts: string[]): Promise<ProductGuess | nul
     ...queryParts.filter(Boolean),
     "home medical equipment product",
   ].join(" ");
-  const results = await webSearch(query);
+  const baseResults = await webSearch(query, preferredDomains);
+  const results =
+    preferredSiteNames.length && baseResults.length
+      ? rankSearchResults(
+          baseResults,
+          preferredSiteNames
+            .map((name) => name.trim())
+            .filter((name) => name.length > 0)
+        )
+      : baseResults;
   const best = results[0];
 
   if (!best) return null;
@@ -198,13 +350,14 @@ async function identifyProduct(queryParts: string[]): Promise<ProductGuess | nul
     name: name || queryParts.filter(Boolean).join(" "),
     category: inferCategory(combined),
     manufacturer: guessManufacturer(combined),
-    model: "",
-    sku: "",
+    model: extractModelNumber(combined),
+    sku: queryParts.find((part) => /^[A-Z0-9-]{6,}$/i.test(part.trim()))?.trim() ?? "",
     upc: "",
     hcpcs: "",
     imageUrl,
     sourceUrl: best.url,
     confidence: name ? 0.55 : 0.35,
+    warrantyMonths: extractWarrantyMonths(combined),
   };
 }
 
@@ -236,12 +389,21 @@ async function enrichInventory(body: Record<string, unknown>, actor: string) {
   const code = normalizeBarcode(
     text(body.code) || text(current.serial) || text(current.barcode) || text(current.sku)
   );
-  const guess = await identifyProduct([
-    code,
-    text(current.name).replace(/^Pending scanned item\s+/i, ""),
-    text(current.manufacturer),
-    text(current.modelNumber),
-  ]);
+
+  const vendorResearchSites = await loadVendorResearchSites();
+  const preferredDomains = vendorResearchSites.map(domainFromRecord);
+  const preferredSiteNames = vendorResearchSites.map((site) => site.name);
+
+  const guess = await identifyProduct(
+    [
+      code,
+      text(current.name).replace(/^Pending scanned item\s+/i, ""),
+      text(current.manufacturer),
+      text(current.modelNumber),
+    ],
+    preferredDomains,
+    preferredSiteNames
+  );
 
   if (!guess) {
     return NextResponse.json({ error: "Jarvis could not identify a likely product." }, { status: 404 });
@@ -300,14 +462,14 @@ async function enrichInventory(body: Record<string, unknown>, actor: string) {
       deleted: false,
       searchText: normalizeSearchText(searchValues.join(" ")),
       searchKeywords: buildSearchKeywords(searchValues),
-      jarvisWebEnrichedAt: FieldValue.serverTimestamp(),
+      jarvisWebEnrichedAt: AdminFieldValue.serverTimestamp(),
       jarvisWebEnrichment: {
         sourceUrl: guess.sourceUrl,
         imageUrl: guess.imageUrl,
         confidence: guess.confidence,
         queryCode: code,
       },
-      updatedAt: FieldValue.serverTimestamp(),
+      updatedAt: AdminFieldValue.serverTimestamp(),
       updatedByEmail: actor,
     },
     { merge: true }
@@ -341,10 +503,10 @@ async function enrichInventory(body: Record<string, unknown>, actor: string) {
         sourceUrl: guess.sourceUrl,
         imageUrl: guess.imageUrl,
         confidence: guess.confidence,
-        enrichedAt: FieldValue.serverTimestamp(),
+        enrichedAt: AdminFieldValue.serverTimestamp(),
       },
       searchText: normalizeSearchText(inventorySearchValues.join(" ")),
-      updatedAt: FieldValue.serverTimestamp(),
+      updatedAt: AdminFieldValue.serverTimestamp(),
     },
     { merge: true }
   );
@@ -376,6 +538,10 @@ async function enrichProductImages(body: Record<string, unknown>, actor: string)
     return NextResponse.json({ error: "productIds are required" }, { status: 400 });
   }
 
+  const vendorResearchSites = await loadVendorResearchSites();
+  const preferredDomains = vendorResearchSites.map(domainFromRecord);
+  const preferredSiteNames = vendorResearchSites.map((site) => site.name);
+
   const updated: Array<{ productId: string; imageUrl: string; sourceUrl: string }> = [];
 
   for (const productId of ids) {
@@ -386,14 +552,18 @@ async function enrichProductImages(body: Record<string, unknown>, actor: string)
     const product = snap.data() ?? {};
     if (text(product.imageUrl) && text(product.thumbnailUrl)) continue;
 
-    const guess = await identifyProduct([
-      text(product.name),
-      text(product.manufacturer),
-      text(product.model),
-      text(product.sku),
-      text(product.upc),
-      "stock product image",
-    ]);
+    const guess = await identifyProduct(
+      [
+        text(product.name),
+        text(product.manufacturer),
+        text(product.model),
+        text(product.sku),
+        text(product.upc),
+        "stock product image",
+      ],
+      preferredDomains,
+      preferredSiteNames
+    );
 
     if (!guess?.imageUrl) continue;
 
@@ -405,9 +575,9 @@ async function enrichProductImages(body: Record<string, unknown>, actor: string)
           sourceUrl: guess.sourceUrl,
           imageUrl: guess.imageUrl,
           confidence: guess.confidence,
-          enrichedAt: FieldValue.serverTimestamp(),
+          enrichedAt: AdminFieldValue.serverTimestamp(),
         },
-        updatedAt: FieldValue.serverTimestamp(),
+        updatedAt: AdminFieldValue.serverTimestamp(),
         updatedByEmail: actor,
       },
       { merge: true }
@@ -421,6 +591,233 @@ async function enrichProductImages(body: Record<string, unknown>, actor: string)
   }
 
   return NextResponse.json({ updated });
+}
+
+type AutoFillRecord = Record<string, unknown>;
+
+type BlankField = {
+  field: string;
+  currentValue: unknown;
+  sourceValue: unknown;
+  confidence: number;
+  sourceDocId: string;
+  sourceCollection: string;
+};
+
+type AutoFillResult = {
+  docId: string;
+  collection: string;
+  filledFields: BlankField[];
+};
+
+async function autoFillBlankFields(
+  collections: string[],
+  actor: string
+): Promise<AutoFillResult[]> {
+  const results: AutoFillResult[] = [];
+  const BATCH_SIZE = 25;
+
+  for (const collectionName of collections) {
+    const collectionRef = adminDb.collection(collectionName);
+
+    const snapshot = await collectionRef.limit(BATCH_SIZE).get();
+
+    if (snapshot.empty) {
+      continue;
+    }
+
+    const blankCandidates: Array<{ docId: string; data: AutoFillRecord; blankFields: string[] }> = [];
+
+    for (const docSnap of snapshot.docs) {
+      const data = docSnap.data();
+      const blankFields: string[] = [];
+
+      const fieldKeys = [
+        "manufacturer",
+        "manufacturerItemId",
+        "model",
+        "sku",
+        "upc",
+        "hcpcs",
+        "category",
+        "imageUrl",
+        "thumbnailUrl",
+        "barcode",
+        "serial",
+        "lotNumber",
+        "locationName",
+        "binLocation",
+        "dimensions",
+        "weight",
+        "primaryVendor",
+        "secondaryVendor",
+        "warrantyMonths",
+      ];
+
+      for (const field of fieldKeys) {
+        const value = data[field];
+        if (value === undefined || value === null || value === "" || (Array.isArray(value) && value.length === 0)) {
+          blankFields.push(field);
+        }
+      }
+
+      if (blankFields.length > 0) {
+        blankCandidates.push({ docId: docSnap.id, data, blankFields });
+      }
+    }
+
+    for (const candidate of blankCandidates) {
+      const filledFields: BlankField[] = [];
+      const updates: Record<string, unknown> = {};
+
+      const name = text(candidate.data.name);
+      const sku = text(candidate.data.sku);
+      const upc = text(candidate.data.upc);
+      const manufacturer = text(candidate.data.manufacturer);
+      const category = text(candidate.data.category);
+
+      const searchIdentifiers = (() => {
+        const identifiers: string[] = [];
+        if (name) identifiers.push(name.toLowerCase());
+        if (sku) identifiers.push(sku.toLowerCase());
+        if (upc) identifiers.push(upc.toLowerCase());
+        if (manufacturer) identifiers.push(manufacturer.toLowerCase());
+        if (category) identifiers.push(category.toLowerCase());
+        return identifiers;
+      })();
+
+      if (!searchIdentifiers.length) {
+        continue;
+      }
+
+      const siblingChecks: Array<{ field: string; value: string }> = [];
+      if (sku) siblingChecks.push({ field: "sku", value: sku });
+      if (upc) siblingChecks.push({ field: "upc", value: upc });
+      if (manufacturer) siblingChecks.push({ field: "manufacturer", value: manufacturer });
+      if (category) siblingChecks.push({ field: "category", value: category });
+
+      let matchedSibling: AutoFillRecord | null = null;
+      let matchConfidence = 0;
+      let matchDocId = "";
+
+      for (const check of siblingChecks) {
+        const siblingSnap = await collectionRef
+          .where(check.field, "==", check.value)
+          .limit(5)
+          .get();
+
+        const siblings = siblingSnap.docs.filter((docSnap) => docSnap.id !== candidate.docId);
+
+        if (siblings.length > 0 && matchConfidence < 85) {
+          matchedSibling = siblings[0].data();
+          matchDocId = siblings[0].id;
+          matchConfidence = 85;
+        }
+      }
+
+      if (!matchedSibling && name && name.length > 2) {
+        const nameSnap = await collectionRef
+          .where("name", "==", name)
+          .limit(5)
+          .get();
+
+        const nameMatches = nameSnap.docs.filter((docSnap) => docSnap.id !== candidate.docId);
+
+        if (nameMatches.length > 0 && matchConfidence < 95) {
+          matchedSibling = nameMatches[0].data();
+          matchDocId = nameMatches[0].id;
+          matchConfidence = 95;
+        }
+      }
+
+      if (!matchedSibling && manufacturer && manufacturer.length > 2) {
+        const mfgSnap = await collectionRef
+          .where("manufacturer", "==", manufacturer)
+          .limit(10)
+          .get();
+
+        const mfgMatches = mfgSnap.docs.filter((docSnap) => docSnap.id !== candidate.docId);
+
+        if (mfgMatches.length > 0 && matchConfidence < 70) {
+          matchedSibling = mfgMatches[0].data();
+          matchDocId = mfgMatches[0].id;
+          matchConfidence = 70;
+        }
+      }
+
+      if (!matchedSibling || !Object.keys(matchedSibling).length) {
+        continue;
+      }
+
+      for (const field of candidate.blankFields) {
+        const siblingValue = matchedSibling[field];
+        const normalizedSibling = text(siblingValue);
+
+        if (normalizedSibling) {
+          updates[field] = normalizedSibling;
+          filledFields.push({
+            field,
+            currentValue: null,
+            sourceValue: normalizedSibling,
+            confidence: matchConfidence,
+            sourceDocId: matchDocId,
+            sourceCollection: collectionName,
+          });
+        }
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await collectionRef.doc(candidate.docId).update({
+          ...updates,
+          updatedAt: AdminFieldValue.serverTimestamp(),
+          updatedByEmail: actor,
+          autoFilledBy: "jarvis",
+          autoFillTimestamp: AdminFieldValue.serverTimestamp(),
+          autoFillConfidence: matchConfidence,
+        });
+
+        if (collectionName === "inventory") {
+          const productId = text(candidate.data.productId);
+          if (productId) {
+            await adminDb.collection("products").doc(productId).update({
+              ...Object.fromEntries(
+                Object.entries(updates).filter(([key]) => ["manufacturer", "manufacturerItemId", "model", "sku", "upc", "hcpcs", "category"].includes(key))
+              ),
+              updatedAt: AdminFieldValue.serverTimestamp(),
+              updatedByEmail: actor,
+              autoFilledBy: "jarvis",
+              autoFillTimestamp: AdminFieldValue.serverTimestamp(),
+              autoFillConfidence: matchConfidence,
+            });
+          }
+        }
+
+        await adminDb.collection("jarvisAutoFillLog").add({
+          docId: candidate.docId,
+          collection: collectionName,
+          filledFields: filledFields.map((item) => ({
+            field: item.field,
+            sourceValue: item.sourceValue,
+            confidence: item.confidence,
+            sourceDocId: item.sourceDocId,
+          })),
+          confidence: matchConfidence,
+          createdByEmail: actor,
+          createdAt: AdminFieldValue.serverTimestamp(),
+        });
+      }
+
+      if (filledFields.length > 0) {
+        results.push({
+          docId: candidate.docId,
+          collection: collectionName,
+          filledFields,
+        });
+      }
+    }
+  }
+
+  return results;
 }
 
 export async function POST(request: NextRequest) {
@@ -441,5 +838,35 @@ export async function POST(request: NextRequest) {
     return enrichProductImages(body, actor);
   }
 
+  if (mode === "identifySku") {
+    const sku = text(body.sku);
+    if (!sku) {
+      return NextResponse.json({ error: "sku is required" }, { status: 400 });
+    }
+
+    const vendorResearchSites = await loadVendorResearchSites();
+    const preferredDomains = vendorResearchSites.map(domainFromRecord);
+    const preferredSiteNames = vendorResearchSites.map((site) => site.name);
+
+    const guess = await identifySku(sku, preferredDomains, preferredSiteNames);
+
+    if (!guess) {
+      return NextResponse.json({ error: "Jarvis could not identify a likely product from that SKU." }, { status: 404 });
+    }
+
+    return NextResponse.json({ guess });
+  }
+
+  if (mode === "autoFillBlankFields") {
+    const collections = Array.isArray(body.collections)
+      ? body.collections.map(text).filter(Boolean)
+      : ["inventory", "products"];
+
+    const results = await autoFillBlankFields(collections, actor);
+    return NextResponse.json({ results });
+  }
+
   return NextResponse.json({ error: "Unsupported enrichment mode" }, { status: 400 });
 }
+
+

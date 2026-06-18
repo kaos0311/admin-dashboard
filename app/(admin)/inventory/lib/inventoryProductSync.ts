@@ -51,11 +51,33 @@ function safeDocId(value: string): string {
   return cleanId || `inventory-product-${Date.now()}`;
 }
 
-function inferProductType(item: ProductSyncInput) {
+function inferProductCategory(item: ProductSyncInput) {
   const text = `${item.name} ${item.category} ${item.hcpc}`.toLowerCase();
+
+  if (text.includes("cpap") || text.includes("bipap")) return "CPAP";
+  if (text.includes("mask")) return "CPAP Accessories";
+
+  if (text.includes("everflo")) return "Oxygen - Everflo";
+  if (text.includes("perfecto")) return "Oxygen - Perfecto";
+  if (text.includes("platinum 5")) return "Oxygen - Platinum 5";
+  if (text.includes("millennium")) return "Oxygen - Millennium";
+  if (text.includes("airsep")) return "Oxygen - AirSep";
+  if (text.includes("intensity")) return "Oxygen - Intensity";
+  if (text.includes("sequal")) return "Oxygen - SeQual";
+  if (text.includes("oxygen") || text.includes("concentrator")) return "Oxygen - Concentrator";
+
+  if (text.includes("wheelchair")) return "Mobility";
+  if (text.includes("walker") || text.includes("rollator")) return "Mobility";
+  if (text.includes("hospital bed") || text.includes("bed rail")) return "Beds";
+  if (text.includes("commode") || text.includes("bath")) return "Bath Safety";
+
+  return "General";
+}
+
+function inferProductTypeFromCategory(category: string) {
+  const text = category.toLowerCase();
   if (text.includes("cpap") || text.includes("bipap")) return "cpap";
   if (text.includes("oxygen") || text.includes("concentrator")) return "oxygen";
-  if (item.serial || item.manufacturerItemId) return "serialized";
   return "resale";
 }
 
@@ -90,9 +112,10 @@ async function findExistingProduct(item: ProductSyncInput): Promise<string | nul
 
 export async function ensureProductFromInventory(item: ProductSyncInput) {
   const name = clean(item.name);
-  const category = clean(item.category);
+  const itemCategory = clean(item.category);
+  const resolvedCategory = itemCategory || inferProductCategory(item);
 
-  if (!name || !category) return null;
+  if (!name) return null;
 
   const barcode = item.barcode ? normalizeBarcode(item.barcode) : "";
   const hcpcs = clean(item.hcpc).toUpperCase();
@@ -100,15 +123,15 @@ export async function ensureProductFromInventory(item: ProductSyncInput) {
   const manufacturer = clean(item.manufacturer);
   const manufacturerItemId = clean(item.manufacturerItemId);
   const model = clean(item.modelNumber);
-  const productType = inferProductType(item);
+  const productType = inferProductTypeFromCategory(resolvedCategory);
   const existingId = await findExistingProduct(item);
   const productId =
     existingId ||
-    safeDocId(sku || barcode || hcpcs || manufacturerItemId || `${name}-${category}`);
+    safeDocId(sku || barcode || hcpcs || manufacturerItemId || `${name}-${resolvedCategory}`);
 
   const searchValues = [
     name,
-    category,
+    resolvedCategory,
     productType,
     manufacturer,
     manufacturerItemId,
@@ -124,7 +147,7 @@ export async function ensureProductFromInventory(item: ProductSyncInput) {
       name,
       brand: manufacturer,
       model,
-      category,
+      category: resolvedCategory,
       productType,
       manufacturer,
       manufacturerItemId,
@@ -136,7 +159,7 @@ export async function ensureProductFromInventory(item: ProductSyncInput) {
       reorderLevel: item.reorderLevel || 0,
       status: item.status === "discontinued" ? "discontinued" : "active",
       isRentalItem: false,
-      isSerialized: productType === "serialized" || Boolean(item.serial),
+      isSerialized: Boolean(item.serial),
       requiresSerialTracking: Boolean(item.serial),
       lotTracking: Boolean(item.lotNumber),
       deleted: false,
@@ -162,7 +185,7 @@ export async function ensureProductFromInventory(item: ProductSyncInput) {
       {
         code: hcpcs,
         shopDescription: name,
-        shopCategory: category,
+        shopCategory: resolvedCategory,
         observedInShop: true,
         lastObservedSource: "inventory_auto_sync",
         lastObservedAt: serverTimestamp(),

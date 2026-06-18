@@ -1,6 +1,7 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   limit,
@@ -57,6 +58,12 @@ function numberSafe(value: unknown): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function pick(existingValue: unknown, newValue: unknown): unknown {
+  const existingStr = String(existingValue ?? "").trim();
+  const newStr = String(newValue ?? "").trim();
+  return newStr || (existingStr ? existingValue : newValue);
+}
+
 function buildSearchText(input: SmartMergeInventoryInput): string {
   return [
     input.name,
@@ -91,10 +98,20 @@ async function findExistingInventory(input: SmartMergeInventoryInput) {
   const manufacturerItemId = clean(input.manufacturerItemId);
 
   const candidates = [];
+  const normalizedInputCode = barcode ? normalizeBarcode(barcode) : "";
 
   if (serial) {
     candidates.push(
       query(collection(db, "inventory"), where("serial", "==", serial), limit(10))
+    );
+  }
+
+  if (normalizedInputCode) {
+    candidates.push(
+      query(collection(db, "inventory"), where("barcode", "==", normalizedInputCode), limit(10))
+    );
+    candidates.push(
+      query(collection(db, "inventory"), where("serial", "==", normalizedInputCode), limit(10))
     );
   }
 
@@ -126,57 +143,106 @@ async function findExistingInventory(input: SmartMergeInventoryInput) {
     );
   }
 
+  const seen = new Set<string>();
+  const mergedCandidates = [];
+
   for (const q of candidates) {
     const snap = await getDocs(q);
 
     for (const docSnap of snap.docs) {
-      const data = docSnap.data();
-
-      const sameLocation =
-        key(data.locationName || "Main Location") === key(locationName);
-
-      const sameBin = key(data.binLocation) === key(binLocation);
-
-      const sameSerial =
-        serial && key(data.serial) === key(serial);
-
-      const sameBarcodeLot =
-        barcode &&
-        lotNumber &&
-        key(data.barcode) === key(barcode) &&
-        key(data.lotNumber) === key(lotNumber);
-
-      const sameSkuLocation =
-        sku &&
-        key(data.sku) === key(sku) &&
-        sameLocation &&
-        sameBin &&
-        !serial &&
-        !lotNumber;
-
-      const sameManufacturerLocation =
-        manufacturerItemId &&
-        key(data.manufacturerItemId) === key(manufacturerItemId) &&
-        sameLocation &&
-        sameBin &&
-        !serial &&
-        !lotNumber;
-
-      if (
-        sameSerial ||
-        sameBarcodeLot ||
-        sameSkuLocation ||
-        sameManufacturerLocation
-      ) {
-        return {
-          id: docSnap.id,
-          data,
-        };
+      if (!seen.has(docSnap.id)) {
+        seen.add(docSnap.id);
+        mergedCandidates.push({ id: docSnap.id, data: docSnap.data() });
       }
     }
   }
 
+  for (const existing of mergedCandidates) {
+    const data = existing.data;
+    const sameLocation = key(data.locationName || "Main Location") === key(locationName);
+    const sameBin = key(data.binLocation) === key(binLocation);
+    const existingSerial = key(data.serial || "");
+    const existingBarcode = key(data.barcode || "");
+    const inputSerial = key(serial);
+    const inputBarcode = key(normalizedInputCode || barcode);
+
+    const sameSerial = inputSerial.length > 0 && existingSerial === inputSerial;
+    const sameBarcodeLot =
+      inputBarcode.length > 0 &&
+      lotNumber.length > 0 &&
+      existingBarcode === inputBarcode &&
+      key(data.lotNumber || "") === key(lotNumber);
+    const sameCodeCrossField =
+      inputSerial.length > 0 &&
+      existingBarcode === inputSerial;
+    const sameBarcodeCrossField =
+      inputBarcode.length > 0 &&
+      lotNumber.length === 0 &&
+      existingSerial === inputBarcode;
+    const sameSkuLocation =
+      sku.length > 0 &&
+      existingSerial === key(sku) &&
+      sameLocation &&
+      sameBin &&
+      !inputSerial &&
+      !inputBarcode &&
+      !lotNumber;
+    const sameManufacturerLocation =
+      manufacturerItemId.length > 0 &&
+      key(data.manufacturerItemId) === key(manufacturerItemId) &&
+      sameLocation &&
+      sameBin &&
+      !inputSerial &&
+      !inputBarcode &&
+      !lotNumber;
+
+    if (
+      sameSerial ||
+      sameBarcodeLot ||
+      sameCodeCrossField ||
+      sameBarcodeCrossField ||
+      sameSkuLocation ||
+      sameManufacturerLocation
+    ) {
+      return {
+        id: existing.id,
+        data: existing.data,
+      };
+    }
+  }
+
   return null;
+}
+
+async function consolidateDuplicate(
+  keepId: string,
+  removeId: string,
+  mergedPayload: Record<string, unknown>,
+  nextQuantity: number,
+  unitCost: number
+) {
+  await updateDoc(doc(db, "inventory", keepId), {
+    ...mergedPayload,
+    quantityOnHand: nextQuantity,
+    totalValue: nextQuantity * unitCost,
+    updatedAt: serverTimestamp(),
+  });
+
+  await addDoc(collection(db, "stockMovements"), {
+    productId: mergedPayload.productId,
+    productName: mergedPayload.name,
+    barcode: mergedPayload.barcode,
+    serial: mergedPayload.serial,
+    lotNumber: mergedPayload.lotNumber,
+    type: "inventory_update",
+    quantity: nextQuantity,
+    source: "smart_merge_consolidation",
+    sourceId: keepId,
+    notes: `Consolidated duplicate inventory record ${removeId} into ${keepId}.`,
+    createdAt: serverTimestamp(),
+  });
+
+  await deleteDoc(doc(db, "inventory", removeId));
 }
 
 async function logStockMovement(args: {
@@ -284,28 +350,84 @@ export async function smartMergeInventory(
     numberSafe(existing.data.committed) -
     numberSafe(existing.data.onRent);
 
-  await updateDoc(doc(db, "inventory", existing.id), {
-    ...payload,
+  const mergedPayload = {
+    productId: pick(existing.data.productId, payload.productId),
+    name: payload.name,
+    category: payload.category,
+    manufacturer: pick(existing.data.manufacturer, payload.manufacturer),
+    manufacturerItemId: pick(
+      existing.data.manufacturerItemId,
+      payload.manufacturerItemId
+    ),
+    sku: pick(existing.data.sku, payload.sku),
+    hcpc: pick(existing.data.hcpc, payload.hcpc),
+    barcode: pick(existing.data.barcode, payload.barcode),
+    serial: pick(existing.data.serial, payload.serial),
+    lotNumber: pick(existing.data.lotNumber, payload.lotNumber),
+    expirationDate: pick(existing.data.expirationDate, payload.expirationDate),
+    locationName: payload.locationName,
+    binLocation: pick(existing.data.binLocation, payload.binLocation),
     quantityOnHand: nextQuantity,
+    committed,
+    onRent,
+    onOrder,
     available: nextAvailable,
+    reorderLevel: pick(existing.data.reorderLevel, payload.reorderLevel),
+    unitCost,
     totalValue: nextQuantity * unitCost,
+    status: payload.status,
     notes:
       payload.notes ||
       clean(existing.data.notes) ||
       "Updated by smart inventory merge.",
+    searchText: buildSearchText({
+      productId: clean(pick(existing.data.productId, payload.productId)),
+      name: payload.name,
+      category: payload.category,
+      manufacturer: clean(
+        pick(existing.data.manufacturer, payload.manufacturer)
+      ),
+      manufacturerItemId: clean(
+        pick(
+          existing.data.manufacturerItemId,
+          payload.manufacturerItemId
+        )
+      ),
+      sku: clean(pick(existing.data.sku, payload.sku)),
+      hcpc: clean(payload.hcpc).toUpperCase(),
+      barcode: clean(pick(existing.data.barcode, payload.barcode)),
+      serial: clean(pick(existing.data.serial, payload.serial)),
+      lotNumber: clean(pick(existing.data.lotNumber, payload.lotNumber)),
+      expirationDate: clean(
+        pick(existing.data.expirationDate, payload.expirationDate)
+      ),
+      locationName: payload.locationName,
+      binLocation: clean(pick(existing.data.binLocation, payload.binLocation)),
+      quantityOnHand: nextQuantity,
+      status: payload.status,
+      notes:
+        payload.notes ||
+        clean(existing.data.notes) ||
+        "Updated by smart inventory merge.",
+    }),
     updatedAt: serverTimestamp(),
-  });
+  };
+
+  const mergeSource = input.source || "smart_merge";
+  const mergeSourceId = input.sourceId || existing.id;
+
+  await updateDoc(doc(db, "inventory", existing.id), mergedPayload);
 
   await logStockMovement({
-    productId: payload.productId,
+    productId: String(pick(existing.data.productId, payload.productId)),
     productName: payload.name,
-    barcode: payload.barcode,
-    serial: payload.serial,
-    lotNumber: payload.lotNumber,
+    barcode: String(pick(existing.data.barcode, payload.barcode)),
+    serial: String(pick(existing.data.serial, payload.serial)),
+    lotNumber: String(pick(existing.data.lotNumber, payload.lotNumber)),
     type: quantityOnHand >= 0 ? "restock" : "manual_adjustment",
     quantity: Math.abs(quantityOnHand),
-    source: input.source || "smart_merge",
-    sourceId: input.sourceId || existing.id,
+    source: mergeSource,
+    sourceId: mergeSourceId,
     notes: `Smart merge updated quantity from ${previousQuantity} to ${nextQuantity}.`,
   });
 

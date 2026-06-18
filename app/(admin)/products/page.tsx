@@ -327,8 +327,71 @@ export default function ProductsPage() {
   ) {
     if (!scannerOpen) return;
 
-    const clean =
-      normalizeBarcode(code);
+    const clean = normalizeBarcode(code);
+
+    if (typeof clean === "string" && clean.trim().length > 0 && /^[A-Z0-9\-]{3,}$/i.test(clean.trim())) {
+      const sku = clean.trim();
+      const captured = sku;
+      setScannerOpen(false);
+
+      void (async () => {
+        try {
+          const tokenResult = await user?.getIdToken();
+          const response = await fetch("/api/jarvis/product-enrichment", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              ...(tokenResult ? { Authorization: `Bearer ${tokenResult}` } : {}),
+            },
+            body: JSON.stringify({ mode: "identifySku", sku }),
+          });
+
+          if (!response.ok) {
+            throw new Error("Jarvis SKU lookup failed.");
+          }
+
+          const json = (await response.json()) as Record<string, unknown>;
+          const guess = json.guess as Record<string, unknown> | undefined;
+
+          if (!guess) {
+            throw new Error("Jarvis could not identify a product from that SKU.");
+          }
+
+          setForm((prev) => ({
+            ...prev,
+            sku: String(guess.sku ?? prev.sku ?? captured),
+            upc: String(guess.upc ?? prev.upc ?? ""),
+            name: String(guess.name ?? prev.name ?? ""),
+            brand: String(guess.manufacturer ?? prev.brand ?? ""),
+            manufacturer: String(guess.manufacturer ?? prev.manufacturer ?? ""),
+            model: String(guess.model ?? prev.model ?? ""),
+            category: String(guess.category ?? prev.category ?? ""),
+            imageUrl: String(guess.imageUrl ?? prev.imageUrl ?? ""),
+            thumbnailUrl: String(guess.imageUrl ?? prev.thumbnailUrl ?? ""),
+            warrantyMonths: String(guess.warrantyMonths ?? prev.warrantyMonths ?? ""),
+          }));
+
+          toast.success("Jarvis filled product details from SKU.");
+        } catch (error) {
+          console.error("SKU IDENTIFY ERROR:", error);
+          setForm((prev) => ({
+            ...prev,
+            upc: clean,
+          }));
+
+          setFilters((prev) => ({
+            ...prev,
+            search: clean,
+          }));
+
+          toast.error(
+            error instanceof Error ? error.message : "Could not identify product by SKU."
+          );
+        }
+      })();
+
+      return;
+    }
 
     setForm((prev) => ({
       ...prev,

@@ -292,6 +292,12 @@ export default function InventoryPage() {
       message: string;
     } | null>(null);
 
+  const [scanOutCode, setScanOutCode] =
+    useState<string | null>(null);
+
+  const [scanOutReason, setScanOutReason] =
+    useState<"rental" | "purchase" | "maintenance">("rental");
+
   const [jarvisNotice, setJarvisNotice] =
     useState<{
       title: string;
@@ -605,14 +611,8 @@ export default function InventoryPage() {
         return;
 
       case "scanOut":
-        void handleScanMovement(clean, "out").then((success) => {
-          if (!success) return;
-
-          setScanSuccess({
-            title: "Scan Out Complete",
-            message: `${clean} was removed from available inventory successfully.`,
-          });
-        });
+        setScanOutCode(clean);
+        setScanOutReason("rental");
         return;
 
       default:

@@ -443,7 +443,11 @@ export function useInventoryActions({
     }
   }
 
-  async function handleScanMovement(rawCode: string, direction: "in" | "out"): Promise<boolean> {
+  async function handleScanMovement(
+    rawCode: string,
+    direction: "in" | "out",
+    outReason?: "rental" | "purchase" | "maintenance"
+  ): Promise<boolean> {
     if (!canWrite) {
       toast.error("You do not have permission to move inventory.");
       return false;
@@ -478,6 +482,15 @@ export function useInventoryActions({
     const available =
       direction === "in" ? item.available + 1 : item.available - 1;
 
+    const outType = outReason
+      ? `scan_out_${outReason}`
+      : direction === "in"
+        ? "scan_in"
+        : "scan_out";
+    const outNotes = outReason
+      ? `Scanned out for ${outReason.replace(/_/g, " ")} by barcode/manual lookup.`
+      : `${direction === "in" ? "Scanned in" : "Scanned out"} by barcode/manual lookup.`;
+
     await updateDoc(doc(db, "inventory", item.id), {
       quantityOnHand,
       available,
@@ -492,10 +505,10 @@ export function useInventoryActions({
       barcode: item.barcode,
       serial: item.serial,
       lotNumber: item.lotNumber,
-      type: direction === "in" ? "scan_in" : "scan_out",
+      type: outType,
       quantity: 1,
       sourceId: item.id,
-      notes: `${direction === "in" ? "Scanned in" : "Scanned out"} by barcode/manual lookup.`,
+      notes: outNotes,
     });
 
     if (direction === "in") {
