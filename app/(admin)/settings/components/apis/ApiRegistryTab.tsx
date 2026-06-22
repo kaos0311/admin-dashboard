@@ -87,6 +87,86 @@ const data = await response.json();
 console.log(data);`,
 };
 
+const BARCODEAPI_STARTER: ApiDraft = {
+  name: "BarcodeAPI.org - Barcode Generator",
+  provider: "BarcodeAPI.org",
+  status: "available",
+  category: "Barcode / Inventory",
+  purpose:
+    "Reference tool Jarvis can use for barcode generation links, barcode format examples, and inventory scan testing support.",
+  docsUrl: "https://barcodeapi.org/index.html#auto",
+  baseUrl: "https://barcodeapi.org/",
+  keyLocation: "No key documented. Review BarcodeAPI.org rate limits before production use.",
+  notes:
+    "Open-source REST barcode server capable of generating many barcode formats. Useful as a Jarvis reference for scan labels, test barcodes, and barcode troubleshooting.",
+  sampleCode: `const barcodeValue = "M170-1-318SF";
+const barcodeUrl = \`https://barcodeapi.org/api/auto/\${encodeURIComponent(barcodeValue)}\`;
+
+// Use barcodeUrl as an image source or open it to download a generated barcode.`,
+};
+
+const CHANGE_PHOTOS_STARTER: ApiDraft = {
+  name: "Change.Photos - Product Image Processing",
+  provider: "Change.Photos",
+  status: "available",
+  category: "Images / Product Catalog",
+  purpose:
+    "Tool Jarvis can use after finding stock product images to resize, compress, convert, and standardize product photos for inventory and product lineup pages.",
+  docsUrl: "https://www.change.photos/",
+  baseUrl: "https://change.photos/api/change",
+  keyLocation:
+    "Store the API key in server environment variable CHANGE_PHOTOS_API_KEY. Do not store the key in Firestore.",
+  notes:
+    "Change.Photos transforms existing image URLs. Jarvis should first find a reliable product image, then use this tool to normalize the image for catalog display.",
+  sampleCode: `const response = await fetch("https://change.photos/api/change", {
+  method: "POST",
+  headers: {
+    "X-Api-Key": "Bearer CHANGE_PHOTOS_API_KEY",
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    url: productImageUrl,
+    width: 800,
+    height: 800,
+    fit: "inside",
+    compress: true,
+    format: "webp"
+  })
+});
+
+const data = await response.json();
+console.log("Processed image URL:", data.url);`,
+};
+
+const RAPIDAPI_BARCODE_LOOKUP_STARTER: ApiDraft = {
+  name: "RapidAPI Barcode Lookup",
+  provider: "RapidAPI / barcode-lookup.p.rapidapi.com",
+  status: "available",
+  category: "Barcode / Product Lookup",
+  purpose:
+    "Tool Jarvis can use to look up product details from UPC, EAN, or ISBN barcodes before falling back to broader web search.",
+  docsUrl: "https://rapidapi.com/",
+  baseUrl: "https://barcode-lookup.p.rapidapi.com/v3/products",
+  keyLocation:
+    "Store the RapidAPI key in server environment variable RAPIDAPI_KEY. Do not store the key in Firestore.",
+  notes:
+    "Use for barcode-to-product enrichment when scanned inventory has a real UPC, EAN, or ISBN. Requires x-rapidapi-key even if the sample curl only shows the host header.",
+  sampleCode: `const response = await fetch(
+  "https://barcode-lookup.p.rapidapi.com/v3/products?barcode=9780439625593",
+  {
+    method: "GET",
+    headers: {
+      "Content-Type": "application/json",
+      "x-rapidapi-host": "barcode-lookup.p.rapidapi.com",
+      "x-rapidapi-key": "RAPIDAPI_KEY"
+    }
+  }
+);
+
+const data = await response.json();
+console.log(data);`,
+};
+
 const STATUS_LABELS: Record<ApiStatus, string> = {
   in_use: "In Use",
   available: "Available",
@@ -580,6 +660,36 @@ export function ApiRegistryTab() {
             >
               <Code2 className="h-4 w-4" />
               SerpApi Starter
+            </button>
+
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => resetDraft(BARCODEAPI_STARTER)}
+              className={buttons.secondary}
+            >
+              <Code2 className="h-4 w-4" />
+              BarcodeAPI Starter
+            </button>
+
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => resetDraft(CHANGE_PHOTOS_STARTER)}
+              className={buttons.secondary}
+            >
+              <Code2 className="h-4 w-4" />
+              Change.Photos Starter
+            </button>
+
+            <button
+              type="button"
+              disabled={saving}
+              onClick={() => resetDraft(RAPIDAPI_BARCODE_LOOKUP_STARTER)}
+              className={buttons.secondary}
+            >
+              <Code2 className="h-4 w-4" />
+              Barcode Lookup Starter
             </button>
 
             {editingId ? (

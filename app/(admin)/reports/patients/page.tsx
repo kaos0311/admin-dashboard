@@ -94,11 +94,23 @@ type PatientPrefixGroup = {
   patients: PatientWithDerived[];
 };
 
+function lastNameForSort(value: string): string {
+  const words = value
+    .replace(/^[^a-zA-Z]+/, "")
+    .split(/\s+/)
+    .map((word) => word.replace(/[^\p{L}\p{N}'-]+/gu, ""))
+    .filter(Boolean);
+
+  const filtered = words.filter((word) => word.length > 1);
+  return filtered[filtered.length - 1] ?? words[words.length - 1] ?? value;
+}
+
 function patientLastNamePrefix(patient: PatientWithDerived): string {
   const source = (patient.lastName || patient.fullName)
     .trim()
     .replace(/^[^a-zA-Z]+/, "");
-  const letters = source.slice(0, 2).toUpperCase();
+  const lastName = lastNameForSort(source);
+  const letters = lastName.slice(0, 2).toUpperCase();
 
   return letters || "#";
 }
@@ -109,7 +121,9 @@ function buildPrefixGroups(
   const groups = new Map<string, PatientWithDerived[]>();
   const sortedPatients = [...patients].sort(
     (a, b) =>
-      a.lastName.localeCompare(b.lastName) ||
+      lastNameForSort(a.lastName || a.fullName).localeCompare(
+        lastNameForSort(b.lastName || b.fullName)
+      ) ||
       a.firstName.localeCompare(b.firstName) ||
       a.fullName.localeCompare(b.fullName),
   );

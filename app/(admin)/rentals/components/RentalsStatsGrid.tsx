@@ -101,9 +101,9 @@ export function RentalsStatsGrid({
       />
 
       <StatCard
-        label="PAR 30 Days"
+        label="PAR Attention"
         value={stats.expiringPars}
-        description="Authorizations expiring soon"
+        description="Expired or expiring authorizations"
         icon={<ShieldCheck className="h-5 w-5" aria-hidden="true" />}
         active={activeReport === "pars"}
         onClick={() => onSelectReport("pars")}

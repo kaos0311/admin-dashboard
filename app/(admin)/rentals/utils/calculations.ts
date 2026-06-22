@@ -1,16 +1,58 @@
 ﻿import type { RentalRecord, RentalStats } from "../rentals-types";
 
+export function parseRentalDate(value: string): Date | null {
+  if (!value) return null;
+
+  const parsed = new Date(`${value}T00:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 export function isRentalOverdue(record: RentalRecord): boolean {
   if (record.status !== "checked_out") return false;
-  if (!record.expectedReturnDate) return false;
+
+  const expected = parseRentalDate(record.expectedReturnDate);
+  if (!expected) return false;
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
 
-  const expected = new Date(`${record.expectedReturnDate}T00:00:00`);
-  if (Number.isNaN(expected.getTime())) return false;
-
   return expected < today;
+}
+
+export function isRentalParExpired(record: RentalRecord): boolean {
+  const expiration = parseRentalDate(record.parExpiration);
+  if (!expiration) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  return expiration < today;
+}
+
+export function isRentalParExpiringSoon(record: RentalRecord, days = 30): boolean {
+  const expiration = parseRentalDate(record.parExpiration);
+  if (!expiration) return false;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const soon = new Date(today);
+  soon.setDate(soon.getDate() + days);
+
+  return expiration >= today && expiration <= soon;
+}
+
+export function isRentalParAttentionRecord(record: RentalRecord, days = 30): boolean {
+  return isRentalParExpired(record) || isRentalParExpiringSoon(record, days);
+}
+
+export function sortRentalParRecords(records: RentalRecord[]): RentalRecord[] {
+  return records.slice().sort((left, right) => {
+    const leftTime = parseRentalDate(left.parExpiration)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+    const rightTime = parseRentalDate(right.parExpiration)?.getTime() ?? Number.MAX_SAFE_INTEGER;
+
+    return leftTime - rightTime;
+  });
 }
 
 export function calculateRentalStats(records: RentalRecord[]): RentalStats {
@@ -19,12 +61,7 @@ export function calculateRentalStats(records: RentalRecord[]): RentalStats {
   return records.reduce<RentalStats>(
     (stats, record) => {
       const overdue = isRentalOverdue(record);
-      const parExpiration = record.parExpiration
-        ? new Date(`${record.parExpiration}T00:00:00`)
-        : null;
-      const today = new Date();
-      const soon = new Date();
-      soon.setDate(soon.getDate() + 30);
+      const parAttention = isRentalParAttentionRecord(record);
 
       stats.total += 1;
       if (record.patientId || record.patientName) {
@@ -44,12 +81,7 @@ export function calculateRentalStats(records: RentalRecord[]): RentalStats {
       stats.totalCharge += record.extCharge || record.charge;
       stats.totalAllow += record.extAllow || record.allow;
 
-      if (
-        parExpiration &&
-        !Number.isNaN(parExpiration.getTime()) &&
-        parExpiration >= today &&
-        parExpiration <= soon
-      ) {
+      if (parAttention) {
         stats.expiringPars += 1;
       }
 

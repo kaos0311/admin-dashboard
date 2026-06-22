@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 
 import {
+  Bot,
   Building2,
   ClipboardList,
   Code2,
@@ -29,6 +30,7 @@ import { useSettingsPage } from "./hooks/use-settings-page";
 
 import { ApiRegistryTab } from "./components/apis/ApiRegistryTab";
 import { BrightreeReferencesTab } from "./components/brightree/BrightreeReferencesTab";
+import { ImprovementsTab } from "./components/improvements/ImprovementsTab";
 import { CompanyTab } from "./components/company/CompanyTab";
 import { DangerTab } from "./components/danger/DangerTab";
 import { InventoryTab } from "./components/inventory/InventoryTab";
@@ -47,6 +49,7 @@ const tabIcons: Record<SettingsTabKey, React.ReactNode> = {
   brightree: <ClipboardList className="h-4 w-4" />,
   apis: <Code2 className="h-4 w-4" />,
   "vendor-research": <Globe2 className="h-4 w-4" />,
+  improvements: <Bot className="h-4 w-4" />,
   users: <Users className="h-4 w-4" />,
   security: <LockKeyhole className="h-4 w-4" />,
   danger: <ShieldAlert className="h-4 w-4" />,
@@ -190,6 +193,10 @@ export default function SettingsPage() {
 
             {activeTab === "vendor-research" ? (
               <VendorResearchTab />
+            ) : null}
+
+            {activeTab === "improvements" ? (
+              <ImprovementsTab settings={settings} setSettings={setSettings} />
             ) : null}
 
             {activeTab === "users" ? (

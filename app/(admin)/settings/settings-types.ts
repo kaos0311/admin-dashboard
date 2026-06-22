@@ -5,6 +5,7 @@
   | "brightree"
   | "apis"
   | "vendor-research"
+  | "improvements"
   | "users"
   | "security"
   | "danger";
@@ -168,6 +169,27 @@ export type VendorResearchSite = {
   createdAt?: unknown;
   updatedAt?: unknown;
   updatedByEmail?: string;
+};
+
+export type ImprovementProposalStatus = "pending" | "approved" | "rejected" | "applied";
+
+export type ImprovementProposal = {
+  id: string;
+  title: string;
+  description: string;
+  category: "ui" | "api" | "data" | "security" | "automation" | "other";
+  priority: "low" | "medium" | "high";
+  status: ImprovementProposalStatus;
+  proposedChanges: string;
+  estimatedImpact: string;
+  proposedByUid: string;
+  proposedByEmail: string;
+  approvedByUid?: string;
+  approvedByEmail?: string;
+  rejectionReason?: string;
+  appliedAt?: unknown;
+  createdAt: unknown;
+  updatedAt: unknown;
 };
 
 export type SettingsMessage = {

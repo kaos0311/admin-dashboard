@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 
 import {
   AlertTriangle,
@@ -11,6 +12,20 @@ import {
   Wrench,
 } from "lucide-react";
 
+import {
+  addDoc,
+  collection,
+  doc,
+  getDocs,
+  limit,
+  query,
+  serverTimestamp,
+  updateDoc,
+  where,
+} from "firebase/firestore";
+
+import { auth, db } from "@/lib/firebase";
+import { useAuthRole } from "@/app/hooks/useAuthRole";
 import { alerts, badges, buttons, colors, glass, spacing, tables, typography } from "@/theme";
 
 import { useRentalProducts } from "./hooks/useRentalProducts";
@@ -29,7 +44,107 @@ import {
 } from "./components/RentalsStatsGrid";
 import type { RentalRecord } from "./rentals-types";
 import { formatCurrency, formatDate } from "./utils/formatters";
-import { isRentalOverdue } from "./utils/calculations";
+import {
+  isRentalOverdue,
+  isRentalParAttentionRecord,
+  isRentalParExpired,
+  sortRentalParRecords,
+} from "./utils/calculations";
+
+const PAR_SYNC_WINDOW_DAYS = 30;
+
+function rentalPatientKey(record: RentalRecord): string {
+  return record.patientId || record.patientName || "";
+}
+
+function rentalParSyncKey(record: RentalRecord): string {
+  return [record.id, record.parNumber, record.parExpiration].join("|");
+}
+
+function rentalParNumber(record: unknown): string {
+  if (typeof record === "string") return record.trim();
+  if (typeof record === "number" && Number.isFinite(record)) return String(record);
+  return "";
+}
+
+function buildRentalParAuthorizationPayload(record: RentalRecord) {
+  return {
+    patientKey: rentalPatientKey(record),
+    patientId: record.patientId,
+    patientName: record.patientName,
+    parNumber: record.parNumber,
+    parStatus: isRentalParExpired(record) ? "expired" : "expiring",
+    parExpiration: record.parExpiration,
+    parInitialDate: record.checkedOutDate,
+    insurance: record.insuranceName || record.payor,
+    insuranceStatus: record.payor ? "active" : "",
+    salesOrderId: record.salesOrderId,
+    salesOrderStatus: "rental",
+    itemId: record.itemId,
+    itemName: record.productName,
+    quantity: record.quantity,
+    procedureCode: record.procCode,
+    modifiers: record.modifiers,
+    branchOffice: record.location,
+    actualDeliveryDate: record.checkedOutDate,
+    nextBillingDate: record.nextBillingDate,
+    orderingDoctor: record.orderingDoctor,
+    sourceReport: "rentals",
+    sourceRentalId: record.id,
+    rentalStatus: record.status,
+    rentalMonthlyRate: record.monthlyRate,
+    rentalCharge: record.extCharge || record.charge,
+    rentalAllow: record.extAllow || record.allow,
+    updatedAt: serverTimestamp(),
+    updatedBy: auth.currentUser?.email ?? null,
+  };
+}
+
+async function syncRentalParsToPatientRecords(
+  recordsToSync: RentalRecord[],
+  syncedKeys: Set<string>
+): Promise<number> {
+  let synced = 0;
+
+  for (const record of recordsToSync) {
+    const key = rentalParSyncKey(record);
+    if (syncedKeys.has(key)) continue;
+
+    const patientKey = rentalPatientKey(record);
+    if (!patientKey || !record.parNumber || !record.parExpiration) {
+      syncedKeys.add(key);
+      continue;
+    }
+
+    const existing = await getDocs(
+      query(
+        collection(db, "patientAuthorizations"),
+        where("patientKey", "==", patientKey),
+        limit(200)
+      )
+    );
+    const existingDoc = existing.docs.find((docSnap) =>
+      rentalParNumber(docSnap.data().parNumber) === record.parNumber
+    );
+
+    const payload = buildRentalParAuthorizationPayload(record);
+
+    if (existingDoc) {
+      await updateDoc(doc(db, "patientAuthorizations", existingDoc.id), payload);
+    } else {
+      await addDoc(collection(db, "patientAuthorizations"), {
+        ...payload,
+        createdAt: serverTimestamp(),
+      });
+    }
+
+    syncedKeys.add(key);
+    synced += 1;
+  }
+
+  return synced;
+}
+
 
 export default function RentalsPage() {
   const {
@@ -53,12 +168,40 @@ export default function RentalsPage() {
   const stats =
     useRentalStats(records);
 
+  const { isAdmin } = useAuthRole();
+
   const [error, setError] =
     useState("");
   const [activeReport, setActiveReport] =
     useState<RentalReportKey>("pars");
   const [selectedEquipment, setSelectedEquipment] =
     useState<EquipmentSummary | null>(null);
+  const [parFocus, setParFocus] =
+    useState("");
+  const [parSyncMessage, setParSyncMessage] =
+    useState("");
+  const syncedParKeysRef = useRef(new Set<string>());
+
+  useEffect(() => {
+    if (!isAdmin || loading) return;
+
+    const rowsToSync = sortRentalParRecords(
+      records.filter((record) => isRentalParAttentionRecord(record, PAR_SYNC_WINDOW_DAYS))
+    );
+
+    if (rowsToSync.length === 0) return;
+
+    void syncRentalParsToPatientRecords(rowsToSync, syncedParKeysRef.current)
+      .then((synced) => {
+        if (synced > 0) {
+          setParSyncMessage(`${synced} expiring PAR record(s) synced to patient medical records.`);
+        }
+      })
+      .catch((caught) => {
+        console.error("RENTAL PAR SYNC ERROR:", caught);
+        setParSyncMessage("Could not sync expiring PARs to patient medical records.");
+      });
+  }, [isAdmin, loading, records]);
 
   async function handleSave() {
     setError("");
@@ -247,9 +390,13 @@ export default function RentalsPage() {
             report={activeReport}
             records={filteredRecords}
             selectedEquipment={selectedEquipment}
+            parFocus={parFocus}
+            parSyncMessage={parSyncMessage}
             loading={loading}
             onStartRepair={startRepairRecord}
             onEdit={editRental}
+            onParFocus={setParFocus}
+            onClearParFocus={() => setParFocus("")}
           />
         </section>
       </div>
@@ -261,16 +408,24 @@ function RentalCallableReport({
   report,
   records,
   selectedEquipment,
+  parFocus,
+  parSyncMessage,
   loading,
   onStartRepair,
   onEdit,
+  onParFocus,
+  onClearParFocus,
 }: {
   report: RentalReportKey;
   records: RentalRecord[];
   selectedEquipment: EquipmentSummary | null;
+  parFocus: string;
+  parSyncMessage: string;
   loading: boolean;
   onStartRepair: (record?: RentalRecord) => void;
   onEdit: (record: RentalRecord) => void;
+  onParFocus: (value: string) => void;
+  onClearParFocus: () => void;
 }) {
   const selectedEquipmentRows = selectedEquipment
     ? records.filter((record) => {
@@ -288,14 +443,12 @@ function RentalCallableReport({
     : [];
   const overdueRows = records.filter(isRentalOverdue);
   const maintenanceRows = records.filter((record) => record.status === "maintenance");
-  const parRows = records
-    .filter((record) => record.parExpiration)
-    .sort((left, right) => {
-      const leftTime = Date.parse(left.parExpiration) || Number.MAX_SAFE_INTEGER;
-      const rightTime = Date.parse(right.parExpiration) || Number.MAX_SAFE_INTEGER;
-
-      return leftTime - rightTime;
-    });
+  const parRows = sortRentalParRecords(
+    records.filter((record) => isRentalParAttentionRecord(record, PAR_SYNC_WINDOW_DAYS))
+  );
+  const parFocusRows = parFocus
+    ? parRows.filter((record) => record.parNumber === parFocus)
+    : parRows;
 
   if (loading) {
     return (
@@ -359,14 +512,28 @@ function RentalCallableReport({
   if (report === "pars") {
     return (
       <ReportTable
-        title="PAR Expirations"
-        description="Chronological authorization list with nearest expiration dates at the top."
+        title="PAR Attention"
+        description="Expired or soon-expiring authorizations synced into patient medical records, with each PAR number callable for individual review."
         icon={<ShieldCheck className="h-5 w-5" />}
-        rows={parRows}
-        empty="No PAR expiration dates found."
+        rows={parFocusRows}
+        empty={parFocus ? "No rows found for that PAR number." : "No expired or soon-expiring PARs found."}
+        action={
+          parFocus ? (
+            <button
+              type="button"
+              className={buttons.compactSecondary}
+              onClick={onClearParFocus}
+            >
+              Show all PARs
+            </button>
+          ) : null
+        }
         onStartRepair={onStartRepair}
         onEdit={onEdit}
         mode="pars"
+        parFocus={parFocus}
+        parSyncMessage={parSyncMessage}
+        onParFocus={onParFocus}
       />
     );
   }
@@ -409,6 +576,9 @@ function ReportTable({
   empty,
   action,
   mode = "standard",
+  parFocus,
+  parSyncMessage,
+  onParFocus,
   onStartRepair,
   onEdit,
 }: {
@@ -419,6 +589,9 @@ function ReportTable({
   empty: string;
   action?: React.ReactNode;
   mode?: "standard" | "pars";
+  parFocus?: string;
+  parSyncMessage?: string;
+  onParFocus?: (value: string) => void;
   onStartRepair: (record: RentalRecord) => void;
   onEdit: (record: RentalRecord) => void;
 }) {
@@ -437,6 +610,12 @@ function ReportTable({
 
         {action ? <div className="shrink-0">{action}</div> : null}
       </div>
+
+      {mode === "pars" && parSyncMessage ? (
+        <div className={`${glass.inset} mb-4 text-sm text-cyan-100`}>
+          {parSyncMessage}
+        </div>
+      ) : null}
 
       {rows.length === 0 ? (
         <div className={glass.emptyState}>
@@ -488,7 +667,32 @@ function ReportTable({
                       </div>
                     </td>
                     <td className={tables.cell}>
-                      <div>{record.parNumber || "-"}</div>
+                      {mode === "pars" && record.parNumber ? (
+                        <div className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            className={buttons.compactSecondary}
+                            disabled={parFocus === record.parNumber}
+                            onClick={() => onParFocus?.(record.parNumber)}
+                          >
+                            {parFocus === record.parNumber ? "Selected" : "Pull PAR"}
+                          </button>
+                          {record.patientId ? (
+                            <Link
+                              href={`/reports/patients/${encodeURIComponent(record.patientId)}?tab=insurance`}
+                              className="text-sm font-semibold text-cyan-100 hover:text-white"
+                            >
+                              {record.parNumber}
+                            </Link>
+                          ) : (
+                            <span className="text-sm font-semibold text-slate-200">
+                              {record.parNumber}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <div>{record.parNumber || "-"}</div>
+                      )}
                       <div className={typography.smallMuted}>
                         Exp {formatDate(record.parExpiration)}
                       </div>

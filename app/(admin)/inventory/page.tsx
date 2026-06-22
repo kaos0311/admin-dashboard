@@ -41,6 +41,7 @@ import { InventoryLoadingState } from "./components/InventoryLoadingState";
 import { type InventoryStatKey, InventoryStats } from "./components/InventoryStats";
 import { InventoryStatsDrilldownModal } from "./components/InventoryStatsDrilldownModal";
 import { JarvisNoticeModal } from "./components/JarvisNoticeModal";
+import { type ScanAssignmentChoice, ScanAssignmentModal } from "./components/ScanAssignmentModal";
 import { ScanSuccessModal } from "./components/ScanSuccessModal";
 
 import { useInventoryActions } from "./hooks/useInventoryActions";
@@ -292,10 +293,10 @@ export default function InventoryPage() {
       message: string;
     } | null>(null);
 
-  const [scanOutCode, setScanOutCode] =
+  const [_scanOutCode, setScanOutCode] =
     useState<string | null>(null);
 
-  const [scanOutReason, setScanOutReason] =
+  const [_scanOutReason, setScanOutReason] =
     useState<"rental" | "purchase" | "maintenance">("rental");
 
   const [jarvisNotice, setJarvisNotice] =
@@ -303,6 +304,9 @@ export default function InventoryPage() {
       title: string;
       message: string;
     } | null>(null);
+
+  const [pendingScan, setPendingScan] =
+    useState<{ code: string; target: ScanTarget } | null>(null);
 
   const inventoryThresholds = useInventorySettings();
 
@@ -416,7 +420,7 @@ export default function InventoryPage() {
 
     if (!confirmed) return;
 
-    const returnQuantity = Math.max(item.onRent, item.status === "rental_out" ? 1 : 0, 1);
+    const returnQuantity = Math.max(item.onRent ?? 0, item.status === "rental_out" ? 1 : 0, 1);
     const nextItem = {
       ...item,
       status: "available" as const,
@@ -578,6 +582,36 @@ export default function InventoryPage() {
     setScannerOpen(true);
   }
 
+  function handleAssignmentConfirm(choice: ScanAssignmentChoice) {
+    if (!pendingScan) return;
+
+    const { code } = pendingScan;
+
+    switch (choice) {
+      case "lotNumber":
+        updateForm("lotNumber", code);
+        break;
+      case "serial":
+        updateForm("serial", code);
+        break;
+      case "barcodeSku":
+        if (pendingScan.target === "lotNumber") {
+          updateForm("lotNumber", code);
+        } else {
+          updateForm("barcode", code);
+        }
+        break;
+      case "next":
+        break;
+      case "none":
+      default:
+        break;
+    }
+
+    setPendingScan(null);
+    toast.success("Barcode scan captured.");
+  }
+
   function handleScanDetected(
     code: string
   ) {
@@ -586,18 +620,10 @@ export default function InventoryPage() {
 
     switch (scanTarget) {
       case "serial":
-        updateForm(
-          "serial",
-          clean
-        );
-        break;
-
       case "lotNumber":
-        updateForm(
-          "lotNumber",
-          clean
-        );
-        break;
+      case null:
+        setPendingScan({ code: clean, target: scanTarget });
+        return;
 
       case "scanIn":
         void handleScanMovement(clean, "in").then((success) => {
@@ -1073,6 +1099,15 @@ export default function InventoryPage() {
         isAdmin={isAdmin}
         autofillOptions={inventoryAutofillOptions}
         onClose={() => setSelectedStatKey(null)}
+      />
+
+      <ScanAssignmentModal
+        open={Boolean(pendingScan)}
+        code={pendingScan?.code ?? ""}
+        target={pendingScan?.target ?? null}
+        saving={saving}
+        onClose={() => setPendingScan(null)}
+        onConfirm={handleAssignmentConfirm}
       />
 
       <ScanSuccessModal

@@ -5,16 +5,18 @@ import Link from "next/link";
 import {
   addDoc,
   collection,
+  doc,
   type DocumentData,
   limit,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  setDoc,
+  updateDoc,
 } from "firebase/firestore";
 import {
   AlertCircle,
-  CalendarClock,
   CalendarDays,
   ChevronDown,
   ClipboardCheck,
@@ -51,6 +53,7 @@ import {
 type PickupRow = {
   patient: PatientWithDerived;
   eligibility: CpapEligibilityRow;
+  clinicalOnly?: boolean;
 };
 
 type PickupPatientTile = {
@@ -61,6 +64,7 @@ type PickupPatientTile = {
   readyCount: number;
   soonCount: number;
   verifyCount: number;
+  overdueCount: number;
 };
 
 type SetupRow = {
@@ -69,17 +73,53 @@ type SetupRow = {
   label: string;
 };
 
-type StatTileId = "cpap" | "ready" | "soon" | "verify";
+type StatTileId = "cpap" | "ready" | "soon" | "verify" | "overdue";
 
 type StatPatientGroups = Record<StatTileId, PatientWithDerived[]>;
 
 type ManualSetupAppointment = {
   id: string;
   patientName: string;
+  patientKey?: string;
   phone: string;
   appointmentDate: string;
   appointmentTime: string;
   notes: string;
+};
+
+type CpapSupplyPull = {
+  id: string;
+  patientKey: string;
+  patientName: string;
+  supplyId: string;
+  supplyLabel: string;
+  dueDate: string;
+  status: "pulled" | "picked_up" | "cancelled";
+  pulledAt?: string;
+  pickedUpAt?: string;
+  updatedAt?: unknown;
+};
+
+type CpapSupplyCallNote = {
+  id: string;
+  patientKey: string;
+  patientName: string;
+  phone: string;
+  notes: string;
+  suppliesSummary: string;
+  updatedAt?: unknown;
+};
+
+type CalendarEvent = {
+  id: string;
+  date: string;
+  kind: "appointment" | "setup" | "supply" | "clinical";
+  title: string;
+  detail: string;
+  status?: string;
+  patient?: PatientWithDerived | null;
+  appointment?: ManualSetupAppointment;
+  pickupRow?: PickupRow;
 };
 
 function cx(...classes: Array<string | false | null | undefined>) {
@@ -101,6 +141,56 @@ function firstText(...values: unknown[]): string {
   }
 
   return "";
+}
+
+function toIsoDate(value: Date): string {
+  return value.toISOString().slice(0, 10);
+}
+
+function parseLocalDate(value: string): Date | null {
+  const parsed = new Date(`${value}T12:00:00`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function addDays(value: Date, days: number): Date {
+  const next = new Date(value);
+  next.setDate(next.getDate() + days);
+  return next;
+}
+
+function addMonths(value: Date, months: number): Date {
+  const next = new Date(value);
+  next.setMonth(next.getMonth() + months);
+  return next;
+}
+
+function daysBetween(start: Date, end: Date): number {
+  const startDay = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+  const endDay = Date.UTC(end.getFullYear(), end.getMonth(), end.getDate());
+  return Math.ceil((endDay - startDay) / (24 * 60 * 60 * 1000));
+}
+
+function monthLabel(value: Date): string {
+  return new Intl.DateTimeFormat("en-US", {
+    month: "long",
+    year: "numeric",
+  }).format(value);
+}
+
+function monthKey(value: Date): string {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function stableId(parts: string[]): string {
+  let hash = 0;
+  const source = parts.join("|");
+
+  for (let index = 0; index < source.length; index += 1) {
+    hash = (hash << 5) - hash + source.charCodeAt(index);
+    hash |= 0;
+  }
+
+  return `cpap-${Math.abs(hash).toString(36)}-${Date.now().toString(36)}`;
 }
 
 function equipmentDateMs(item: CurrentEquipmentItem): number {
@@ -158,6 +248,99 @@ function statusClass(row: CpapEligibilityRow): string {
   return badges.neutral;
 }
 
+function patientClinicalText(patient: PatientWithDerived): string {
+  return [
+    patient.fullName,
+    patient.patientSnapshot,
+    patient.snapshot,
+    patient.notes,
+    patient.careNotes,
+    patient.equipmentNotes,
+    patient.billingNotes,
+    patient.profile,
+    patient.insurance,
+    patient.cpap,
+    patient.currentEquipment?.map((item) =>
+      [item.itemName, item.hcpc, item.category, item.status].join(" "),
+    ),
+  ]
+    .filter((value) => value !== undefined && value !== null)
+    .map((value) => JSON.stringify(value))
+    .join(" ")
+    .toLowerCase();
+}
+
+function hasCpapClinicalEntry(patient: PatientWithDerived): boolean {
+  const text = patientClinicalText(patient);
+  return (
+    text.includes("cpap") ||
+    text.includes("pap machine") ||
+    text.includes("bipap") ||
+    text.includes("apap") ||
+    text.includes("positive airway") ||
+    text.includes("e0601") ||
+    text.includes("a7030") ||
+    text.includes("a7034") ||
+    text.includes("a7037")
+  );
+}
+
+function clinicalCpapRows(patient: PatientWithDerived): PickupRow[] {
+  if (hasCpapEquipment(patient) || !hasCpapClinicalEntry(patient)) return [];
+
+  const rules = CPAP_SUPPLY_RULES.filter((rule) =>
+    ["pap-machine", "nasal-mask", "full-face-mask", "tubing", "disposable-filter"].includes(
+      rule.id,
+    ),
+  );
+
+  return rules.map((rule) => ({
+    patient,
+    clinicalOnly: true,
+    eligibility: {
+      rule,
+      lastReceivedDate: "",
+      nextEligibleDate: "",
+      status: "missing",
+      daysUntilEligible: null,
+      matchingItems: [],
+    },
+  }));
+}
+
+function supplyDueDate(eligibility: CpapEligibilityRow, today: Date): string {
+  return eligibility.nextEligibleDate || toIsoDate(today);
+}
+
+function supplyPullKey(patient: PatientWithDerived, eligibility: CpapEligibilityRow): string {
+  return [patient.id, eligibility.rule.id, supplyDueDate(eligibility, new Date())].join("|");
+}
+
+function supplyPullStatus(
+  patient: PatientWithDerived,
+  eligibility: CpapEligibilityRow,
+  pulls: CpapSupplyPull[],
+  today: Date,
+): "pulled" | "picked_up" | "overdue" | "not_picked_up" | "future" {
+  const key = supplyPullKey(patient, eligibility);
+  const pull = pulls.find((item) =>
+    [item.patientKey, item.supplyId, item.dueDate].join("|") === key,
+  );
+
+  if (pull?.status === "picked_up") return "picked_up";
+  if (pull?.status === "pulled") return "pulled";
+
+  if (eligibility.status === "future") return "future";
+
+  const dueDate = parseLocalDate(supplyDueDate(eligibility, today));
+  const overdue = dueDate && daysBetween(dueDate, today) > 2;
+
+  if (overdue) return "overdue";
+  if (eligibility.status === "ready") return "not_picked_up";
+
+  return "future";
+}
+
 function nextSetupRows(patients: PatientWithDerived[]): SetupRow[] {
   return patients
     .flatMap((patient) => {
@@ -187,6 +370,91 @@ function nextSetupRows(patients: PatientWithDerived[]): SetupRow[] {
     .slice(0, 24);
 }
 
+function calendarDays(monthDate: Date): Date[] {
+  const first = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
+  const start = addDays(first, -first.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => addDays(start, index));
+}
+
+function buildCalendarEvents(args: {
+  appointmentsWithPatient: Array<{ appointment: ManualSetupAppointment; patient: PatientWithDerived | null }>;
+  setupRows: SetupRow[];
+  pickupRows: PickupRow[];
+  supplyPulls: CpapSupplyPull[];
+  today: Date;
+}): CalendarEvent[] {
+  const appointments = args.appointmentsWithPatient.map<CalendarEvent>(
+    ({ appointment, patient }) => ({
+      id: `appointment-${appointment.id}`,
+      date: appointment.appointmentDate,
+      kind: "appointment",
+      title: appointment.patientName,
+      detail: appointment.notes || appointment.phone,
+      patient,
+      appointment,
+    }),
+  );
+
+  const setups = args.setupRows.map<CalendarEvent>((row) => ({
+    id: `setup-${row.patient.id}-${row.label}-${row.date}`,
+    date: row.date,
+    kind: "setup",
+    title: row.patient.fullName || "Unnamed Patient",
+    detail: row.label,
+    patient: row.patient,
+  }));
+
+  const supplyGroups = new Map<
+    string,
+    {
+      row: PickupRow;
+      dueDate: string;
+      details: string[];
+      clinicalOnly: boolean;
+    }
+  >();
+
+  for (const row of args.pickupRows) {
+    const dueDate = supplyDueDate(row.eligibility, args.today);
+    const status = supplyPullStatus(row.patient, row.eligibility, args.supplyPulls, args.today);
+    const clinicalOnly = Boolean(row.clinicalOnly);
+    const groupKey = [dueDate, row.patient.id, clinicalOnly ? "clinical" : "supply"].join("|");
+    const detail = clinicalOnly
+      ? `${row.eligibility.rule.label} needs digital record reconciliation`
+      : `${row.eligibility.rule.label} - ${status.replace(/_/g, " ")}`;
+    const existing = supplyGroups.get(groupKey);
+
+    if (existing) {
+      existing.details.push(detail);
+    } else {
+      supplyGroups.set(groupKey, {
+        row,
+        dueDate,
+        details: [detail],
+        clinicalOnly,
+      });
+    }
+  }
+
+  const supplies = Array.from(supplyGroups.values()).map<CalendarEvent>(
+    ({ row, dueDate, details, clinicalOnly }) => ({
+      id: `supply-${row.patient.id}-${clinicalOnly ? "clinical" : "owed"}-${dueDate}`,
+      date: dueDate,
+      kind: clinicalOnly ? "clinical" : "supply",
+      title: row.patient.fullName || "Unnamed Patient",
+      detail: details.join("; "),
+      status: details.length > 1 ? `${details.length} supplies` : undefined,
+      patient: row.patient,
+      pickupRow: row,
+    }),
+  );
+
+  return [...appointments, ...setups, ...supplies].sort(
+    (a, b) => a.date.localeCompare(b.date) || a.title.localeCompare(b.title),
+  );
+}
+
 export default function CpapCalendarPage() {
   const [patients, setPatients] = useState<PatientWithDerived[]>([]);
   const [appointments, setAppointments] = useState<ManualSetupAppointment[]>([]);
@@ -200,6 +468,15 @@ export default function CpapCalendarPage() {
   const [appointmentDate, setAppointmentDate] = useState("");
   const [appointmentTime, setAppointmentTime] = useState("");
   const [appointmentNotes, setAppointmentNotes] = useState("");
+  const [calendarMonth, setCalendarMonth] = useState(() => monthKey(new Date()));
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState(() => toIsoDate(new Date()));
+  const [selectedSupplyPatient, setSelectedSupplyPatient] = useState<PatientWithDerived | null>(null);
+  const [supplyPulls, setSupplyPulls] = useState<CpapSupplyPull[]>([]);
+  const [supplyPullsLoading, setSupplyPullsLoading] = useState(true);
+  const [callNotes, setCallNotes] = useState<CpapSupplyCallNote[]>([]);
+  const [callNotesLoading, setCallNotesLoading] = useState(true);
+  const [callNoteDrafts, setCallNoteDrafts] = useState<Record<string, string>>({});
+  const [savingCallNotePatientId, setSavingCallNotePatientId] = useState<string | null>(null);
   const [expandedPickupPatientId, setExpandedPickupPatientId] = useState<string | null>(null);
   const [expandedStatTile, setExpandedStatTile] = useState<StatTileId | null>(null);
 
@@ -248,6 +525,7 @@ export default function CpapCalendarPage() {
             return {
               id: docSnap.id,
               patientName: String(data.patientName ?? ""),
+              patientKey: typeof data.patientKey === "string" ? data.patientKey : undefined,
               phone: String(data.phone ?? ""),
               appointmentDate: String(data.appointmentDate ?? ""),
               appointmentTime: String(data.appointmentTime ?? ""),
@@ -267,21 +545,115 @@ export default function CpapCalendarPage() {
     return unsubscribe;
   }, []);
 
+  useEffect(() => {
+    setSupplyPullsLoading(true);
+
+    const supplyPullsQuery = query(
+      collection(db, "cpapSupplyPulls"),
+      orderBy("dueDate", "asc"),
+      limit(1000),
+    );
+
+    const unsubscribe = onSnapshot(
+      supplyPullsQuery,
+      (snapshot) => {
+        setSupplyPulls(
+          snapshot.docs.map((docSnap) => {
+            const data = docSnap.data();
+
+            return {
+              id: docSnap.id,
+              patientKey: String(data.patientKey ?? ""),
+              patientName: String(data.patientName ?? ""),
+              supplyId: String(data.supplyId ?? ""),
+              supplyLabel: String(data.supplyLabel ?? ""),
+              dueDate: String(data.dueDate ?? ""),
+              status: ["pulled", "picked_up", "cancelled"].includes(String(data.status ?? ""))
+                ? (data.status as CpapSupplyPull["status"])
+                : "pulled",
+              pulledAt: typeof data.pulledAt === "string" ? data.pulledAt : undefined,
+              pickedUpAt: typeof data.pickedUpAt === "string" ? data.pickedUpAt : undefined,
+              updatedAt: data.updatedAt,
+            };
+          }),
+        );
+        setSupplyPullsLoading(false);
+      },
+      (err: Error) => {
+        console.error("Failed to load CPAP supply pulls", err);
+        setSupplyPulls([]);
+        setSupplyPullsLoading(false);
+      },
+    );
+
+    return unsubscribe;
+  }, []);
+
+  useEffect(() => {
+    setCallNotesLoading(true);
+
+    const callNotesQuery = query(collection(db, "cpapSupplyCallNotes"), limit(1000));
+
+    const unsubscribe = onSnapshot(
+      callNotesQuery,
+      (snapshot) => {
+        const nextNotes = snapshot.docs.map((docSnap) => {
+          const data = docSnap.data();
+
+          return {
+            id: docSnap.id,
+            patientKey: String(data.patientKey ?? docSnap.id),
+            patientName: String(data.patientName ?? ""),
+            phone: String(data.phone ?? ""),
+            notes: String(data.notes ?? ""),
+            suppliesSummary: String(data.suppliesSummary ?? ""),
+            updatedAt: data.updatedAt,
+          };
+        });
+
+        setCallNotes(nextNotes);
+        setCallNoteDrafts((current) => {
+          const next = { ...current };
+
+          for (const note of nextNotes) {
+            if (next[note.patientKey] === undefined) {
+              next[note.patientKey] = note.notes;
+            }
+          }
+
+          return next;
+        });
+        setCallNotesLoading(false);
+      },
+      (err: Error) => {
+        console.error("Failed to load CPAP call notes", err);
+        toast.error("CPAP call notes could not be loaded.");
+        setCallNotes([]);
+        setCallNotesLoading(false);
+      },
+    );
+
+    return unsubscribe;
+  }, []);
+
   const cpapPatients = useMemo(
-    () => patients.filter((patient) => hasCpapEquipment(patient)),
+    () => patients.filter((patient) => hasCpapEquipment(patient) || hasCpapClinicalEntry(patient)),
     [patients],
   );
+
+  const today = useMemo(() => new Date(), []);
 
   const pickupRows = useMemo<PickupRow[]>(() => {
     const needle = search.trim().toLowerCase();
 
     return cpapPatients
-      .flatMap((patient) =>
-        getCpapReadyRows(patient).map((eligibility) => ({
+      .flatMap((patient) => [
+        ...getCpapReadyRows(patient).map((eligibility) => ({
           patient,
           eligibility,
         })),
-      )
+        ...clinicalCpapRows(patient),
+      ])
       .filter(({ patient, eligibility }) => {
         if (!needle) return true;
 
@@ -331,8 +703,17 @@ export default function CpapCalendarPage() {
       ready: uniquePatients(ready),
       soon: uniquePatients(soon),
       verify: uniquePatients(verify),
+      overdue: uniquePatients(
+        pickupRows
+          .filter(
+            (row) =>
+              supplyPullStatus(row.patient, row.eligibility, supplyPulls, today) ===
+              "overdue",
+          )
+          .map((row) => row.patient),
+      ),
     };
-  }, [cpapPatients]);
+  }, [cpapPatients, pickupRows, supplyPulls, today]);
 
   const pickupPatientTiles = useMemo<PickupPatientTile[]>(() => {
     const byPatient = new Map<string, PickupPatientTile>();
@@ -345,6 +726,7 @@ export default function CpapCalendarPage() {
         existing.readyCount += eligibility.status === "ready" ? 1 : 0;
         existing.soonCount += eligibility.status === "soon" ? 1 : 0;
         existing.verifyCount += eligibility.status === "missing" ? 1 : 0;
+        existing.overdueCount += supplyPullStatus(patient, eligibility, supplyPulls, today) === "overdue" ? 1 : 0;
         continue;
       }
 
@@ -356,6 +738,7 @@ export default function CpapCalendarPage() {
         readyCount: eligibility.status === "ready" ? 1 : 0,
         soonCount: eligibility.status === "soon" ? 1 : 0,
         verifyCount: eligibility.status === "missing" ? 1 : 0,
+        overdueCount: supplyPullStatus(patient, eligibility, supplyPulls, today) === "overdue" ? 1 : 0,
       });
     }
 
@@ -366,12 +749,13 @@ export default function CpapCalendarPage() {
         a.patient.fullName.localeCompare(b.patient.fullName)
       );
     });
-  }, [pickupRows]);
+  }, [pickupRows, supplyPulls, today]);
 
   const appointmentsWithPatient = useMemo(() => {
     return appointments.map((appointment) => {
       const normalizedName = appointment.patientName.trim().toLowerCase();
       const patient =
+        patients.find((item) => item.id === appointment.patientKey) ||
         patients.find((item) => item.fullName.trim().toLowerCase() === normalizedName) ||
         patients.find((item) =>
           normalizedName && item.fullName.toLowerCase().includes(normalizedName),
@@ -382,12 +766,42 @@ export default function CpapCalendarPage() {
     });
   }, [appointments, patients]);
 
+  const selectedCalendarMonthDate = useMemo(
+    () => parseLocalDate(`${calendarMonth}-01`) ?? new Date(),
+    [calendarMonth],
+  );
+  const visibleCalendarDays = useMemo(
+    () => calendarDays(selectedCalendarMonthDate),
+    [selectedCalendarMonthDate],
+  );
+  const calendarEvents = useMemo(
+    () =>
+      buildCalendarEvents({
+        appointmentsWithPatient,
+        setupRows,
+        pickupRows,
+        supplyPulls,
+        today,
+      }),
+    [appointmentsWithPatient, pickupRows, setupRows, supplyPulls, today],
+  );
+  const eventsByDate = useMemo(() => {
+    const grouped = new Map<string, CalendarEvent[]>();
+
+    for (const event of calendarEvents) {
+      grouped.set(event.date, [...(grouped.get(event.date) ?? []), event]);
+    }
+
+    return grouped;
+  }, [calendarEvents]);
+  const selectedDayEvents = eventsByDate.get(selectedCalendarDate) ?? [];
   const stats = useMemo(
     () => ({
       cpapPatients: statPatients.cpap.length,
       ready: statPatients.ready.length,
       soon: statPatients.soon.length,
       verify: statPatients.verify.length,
+      overdue: statPatients.overdue.length,
     }),
     [statPatients],
   );
@@ -418,17 +832,34 @@ export default function CpapCalendarPage() {
         value: stats.verify,
         patients: statPatients.verify,
       },
+      {
+        id: "overdue" as const,
+        label: "48h Overdue",
+        value: stats.overdue,
+        patients: statPatients.overdue,
+      },
     ],
     [statPatients, stats],
   );
 
   const activeStat = statTiles.find((tile) => tile.id === expandedStatTile) ?? null;
+  const selectedSupplyTile = selectedSupplyPatient
+    ? pickupPatientTiles.find((tile) => tile.patient.id === selectedSupplyPatient.id) ?? null
+    : null;
+  const callNotesByPatient = useMemo(() => {
+    return new Map(callNotes.map((note) => [note.patientKey, note]));
+  }, [callNotes]);
 
   async function saveSetupAppointment(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     const name = appointmentName.trim();
     const phone = appointmentPhone.trim();
+    const matchedPatient = patients.find((item) =>
+      item.fullName.trim().toLowerCase() === name.toLowerCase(),
+    ) ?? patients.find((item) =>
+      name && item.fullName.toLowerCase().includes(name.toLowerCase()),
+    );
 
     if (!name || !phone) {
       toast.error("Name and phone number are required.");
@@ -440,6 +871,7 @@ export default function CpapCalendarPage() {
     try {
       await addDoc(collection(db, "cpapSetupAppointments"), {
         patientName: name,
+        patientKey: matchedPatient?.id,
         phone,
         appointmentDate,
         appointmentTime,
@@ -463,6 +895,78 @@ export default function CpapCalendarPage() {
     }
   }
 
+  async function markSupplyPulled(row: PickupRow, pickedUp = false) {
+    const dueDate = supplyDueDate(row.eligibility, new Date());
+    const key = [row.patient.id, row.eligibility.rule.id, dueDate].join("|");
+    const existing = supplyPulls.find((pull) =>
+      [pull.patientKey, pull.supplyId, pull.dueDate].join("|") === key,
+    );
+    const now = new Date().toISOString();
+
+    try {
+      if (existing) {
+        await updateDoc(doc(db, "cpapSupplyPulls", existing.id), {
+          status: pickedUp ? "picked_up" : "pulled",
+          pulledAt: now,
+          pickedUpAt: pickedUp ? now : existing.pickedUpAt,
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await addDoc(collection(db, "cpapSupplyPulls"), {
+          id: stableId([row.patient.id, row.eligibility.rule.id, dueDate]),
+          patientKey: row.patient.id,
+          patientName: row.patient.fullName,
+          supplyId: row.eligibility.rule.id,
+          supplyLabel: row.eligibility.rule.label,
+          dueDate,
+          status: pickedUp ? "picked_up" : "pulled",
+          pulledAt: now,
+          pickedUpAt: pickedUp ? now : undefined,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        });
+      }
+
+      toast.success(
+        pickedUp
+          ? "CPAP supply marked picked up."
+          : "CPAP supply marked pulled.",
+      );
+    } catch (err) {
+      console.error("SAVE CPAP SUPPLY PULL ERROR:", err);
+      toast.error("Could not update the CPAP supply status.");
+    }
+  }
+
+  async function saveCallNote(tile: PickupPatientTile) {
+    const notes = (callNoteDrafts[tile.patient.id] ?? "").trim();
+    const suppliesSummary = tile.rows.map((row) => row.rule.label).join(", ");
+
+    setSavingCallNotePatientId(tile.patient.id);
+
+    try {
+      await setDoc(
+        doc(db, "cpapSupplyCallNotes", tile.patient.id),
+        {
+          patientKey: tile.patient.id,
+          patientName: tile.patient.fullName || "Unnamed Patient",
+          phone: tile.patient.phone || "",
+          notes,
+          suppliesSummary,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true },
+      );
+
+      toast.success("CPAP call note saved.");
+    } catch (err) {
+      console.error("SAVE CPAP CALL NOTE ERROR:", err);
+      toast.error("Could not save the CPAP call note.");
+    } finally {
+      setSavingCallNotePatientId(null);
+    }
+  }
+
   return (
     <main className={cx(glass.page, colors.app)}>
       <div className={colors.grid} aria-hidden="true" />
@@ -478,12 +982,12 @@ export default function CpapCalendarPage() {
               </div>
 
               <h1 className={cx(typography.hero, "mt-4 break-words")}>
-                CPAP Pickups & Supply Eligibility
+                CPAP Calendar, Pickups & Supply Reconciliation
               </h1>
 
               <p className={cx(typography.body, "mt-3 max-w-3xl break-words")}>
-                Setup appointments, ready pickup work, and Medicare-aware supply
-                allowances connected directly to each patient digital file.
+                Live day-by-day appointments, supply pulls, 48-hour pickup grace
+                checks, and clinical CPAP scans connected directly to each patient digital file.
               </p>
             </div>
           </div>
@@ -566,7 +1070,7 @@ export default function CpapCalendarPage() {
                 ))}
               </div>
             )}
-          </section>
+        </section>
         ) : null}
 
         <section className={glass.panelPadded}>
@@ -593,9 +1097,16 @@ export default function CpapCalendarPage() {
         ) : null}
 
         <section className={glass.panelPadded}>
-          <div className="mb-4 flex min-w-0 items-center gap-2">
-            <Plus className="h-5 w-5 shrink-0 text-cyan-200" aria-hidden />
-            <h2 className={typography.cardTitle}>Add Setup Appointment</h2>
+          <div className="mb-4 flex min-w-0 flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="min-w-0">
+              <div className="mb-2 flex items-center gap-2">
+                <Plus className="h-5 w-5 shrink-0 text-cyan-200" aria-hidden />
+                <h2 className={typography.cardTitle}>Add Setup Appointment</h2>
+              </div>
+              <p className={typography.smallMuted}>
+                Add a CPAP setup appointment date that will appear on the live calendar.
+              </p>
+            </div>
           </div>
 
           <form onSubmit={saveSetupAppointment} className="grid min-w-0 gap-3 lg:grid-cols-[1fr_180px_150px_150px_auto]">
@@ -661,12 +1172,126 @@ export default function CpapCalendarPage() {
         </section>
 
         <section className={glass.panelPadded}>
-          <div className="mb-4 flex min-w-0 items-center gap-2">
-            <CalendarClock className="h-5 w-5 shrink-0 text-cyan-200" aria-hidden />
-            <h2 className={typography.cardTitle}>Setup Appointments</h2>
+          <div className="mb-4 flex min-w-0 items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="mb-2 flex items-center gap-2">
+                <CalendarDays className="h-5 w-5 shrink-0 text-cyan-200" aria-hidden />
+                <h2 className={typography.cardTitle}>CPAP Calendar</h2>
+              </div>
+              <p className={typography.smallMuted}>
+                Appointments, setup dates, supply eligibility, and 48-hour pickup grace items.
+              </p>
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  const previous = addMonths(selectedCalendarMonthDate, -1);
+                  setCalendarMonth(monthKey(previous));
+                  setSelectedCalendarDate(toIsoDate(previous));
+                }}
+                className={buttons.secondary}
+              >
+                Previous
+              </button>
+              <span className={cx(typography.bodyStrong, "min-w-32 text-center")}>
+                {monthLabel(selectedCalendarMonthDate)}
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  const next = addMonths(selectedCalendarMonthDate, 1);
+                  setCalendarMonth(monthKey(next));
+                  setSelectedCalendarDate(toIsoDate(next));
+                }}
+                className={buttons.secondary}
+              >
+                Next
+              </button>
+            </div>
           </div>
 
-          {loading || appointmentsLoading ? (
+          <div className="grid grid-cols-7 gap-2">
+            {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+              <div key={day} className="text-center text-xs font-semibold uppercase tracking-wide text-cyan-100/70">
+                {day}
+              </div>
+            ))}
+            {visibleCalendarDays.map((day) => {
+              const dateKey = toIsoDate(day);
+              const dayEvents = eventsByDate.get(dateKey) ?? [];
+              const isCurrentMonth = day.getMonth() === selectedCalendarMonthDate.getMonth();
+              const isSelected = selectedCalendarDate === dateKey;
+
+              return (
+                <button
+                  key={dateKey}
+                  type="button"
+                  onClick={() => setSelectedCalendarDate(dateKey)}
+                  className={cx(
+                    glass.insetPadded,
+                    "min-h-24 text-left",
+                    !isCurrentMonth && "opacity-40",
+                    isSelected && "ring-1 ring-cyan-300/60",
+                  )}
+                >
+                  <span className={typography.caption}>{day.getDate()}</span>
+                  <div className="mt-2 space-y-1">
+                    {dayEvents.slice(0, 3).map((event) => (
+                      <p key={event.id} className={cx(typography.smallMuted, "truncate")}>
+                        {event.title || event.detail}
+                      </p>
+                    ))}
+                    {dayEvents.length > 3 ? (
+                      <p className={typography.smallMuted}>+{dayEvents.length - 3} more</p>
+                    ) : null}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
+            {selectedDayEvents.length > 0 ? (
+              selectedDayEvents.map((event) => {
+                const patientHref = event.patient ? `/reports/patients/${event.patient.id}` : null;
+
+                return patientHref ? (
+                  <Link
+                    key={event.id}
+                    href={patientHref}
+                    className={cx(glass.insetPadded, glass.cardHover, "block min-w-0")}
+                  >
+                    <p className={typography.caption}>{formatDate(event.date)}</p>
+                    <p className={cx(typography.bodyStrong, "mt-1 break-words")}>
+                      {event.title || "CPAP calendar event"}
+                    </p>
+                    <p className={cx(typography.smallMuted, "mt-1 break-words")}>
+                      {event.detail || event.status || "CPAP event"}
+                    </p>
+                  </Link>
+                ) : (
+                  <article key={event.id} className={glass.insetPadded}>
+                    <p className={typography.caption}>{formatDate(event.date)}</p>
+                    <p className={cx(typography.bodyStrong, "mt-1 break-words")}>
+                      {event.title || "CPAP calendar event"}
+                    </p>
+                    <p className={cx(typography.smallMuted, "mt-1 break-words")}>
+                      {event.detail || event.status || "CPAP event"}
+                    </p>
+                  </article>
+                );
+              })
+            ) : (
+              <p className={typography.bodyMuted}>No CPAP events for {formatDate(selectedCalendarDate)}.</p>
+            )}
+          </div>
+        </section>
+
+        <section className={glass.panelPadded}>
+
+          {loading || appointmentsLoading || supplyPullsLoading || callNotesLoading ? (
             <p className={typography.bodyMuted}>Loading CPAP calendar...</p>
           ) : setupRows.length === 0 && appointmentsWithPatient.length === 0 ? (
             <p className={typography.bodyMuted}>
@@ -733,18 +1358,22 @@ export default function CpapCalendarPage() {
         <section className={glass.panelPadded}>
           <div className="mb-4 flex min-w-0 items-center gap-2">
             <PackageCheck className="h-5 w-5 shrink-0 text-cyan-200" aria-hidden />
-            <h2 className={typography.cardTitle}>Ready For Pickup</h2>
+            <h2 className={typography.cardTitle}>Ready For Pickup / Reconciliation</h2>
           </div>
 
           {pickupPatientTiles.length === 0 ? (
             <p className={cx(glass.emptyState, "text-center")}>
-              {loading ? "Loading CPAP worklist..." : "No matching CPAP pickup patients."}
+              {loading ? "Loading CPAP worklist..." : "No matching CPAP pickup or clinical reconciliation patients."}
             </p>
           ) : (
             <div className="grid min-w-0 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
               {pickupPatientTiles.map((tile) => {
                 const medicare = isMedicarePatient(tile.patient);
                 const equipmentExpanded = expandedPickupPatientId === tile.patient.id;
+                const hasMultipleSupplies = tile.rows.length > 1;
+                const callNote = callNotesByPatient.get(tile.patient.id);
+                const callNoteDraft = callNoteDrafts[tile.patient.id] ?? callNote?.notes ?? "";
+                const savingCallNote = savingCallNotePatientId === tile.patient.id;
 
                 return (
                   <article
@@ -753,19 +1382,45 @@ export default function CpapCalendarPage() {
                   >
                     <div className="flex min-w-0 items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <Link
-                          href={`/reports/patients/${tile.patient.id}?tab=items`}
-                          className="group flex min-w-0 items-center gap-2"
-                        >
-                          <UserRound className="h-4 w-4 shrink-0 text-cyan-200" aria-hidden />
-                          <h3 className={cx(typography.bodyStrong, "break-words group-hover:text-cyan-100")}>
-                            {tile.patient.fullName || "Unnamed Patient"}
-                          </h3>
-                        </Link>
+                        {hasMultipleSupplies ? (
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSupplyPatient(tile.patient)}
+                            className="group flex min-w-0 items-center gap-2 text-left underline-offset-4 hover:text-cyan-100 hover:underline"
+                            aria-label={`Show ${tile.rows.length} CPAP supplies owed by ${
+                              tile.patient.fullName || "unnamed patient"
+                            }`}
+                          >
+                            <UserRound className="h-4 w-4 shrink-0 text-cyan-200" aria-hidden />
+                            <h3 className={cx(typography.bodyStrong, "break-words")}>
+                              {tile.patient.fullName || "Unnamed Patient"}
+                            </h3>
+                            <span className={`${glass.chip} ${badges.info} shrink-0`}>
+                              {tile.rows.length} supplies
+                            </span>
+                          </button>
+                        ) : (
+                          <div className="flex min-w-0 items-center gap-2">
+                            <UserRound className="h-4 w-4 shrink-0 text-cyan-200" aria-hidden />
+                            <h3 className={cx(typography.bodyStrong, "break-words")}>
+                              {tile.patient.fullName || "Unnamed Patient"}
+                            </h3>
+                          </div>
+                        )}
                         <p className={cx(typography.smallMuted, "mt-1 break-words")}>
                           {tile.patient.insurance?.primaryInsurance ||
                             tile.patient.insurance?.payor ||
                             "No insurance listed"}
+                        </p>
+                        <p className={cx(typography.smallMuted, "mt-2 flex items-center gap-2 break-words")}>
+                          <Phone className="h-3.5 w-3.5 shrink-0 text-cyan-200" aria-hidden />
+                          {tile.patient.phone ? (
+                            <a className="hover:text-cyan-100" href={`tel:${tile.patient.phone}`}>
+                              {tile.patient.phone}
+                            </a>
+                          ) : (
+                            "No phone listed"
+                          )}
                         </p>
                       </div>
 
@@ -783,6 +1438,11 @@ export default function CpapCalendarPage() {
                         {tile.verifyCount > 0 ? (
                           <span className={`${glass.chip} ${badges.info}`}>
                             {tile.verifyCount} verify
+                          </span>
+                        ) : null}
+                        {tile.overdueCount > 0 ? (
+                          <span className={`${glass.chip} ${badges.danger}`}>
+                            {tile.overdueCount} 48h overdue
                           </span>
                         ) : null}
                       </div>
@@ -803,7 +1463,51 @@ export default function CpapCalendarPage() {
                       </div>
                     </div>
 
+                    <div className="mt-4">
+                      <label className={forms.field}>
+                        <span className={forms.label}>Call result notes</span>
+                        <textarea
+                          value={callNoteDraft}
+                          onChange={(event) =>
+                            setCallNoteDrafts((current) => ({
+                              ...current,
+                              [tile.patient.id]: event.target.value,
+                            }))
+                          }
+                          placeholder="Document the result of the resupply call..."
+                          className={forms.textareaCompact}
+                        />
+                      </label>
+                      <div className="mt-2 flex min-w-0 flex-wrap items-center justify-between gap-2">
+                        <p className={typography.smallMuted}>
+                          {callNote?.updatedAt ? "Saved call note on file." : "No saved call note yet."}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => saveCallNote(tile)}
+                          disabled={savingCallNote}
+                          className={buttons.secondary}
+                        >
+                          {savingCallNote ? "Saving..." : "Save Call Note"}
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => markSupplyPulled({ patient: tile.patient, eligibility: tile.rows[0] }, false)}
+                        className={buttons.secondary}
+                      >
+                        Mark Pulled
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => markSupplyPulled({ patient: tile.patient, eligibility: tile.rows[0] }, true)}
+                        className={buttons.secondary}
+                      >
+                        Mark Picked Up
+                      </button>
                       <button
                         type="button"
                         aria-expanded={equipmentExpanded}
@@ -834,7 +1538,15 @@ export default function CpapCalendarPage() {
 
                     {equipmentExpanded ? (
                       <div className="mt-4 space-y-2">
-                        {tile.rows.map((eligibility) => (
+                        {tile.rows.map((eligibility) => {
+                          const pullStatus = supplyPullStatus(
+                            tile.patient,
+                            eligibility,
+                            supplyPulls,
+                            today,
+                          );
+
+                          return (
                           <div key={eligibility.rule.id} className={glass.insetPadded}>
                             <div className="flex min-w-0 items-start justify-between gap-3">
                               <div className="min-w-0">
@@ -848,11 +1560,31 @@ export default function CpapCalendarPage() {
                               <span className={`${glass.chip} ${statusClass(eligibility)} shrink-0`}>
                                 {statusLabel(eligibility)}
                               </span>
+                              {pullStatus === "overdue" ? (
+                                <span className={`${glass.chip} ${badges.danger} shrink-0`}>
+                                  48h overdue
+                                </span>
+                              ) : pullStatus === "not_picked_up" ? (
+                                <span className={`${glass.chip} ${badges.warning} shrink-0`}>
+                                  not picked up
+                                </span>
+                              ) : pullStatus === "pulled" ? (
+                                <span className={`${glass.chip} ${badges.success} shrink-0`}>
+                                  pulled
+                                </span>
+                              ) : pullStatus === "picked_up" ? (
+                                <span className={`${glass.chip} ${badges.success} shrink-0`}>
+                                  picked up
+                                </span>
+                              ) : null}
                             </div>
 
                             <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-2">
                               <p className={typography.smallMuted}>
                                 Eligible: {formatDate(eligibility.nextEligibleDate)}
+                              </p>
+                              <p className={typography.smallMuted}>
+                                Pull status: {pullStatus.replace(/_/g, " ")}
                               </p>
                               <p className={typography.smallMuted}>
                                 Qty:{" "}
@@ -862,7 +1594,8 @@ export default function CpapCalendarPage() {
                               </p>
                             </div>
                           </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     ) : null}
                   </article>
@@ -893,6 +1626,109 @@ export default function CpapCalendarPage() {
             ))}
           </div>
         </section>
+
+        {selectedSupplyTile ? (
+          <section className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+            <article className={cx(glass.cardPadded, "max-h-[90vh] w-full max-w-2xl overflow-y-auto")}>
+              <div className="flex min-w-0 items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className={typography.caption}>CPAP Supplies Owed</p>
+                  <h2 className={cx(typography.cardTitle, "mt-1 break-words")}>
+                    {selectedSupplyTile.patient.fullName || "Unnamed Patient"}
+                  </h2>
+                  <p className={cx(typography.smallMuted, "mt-1 break-words")}>
+                    {selectedSupplyTile.patient.insurance?.primaryInsurance ||
+                      selectedSupplyTile.patient.insurance?.payor ||
+                      "No insurance listed"}
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setSelectedSupplyPatient(null)}
+                  className={buttons.ghost}
+                >
+                  Close
+                </button>
+              </div>
+
+              <div className="mt-5 space-y-3">
+                {selectedSupplyTile.rows.map((eligibility) => {
+                    const pullStatus = supplyPullStatus(
+                      selectedSupplyTile.patient,
+                      eligibility,
+                      supplyPulls,
+                      today,
+                    );
+                    const medicare = isMedicarePatient(selectedSupplyTile.patient);
+
+                    return (
+                      <div key={eligibility.rule.id} className={glass.insetPadded}>
+                        <div className="flex min-w-0 items-start justify-between gap-3">
+                          <div className="min-w-0">
+                            <p className={typography.bodyStrong}>{eligibility.rule.label}</p>
+                            <p className={cx(typography.smallMuted, "mt-1 break-words")}>
+                              {eligibility.rule.hcpcs.join(", ")}
+                            </p>
+                          </div>
+                          <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                            <span className={`${glass.chip} ${statusClass(eligibility)} shrink-0`}>
+                              {statusLabel(eligibility)}
+                            </span>
+                            {pullStatus === "overdue" ? (
+                              <span className={`${glass.chip} ${badges.danger} shrink-0`}>
+                                48h overdue
+                              </span>
+                            ) : pullStatus === "not_picked_up" ? (
+                              <span className={`${glass.chip} ${badges.warning} shrink-0`}>
+                                not picked up
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+
+                        <div className="mt-3 grid min-w-0 gap-2 sm:grid-cols-3">
+                          <div>
+                            <p className={typography.smallMuted}>Eligible</p>
+                            <p className={typography.bodyStrong}>{formatDate(eligibility.nextEligibleDate)}</p>
+                          </div>
+                          <div>
+                            <p className={typography.smallMuted}>Qty</p>
+                            <p className={typography.bodyStrong}>
+                              {medicare
+                                ? eligibility.rule.medicareThreeMonthQuantity
+                                : eligibility.rule.standardQuantity}
+                            </p>
+                          </div>
+                          <div>
+                            <p className={typography.smallMuted}>Pull status</p>
+                            <p className={typography.bodyStrong}>{pullStatus.replace(/_/g, " ")}</p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+              </div>
+
+              <div className="mt-5 flex flex-wrap justify-end gap-2">
+                <Link
+                  href={`/reports/patients/${selectedSupplyTile.patient.id}?tab=items`}
+                  className={buttons.secondary}
+                >
+                  Open Digital Record
+                </Link>
+                <button
+                  type="button"
+                  onClick={() => setSelectedSupplyPatient(null)}
+                  className={buttons.primary}
+                >
+                  Done
+                </button>
+              </div>
+            </article>
+          </section>
+        ) : null}
+
       </div>
     </main>
   );

@@ -5,13 +5,16 @@ import { ScanLine } from "lucide-react";
 
 import { buttons, colors, glass, tiles, typography } from "@/theme";
 
-type ScanAssignmentChoice = "serial" | "barcodeSku" | "next" | "none";
+export type ScanAssignmentChoice = "serial" | "barcodeSku" | "lotNumber" | "next" | "none";
+
+type ScanTarget = "serial" | "lotNumber" | "barcode" | "scanIn" | "scanOut" | null;
 
 type ScanAssignmentModalProps = {
   open: boolean;
   code: string;
   itemName?: string;
   saving: boolean;
+  target: ScanTarget;
   onClose: () => void;
   onConfirm: (choice: ScanAssignmentChoice) => Promise<void> | void;
 };
@@ -21,10 +24,19 @@ export function ScanAssignmentModal({
   code,
   itemName,
   saving,
+  target,
   onClose,
   onConfirm,
 }: ScanAssignmentModalProps) {
-  const [choice, setChoice] = useState<ScanAssignmentChoice>("serial");
+  const showLotOption = target === "lotNumber";
+  const showSerialOption = target === null || target === "serial";
+  const defaultChoice: ScanAssignmentChoice = showLotOption
+    ? "lotNumber"
+    : showSerialOption
+      ? "serial"
+      : "barcodeSku";
+
+  const [choice, setChoice] = useState<ScanAssignmentChoice>(defaultChoice);
   const [inProgress, setInProgress] = useState(false);
 
   const title = useMemo(() => itemName?.trim() || "Scanned Item", [itemName]);
@@ -32,9 +44,15 @@ export function ScanAssignmentModal({
   if (!open) return null;
 
   async function handleConfirm() {
+    const resolved: ScanAssignmentChoice = choice === "lotNumber" && !showLotOption
+      ? "barcodeSku"
+      : choice === "serial" && !showSerialOption
+        ? "barcodeSku"
+        : choice;
+
     setInProgress(true);
     try {
-      await onConfirm(choice);
+      await onConfirm(resolved);
     } finally {
       setInProgress(false);
     }
@@ -68,47 +86,72 @@ export function ScanAssignmentModal({
         <div className="mt-5">
           <span className={typography.formLabel}>Choose what this scan represents.</span>
           <div className="mt-3 grid gap-2 sm:grid-cols-2">
-            <label
-              className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 ${
-                choice === "serial"
-                  ? `${colors.surfaceHover} border-white/20`
-                  : "border-white/10"
-              }`}
-            >
-              <div>
-                <p className="text-sm font-semibold text-slate-100">Serial</p>
-                <p className={`${typography.smallMuted} text-xs`}>
-                  Attach this scan to the equipment serial.
-                </p>
-              </div>
-              <input
-                type="radio"
-                className="h-4 w-4"
-                checked={choice === "serial"}
-                onChange={() => setChoice("serial")}
-              />
-            </label>
+            {showSerialOption ? (
+              <label
+                className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 ${
+                  choice === "serial"
+                    ? `${colors.surfaceHover} border-white/20`
+                    : "border-white/10"
+                }`}
+              >
+                <div>
+                  <p className="text-sm font-semibold text-slate-100">Serial</p>
+                  <p className={`${typography.smallMuted} text-xs`}>
+                    Attach this scan to the equipment serial.
+                  </p>
+                </div>
+                <input
+                  type="radio"
+                  className="h-4 w-4"
+                  checked={choice === "serial"}
+                  onChange={() => setChoice("serial")}
+                />
+              </label>
+            ) : null}
 
-            <label
-              className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 ${
-                choice === "barcodeSku"
-                  ? `${colors.surfaceHover} border-white/20`
-                  : "border-white/10"
-              }`}
-            >
-              <div>
-                <p className="text-sm font-semibold text-slate-100">SKU / Barcode</p>
-                <p className={`${typography.smallMuted} text-xs`}>
-                  Attach this scan to SKU or barcode.
-                </p>
-              </div>
-              <input
-                type="radio"
-                className="h-4 w-4"
-                checked={choice === "barcodeSku"}
-                onChange={() => setChoice("barcodeSku")}
-              />
-            </label>
+            {showLotOption ? (
+              <label
+                className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 ${
+                  choice === "lotNumber"
+                    ? `${colors.surfaceHover} border-white/20`
+                    : "border-white/10"
+                }`}
+              >
+                <div>
+                  <p className="text-sm font-semibold text-slate-100">Lot Number</p>
+                  <p className={`${typography.smallMuted} text-xs`}>
+                    Attach this scan to the lot number.
+                  </p>
+                </div>
+                <input
+                  type="radio"
+                  className="h-4 w-4"
+                  checked={choice === "lotNumber"}
+                  onChange={() => setChoice("lotNumber")}
+                />
+              </label>
+            ) : (
+              <label
+                className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 ${
+                  choice === "barcodeSku"
+                    ? `${colors.surfaceHover} border-white/20`
+                    : "border-white/10"
+                }`}
+              >
+                <div>
+                  <p className="text-sm font-semibold text-slate-100">SKU / Barcode</p>
+                  <p className={`${typography.smallMuted} text-xs`}>
+                    Attach this scan to SKU or barcode.
+                  </p>
+                </div>
+                <input
+                  type="radio"
+                  className="h-4 w-4"
+                  checked={choice === "barcodeSku"}
+                  onChange={() => setChoice("barcodeSku")}
+                />
+              </label>
+            )}
 
             <label
               className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 ${

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDoc,
   collection,
@@ -184,6 +184,10 @@ function normalizeUrl(value: string): string {
   return `https://${trimmed}`;
 }
 
+function normalizeUrlKey(value: string): string {
+  return normalizeUrl(value).replace(/\/+$/, "").toLowerCase();
+}
+
 export function VendorResearchTab() {
   const [records, setRecords] = useState<VendorResearchSite[]>([]);
   const [draft, setDraft] = useState<VendorResearchDraft>(EMPTY_DRAFT);
@@ -192,6 +196,7 @@ export function VendorResearchTab() {
   const [deletingId, setDeletingId] = useState("");
   const [search, setSearch] = useState("");
   const [loaded, setLoaded] = useState(false);
+  const seededStarterSitesRef = useRef(false);
 
   useEffect(() => {
     const collectionRef = collection(db, "vendorResearchSites");
@@ -205,11 +210,26 @@ export function VendorResearchTab() {
         );
         setRecords(mapped);
 
-        if (!loaded && !snapshot.size) {
+        if (!loaded && !seededStarterSitesRef.current) {
+          seededStarterSitesRef.current = true;
           const seed = async () => {
+            const existingUrlKeys = new Set(
+              mapped.map((record) => normalizeUrlKey(record.url)).filter(Boolean)
+            );
+            const existingNames = new Set(
+              mapped.map((record) => record.name.trim().toLowerCase()).filter(Boolean)
+            );
+            const missingSites = STARTER_SITES.filter((site) => {
+              const urlKey = normalizeUrlKey(site.url);
+              const nameKey = site.name.trim().toLowerCase();
+              return !existingUrlKeys.has(urlKey) && !existingNames.has(nameKey);
+            });
+
+            if (!missingSites.length) return;
+
             try {
               await Promise.all(
-                STARTER_SITES.map((site) =>
+                missingSites.map((site) =>
                   addDoc(collectionRef, {
                     ...site,
                     url: normalizeUrl(site.url),

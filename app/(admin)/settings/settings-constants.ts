@@ -70,6 +70,11 @@ export const SETTINGS_TABS: {
     description: "Document vendor sites Jarvis can use for product research.",
   },
   {
+    key: "improvements",
+    label: "Jarvis Improvements",
+    description: "Propose and review Jarvis self-improvements.",
+  },
+  {
     key: "users",
     label: "Users",
     description: "Manage staff and administrator access.",

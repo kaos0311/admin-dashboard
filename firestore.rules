@@ -54,6 +54,68 @@ service cloud.firestore {
       return isAdmin() || isStaff() || isTank();
     }
 
+    function optionalString(data, field, maxSize) {
+      return !(field in data) || (data[field] is string && data[field].size() <= maxSize);
+    }
+
+    function optionalTimestamp(data, field) {
+      return !(field in data) || data[field] is timestamp;
+    }
+
+    function validCpapSupplyPull(data) {
+      return data.keys().hasOnly([
+          "id",
+          "patientKey",
+          "patientName",
+          "supplyId",
+          "supplyLabel",
+          "dueDate",
+          "status",
+          "pulledAt",
+          "pickedUpAt",
+          "createdAt",
+          "updatedAt",
+        ])
+        && data.keys().hasAll(["patientKey", "supplyId", "dueDate", "status"])
+        && data.patientKey is string
+        && data.patientKey.size() > 0
+        && data.patientKey.size() <= 160
+        && data.supplyId is string
+        && data.supplyId.size() > 0
+        && data.supplyId.size() <= 80
+        && data.dueDate is string
+        && data.dueDate.size() <= 40
+        && data.status in ["pulled", "picked_up", "cancelled"]
+        && optionalString(data, "id", 160)
+        && optionalString(data, "patientName", 160)
+        && optionalString(data, "supplyLabel", 160)
+        && optionalString(data, "pulledAt", 80)
+        && optionalString(data, "pickedUpAt", 80)
+        && optionalTimestamp(data, "createdAt")
+        && optionalTimestamp(data, "updatedAt");
+    }
+
+    function validCpapSupplyCallNote(data) {
+      return data.keys().hasOnly([
+          "patientKey",
+          "patientName",
+          "phone",
+          "notes",
+          "suppliesSummary",
+          "updatedAt",
+        ])
+        && data.keys().hasAll(["patientKey", "notes"])
+        && data.patientKey is string
+        && data.patientKey.size() > 0
+        && data.patientKey.size() <= 160
+        && data.notes is string
+        && data.notes.size() <= 4000
+        && optionalString(data, "patientName", 160)
+        && optionalString(data, "phone", 80)
+        && optionalString(data, "suppliesSummary", 1000)
+        && optionalTimestamp(data, "updatedAt");
+    }
+
     function isSelf(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -137,6 +199,18 @@ service cloud.firestore {
     match /cpapSetupAppointments/{docId} {
       allow read: if isStaffOrAdmin();
       allow write: if isStaffOrAdmin();
+    }
+
+    match /cpapSupplyPulls/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create, update: if isStaffOrAdmin() && validCpapSupplyPull(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    match /cpapSupplyCallNotes/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create, update: if isStaffOrAdmin() && validCpapSupplyCallNote(request.resource.data);
+      allow delete: if isAdmin();
     }
 
     match /orders/{docId} {
@@ -423,6 +497,13 @@ service cloud.firestore {
     match /phiAlerts/{docId} {
       allow read: if isStaffOrAdmin();
       allow create, update, delete: if isAdmin();
+    }
+
+    match /improvementProposals/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create: if isAdmin();
+      allow update: if isAdmin();
+      allow delete: if false;
     }
 
     match /{document=**} {

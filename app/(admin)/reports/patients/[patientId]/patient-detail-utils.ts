@@ -263,6 +263,14 @@ export function normalizePatient(
   const fallbackName =
     bestName ||
     [firstName, lastName].filter(Boolean).join(" ");
+  const insuranceName = safeText(record.insuranceName || record.payor);
+  const insuranceFromName = insuranceName
+    ? { primaryInsurance: insuranceName, payor: insuranceName }
+    : null;
+  const indexedInsurance = safeRecord(raw.insurance);
+  const insurance = indexedInsurance || insuranceFromName
+    ? { ...insuranceFromName, ...indexedInsurance }
+    : null;
 
   return {
     id,
@@ -303,7 +311,7 @@ export function normalizePatient(
     billingNotes: safeText(raw.billingNotes),
 
     profile: safeRecord(raw.profile),
-    insurance: safeRecord(raw.insurance),
+    insurance,
     brightree: safeRecord(raw.brightree),
     cpap: raw.cpap ?? null,
 

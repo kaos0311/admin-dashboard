@@ -468,6 +468,11 @@ export function PatientOrdersBillingSections({
                       <td className={`${typography.small} rounded-l-lg px-3 py-3 align-top`}>
                         <p className={typography.bodyStrong}>{line.parNumber || "—"}</p>
                         <p className={typography.smallMuted}>{line.branchOffice}</p>
+                        {line.sourceReport ? (
+                          <p className={typography.smallMuted}>
+                            Source {line.sourceReport}{line.sourceRentalId ? ` · ${line.sourceRentalId}` : ""}
+                          </p>
+                        ) : null}
                       </td>
                       <td className="px-3 py-3 align-top">
                         <p className={typography.bodyStrong}>{line.itemName || "—"}</p>

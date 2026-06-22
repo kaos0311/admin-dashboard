@@ -78,6 +78,12 @@ export type PatientAuthorizationLine = {
   faxedBy?: string;
   faxedAt?: string;
   rowIndex?: number;
+  sourceReport?: string;
+  sourceRentalId?: string;
+  rentalStatus?: string;
+  rentalMonthlyRate?: number;
+  rentalCharge?: number;
+  rentalAllow?: number;
 };
 
 export type PatientTask = {

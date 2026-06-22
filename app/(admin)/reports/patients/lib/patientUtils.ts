@@ -480,6 +480,16 @@ export function normalizePatient(
     bestName ||
     [firstName, lastName].filter(Boolean).join(" ");
 
+  const insuranceName = safeText(record.insuranceName || record.payor);
+  const insuranceFromName = insuranceName
+    ? ({ primaryInsurance: insuranceName, payor: insuranceName } as PatientInsurance)
+    : null;
+  const indexedInsurance = safeRecord(raw.insurance) as Partial<PatientInsurance> | null;
+  const insurance = indexedInsurance || insuranceFromName
+    ? ({ ...insuranceFromName, ...indexedInsurance } as PatientInsurance)
+    : null;
+  const profile = safeRecord(raw.profile) as PatientProfile | null;
+
   return {
     id,
 
@@ -541,8 +551,8 @@ export function normalizePatient(
     equipmentNotes: safeText(raw.equipmentNotes),
     billingNotes: safeText(raw.billingNotes),
 
-    profile: safeRecord(raw.profile) as PatientProfile | null,
-    insurance: safeRecord(raw.insurance) as PatientInsurance | null,
+    profile,
+    insurance,
     cpap: (safeRecord(raw.cpap) as CpapInfo | null) ?? null,
 
     currentEquipment: normalizeCurrentEquipment(raw.currentEquipment),
