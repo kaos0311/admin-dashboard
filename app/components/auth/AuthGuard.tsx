@@ -4,7 +4,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { onAuthStateChanged } from "firebase/auth";
 import { doc, getDoc } from "firebase/firestore";
-import { ShieldAlert } from "lucide-react";
+import { Loader2, ShieldAlert } from "lucide-react";
 
 import { auth, db } from "@/lib/firebase";
 import { glass, typography } from "@/theme";
@@ -59,7 +59,7 @@ export default function AuthGuard({
         if (!user) {
           if (!cancelled) {
             setGuardState("signedOut");
-            setMessage("No signed-in user was found.");
+            setMessage("Redirecting to sign in...");
           }
 
           if (!redirectedRef.current) {
@@ -147,6 +147,17 @@ export default function AuthGuard({
           </div>
         )}
       </>
+    );
+  }
+
+  if (guardState === "signedOut") {
+    return (
+      <div className={glass.pageCenter}>
+        <div className={glass.loadingCard}>
+          <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+          {message || "Redirecting to sign in..."}
+        </div>
+      </div>
     );
   }
 

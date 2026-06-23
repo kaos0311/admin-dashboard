@@ -126,7 +126,7 @@ export function useAuthRole(): UseAuthRoleResult {
         let resolvedRole: UserRole = null;
         let resolvedActive: boolean | null = true;
 
-        const tokenResult = await getIdTokenResult(currentUser, false);
+        const tokenResult = await getIdTokenResult(currentUser, true);
         resolvedRole = parseRole(tokenResult.claims.role);
 
         const userSnap = await getDoc(doc(db, "users", currentUser.uid));
@@ -163,7 +163,7 @@ export function useAuthRole(): UseAuthRoleResult {
 
             return;
           }
-        } else
+        }
 
         setCachedRole(currentUser.uid, resolvedRole, resolvedActive);
 
@@ -220,8 +220,3 @@ export function useAuthRole(): UseAuthRoleResult {
     };
   }, [user, role, loading, error, active]);
 }
-
-
-
-
-

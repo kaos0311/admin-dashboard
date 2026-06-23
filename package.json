@@ -10,6 +10,8 @@
     "typecheck": "tsc --noEmit",
     "verify": "npm run lint && npm run typecheck && npm run build",
     "verify:imports": "tsx scripts/verify-import-routing.ts",
+    "import:par": "tsx scripts/import-par-report.ts",
+    "import:par:apply": "tsx scripts/import-par-report.ts --apply",
     "import:hcpcs": "node scripts/import-hcpcs-dhs-codes.cjs",
     "seed:brightree": "tsx scripts/seedBrightreeReferences.ts",
     "seed:rolodex:doctors": "tsx scripts/seedRolodexDoctors.ts",

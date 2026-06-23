@@ -6,11 +6,7 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function role() {
-      return isActiveProfile()
-        ? (claimRole() != "" ? claimRole() : profileRole())
-        : "";
-    }
+    /* Auth helpers */
 
     function claimRole() {
       return isSignedIn() && request.auth.token.role is string
@@ -18,24 +14,39 @@ service cloud.firestore {
         : "";
     }
 
-    function profileRole() {
+    function hasProfile() {
       return isSignedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role is string
-          ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
-          : "";
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid));
     }
 
     function profileData() {
       return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
+    function profileRole() {
+      return hasProfile() && profileData().role is string
+        ? profileData().role
+        : "";
+    }
+
     function isActiveProfile() {
       return isSignedIn()
-        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
-        && profileData().active != false
-        && profileData().disabled != true
-        && profileData().deleted != true;
+        && (!hasProfile()
+          || (
+            profileData().active != false
+            && profileData().disabled != true
+            && profileData().deleted != true
+          ));
+    }
+
+    function role() {
+      return isSignedIn()
+        ? (claimRole() != "" ? claimRole() : (isActiveProfile() ? profileRole() : ""))
+        : "";
+    }
+
+    function hasRole(expected) {
+      return role() == expected;
     }
 
     function isAdmin() {
@@ -43,16 +54,18 @@ service cloud.firestore {
     }
 
     function isStaff() {
-      return role() == "staff";
+      return hasRole("staff");
     }
 
     function isTank() {
-      return role() == "tank";
+      return hasRole("tank");
     }
 
     function isStaffOrAdmin() {
       return isAdmin() || isStaff() || isTank();
     }
+
+    /* Field validators */
 
     function optionalString(data, field, maxSize) {
       return !(field in data) || (data[field] is string && data[field].size() <= maxSize);
@@ -134,6 +147,8 @@ service cloud.firestore {
         "uid",
       ]);
     }
+
+    /* Collection rules */
 
     match /settings/{docId} {
       allow read: if isStaffOrAdmin();
@@ -504,6 +519,12 @@ service cloud.firestore {
       allow create: if isAdmin();
       allow update: if isAdmin();
       allow delete: if false;
+    }
+
+    // Collection group queries — required for indexes defined in firestore.indexes.json
+    match /{path=**}/rows/{rowId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if isStaffOrAdmin();
     }
 
     match /{document=**} {

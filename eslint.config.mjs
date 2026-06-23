@@ -110,6 +110,7 @@ const eslintConfig = defineConfig([
   },
 
   globalIgnores([
+    ".kilo/**",
     ".next/**",
     "out/**",
     "build/**",

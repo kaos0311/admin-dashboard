@@ -29,7 +29,10 @@ import {
 import toast from "react-hot-toast";
 
 import { db } from "@/lib/firebase";
-import { badges, buttons, colors, forms, glass, spacing, typography } from "@/theme";
+import { badges, buttons, colors, forms, glass, spacing, tiles, typography } from "@/theme";
+
+import { CpapMachineSelector } from "./CpapMachineSelector";
+import { CpapMaskSelector } from "./CpapMaskSelector";
 
 import {
   CPAP_SUPPLY_RULES,
@@ -733,8 +736,8 @@ export default function CpapCalendarPage() {
       byPatient.set(patient.id, {
         patient,
         rows: [eligibility],
-        machineType: firstText(patient.cpap?.machine, equipmentText(patient, "machine"), "Machine not listed"),
-        maskType: firstText(equipmentText(patient, "mask"), patient.cpap?.maskType, "Mask not listed"),
+        machineType: firstText(patient.cpap?.machine, equipmentText(patient, "machine")),
+        maskType: firstText(equipmentText(patient, "mask"), patient.cpap?.maskType),
         readyCount: eligibility.status === "ready" ? 1 : 0,
         soonCount: eligibility.status === "soon" ? 1 : 0,
         verifyCount: eligibility.status === "missing" ? 1 : 0,
@@ -1252,38 +1255,8 @@ export default function CpapCalendarPage() {
             })}
           </div>
 
-          <div className="mt-4 grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-3">
-            {selectedDayEvents.length > 0 ? (
-              selectedDayEvents.map((event) => {
-                const patientHref = event.patient ? `/reports/patients/${event.patient.id}` : null;
-
-                return patientHref ? (
-                  <Link
-                    key={event.id}
-                    href={patientHref}
-                    className={cx(glass.insetPadded, glass.cardHover, "block min-w-0")}
-                  >
-                    <p className={typography.caption}>{formatDate(event.date)}</p>
-                    <p className={cx(typography.bodyStrong, "mt-1 break-words")}>
-                      {event.title || "CPAP calendar event"}
-                    </p>
-                    <p className={cx(typography.smallMuted, "mt-1 break-words")}>
-                      {event.detail || event.status || "CPAP event"}
-                    </p>
-                  </Link>
-                ) : (
-                  <article key={event.id} className={glass.insetPadded}>
-                    <p className={typography.caption}>{formatDate(event.date)}</p>
-                    <p className={cx(typography.bodyStrong, "mt-1 break-words")}>
-                      {event.title || "CPAP calendar event"}
-                    </p>
-                    <p className={cx(typography.smallMuted, "mt-1 break-words")}>
-                      {event.detail || event.status || "CPAP event"}
-                    </p>
-                  </article>
-                );
-              })
-            ) : (
+          <div className="mt-4">
+            {selectedDayEvents.length === 0 && (
               <p className={typography.bodyMuted}>No CPAP events for {formatDate(selectedCalendarDate)}.</p>
             )}
           </div>
@@ -1366,7 +1339,7 @@ export default function CpapCalendarPage() {
               {loading ? "Loading CPAP worklist..." : "No matching CPAP pickup or clinical reconciliation patients."}
             </p>
           ) : (
-            <div className="grid min-w-0 gap-4 lg:grid-cols-2 2xl:grid-cols-3">
+            <div className="grid min-w-0 gap-3 lg:grid-cols-2">
               {pickupPatientTiles.map((tile) => {
                 const medicare = isMedicarePatient(tile.patient);
                 const equipmentExpanded = expandedPickupPatientId === tile.patient.id;
@@ -1378,9 +1351,9 @@ export default function CpapCalendarPage() {
                 return (
                   <article
                     key={tile.patient.id}
-                    className={cx(glass.cardPadded, "min-w-0")}
+                    className={cx(tiles.base, tiles.hover, tiles.compact, "min-w-0")}
                   >
-                    <div className="flex min-w-0 items-start justify-between gap-3">
+                    <div className={tiles.header}>
                       <div className="min-w-0">
                         {hasMultipleSupplies ? (
                           <button
@@ -1448,19 +1421,18 @@ export default function CpapCalendarPage() {
                       </div>
                     </div>
 
-                    <div className="mt-4 grid min-w-0 gap-3 sm:grid-cols-2">
-                      <div className={glass.insetPadded}>
-                        <p className={typography.caption}>Machine Type</p>
-                        <p className={cx(typography.bodyStrong, "mt-1 break-words")}>
-                          {tile.machineType}
-                        </p>
-                      </div>
-                      <div className={glass.insetPadded}>
-                        <p className={typography.caption}>Mask Type</p>
-                        <p className={cx(typography.bodyStrong, "mt-1 break-words")}>
-                          {tile.maskType}
-                        </p>
-                      </div>
+                    <div className="mt-4 flex flex-col gap-3">
+                      <CpapMachineSelector
+                        patientId={tile.patient.id}
+                        patientName={tile.patient.fullName}
+                        currentMachine={tile.machineType}
+                      />
+                      <CpapMaskSelector
+                        patientId={tile.patient.id}
+                        patientName={tile.patient.fullName}
+                        currentMaskType={tile.maskType}
+                        currentMachine={tile.machineType}
+                      />
                     </div>
 
                     <div className="mt-4">

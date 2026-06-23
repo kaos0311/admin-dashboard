@@ -1,0 +1,11 @@
+{
+    "sixth.telegram.enabled": true,
+    "cSpell.words": [
+        "Firestore"
+    ],
+    "builder.serverUrl": "http://localhost:3000",
+    "builder.command": "npm run dev",
+    "builder.runDevServer": false,
+    "builder.autoDetectDevServer": true,
+    "builder.launchType": "editor"
+}
