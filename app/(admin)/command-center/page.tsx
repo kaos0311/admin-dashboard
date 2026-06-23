@@ -3,6 +3,7 @@
 import {
   AlertTriangle,
   ClipboardList,
+  FileSpreadsheet,
   FileWarning,
   HeartPulse,
   ShieldAlert,
@@ -12,6 +13,7 @@ import {
 
 import { CommandHero } from "./components/CommandHero";
 import { HospiceList } from "./components/HospiceList";
+import { ImportedReportList } from "./components/ImportedReportList";
 import { IssueList } from "./components/IssueList";
 import { JarvisPanel } from "./components/JarvisPanel";
 import { MiniCard } from "./components/MiniCard";
@@ -27,6 +29,7 @@ export default function CommandCenterPage() {
     hospice,
     recalls,
     stats,
+    importedReports,
     topIssues,
     topTasks,
     loading,
@@ -83,15 +86,26 @@ export default function CommandCenterPage() {
           />
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
           <MiniCard title="Missing CMNs" value={stats.missingCmns} />
           <MiniCard title="Expired PARs" value={stats.expiredPars} />
           <MiniCard title="Missing Serials" value={stats.missingSerials} />
           <MiniCard title="Hospice Records" value={stats.hospiceRecords} />
           <MiniCard title="Active Recalls" value={stats.activeRecalls} />
+          <MiniCard title="Uploaded Files" value={stats.importedReportFiles} />
+          <MiniCard title="Uploaded Rows" value={stats.importedReportRows} />
+          <MiniCard title="Report Types" value={stats.uploadedReportTypes} />
         </section>
 
         <section className="grid gap-6 xl:grid-cols-2">
+          <Panel
+            title="Uploaded Reports Battle Feed"
+            subtitle="Every imported file and row count routed into command."
+            icon={<FileSpreadsheet className="h-5 w-5 text-cyan-300" />}
+          >
+            <ImportedReportList reports={importedReports} />
+          </Panel>
+
           <Panel
             title="Priority Compliance Issues"
             subtitle="Highest-risk open issues first."

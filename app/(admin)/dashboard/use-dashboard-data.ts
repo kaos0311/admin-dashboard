@@ -9,6 +9,8 @@ import {
   onSnapshot,
   orderBy,
   query,
+  type QuerySnapshot,
+  type Timestamp,
   type Unsubscribe,
 } from "firebase/firestore";
 
@@ -17,11 +19,13 @@ import { db } from "@/lib/firebase";
 import type {
   BirthdayAnalytics,
   DashboardSummary,
+  ImportedReportRow,
   InventoryAnalytics,
   MovementRow,
   OrderRow,
   ProductRow,
   RentalRow,
+  ReportTypeSummary,
   WipEmployeeSummary,
 } from "./dashboard-types";
 
@@ -44,6 +48,7 @@ const RENTAL_PREVIEW_LIMIT = 15;
 const PRODUCT_PREVIEW_LIMIT = 100;
 const MOVEMENT_LIMIT = 8;
 const WIP_EMPLOYEE_LIMIT = 12;
+const IMPORTED_REPORT_LIMIT = 50;
 
 export type DashboardDataState = {
   summary: DashboardSummary;
@@ -55,6 +60,8 @@ export type DashboardDataState = {
   products: ProductRow[];
   movements: MovementRow[];
   wipEmployees: WipEmployeeSummary[];
+  importedReports: ImportedReportRow[];
+  reportTypeSummaries: ReportTypeSummary[];
 
   loading: boolean;
   refreshing: boolean;
@@ -75,6 +82,123 @@ function getErrorMessage(error: unknown): string {
   return "Unknown dashboard error.";
 }
 
+function formatTimestamp(value: unknown): string | null {
+  if (
+    value &&
+    typeof value === "object" &&
+    "toDate" in value &&
+    typeof (value as Timestamp).toDate === "function"
+  ) {
+    return (value as Timestamp).toDate().toLocaleString();
+  }
+
+  if (typeof value === "string") return value;
+
+  return null;
+}
+
+function getStringField(
+  data: Record<string, unknown>,
+  keys: string[],
+  fallback: string
+): string {
+  for (const key of keys) {
+    const value = data[key];
+
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+
+  return fallback;
+}
+
+function getNumberField(data: Record<string, unknown>, keys: string[]): number {
+  for (const key of keys) {
+    const value = Number(data[key]);
+
+    if (Number.isFinite(value) && value > 0) {
+      return value;
+    }
+  }
+
+  return 0;
+}
+
+function normalizeImportedReport(
+  id: string,
+  data: Record<string, unknown>
+): ImportedReportRow {
+  return {
+    id,
+    fileName: getStringField(
+      data,
+      ["fileName", "originalFileName", "name"],
+      "Imported report"
+    ),
+    reportType: getStringField(
+      data,
+      ["reportType", "primaryReportType", "selectedReportType"],
+      "custom"
+    ),
+    rowCount: getNumberField(data, [
+      "rowCount",
+      "rowsInserted",
+      "rowsProcessed",
+      "processedRows",
+      "totalRows",
+    ]),
+    status: getStringField(
+      data,
+      ["status", "processingStatus", "processingStage"],
+      "queued"
+    ),
+    uploadedAt: formatTimestamp(
+      data.uploadedAt ?? data.createdAt ?? data.startedAt ?? data.updatedAt
+    ),
+  };
+}
+
+function mergeImportedReports(
+  reports: ImportedReportRow[],
+  jobs: ImportedReportRow[]
+): ImportedReportRow[] {
+  const merged = new Map<string, ImportedReportRow>();
+
+  jobs.forEach((job) => merged.set(job.id, job));
+  reports.forEach((report) => {
+    const job = merged.get(report.id);
+
+    merged.set(report.id, {
+      ...job,
+      ...report,
+      rowCount: report.rowCount || job?.rowCount || 0,
+      uploadedAt: report.uploadedAt || job?.uploadedAt || null,
+    });
+  });
+
+  return [...merged.values()].slice(0, IMPORTED_REPORT_LIMIT);
+}
+
+function buildReportTypeSummaries(reports: ImportedReportRow[]): ReportTypeSummary[] {
+  const summaries = new Map<string, ReportTypeSummary>();
+
+  reports.forEach((report) => {
+    const reportType = report.reportType || "custom";
+    const current = summaries.get(reportType) ?? {
+      reportType,
+      files: 0,
+      rows: 0,
+    };
+
+    current.files += 1;
+    current.rows += report.rowCount;
+    summaries.set(reportType, current);
+  });
+
+  return [...summaries.values()].sort((a, b) => b.rows - a.rows);
+}
+
 function withDocId<T extends Record<string, unknown>>(
   id: string,
   data: T
@@ -83,6 +207,23 @@ function withDocId<T extends Record<string, unknown>>(
     id,
     ...data,
   };
+}
+
+type PreviewSnapshot = QuerySnapshot<Record<string, unknown>>;
+type PreviewResult = PromiseSettledResult<PreviewSnapshot>;
+
+function getFulfilledSnapshot(
+  result: PreviewResult,
+  label: string,
+  failures: string[]
+): PreviewSnapshot | null {
+  if (result.status === "fulfilled") {
+    return result.value;
+  }
+
+  console.warn(`Dashboard ${label} preview failed.`, result.reason);
+  failures.push(label);
+  return null;
 }
 
 export function useDashboardData(): DashboardDataState {
@@ -97,6 +238,7 @@ export function useDashboardData(): DashboardDataState {
   const [products, setProducts] = useState<ProductRow[]>([]);
   const [movements, setMovements] = useState<MovementRow[]>([]);
   const [wipEmployees, setWipEmployees] = useState<WipEmployeeSummary[]>([]);
+  const [importedReports, setImportedReports] = useState<ImportedReportRow[]>([]);
 
   const [analyticsLoaded, setAnalyticsLoaded] = useState(false);
   const [birthdaysLoaded, setBirthdaysLoaded] = useState(false);
@@ -112,19 +254,21 @@ export function useDashboardData(): DashboardDataState {
 
     try {
       const [
-        wipEmployeesSnap,
-        ordersSnap,
-        rentalsSnap,
-        productsSnap,
-        movementsSnap,
-      ] = await Promise.all([
+        wipEmployeesResult,
+        ordersResult,
+        rentalsResult,
+        productsResult,
+        movementsResult,
+        importedReportsResult,
+        importJobsResult,
+      ] = await Promise.allSettled([
         getDocs(
           query(
             collection(db, "analytics", "wip", "employees"),
             orderBy("open", "desc"),
             limit(WIP_EMPLOYEE_LIMIT)
           )
-        ),
+        ) as Promise<PreviewSnapshot>,
 
         getDocs(
           query(
@@ -132,7 +276,7 @@ export function useDashboardData(): DashboardDataState {
             orderBy("createdAt", "desc"),
             limit(ORDER_PREVIEW_LIMIT)
           )
-        ),
+        ) as Promise<PreviewSnapshot>,
 
         getDocs(
           query(
@@ -140,7 +284,7 @@ export function useDashboardData(): DashboardDataState {
             orderBy("createdAt", "desc"),
             limit(RENTAL_PREVIEW_LIMIT)
           )
-        ),
+        ) as Promise<PreviewSnapshot>,
 
         getDocs(
           query(
@@ -148,7 +292,7 @@ export function useDashboardData(): DashboardDataState {
             orderBy("name", "asc"),
             limit(PRODUCT_PREVIEW_LIMIT)
           )
-        ),
+        ) as Promise<PreviewSnapshot>,
 
         getDocs(
           query(
@@ -156,11 +300,60 @@ export function useDashboardData(): DashboardDataState {
             orderBy("createdAt", "desc"),
             limit(MOVEMENT_LIMIT)
           )
-        ),
+        ) as Promise<PreviewSnapshot>,
+
+        getDocs(
+          query(
+            collection(db, "importedReports"),
+            orderBy("uploadedAt", "desc"),
+            limit(IMPORTED_REPORT_LIMIT)
+          )
+        ) as Promise<PreviewSnapshot>,
+
+        getDocs(
+          query(
+            collection(db, "importJobs"),
+            orderBy("createdAt", "desc"),
+            limit(IMPORTED_REPORT_LIMIT)
+          )
+        ) as Promise<PreviewSnapshot>,
       ]);
 
+      const failures: string[] = [];
+      const wipEmployeesSnap = getFulfilledSnapshot(
+        wipEmployeesResult,
+        "WIP employee",
+        failures
+      );
+      const ordersSnap = getFulfilledSnapshot(ordersResult, "orders", failures);
+      const rentalsSnap = getFulfilledSnapshot(
+        rentalsResult,
+        "rentals",
+        failures
+      );
+      const productsSnap = getFulfilledSnapshot(
+        productsResult,
+        "products",
+        failures
+      );
+      const movementsSnap = getFulfilledSnapshot(
+        movementsResult,
+        "stock movement",
+        failures
+      );
+      const importedReportsSnap = getFulfilledSnapshot(
+        importedReportsResult,
+        "imported reports",
+        failures
+      );
+      const importJobsSnap = getFulfilledSnapshot(
+        importJobsResult,
+        "import jobs",
+        failures
+      );
+
       setWipEmployees(
-        wipEmployeesSnap.docs.map((docSnap) =>
+        (wipEmployeesSnap?.docs ?? []).map((docSnap) =>
           normalizeWipEmployee(
             withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
           )
@@ -168,7 +361,7 @@ export function useDashboardData(): DashboardDataState {
       );
 
       setOrders(
-        ordersSnap.docs.map((docSnap) =>
+        (ordersSnap?.docs ?? []).map((docSnap) =>
           normalizeOrder(
             withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
           )
@@ -176,7 +369,7 @@ export function useDashboardData(): DashboardDataState {
       );
 
       setRentals(
-        rentalsSnap.docs.map((docSnap) =>
+        (rentalsSnap?.docs ?? []).map((docSnap) =>
           normalizeRental(
             withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
           )
@@ -184,20 +377,45 @@ export function useDashboardData(): DashboardDataState {
       );
 
       setProducts(
-        productsSnap.docs.map((docSnap) =>
+        (productsSnap?.docs ?? []).map((docSnap) =>
           normalizeProduct(
             withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
           )
         )
       );
 
+      setImportedReports(
+        mergeImportedReports(
+          (importedReportsSnap?.docs ?? []).map((docSnap) =>
+            normalizeImportedReport(
+              docSnap.id,
+              docSnap.data() as Record<string, unknown>
+            )
+          ),
+          (importJobsSnap?.docs ?? []).map((docSnap) =>
+            normalizeImportedReport(
+              docSnap.id,
+              docSnap.data() as Record<string, unknown>
+            )
+          )
+        )
+      );
+
       setMovements(
-        movementsSnap.docs.map((docSnap) =>
+        (movementsSnap?.docs ?? []).map((docSnap) =>
           normalizeMovement(
             withDocId(docSnap.id, docSnap.data() as Record<string, unknown>)
           )
         )
       );
+
+      if (failures.length > 0) {
+        setError(
+          `Some dashboard preview data could not be loaded: ${failures.join(
+            ", "
+          )}. Check Firestore rules and deployed indexes for those collections.`
+        );
+      }
 
       setPreviewsLoaded(true);
     } catch (loadError) {
@@ -208,6 +426,7 @@ export function useDashboardData(): DashboardDataState {
       setProducts([]);
       setMovements([]);
       setWipEmployees([]);
+      setImportedReports([]);
       setPreviewsLoaded(true);
 
       setError(
@@ -314,6 +533,11 @@ export function useDashboardData(): DashboardDataState {
     );
   }, [analyticsLoaded, birthdaysLoaded, inventoryLoaded, previewsLoaded]);
 
+  const reportTypeSummaries = useMemo(
+    () => buildReportTypeSummaries(importedReports),
+    [importedReports]
+  );
+
   return {
     summary,
     birthdays,
@@ -324,6 +548,8 @@ export function useDashboardData(): DashboardDataState {
     products,
     movements,
     wipEmployees,
+    importedReports,
+    reportTypeSummaries,
 
     loading,
     refreshing,

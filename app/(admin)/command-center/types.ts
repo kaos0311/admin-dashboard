@@ -49,6 +49,25 @@ export type EquipmentRecall = {
   active?: boolean;
 };
 
+export type CommandImportedReport = {
+  id: string;
+  fileName?: string;
+  reportType?: string;
+  rowCount?: number;
+  rowsInserted?: number;
+  rowsProcessed?: number;
+  processedRows?: number;
+  totalRows?: number;
+  originalFileName?: string;
+  primaryReportType?: string;
+  selectedReportType?: string;
+  createdAt?: Timestamp | string | null;
+  startedAt?: Timestamp | string | null;
+  updatedAt?: Timestamp | string | null;
+  status?: string;
+  uploadedAt?: Timestamp | string | null;
+};
+
 export type CommandCenterStats = {
   openIssues: number;
   criticalIssues: number;
@@ -59,4 +78,7 @@ export type CommandCenterStats = {
   escalatedTasks: number;
   hospiceRecords: number;
   activeRecalls: number;
+  importedReportFiles: number;
+  importedReportRows: number;
+  uploadedReportTypes: number;
 };

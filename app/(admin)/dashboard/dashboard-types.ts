@@ -89,6 +89,21 @@ export type MovementRow = {
   createdAt?: string | null;
 };
 
+export type ImportedReportRow = {
+  id: string;
+  fileName: string;
+  reportType: string;
+  rowCount: number;
+  status: string;
+  uploadedAt?: string | null;
+};
+
+export type ReportTypeSummary = {
+  reportType: string;
+  files: number;
+  rows: number;
+};
+
 export type WipEmployeeSummary = {
   employeeId: string;
   employeeName: string;
