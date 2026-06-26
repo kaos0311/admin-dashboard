@@ -178,7 +178,7 @@ export default function InventoryAssetChartPage() {
           <button
             type="button"
             onClick={() => router.back()}
-            className="mb-4 inline-flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
+            className={`mb-4 inline-flex items-center gap-2 text-sm ${typography.bodyMuted} transition hover:${colors.textPrimary}`}
           >
             <ArrowLeft className="h-4 w-4" />
             Back
@@ -256,10 +256,10 @@ export default function InventoryAssetChartPage() {
 
 function AssetHeader({ asset }: { asset: InventoryItem }) {
   return (
-    <header className="rounded-[2rem] border border-white/10 bg-gradient-to-br from-white/[0.12] via-white/[0.055] to-black/40 p-6 shadow-2xl shadow-black/30 backdrop-blur-2xl">
+    <header className={`${glass.panelPadded} rounded-[2rem] bg-gradient-to-br from-white/[0.12] via-white/[0.055] to-black/40 shadow-2xl shadow-black/30 backdrop-blur-2xl`}>
       <Link
         href="/inventory"
-        className="mb-5 inline-flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
+        className={`mb-5 inline-flex items-center gap-2 text-sm ${typography.bodyMuted} transition hover:${colors.textPrimary}`}
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Inventory
@@ -267,13 +267,13 @@ function AssetHeader({ asset }: { asset: InventoryItem }) {
 
       <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
         <div className="min-w-0">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs text-zinc-300">
+          <div className={badges.info}>
             <FileText className="h-3.5 w-3.5" />
             Inventory asset chart
           </div>
 
           <div className="flex flex-wrap items-center gap-3">
-            <h1 className="min-w-0 break-words text-3xl font-bold leading-[1.15] tracking-tight text-white">
+            <h1 className={typography.pageTitle}>
               {asset.name || "Unnamed asset"}
             </h1>
 
@@ -281,7 +281,7 @@ function AssetHeader({ asset }: { asset: InventoryItem }) {
             {asset.patientName ? <Badge label="Patient assigned" /> : null}
           </div>
 
-          <p className="mt-2 text-sm text-zinc-400">
+          <p className={`mt-2 text-sm ${typography.bodyMuted}`}>
             Serial: {asset.serial || "-"} | Asset:{" "}
             {asset.assetTag || asset.assetNumber || "-"}
           </p>

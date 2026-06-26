@@ -1,10 +1,11 @@
-﻿import { colors } from "./colors";
+const sunkInShadow = "shadow-[inset_0_1px_3px_rgba(0,0,0,0.45)]";
+const activeSunkIn = "active:translate-y-[1px] active:shadow-[inset_0_3px_6px_rgba(0,0,0,0.6)]";
 
 const base =
-  "inline-flex items-center justify-center gap-2 rounded-2xl px-4 py-2.5 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50";
+  `inline-flex items-center justify-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold ${sunkInShadow} transition-all ${activeSunkIn} disabled:cursor-not-allowed disabled:opacity-45`;
 
 const compactBase =
-  "inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-semibold transition disabled:cursor-not-allowed disabled:opacity-50";
+  `inline-flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold ${sunkInShadow} transition-all ${activeSunkIn} disabled:cursor-not-allowed disabled:opacity-45`;
 
 export const buttons = {
   base,
@@ -12,68 +13,55 @@ export const buttons = {
   primary:
     [
       base,
-      "bg-cyan-300 text-slate-950 shadow-lg shadow-cyan-500/20 hover:bg-cyan-200",
+      "border-[#7a9a5e]/40 bg-[#5a7a3e] text-[#ececec] hover:bg-[#6a8a4e] active:bg-[#4a6a2e]",
     ].join(" "),
 
   secondary:
     [
       base,
-      colors.border,
-      colors.surface,
-      colors.textPrimary,
-      colors.surfaceHover,
+      "border-[#3a3a3a] bg-[#222222] text-[#ececec] hover:bg-[#2a2a2a] active:bg-[#1a1a1a]",
     ].join(" "),
 
   upload:
     [
       base,
-      "min-w-0 px-4 py-3",
-      "border border-cyan-300/20 bg-cyan-400/10 text-cyan-100",
-      "shadow-lg shadow-cyan-950/20 transition-all duration-200",
-      "hover:border-cyan-200/40 hover:bg-cyan-400/15",
-      "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950",
+      "border-[#7a9a5e]/30 bg-[#4a6a3e] text-[#ececec] hover:bg-[#5a7a4e] active:bg-[#3a5a2e]",
     ].join(" "),
 
   danger:
     [
       base,
-      "bg-rose-600 text-white hover:bg-rose-500",
+      "border-[#b84a4a]/40 bg-[#8a2a2a] text-[#ececec] hover:bg-[#9a3a3a] active:bg-[#6a1a1a]",
     ].join(" "),
 
   warning:
     [
       base,
-      "bg-amber-500 text-slate-950 hover:bg-amber-400",
+      "border-[#c49a4a]/40 bg-[#9a7a2a] text-[#ececec] hover:bg-[#aa8a3a] active:bg-[#7a5a1a]",
     ].join(" "),
 
   success:
     [
       base,
-      "bg-emerald-600 text-white hover:bg-emerald-500",
+      "border-[#6a9a6a]/40 bg-[#4a7a4a] text-[#ececec] hover:bg-[#5a8a5a] active:bg-[#3a5a3a]",
     ].join(" "),
 
   info:
     [
       base,
-      "bg-sky-600 text-white hover:bg-sky-500",
+      "border-[#7a9a5e]/35 bg-[#3a5a3e] text-[#ececec] hover:bg-[#4a6a4e] active:bg-[#2a4a2e]",
     ].join(" "),
 
   ghost:
     [
       base,
-      colors.border,
-      "bg-transparent",
-      colors.textSecondary,
-      "hover:bg-white/[0.06] hover:text-white",
+      "border-transparent bg-transparent text-[#b8b8b8] hover:bg-[#222222] hover:text-[#ececec] active:bg-[#1a1a1a]",
     ].join(" "),
 
   subtle:
     [
       base,
-      colors.border,
-      colors.surfaceStrong,
-      colors.textSecondary,
-      "hover:bg-white/[0.09] hover:text-white",
+      "border-[#3a3a3a] bg-[#2e2e2e] text-[#b8b8b8] hover:bg-[#363636] hover:text-[#ececec] active:bg-[#262626]",
     ].join(" "),
 
   compact: compactBase,
@@ -81,91 +69,135 @@ export const buttons = {
   compactPrimary:
     [
       compactBase,
-      "bg-cyan-600 text-white hover:bg-cyan-500",
+      "border-[#7a9a5e]/40 bg-[#5a7a3e] text-[#ececec] hover:bg-[#6a8a4e] active:bg-[#4a6a2e]",
     ].join(" "),
 
   compactSecondary:
     [
       compactBase,
-      colors.border,
-      colors.surface,
-      colors.textPrimary,
-      colors.surfaceHover,
+      "border-[#3a3a3a] bg-[#222222] text-[#ececec] hover:bg-[#2a2a2a] active:bg-[#1a1a1a]",
     ].join(" "),
 
   compactDanger:
     [
       compactBase,
-      "bg-rose-600 text-white hover:bg-rose-500",
+      "border-[#b84a4a]/40 bg-[#8a2a2a] text-[#ececec] hover:bg-[#9a3a3a] active:bg-[#6a1a1a]",
     ].join(" "),
 
   compactWarning:
     [
       compactBase,
-      "bg-amber-500 text-slate-950 hover:bg-amber-400",
+      "border-[#c49a4a]/40 bg-[#9a7a2a] text-[#ececec] hover:bg-[#aa8a3a] active:bg-[#7a5a1a]",
     ].join(" "),
 
   compactSuccess:
     [
       compactBase,
-      "bg-emerald-600 text-white hover:bg-emerald-500",
+      "border-[#6a9a6a]/40 bg-[#4a7a4a] text-[#ececec] hover:bg-[#5a8a5a] active:bg-[#3a5a3a]",
     ].join(" "),
 
   icon:
     [
-      "inline-flex h-10 w-10 items-center justify-center rounded-2xl transition disabled:cursor-not-allowed disabled:opacity-50",
-      colors.border,
-      colors.surface,
-      colors.textSecondary,
-      colors.surfaceHover,
+      `inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#3a3a3a] bg-[#222222] text-[#b8b8b8] ${sunkInShadow} transition-all hover:bg-[#2a2a2a] ${activeSunkIn} disabled:cursor-not-allowed disabled:opacity-45`,
     ].join(" "),
 
   iconDanger:
     [
-      "inline-flex h-10 w-10 items-center justify-center rounded-2xl transition disabled:cursor-not-allowed disabled:opacity-50",
-      colors.dangerBadge,
+      `inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#b84a4a]/30 bg-[#8a2a2a] text-[#ececec] ${sunkInShadow} transition-all hover:bg-[#9a3a3a] ${activeSunkIn} disabled:cursor-not-allowed disabled:opacity-45`,
     ].join(" "),
 
   iconSuccess:
     [
-      "inline-flex h-10 w-10 items-center justify-center rounded-2xl transition disabled:cursor-not-allowed disabled:opacity-50",
-      colors.successBadge,
+      `inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#6a9a6a]/30 bg-[#4a7a4a] text-[#ececec] ${sunkInShadow} transition-all hover:bg-[#5a8a5a] ${activeSunkIn} disabled:cursor-not-allowed disabled:opacity-45`,
     ].join(" "),
 
   iconWarning:
     [
-      "inline-flex h-10 w-10 items-center justify-center rounded-2xl transition disabled:cursor-not-allowed disabled:opacity-50",
-      colors.warningBadge,
+      `inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#c49a4a]/30 bg-[#9a7a2a] text-[#ececec] ${sunkInShadow} transition-all hover:bg-[#aa8a3a] ${activeSunkIn} disabled:cursor-not-allowed disabled:opacity-45`,
     ].join(" "),
 
   iconArchive:
     [
-      "inline-flex h-10 w-10 items-center justify-center rounded-2xl transition disabled:cursor-not-allowed disabled:opacity-50",
-      colors.dangerBadge,
+      `inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#b84a4a]/30 bg-[#8a2a2a] text-[#ececec] ${sunkInShadow} transition-all hover:bg-[#9a3a3a] ${activeSunkIn} disabled:cursor-not-allowed disabled:opacity-45`,
     ].join(" "),
 
   iconDelete:
     [
-      "inline-flex h-10 w-10 items-center justify-center rounded-2xl transition disabled:cursor-not-allowed disabled:opacity-50",
-      colors.dangerBadge,
+      `inline-flex h-10 w-10 items-center justify-center rounded-xl border border-[#b84a4a]/30 bg-[#8a2a2a] text-[#ececec] ${sunkInShadow} transition-all hover:bg-[#9a3a3a] ${activeSunkIn} disabled:cursor-not-allowed disabled:opacity-45`,
     ].join(" "),
+
   iconInline:
     [
-      "absolute right-3 top-1/2 -translate-y-1/2 rounded-lg p-2 transition disabled:cursor-not-allowed disabled:opacity-60",
-      colors.textSecondary,
-      "hover:bg-white/10 hover:text-white",
+      `absolute right-3 top-1/2 -translate-y-1/2 rounded-lg border border-[#3a3a3a] bg-[#222222] p-2 text-[#b8b8b8] ${sunkInShadow} transition-all hover:bg-[#2a2a2a] active:translate-y-[calc(-50%+1px)] active:shadow-[inset_0_3px_6px_rgba(0,0,0,0.6)] disabled:cursor-not-allowed disabled:opacity-60`,
     ].join(" "),
 
   fullPrimary:
     [
       base,
-      "w-full py-3",
-      "bg-white text-black hover:bg-zinc-200",
+      "w-full py-3 border-[#7a9a5e]/40 bg-[#5a7a3e] text-[#ececec] hover:bg-[#6a8a4e] active:bg-[#4a6a2e]",
     ].join(" "),
-
 } as const;
 
 export type ButtonKey = keyof typeof buttons;
 
+export type ActionTone =
+  | "critical"
+  | "urgent"
+  | "blocked"
+  | "danger"
+  | "red"
+  | "high"
+  | "medium"
+  | "watch"
+  | "warning"
+  | "orange"
+  | "yellow"
+  | "low"
+  | "open"
+  | "info"
+  | "blue"
+  | "active"
+  | "resolved"
+  | "completed"
+  | "success"
+  | "green"
+  | "neutral";
 
+export function actionButtonClass(tone?: ActionTone | string): string {
+  switch (tone) {
+    case "critical":
+    case "urgent":
+    case "blocked":
+    case "danger":
+    case "red":
+      return buttons.compactDanger;
 
+    case "high":
+    case "medium":
+    case "watch":
+    case "warning":
+    case "orange":
+    case "yellow":
+      return buttons.compactWarning;
+
+    case "low":
+    case "open":
+    case "info":
+    case "blue":
+    case "active":
+      return buttons.compactPrimary;
+
+    case "resolved":
+    case "completed":
+    case "success":
+    case "green":
+      return buttons.compactSuccess;
+
+    default:
+      return buttons.compactSecondary;
+  }
+}
+
+export function metricActionButtonClass(tone?: ActionTone | string): string {
+  return ["mt-auto w-full", actionButtonClass(tone)].join(" ");
+}

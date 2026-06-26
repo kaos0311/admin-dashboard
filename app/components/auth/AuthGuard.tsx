@@ -27,6 +27,20 @@ function parseRole(value: unknown): ResolvedRole {
     : null;
 }
 
+function getRoleFromUserRecord(data: Record<string, unknown>): ResolvedRole {
+  const dbRole = parseRole(data.role);
+  if (dbRole) return dbRole;
+
+  if (data.temporaryTankAccess === true) {
+    const prevRole = parseRole(data.previousRole);
+    if (prevRole === "admin" || prevRole === "tank") {
+      return "tank";
+    }
+  }
+
+  return null;
+}
+
 function roleIsAllowed(role: ResolvedRole, allowedRoles: AllowedRole[]): boolean {
   if (!role) return false;
   if (allowedRoles.includes(role)) return true;
@@ -98,7 +112,7 @@ export default function AuthGuard({
             return;
           }
 
-          const dbRole = parseRole(data.role);
+          const dbRole = getRoleFromUserRecord(data);
           if (dbRole) resolvedRole = dbRole;
         }
 

@@ -1,13 +1,13 @@
-import { glass } from "./glass";
+import { surfaces } from "./surfaces";
 
 export const alerts = {
-  info: glass.alertInfo,
+  info: surfaces.alertInfo,
 
-  success: glass.alertSuccess,
+  success: surfaces.alertSuccess,
 
-  warning: glass.alertWarning,
+  warning: surfaces.alertWarning,
 
-  danger: glass.alertDanger,
+  danger: surfaces.alertDanger,
 } as const;
 
 export type AlertKey = keyof typeof alerts;

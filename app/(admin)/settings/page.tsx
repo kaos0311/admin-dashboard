@@ -19,7 +19,7 @@ import {
   Users,
 } from "lucide-react";
 
-import { buttons, colors, glass, typography } from "@/theme";
+import { badges, buttons, colors, glass, typography } from "@/theme";
 import AdminOnly from "@/app/components/auth/AdminOnly";
 
 import { SETTINGS_TABS } from "./settings-constants";
@@ -100,7 +100,7 @@ export default function SettingsPage() {
 
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="space-y-4">
-              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+              <div className={badges.info}>
                 <ShieldCheck className="h-3.5 w-3.5" />
                 System Configuration
               </div>

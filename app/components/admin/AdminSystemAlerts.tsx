@@ -35,7 +35,7 @@ export function AdminSystemAlerts() {
           onClick={() => setDismissed(true)}
           title="Dismiss system alert"
           aria-label="Dismiss system alert"
-          className={`rounded-lg p-1 transition ${colors.textSecondary} hover:bg-white/10 hover:text-amber-100`}
+          className={`rounded-lg p-1 transition ${colors.textSecondary} hover:${colors.surfaceStrong} hover:text-[#d4b86a]`}
         >
           <X className="h-3.5 w-3.5" aria-hidden="true" />
         </button>

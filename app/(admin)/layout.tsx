@@ -11,7 +11,7 @@ import StaffOrAdmin from "@/app/components/auth/StaffOrAdmin";
 import MaintenanceGate from "@/app/components/MaintenanceGate";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 import { auth } from "@/lib/firebase";
-import { colors, glass, spacing, typography } from "@/theme";
+import { colors, spacing, surfaces, typography } from "@/theme";
 
 type AdminLayoutProps = {
   children: ReactNode;
@@ -50,7 +50,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
   if (loading) {
     return (
       <div className={`${colors.app} flex min-h-screen items-center justify-center px-4`}>
-        <div className={`${glass.card} ${spacing.section}`}>
+        <div className={`${surfaces.card} ${spacing.section}`}>
           <p className={typography.bodyMuted}>Loading command center...</p>
         </div>
       </div>
@@ -61,13 +61,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     <StaffOrAdmin>
       <MaintenanceGate>
         <div className={`admin-page ${colors.app} min-h-screen ${colors.textPrimary}`}>
-          <div className={colors.grid} />
-          <div className={colors.vignette} />
           <JarvisSafetyInterlock />
 
           <a
             href="#admin-main-content"
-            className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-white focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-black"
+            className={`sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:${colors.surface} focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:${colors.textInverse}`}
           >
             Skip to main content
           </a>
@@ -80,16 +78,16 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
             />
 
             <div className="flex min-w-0 flex-1 flex-col lg:ml-64">
-              <header className={`${glass.toolbar} sticky top-0 z-30 rounded-none border-x-0 border-t-0`}>
+              <header className={`${surfaces.toolbar} sticky top-0 z-30 rounded-none border-x-0 border-t-0`}>
                 <div className="grid min-w-0 grid-cols-[auto_1fr_auto] items-center gap-4 px-4 py-3">
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
                       onClick={openMobileMenu}
                       aria-label="Open admin navigation menu"
-                      aria-expanded={mobileOpen}
+                      aria-expanded={mobileOpen ? true : false}
                       aria-controls="admin-sidebar"
-                      className={`${glass.focus} inline-flex items-center gap-2 rounded-xl border ${colors.border} bg-white/5 px-3 py-2 text-sm font-medium ${colors.textPrimary} transition hover:bg-white/10 lg:hidden`}
+                      className={`${surfaces.focus} inline-flex items-center gap-2 rounded-xl border ${colors.border} ${colors.surface} px-3 py-2 text-sm font-medium ${colors.textPrimary} transition ${colors.surfaceHover} lg:hidden`}
                     >
                       <Menu className="h-4 w-4" />
                       Menu
@@ -111,7 +109,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                       type="button"
                       onClick={handleLogout}
                       disabled={loggingOut}
-                      className={`${glass.focus} inline-flex items-center gap-2 rounded-xl border ${colors.borderStrong} bg-white/5 px-4 py-2 text-sm font-medium ${colors.textPrimary} transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60`}
+                      className={`${surfaces.focus} inline-flex items-center gap-2 rounded-xl border ${colors.borderStrong} ${colors.surface} px-4 py-2 text-sm font-medium ${colors.textPrimary} transition ${colors.surfaceHover} disabled:cursor-not-allowed disabled:opacity-60`}
                     >
                       <LogOut className="h-4 w-4" />
                       {loggingOut ? "Logging out..." : "Log out"}
@@ -124,7 +122,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                 id="admin-main-content"
                 className="min-w-0 flex-1 overflow-x-hidden"
               >
-                <div className={`${glass.shellFull} ${spacing.page}`}>
+                <div className={`${surfaces.shellFull} ${spacing.page}`}>
                   {children}
                 </div>
               </main>
@@ -135,6 +133,3 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     </StaffOrAdmin>
   );
 }
-
-
-

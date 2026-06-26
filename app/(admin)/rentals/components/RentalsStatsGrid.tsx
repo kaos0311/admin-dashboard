@@ -43,6 +43,7 @@ export function RentalsStatsGrid({
         description="All tracked rental assets"
         icon={<PackageCheck className="h-5 w-5" aria-hidden="true" />}
         active={activeReport === "total"}
+        tone="blue"
         onClick={() => onSelectReport("total")}
       />
 
@@ -52,6 +53,7 @@ export function RentalsStatsGrid({
         description="Unique rental patients"
         icon={<Users className="h-5 w-5" aria-hidden="true" />}
         active={activeReport === "patients"}
+        tone="blue"
         onClick={() => onSelectReport("patients")}
       />
 
@@ -61,6 +63,7 @@ export function RentalsStatsGrid({
         description="Currently assigned"
         icon={<PackageX className="h-5 w-5" aria-hidden="true" />}
         active={activeReport === "checked_out"}
+        tone="yellow"
         onClick={() => onSelectReport("checked_out")}
       />
 
@@ -70,6 +73,7 @@ export function RentalsStatsGrid({
         description="Ready to issue"
         icon={<CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
         active={activeReport === "available"}
+        tone="success"
         onClick={() => onSelectReport("available")}
       />
 
@@ -79,6 +83,7 @@ export function RentalsStatsGrid({
         description="Past expected return"
         icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
         active={activeReport === "overdue"}
+        tone="red"
         onClick={() => onSelectReport("overdue")}
       />
 
@@ -88,6 +93,7 @@ export function RentalsStatsGrid({
         description="Needs service"
         icon={<Wrench className="h-5 w-5" aria-hidden="true" />}
         active={activeReport === "maintenance"}
+        tone="yellow"
         onClick={() => onSelectReport("maintenance")}
       />
 
@@ -97,6 +103,7 @@ export function RentalsStatsGrid({
         description="Active rental allowable"
         icon={<BadgeDollarSign className="h-5 w-5" aria-hidden="true" />}
         active={activeReport === "monthly"}
+        tone="blue"
         onClick={() => onSelectReport("monthly")}
       />
 
@@ -106,6 +113,7 @@ export function RentalsStatsGrid({
         description="Expired or expiring authorizations"
         icon={<ShieldCheck className="h-5 w-5" aria-hidden="true" />}
         active={activeReport === "pars"}
+        tone="yellow"
         onClick={() => onSelectReport("pars")}
       />
     </section>

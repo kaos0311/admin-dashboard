@@ -1,6 +1,6 @@
 "use client";
 
-import { typography } from "@/theme";
+import { colors, forms, surfaces, typography } from "@/theme";
 
 import { Keyboard } from "lucide-react";
 
@@ -16,10 +16,10 @@ export default function ManualScannerPanel({
   onSubmit,
 }: ManualScannerPanelProps) {
   return (
-    <section className="rounded-[2rem] border border-white/10 bg-white/[0.05] p-5 shadow-2xl shadow-black/30 backdrop-blur-xl">
+    <section className={`${surfaces.cardPadded} rounded-[2rem] shadow-2xl shadow-black/30 backdrop-blur-xl`}>
       <div className="mb-4 flex items-center gap-3">
-        <div className="rounded-2xl border border-cyan-300/20 bg-cyan-400/10 p-2">
-          <Keyboard className="h-5 w-5 text-cyan-200" />
+        <div className={`rounded-2xl border ${colors.info} p-2`}>
+          <Keyboard className={`h-5 w-5 ${colors.textInfo}`} />
         </div>
 
         <div>
@@ -45,13 +45,13 @@ export default function ManualScannerPanel({
         placeholder="Enter barcode manually..."
         autoComplete="off"
         spellCheck={false}
-        className="w-full rounded-2xl border border-white/10 bg-black/50 px-4 py-3 text-white outline-none backdrop-blur-xl placeholder:text-zinc-500 focus:border-cyan-300/50"
+        className={`${forms.input} w-full bg-[#181818]/90 px-4 py-3 ${colors.textPrimary} placeholder:text-[#606060] focus:border-[#7a9a5e]/50`}
       />
 
       <button
         type="button"
         onClick={onSubmit}
-        className="mt-3 rounded-2xl border border-white/10 bg-white px-4 py-2 font-semibold text-black shadow-lg shadow-black/30 transition hover:bg-zinc-200"
+        className={`mt-3 rounded-2xl border ${colors.border} ${colors.surface} px-4 py-2 font-semibold ${colors.textPrimary} shadow-lg shadow-black/30 transition ${colors.surfaceHover}`}
       >
         Submit
       </button>

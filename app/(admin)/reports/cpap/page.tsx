@@ -1600,7 +1600,7 @@ export default function CpapCalendarPage() {
         </section>
 
         {selectedSupplyTile ? (
-          <section className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+          <section className={`fixed inset-0 z-50 flex items-center justify-center ${colors.overlay} p-4`}>
             <article className={cx(glass.cardPadded, "max-h-[90vh] w-full max-w-2xl overflow-y-auto")}>
               <div className="flex min-w-0 items-start justify-between gap-4">
                 <div className="min-w-0">

@@ -1,6 +1,6 @@
 ﻿import { Activity, Upload } from "lucide-react";
 
-import { tiles, typography } from "@/theme";
+import { colors, tiles, typography } from "@/theme";
 
 import OpenUploadCenterButton from "./OpenUploadCenterButton";
 
@@ -14,13 +14,13 @@ export function ReportsHero() {
       aria-labelledby="reports-page-title"
     >
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-300/40 to-transparent"
+        className={`pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-[#7a9a5e]/40 to-transparent`}
         aria-hidden="true"
       />
 
       <div className="relative flex min-w-0 flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
         <div className="min-w-0 flex-1">
-          <div className="mb-3 inline-flex max-w-full min-w-0 items-center gap-2 rounded-full border border-cyan-300/20 bg-cyan-400/10 px-3 py-1 text-xs font-medium text-cyan-200">
+          <div className={`mb-3 inline-flex max-w-full min-w-0 items-center gap-2 rounded-full border ${colors.info} px-3 py-1 text-xs font-medium ${colors.textInfo}`}>
             <Activity className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             <span className="min-w-0 truncate">Reports Command Center</span>
           </div>

@@ -28,7 +28,7 @@ export default function CameraScannerPanel({
 
   return (
     <section className="space-y-4">
-      <div className="relative overflow-hidden rounded-[2rem] border border-white/10 bg-black shadow-2xl shadow-black/50">
+      <div className={`relative overflow-hidden rounded-[2rem] border ${colors.border} bg-[#181818] shadow-2xl shadow-black/50`}>
         <video
           ref={videoRef}
           className="aspect-video w-full object-cover"
@@ -40,7 +40,7 @@ export default function CameraScannerPanel({
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_center,_transparent_35%,_rgba(0,0,0,0.55)_100%)]" />
 
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-          <div className="h-44 w-[80%] rounded-2xl border-2 border-emerald-300/80 shadow-[0_0_45px_rgba(52,211,153,0.28)]" />
+          <div className={`h-44 w-[80%] rounded-2xl border-2 border-[#6a9a6a]/80 shadow-[0_0_45px_rgba(106,154,106,0.28)]`} />
         </div>
       </div>
 

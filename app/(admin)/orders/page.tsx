@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { ClipboardList, Loader2, ShieldCheck, Truck } from "lucide-react";
 import toast from "react-hot-toast";
 
-import { colors, glass, tiles, typography } from "@/theme";
+import { buttons, colors, glass, tiles, typography } from "@/theme";
 
 import BarcodeScannerModal from "@/app/components/barcode-scanner/BarcodeScannerModal";
 import { normalizeBarcode } from "@/lib/barcode";
@@ -324,7 +324,7 @@ export default function OrdersPage() {
                 </div>
               </div>
 
-              <div className={`mt-4 flex items-center gap-2 rounded-2xl border border-white/10 bg-black/20 px-3 py-2 text-xs ${typography.bodyMuted}`}>
+              <div className={`${glass.insetPadded} mt-4 flex items-center gap-2 px-3 py-2 text-xs ${typography.bodyMuted}`}>
                 <ClipboardList className="h-3.5 w-3.5 text-sky-200" />
                 Operational order intelligence active
               </div>
@@ -396,6 +396,7 @@ export default function OrdersPage() {
           delivered={summary.delivered}
           cancelled={summary.cancelled}
           archived={summary.archived}
+          onSelectStatus={setTab}
         />
 
         <SmartFiltersPanel
@@ -424,7 +425,7 @@ export default function OrdersPage() {
               type="button"
               onClick={() => void loadOrders("more")}
               disabled={loadingMore}
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"
+              className={buttons.primary}
             >
               {loadingMore ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

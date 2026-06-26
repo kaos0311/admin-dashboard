@@ -1,7 +1,6 @@
-import { typography } from "@/theme";
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
 
-import { GlassCard } from "./shared/GlassCard";
+import { colors, metricActionButtonClass, tiles, typography } from "@/theme";
 
 type StatCardProps = {
   label: string;
@@ -10,6 +9,7 @@ type StatCardProps = {
   icon: ReactNode;
   active?: boolean;
   onClick?: () => void;
+  tone?: string;
 };
 
 export function StatCard({
@@ -19,6 +19,7 @@ export function StatCard({
   icon,
   active = false,
   onClick,
+  tone = "blue",
 }: StatCardProps) {
   const displayValue =
     value === null || value === undefined || value === ""
@@ -26,25 +27,31 @@ export function StatCard({
       : String(value);
 
   const content = (
+    <>
       <div className="flex min-w-0 items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
-          <p className={`truncate text-xs font-medium uppercase tracking-[0.16em] ${typography.caption}`}>
-            {label}
-          </p>
+          <p className={tiles.metricLabel} title={label}>{label}</p>
 
-          <p className="mt-2 break-words text-2xl font-bold tracking-tight text-white">
+          <p className={["mt-2 break-words", typography.metricCompact].join(" ")}>
             {displayValue}
           </p>
 
-          <p className={`mt-1 break-words text-xs leading-5 ${typography.bodyMuted}`}>
+          <p className={["mt-1 break-words", typography.smallMuted].join(" ")}>
             {description}
           </p>
         </div>
 
-        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] text-cyan-200 shadow-inner shadow-white/5">
+        <div className={["flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl", colors.neutral].join(" ")}>
           {icon}
         </div>
       </div>
+
+      {onClick ? (
+        <span className={metricActionButtonClass(tone)}>
+          {active ? "Viewing" : "Open"}
+        </span>
+      ) : null}
+    </>
   );
 
   if (onClick) {
@@ -53,23 +60,21 @@ export function StatCard({
         type="button"
         onClick={onClick}
         className={[
-          "min-w-0 rounded-3xl text-left transition",
-          active ? "ring-2 ring-cyan-300/45" : "hover:-translate-y-0.5",
+          tiles.base,
+          tiles.compact,
+          tiles.hover,
+          "min-h-[10.75rem] min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a9a5e]/40",
+          active ? "ring-2 ring-[#7a9a5e]/45" : "",
         ].join(" ")}
       >
-        <GlassCard className="min-w-0 p-4">
-          {content}
-        </GlassCard>
+        {content}
       </button>
     );
   }
 
   return (
-    <GlassCard className="min-w-0 p-4">
+    <article className={[tiles.base, tiles.compact, "min-h-[10.75rem] min-w-0"].join(" ")}>
       {content}
-    </GlassCard>
+    </article>
   );
 }
-
-
-

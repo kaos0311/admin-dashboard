@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Activity,
   AlertTriangle,
@@ -10,9 +11,10 @@ import {
   Stethoscope,
 } from "lucide-react";
 
-import { badges, colors, glass, typography } from "@/theme";
+import { colors, glass, typography } from "@/theme";
 
 import type { CommandCenterStats } from "../types";
+import { alertButtonClass } from "../utils/commandCenterFormat";
 
 type DatabaseHealthPanelProps = {
   stats: CommandCenterStats;
@@ -24,6 +26,8 @@ type Meter = {
   value: number;
   detail: string;
   icon: typeof Activity;
+  href: string;
+  actionLabel: string;
 };
 
 function clampScore(value: number) {
@@ -44,6 +48,13 @@ function healthLabel(value: number) {
   return "High Risk";
 }
 
+function healthTone(value: number) {
+  if (value >= 85) return colors.success;
+  if (value >= 65) return colors.info;
+  if (value >= 45) return colors.warning;
+  return colors.danger;
+}
+
 function buildMeters(stats: CommandCenterStats): Meter[] {
   return [
     {
@@ -57,26 +68,41 @@ function buildMeters(stats: CommandCenterStats): Meter[] {
       ),
       detail: `${stats.openIssues} open, ${stats.criticalIssues} critical`,
       icon: ShieldCheck,
+      href: "/command-center?focus=compliance#priority-compliance-issues",
+      actionLabel: "Open issues",
     },
     {
       label: "Work Flow",
       value: clampScore(100 - stats.openTasks * 3 - stats.escalatedTasks * 12),
       detail: `${stats.openTasks} open, ${stats.escalatedTasks} escalated`,
       icon: Activity,
+      href: "/command-center?focus=tasks#task-escalation",
+      actionLabel: "Open tasks",
     },
     {
       label: "Inventory Trace",
       value: clampScore(100 - stats.missingSerials * 14 - stats.activeRecalls * 12),
       detail: `${stats.missingSerials} missing serials, ${stats.activeRecalls} recalls`,
       icon: DatabaseZap,
+      href: "/command-center?focus=inventory#active-equipment-recalls",
+      actionLabel: "Open trace work",
     },
     {
       label: "Hospice Watch",
       value: clampScore(100 - Math.max(0, stats.hospiceRecords - 25) * 2),
       detail: `${stats.hospiceRecords} active oversight records`,
       icon: HeartPulse,
+      href: "/command-center?focus=hospice#hospice-oversight",
+      actionLabel: "Open hospice",
     },
   ];
+}
+
+function meterTone(value: number) {
+  if (value >= 85) return "success";
+  if (value >= 65) return "blue";
+  if (value >= 45) return "yellow";
+  return "red";
 }
 
 function buildRecommendations(stats: CommandCenterStats): string[] {
@@ -123,6 +149,7 @@ export function DatabaseHealthPanel({
 
   return (
     <aside
+      id="database-health"
       className={[
         "flex h-full min-w-0 flex-col overflow-hidden rounded-[1.75rem]",
         glass.panel,
@@ -144,13 +171,7 @@ export function DatabaseHealthPanel({
           <span
             className={[
               "shrink-0 rounded-full px-2.5 py-1 text-xs font-bold",
-              overallScore >= 85
-                ? badges.active
-                : overallScore >= 65
-                  ? badges.info
-                  : overallScore >= 45
-                    ? badges.warning
-                    : badges.danger,
+              healthTone(overallScore),
             ].join(" ")}
           >
             {overallScore}
@@ -164,7 +185,7 @@ export function DatabaseHealthPanel({
             <div
               className={[
                 "flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl",
-                overallScore >= 65 ? badges.info : badges.warning,
+                healthTone(overallScore),
               ].join(" ")}
             >
               {overallScore >= 65 ? (
@@ -211,6 +232,13 @@ export function DatabaseHealthPanel({
                 <p className={["mt-1 min-w-0 break-words", typography.smallMuted].join(" ")}>
                   {meter.detail}
                 </p>
+
+                <Link
+                  href={meter.href}
+                  className={["mt-2 w-full", alertButtonClass(meterTone(meter.value))].join(" ")}
+                >
+                  {meter.actionLabel}
+                </Link>
               </div>
             );
           })}

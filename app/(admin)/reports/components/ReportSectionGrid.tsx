@@ -1,7 +1,7 @@
 ﻿import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 
-import { tiles, typography } from "@/theme";
+import { colors, tiles, typography } from "@/theme";
 
 import { reportPages } from "../reports-config";
 
@@ -27,16 +27,16 @@ export function ReportSectionGrid() {
             className={[
               tiles.base,
               "group min-w-0 p-5 transition",
-              "hover:-translate-y-0.5 hover:border-white/20 hover:bg-white/[0.08]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/40 focus-visible:ring-offset-2 focus-visible:ring-offset-slate-950",
+              tiles.hover,
+              `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a9a5e]/40 focus-visible:ring-offset-2 focus-visible:ring-offset-[#141414]`,
             ].join(" ")}
           >
             <div className="flex h-full min-w-0 flex-col justify-between gap-5">
               <div className="flex min-w-0 items-start gap-4">
                 <div
                   className={[
-                    "shrink-0 rounded-2xl border border-white/10 bg-white/10 p-3 transition",
-                    "group-hover:bg-white/15",
+                    `shrink-0 rounded-2xl border ${colors.border} ${colors.surface} p-3 transition`,
+                    "group-hover:bg-[#2a2a2a]",
                     page.tone,
                   ].join(" ")}
                   aria-hidden="true"
@@ -59,7 +59,7 @@ export function ReportSectionGrid() {
                 className={[
                   "inline-flex min-w-0 items-center gap-2",
                   `text-sm font-medium ${typography.bodyMuted} transition`,
-                  "group-hover:text-white",
+                  `group-hover:${colors.textPrimary}`,
                 ].join(" ")}
                 aria-hidden="true"
               >

@@ -3,6 +3,7 @@ export * from "./badges";
 export * from "./buttons";
 export * from "./colors";
 export * from "./forms";
+export * from "./surfaces";
 export * from "./glass";
 export * from "./motion";
 export * from "./spacing";

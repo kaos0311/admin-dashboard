@@ -81,6 +81,7 @@ export default function ReportsAnalyticsPage() {
         />
 
         <section
+          id="analytics-breakdown"
           className={[
             "grid w-full min-w-0 gap-6",
             "xl:grid-cols-[minmax(0,1fr)_minmax(320px,360px)]",
@@ -95,14 +96,16 @@ export default function ReportsAnalyticsPage() {
             patientClassification={analytics.patientClassification}
           />
 
-          <AnalyticsSourceCard
-            loading={loading}
-            status={analytics.status}
-            source={analytics.source}
-            analyticsVersion={analytics.analyticsVersion}
-            generatedAtLabel={analytics.generatedAtLabel}
-            lastRebuiltByEmail={analytics.lastRebuiltByEmail}
-          />
+          <div id="analytics-sources">
+            <AnalyticsSourceCard
+              loading={loading}
+              status={analytics.status}
+              source={analytics.source}
+              analyticsVersion={analytics.analyticsVersion}
+              generatedAtLabel={analytics.generatedAtLabel}
+              lastRebuiltByEmail={analytics.lastRebuiltByEmail}
+            />
+          </div>
         </section>
       </div>
     </main>

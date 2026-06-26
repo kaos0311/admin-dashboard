@@ -680,12 +680,12 @@ function ReportTable({
                           {record.patientId ? (
                             <Link
                               href={`/reports/patients/${encodeURIComponent(record.patientId)}?tab=insurance`}
-                              className="text-sm font-semibold text-cyan-100 hover:text-white"
+                              className={`text-sm font-semibold ${colors.textSecondary} hover:${colors.textPrimary}`}
                             >
                               {record.parNumber}
                             </Link>
                           ) : (
-                            <span className="text-sm font-semibold text-slate-200">
+                            <span className={`text-sm font-semibold ${colors.textSecondary}`}>
                               {record.parNumber}
                             </span>
                           )}

@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Command, X } from "lucide-react";
 
-import { buttons, forms, glass, typography } from "@/theme";
+import { buttons, colors, forms, glass, typography } from "@/theme";
 import { useEffect, useMemo, useState } from "react";
 
 const commands = [
@@ -61,7 +61,7 @@ export function AdminCommandPalette() {
       </button>
 
       {open ? (
-        <div className={`bg-black/60 fixed inset-0 z-[200] px-4 py-20 backdrop-blur-sm`}>
+        <div className={`${colors.overlay} fixed inset-0 z-[200] px-4 py-20 backdrop-blur-sm`}>
           <div className={`${glass.shell} mx-auto max-w-xl overflow-hidden`}>
             <div className={`${glass.toolbar} flex items-center gap-3 px-4 py-3`}>
               <Command className="h-4 w-4" aria-hidden="true" />
@@ -96,7 +96,7 @@ export function AdminCommandPalette() {
                     setOpen(false);
                     setQuery("");
                   }}
-                  className={`block rounded-2xl px-4 py-3 ${typography.body} transition hover:bg-white/10`}
+                  className={`block rounded-2xl px-4 py-3 ${typography.body} transition ${colors.surfaceHover}`}
                 >
                   {command.label}
                 </Link>

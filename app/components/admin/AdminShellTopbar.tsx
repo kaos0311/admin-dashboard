@@ -9,7 +9,7 @@ import {
   UserRound,
 } from "lucide-react";
 
-import { colors, glass, ThemeToggle, typography } from "@/theme";
+import { colors, surfaces, ThemeToggle, typography } from "@/theme";
 
 type AdminShellTopbarProps = {
   userEmail?: string;
@@ -34,7 +34,7 @@ export function AdminShellTopbar({
 
   return (
     <header
-      className={`${glass.toolbar} sticky top-0 z-40 rounded-none border-x-0 border-t-0 px-4 py-3 transition-colors`}
+      className={`${surfaces.toolbar} sticky top-0 z-40 rounded-none border-x-0 border-t-0 px-4 py-3 transition-colors`}
     >
       <div className="flex min-w-0 items-center justify-between gap-4">
         <div className="flex min-w-0 items-center gap-3">
@@ -44,14 +44,14 @@ export function AdminShellTopbar({
             aria-label={
               mobileOpen ? "Close navigation menu" : "Open navigation menu"
             }
-            aria-expanded={mobileOpen}
-            className={`${glass.focus} inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${colors.border} bg-white/[0.06] ${colors.textSecondary} transition hover:bg-white/[0.12] lg:hidden`}
+            aria-expanded={mobileOpen ? true : false}
+            className={`${surfaces.focus} inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${colors.border} ${colors.surface} ${colors.textSecondary} transition ${colors.surfaceHover} lg:hidden`}
           >
             <Menu className="h-5 w-5" />
           </button>
 
           <div className="min-w-0">
-            <p className="break-words text-xs font-semibold uppercase leading-5 tracking-[0.22em] text-cyan-200/80">
+            <p className={`break-words text-xs font-semibold uppercase leading-5 tracking-[0.22em] ${colors.textInfo} opacity-80`}>
               Advanced Home Medical
             </p>
 
@@ -71,12 +71,12 @@ export function AdminShellTopbar({
         </div>
 
         <div className="flex min-w-0 items-center gap-2">
-          <div className="hidden items-center gap-2 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-3 py-2 text-xs font-medium text-emerald-200 sm:flex">
+          <div className={`hidden items-center gap-2 rounded-2xl px-3 py-2 text-xs font-medium ${colors.success} sm:flex`}>
             <ShieldCheck className="h-4 w-4 shrink-0" />
             {isAdmin ? "Admin" : "Staff"}
           </div>
 
-          <div className={`hidden max-w-[220px] items-center gap-2 rounded-2xl border ${colors.border} bg-white/[0.06] px-3 py-2 text-xs ${colors.textSecondary} sm:flex`}>
+          <div className={`hidden max-w-[220px] items-center gap-2 rounded-2xl border ${colors.border} ${colors.surface} px-3 py-2 text-xs ${colors.textSecondary} sm:flex`}>
             <UserRound className={`h-4 w-4 shrink-0 ${typography.bodyMuted}`} />
             <span className="truncate">{userEmail}</span>
           </div>
@@ -86,7 +86,7 @@ export function AdminShellTopbar({
           <button
             type="button"
             aria-label="View notifications"
-            className={`${glass.focus} inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${colors.border} bg-white/[0.06] ${colors.textSecondary} transition hover:bg-white/[0.12]`}
+            className={`${surfaces.focus} inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border ${colors.border} ${colors.surface} ${colors.textSecondary} transition ${colors.surfaceHover}`}
           >
             <Bell className="h-5 w-5" />
           </button>
@@ -96,7 +96,7 @@ export function AdminShellTopbar({
             onClick={onLogout}
             disabled={loggingOut}
             aria-label="Sign out"
-            className={`${glass.focus} inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl border border-red-300/20 bg-red-500/10 px-3 text-sm font-semibold text-red-200 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50`}
+            className={`${surfaces.focus} inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-2xl border ${colors.danger} px-3 text-sm font-semibold transition hover:bg-[#b84a4a]/20 disabled:cursor-not-allowed disabled:opacity-50`}
           >
             <LogOut className="h-4 w-4" />
             <span className="hidden sm:inline">
@@ -108,6 +108,3 @@ export function AdminShellTopbar({
     </header>
   );
 }
-
-
-

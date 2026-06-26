@@ -14,7 +14,7 @@ import {
 import { ModalHeader } from "@/app/components/modals/shared/ModalHeader";
 import { ModalShell } from "@/app/components/modals/shared/ModalShell";
 import type { WipRecord } from "@/lib/reports/wip";
-import { badges, glass, spacing, tiles, typography } from "@/theme";
+import { actionButtonClass, badges, glass, spacing, tiles, typography } from "@/theme";
 
 import { WipStatusBadge } from "./WipStatusBadge";
 
@@ -104,7 +104,7 @@ function IssueCard({ record }: { record: WipRecord }) {
         </div>
 
         <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <span className={badges.danger}>{days} days</span>
+          <span className={actionButtonClass("red")}>{days} days</span>
           <WipStatusBadge type="status" value={record.status} />
           <WipStatusBadge type="priority" value={record.priority} />
         </div>
@@ -256,11 +256,21 @@ export function WipAgingAlerts({ records }: WipAgingAlertsProps) {
                 </div>
 
                 <div className="flex shrink-0 items-center gap-2">
-                  <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-2.5 py-0.5 text-xs font-medium text-slate-300">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPatientName(group.patientName)}
+                    className={actionButtonClass("yellow")}
+                  >
                     {group.records.length}{" "}
                     {group.records.length === 1 ? "issue" : "issues"}
-                  </span>
-                  <span className={badges.danger}>{group.maxDays} days</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedPatientName(group.patientName)}
+                    className={actionButtonClass("red")}
+                  >
+                    {group.maxDays} days
+                  </button>
                 </div>
               </div>
             </div>

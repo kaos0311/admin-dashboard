@@ -6,7 +6,7 @@ import {
   type WipPriority,
   type WipStatus,
 } from "@/lib/reports/wip";
-import { badges } from "@/theme";
+import { colors } from "@/theme";
 
 type BadgeProps =
   | {
@@ -38,32 +38,10 @@ export function WipStatusBadge({ type, value }: BadgeProps) {
   );
 }
 
-function getStatusClass(status: WipStatus) {
-  switch (status) {
-    case "open":
-      return badges.info;
-    case "pending":
-      return badges.info;
-    case "completed":
-      return badges.success;
-    case "cancelled":
-      return badges.neutral;
-  }
+function getStatusClass(_status: WipStatus) {
+  return colors.neutralBadge;
 }
 
-function getPriorityClass(priority: WipPriority) {
-  switch (priority) {
-    case "critical":
-      return badges.danger;
-    case "high":
-      return badges.warning;
-    case "normal":
-      return badges.info;
-    case "low":
-      return badges.neutral;
-  }
+function getPriorityClass(_priority: WipPriority) {
+  return colors.neutralBadge;
 }
-
-
-
-

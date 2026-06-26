@@ -1,6 +1,0 @@
-"Path","LineNumber","Line"
-"D:\projects\admin-dashboard\app\(admin)\reports\upload\components\UploadQueueItem.tsx","360","            style={{ width: `${state.progress}%` }}"
-"D:\projects\admin-dashboard\app\(admin)\reports\upload\components\UploadQueueList.tsx","159","                  style={{"
-"D:\projects\admin-dashboard\app\(admin)\reports\wip\components\WipAnalytics.tsx","51","                  style={{ width: `${percent}%` }}"
-"D:\projects\admin-dashboard\app\components\reports\ServerImportUploader.tsx","445","                style={{"
-"D:\projects\admin-dashboard\app\providers.tsx","19","        containerStyle={{"

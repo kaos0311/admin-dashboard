@@ -574,7 +574,7 @@ export default function ProductsPage() {
 
         {stats.highRisk >
         0 ? (
-          <section className={alerts.warning}>
+          <section className={glass.panelPadded}>
             <div className="flex items-stretch gap-3">
               <ShieldAlert className="mt-0.5 h-5 w-5 shrink-0" />
 
@@ -705,7 +705,7 @@ export default function ProductsPage() {
                           })
                         )
                       }
-                      className={`absolute right-3 top-3.5 transition ${typography.smallMuted} hover:text-white`}
+                      className={`absolute right-3 top-3.5 transition ${typography.smallMuted} hover:${colors.textPrimary}`}
                       aria-label="Clear search"
                     >
                       <X className="h-4 w-4" />
@@ -818,10 +818,3 @@ export default function ProductsPage() {
     </main>
   );
 }
-
-
-
-
-
-
-

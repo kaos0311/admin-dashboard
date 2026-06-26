@@ -1,13 +1,13 @@
 "use client";
 
-import { typography } from "@/theme";
+import { colors, surfaces, typography } from "@/theme";
 
 import { ClipboardList } from "lucide-react";
 
 export function InventoryEmptyState() {
   return (
-    <div className="rounded-2xl border border-white/10 bg-black/30 p-8 text-center shadow-inner shadow-black/20">
-      <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-white/10">
+    <div className={`${surfaces.emptyState} ${colors.surfaceInset} p-8 text-center`}>
+      <div className={`mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-2xl ${colors.surface} ${colors.textMuted}`}>
         <ClipboardList className={`h-6 w-6 ${typography.bodyMuted}`} />
       </div>
 

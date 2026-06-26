@@ -1,5 +1,5 @@
 ﻿import type { ElementType, ReactNode } from "react";
-import { glass } from "@/theme";
+import { surfaces } from "@/theme";
 
 type GlassPanelProps = {
   children: ReactNode;
@@ -15,13 +15,8 @@ export function GlassPanel({
   as: Component = "section",
 }: GlassPanelProps) {
   return (
-    <Component
-      className={`${glass.panel} ${glass.panelBefore} ${className}`}
-    >
+    <Component className={`${surfaces.panel} ${className}`}>
       <div className={`relative z-10 ${bodyClassName}`}>{children}</div>
     </Component>
   );
 }
-
-
-

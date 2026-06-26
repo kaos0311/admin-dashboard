@@ -1,4 +1,4 @@
-import { badges } from "@/theme";
+import { actionButtonClass, badges } from "@/theme";
 
 export function formatIssueType(value?: string) {
   if (!value) return "Unknown Issue";
@@ -33,4 +33,8 @@ export function badgeClass(value?: string) {
     default:
       return badges.neutral;
   }
+}
+
+export function alertButtonClass(value?: string) {
+  return actionButtonClass(value);
 }

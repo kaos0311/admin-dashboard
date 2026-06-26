@@ -1,41 +1,41 @@
 ﻿export const badges = {
   success:
-    "border border-emerald-400/25 bg-emerald-400/10 text-emerald-100",
+    "border border-[#6a9a6a]/30 bg-[#6a9a6a]/10 text-[#8aba8a]",
 
   warning:
-    "border border-amber-400/25 bg-amber-400/10 text-amber-100",
+    "border border-[#c49a4a]/30 bg-[#c49a4a]/10 text-[#d4b86a]",
 
   danger:
-    "border border-rose-400/25 bg-rose-400/10 text-rose-100",
+    "border border-[#b84a4a]/30 bg-[#b84a4a]/10 text-[#d47a7a]",
 
   info:
-    "border border-cyan-400/25 bg-cyan-400/10 text-cyan-100",
+    "border border-[#7a9a5e]/30 bg-[#7a9a5e]/10 text-[#9aba7e]",
 
   neutral:
-    "border border-white/10 bg-white/[0.06] text-slate-300",
+    "border border-[#3a3a3a] bg-[#222222] text-[#b8b8b8]",
 
   active:
-    "border border-cyan-300/25 bg-cyan-300/10 text-cyan-100",
+    "border border-[#8aaa6e]/30 bg-[#8aaa6e]/10 text-[#9aba7e]",
 
   kpiCard: {
-    neutral: "border-white/10 bg-neutral-950 text-white",
-    cyan: "border-cyan-500/30 bg-cyan-500/10 text-cyan-300",
-    red: "border-red-500/30 bg-red-500/10 text-red-300",
-    emerald: "border-emerald-500/30 bg-emerald-500/10 text-emerald-300",
-    yellow: "border-yellow-500/30 bg-yellow-500/10 text-yellow-300",
+    neutral: "border-[#3a3a3a] bg-[#1c1c1c] text-[#ececec]",
+    cyan: "border-[#7a9a5e]/30 bg-[#7a9a5e]/10 text-[#9aba7e]",
+    red: "border-[#b84a4a]/30 bg-[#b84a4a]/10 text-[#d47a7a]",
+    emerald: "border-[#6a9a6a]/30 bg-[#6a9a6a]/10 text-[#8aba8a]",
+    yellow: "border-[#c49a4a]/30 bg-[#c49a4a]/10 text-[#d4b86a]",
   },
 
   kpiIcon: {
-    neutral: "border-white/10 bg-white/5 text-neutral-400",
-    cyan: "border-cyan-500/20 bg-cyan-500/10 text-cyan-300",
-    red: "border-red-500/20 bg-red-500/10 text-red-300",
-    emerald: "border-emerald-500/20 bg-emerald-500/10 text-emerald-300",
-    yellow: "border-yellow-500/20 bg-yellow-500/10 text-yellow-300",
+    neutral: "border-[#3a3a3a] bg-[#222222] text-[#888888]",
+    cyan: "border-[#7a9a5e]/25 bg-[#7a9a5e]/10 text-[#9aba7e]",
+    red: "border-[#b84a4a]/25 bg-[#b84a4a]/10 text-[#d47a7a]",
+    emerald: "border-[#6a9a6a]/25 bg-[#6a9a6a]/10 text-[#8aba8a]",
+    yellow: "border-[#c49a4a]/25 bg-[#c49a4a]/10 text-[#d4b86a]",
   },
+
   pulseDot:
-    "h-2 w-2 animate-pulse rounded-full bg-sky-200 shadow-[0_0_10px_rgba(186,230,253,0.9)]",
+    "h-2 w-2 animate-pulse rounded-full bg-[#9aba7e] shadow-[0_0_8px_rgba(154,186,126,0.6)]",
 
 } as const;
 
 export type BadgeKey = keyof typeof badges;
-

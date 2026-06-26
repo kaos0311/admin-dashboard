@@ -1,8 +1,10 @@
-﻿import { glass, typography } from "@/theme";
+import Link from "next/link";
+
+import { glass, typography } from "@/theme";
 
 import type { EquipmentRecall } from "../types";
 
-import { badgeClass } from "../utils/commandCenterFormat";
+import { alertButtonClass } from "../utils/commandCenterFormat";
 
 import { EmptyState } from "./EmptyState";
 
@@ -20,6 +22,7 @@ export function RecallList({ recalls }: RecallListProps) {
       {recalls.slice(0, 6).map((recall) => (
         <div
           key={recall.id}
+          id={`recall-${recall.id}`}
           className={`${glass.card} p-4`}
         >
           <div className="flex items-start justify-between gap-3">
@@ -30,27 +33,20 @@ export function RecallList({ recalls }: RecallListProps) {
 
               <p className="mt-1 text-sm text-neutral-400">
                 {recall.manufacturer || "Unknown manufacturer"}
-                {recall.model ? ` â€¢ ${recall.model}` : ""}
+                {recall.model ? ` - ${recall.model}` : ""}
               </p>
             </div>
 
-            <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${badgeClass(
-                recall.severity
-              )}`}
+            <Link
+              href={`/command-center?recall=${encodeURIComponent(recall.id)}#recall-${recall.id}`}
+              className={alertButtonClass(recall.severity)}
+              aria-label={`Open ${recall.severity || "unknown"} recall ${recall.recallTitle || recall.id}`}
             >
               {recall.severity || "unknown"}
-            </span>
+            </Link>
           </div>
         </div>
       ))}
     </div>
   );
 }
-
-
-
-
-
-
-

@@ -17,6 +17,7 @@ import {
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
+import { colors, glass, typography } from "@/theme";
 
 import { addTimelineEntry, writeAuditLog } from "../lib/patientActions";
 import {
@@ -492,13 +493,13 @@ export default function PatientDetailPage() {
           <button
             type="button"
             onClick={() => router.back()}
-            className="mb-4 inline-flex items-center gap-2 text-sm text-zinc-400 transition hover:text-white"
+            className={`mb-4 inline-flex items-center gap-2 text-sm ${typography.bodyMuted} transition hover:${colors.textPrimary}`}
           >
             <ArrowLeft className="h-4 w-4" />
             Back
           </button>
 
-          <p className="text-zinc-400">Patient record not found.</p>
+          <p className={typography.bodyMuted}>Patient record not found.</p>
         </GlassPanel>
       </PageShell>
     );
@@ -516,13 +517,13 @@ export default function PatientDetailPage() {
       />
 
       {message ? (
-        <div className="flex items-start justify-between gap-3 rounded-3xl border border-white/10 bg-white/[0.075] p-4 text-sm text-zinc-200 shadow-xl shadow-black/20 backdrop-blur-2xl">
+        <div className={`${glass.panelPadded} flex items-start justify-between gap-3 text-sm shadow-xl shadow-black/20 backdrop-blur-2xl`}>
           <p>{message}</p>
 
           <button
             type="button"
             onClick={() => setMessage("")}
-            className="rounded-xl p-1 text-zinc-400 transition hover:bg-white/10 hover:text-white"
+            className={`rounded-xl p-1 ${typography.bodyMuted} transition hover:${colors.surfaceHover} hover:${colors.textPrimary}`}
             aria-label="Dismiss message"
             title="Dismiss message"
           >
@@ -633,7 +634,7 @@ function PatientRecordTabs({
               key={tab.id}
               type="button"
               role="tab"
-              aria-selected={selected}
+              aria-selected={selected ? "true" : "false"}
               onClick={() => setActiveTab(tab.id)}
               className={[
                 "inline-flex min-h-11 min-w-0 items-center gap-2 rounded-2xl border px-4 py-2 text-sm font-semibold transition",
@@ -651,8 +652,3 @@ function PatientRecordTabs({
     </GlassPanel>
   );
 }
-
-
-
-
-

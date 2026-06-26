@@ -233,7 +233,7 @@ export function JarvisPanel({
   return (
     <section
       className={[
-        "relative mx-auto w-full max-w-5xl min-w-0 overflow-hidden rounded-[1.75rem]",
+        "relative w-full min-w-0 overflow-hidden rounded-[1.75rem]",
         glass.panel,
       ].join(" ")}
     >
@@ -290,7 +290,7 @@ export function JarvisPanel({
         </div>
       </header>
 
-      <div className={["relative flex h-[520px] min-w-0 flex-col", colors.surfaceInset].join(" ")}>
+      <div className={["relative flex h-[720px] min-w-0 flex-col", colors.surfaceInset].join(" ")}>
         <div className={["px-4 py-3 sm:px-5", colors.border, colors.overlay, "border-b"].join(" ")}>
           <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
             {QUICK_ACTIONS.map((action) => {

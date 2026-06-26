@@ -69,8 +69,7 @@ async function inspectAlerts(db: ReturnType<typeof getFirestore>): Promise<PhiSu
   const snap = await db
     .collection("phiAlerts")
     .where("status", "==", "open")
-    .orderBy("updatedAt", "desc")
-    .limit(40)
+    .limit(500)
     .get();
 
   if (snap.empty) {
@@ -78,7 +77,23 @@ async function inspectAlerts(db: ReturnType<typeof getFirestore>): Promise<PhiSu
     return [];
   }
 
-  return snap.docs.map((doc) => {
+  return snap.docs
+    .sort((left, right) => {
+      const leftUpdatedAt = left.get("updatedAt");
+      const rightUpdatedAt = right.get("updatedAt");
+      const leftMillis =
+        leftUpdatedAt && typeof leftUpdatedAt.toMillis === "function"
+          ? leftUpdatedAt.toMillis()
+          : 0;
+      const rightMillis =
+        rightUpdatedAt && typeof rightUpdatedAt.toMillis === "function"
+          ? rightUpdatedAt.toMillis()
+          : 0;
+
+      return rightMillis - leftMillis;
+    })
+    .slice(0, 40)
+    .map((doc) => {
     const data = doc.data();
     const findings = Array.isArray(data.findings) ? data.findings : [];
     return {

@@ -225,7 +225,7 @@ export default function HospiceReportPage() {
                     <HospicePatientGrid patients={visiblePatients} />
                   </>
                 ) : (
-                  <div className={`${typography.bodyMuted} rounded-2xl border border-white/10 bg-white/[0.04] p-5`}>
+                  <div className={`${typography.bodyMuted} ${glass.insetPadded}`}>
                     Loading records...
                   </div>
                 )}

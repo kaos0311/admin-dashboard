@@ -1,4 +1,5 @@
-﻿import type { ReactNode } from "react";
+import type { ReactNode } from "react";
+import Link from "next/link";
 
 import {
   AlertTriangle,
@@ -7,7 +8,7 @@ import {
   FileText,
 } from "lucide-react";
 
-import { tiles, typography } from "@/theme";
+import { colors, metricActionButtonClass, tiles, typography } from "@/theme";
 
 import { formatCount } from "../analytics-utils";
 
@@ -38,6 +39,8 @@ export function AnalyticsStatGrid({
         value={selectedRows}
         loading={loading}
         icon={<BarChart3 className="h-5 w-5" aria-hidden="true" />}
+        href="#analytics-breakdown"
+        tone="blue"
       />
 
       <StatCard
@@ -45,6 +48,8 @@ export function AnalyticsStatGrid({
         value={totalFiles}
         loading={loading}
         icon={<FileText className="h-5 w-5" aria-hidden="true" />}
+        href="#analytics-sources"
+        tone="blue"
       />
 
       <StatCard
@@ -52,6 +57,8 @@ export function AnalyticsStatGrid({
         value={unknownRows}
         loading={loading}
         icon={<AlertTriangle className="h-5 w-5" aria-hidden="true" />}
+        href="#analytics-breakdown"
+        tone="yellow"
       />
 
       <StatCard
@@ -59,6 +66,8 @@ export function AnalyticsStatGrid({
         value={knownRows}
         loading={loading}
         icon={<CheckCircle2 className="h-5 w-5" aria-hidden="true" />}
+        href="#analytics-breakdown"
+        tone="success"
       />
     </section>
   );
@@ -69,21 +78,26 @@ type StatCardProps = {
   value: number;
   loading: boolean;
   icon: ReactNode;
+  href: string;
+  tone: string;
 };
 
-function StatCard({ title, value, loading, icon }: StatCardProps) {
+function StatCard({ title, value, loading, icon, href, tone }: StatCardProps) {
   return (
-    <article className={[tiles.base, "min-w-0 p-4 sm:p-5"].join(" ")}>
+    <Link
+      href={href}
+      className={[tiles.base, tiles.compact, tiles.hover, "min-h-[10.75rem] min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a9a5e]/40"].join(" ")}
+    >
       <div className="flex min-w-0 items-start gap-3">
         <div
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/10 text-cyan-200"
+          className={["flex h-10 w-10 shrink-0 items-center justify-center rounded-xl", colors.neutral].join(" ")}
           aria-hidden="true"
         >
           {icon}
         </div>
 
         <div className="min-w-0 flex-1 pt-0.5">
-          <p className={[typography.bodyMuted, "break-words leading-4"].join(" ")}>
+          <p className={tiles.metricLabel} title={title}>
             {title}
           </p>
 
@@ -104,9 +118,10 @@ function StatCard({ title, value, loading, icon }: StatCardProps) {
           </p>
         </div>
       </div>
-    </article>
+
+      <span className={metricActionButtonClass(tone)}>
+        Open
+      </span>
+    </Link>
   );
 }
-
-
-

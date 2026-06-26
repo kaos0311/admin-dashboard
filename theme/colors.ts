@@ -1,102 +1,95 @@
 export const colors = {
+  /* ---- Background ---- */
   app:
-    "relative isolate overflow-x-hidden bg-[radial-gradient(circle_at_50%_0%,rgba(34,211,238,0.13),transparent_34%),radial-gradient(circle_at_0%_20%,rgba(14,165,233,0.10),transparent_28%),radial-gradient(circle_at_100%_18%,rgba(99,102,241,0.12),transparent_30%),linear-gradient(135deg,#020617_0%,#06111f_44%,#020617_100%)]",
-
-  grid:
-    "pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(to_right,rgba(148,163,184,0.07)_1px,transparent_1px),linear-gradient(to_bottom,rgba(148,163,184,0.07)_1px,transparent_1px)] bg-[size:48px_48px] opacity-30",
-
-  vignette:
-    "pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.34)_70%,rgba(0,0,0,0.78)_100%)]",
-
-  textPrimary: "text-white",
-  textSecondary: "text-slate-300",
-  textMuted: "text-slate-400",
-  textFaint: "text-slate-500",
-  textInverse: "text-slate-950",
-  textDisabled: "text-white/50",
-  textInfo: "text-cyan-200",
-  textSuccess: "text-emerald-200",
-  textWarning: "text-amber-200",
-  textDanger: "text-rose-300",
-
-  border: "border-white/10",
-  borderStrong: "border-white/15",
-  borderMuted: "border-white/[0.06]",
-
-  surface:
-    "bg-white/[0.045]",
-
-  surfaceHover:
-    "hover:bg-white/[0.07]",
-
-  surfaceStrong:
-    "bg-white/[0.08]",
-
-  surfaceInset:
-    "bg-black/25",
-
-  surfaceInput:
-    "bg-black/45",
-
-  surfaceInputFocus:
-    "focus:bg-black/55",
+    "bg-[#141414] text-[#ececec]",
 
   adminShell:
-    "bg-[#07090d] text-white",
+    "bg-[#141414] text-[#ececec]",
 
+  /* ---- Text ---- */
+  textPrimary: "text-[#ececec]",
+  textSecondary: "text-[#b8b8b8]",
+  textMuted: "text-[#888888]",
+  textFaint: "text-[#606060]",
+  textInverse: "text-[#141414]",
+  textDisabled: "text-[#ececec]/40",
+  textInfo: "text-[#7a9a5e]",
+  textSuccess: "text-[#6a9a6a]",
+  textWarning: "text-[#c49a4a]",
+  textDanger: "text-[#b84a4a]",
+
+  /* ---- Borders ---- */
+  border: "border-[#3a3a3a]",
+  borderStrong: "border-[#4a4a4a]",
+  borderMuted: "border-[#2a2a2a]",
+
+  /* ---- Surfaces ---- */
+  surface:
+    "bg-[#222222]",
+  surfaceHover:
+    "hover:bg-[#2a2a2a]",
+  surfaceStrong:
+    "bg-[#2e2e2e]",
+  surfaceInset:
+    "bg-[#181818] shadow-inner shadow-black/40",
+
+  surfaceInput:
+    "bg-[#181818]",
+  surfaceInputFocus:
+    "focus:bg-[#1e1e1e]",
+
+  /* ---- Overlay ---- */
   overlay:
-    "bg-slate-950/70",
+    "bg-black/70",
 
+  /* ---- Decorative backgrounds ---- */
+  grid:
+    "pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:48px_48px] opacity-20",
+
+  vignette:
+    "pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.25)_70%,rgba(0,0,0,0.5)_100%)]",
+
+  /* ---- Shadows ---- */
   shadow:
-    "shadow-xl shadow-black/25",
-
+    "shadow-lg shadow-black/30",
   shadowStrong:
-    "shadow-2xl shadow-black/35",
+    "shadow-2xl shadow-black/50",
 
+  /* ---- Semantic colors ---- */
   success:
-    "border-emerald-400/25 bg-emerald-400/10 text-emerald-100",
-
+    "border-[#6a9a6a]/30 bg-[#6a9a6a]/10 text-[#8aba8a]",
   warning:
-    "border-amber-400/25 bg-amber-400/10 text-amber-100",
-
+    "border-[#c49a4a]/30 bg-[#c49a4a]/10 text-[#d4b86a]",
   warningBanner:
-    "border-amber-300/10 bg-amber-500/10 text-amber-100",
-
+    "border-[#c49a4a]/15 bg-[#c49a4a]/8 text-[#d4b86a]",
   danger:
-    "border-rose-400/25 bg-rose-400/10 text-rose-100",
-
+    "border-[#b84a4a]/30 bg-[#b84a4a]/10 text-[#d47a7a]",
   info:
-    "border-cyan-400/25 bg-cyan-400/10 text-cyan-100",
-
+    "border-[#7a9a5e]/30 bg-[#7a9a5e]/10 text-[#9aba7e]",
   neutral:
-    "border-white/10 bg-white/[0.06] text-slate-300",
+    "border-[#3a3a3a] bg-[#222222] text-[#b8b8b8]",
 
+  /* ---- Badges ---- */
   successBadge:
-    "border-emerald-400/25 bg-emerald-400/10 text-emerald-100",
-
+    "border-[#6a9a6a]/30 bg-[#6a9a6a]/10 text-[#8aba8a]",
   warningBadge:
-    "border-amber-400/25 bg-amber-400/10 text-amber-100",
-
+    "border-[#c49a4a]/30 bg-[#c49a4a]/10 text-[#d4b86a]",
   dangerBadge:
-    "border-rose-400/25 bg-rose-400/10 text-rose-100",
-
+    "border-[#b84a4a]/30 bg-[#b84a4a]/10 text-[#d47a7a]",
   infoBadge:
-    "border-cyan-400/25 bg-cyan-400/10 text-cyan-100",
-
+    "border-[#7a9a5e]/30 bg-[#7a9a5e]/10 text-[#9aba7e]",
   neutralBadge:
-    "border-white/10 bg-white/[0.06] text-slate-300",
-
+    "border-[#3a3a3a] bg-[#222222] text-[#b8b8b8]",
   activeBadge:
-    "border-cyan-300/25 bg-cyan-300/10 text-cyan-100",
+    "border-[#8aaa6e]/30 bg-[#8aaa6e]/10 text-[#9aba7e]",
 
+  /* ---- Pulse dots ---- */
   pulse:
-    "bg-cyan-300 shadow-[0_0_10px_rgba(125,211,252,0.9)]",
-
+    "bg-[#7a9a5e] shadow-[0_0_8px_rgba(122,154,94,0.6)]",
   dangerPulse:
-    "bg-rose-300 shadow-[0_0_10px_rgba(253,164,175,0.9)]",
-
+    "bg-[#b84a4a] shadow-[0_0_8px_rgba(184,74,74,0.6)]",
   successPulse:
-    "bg-emerald-300 shadow-[0_0_10px_rgba(110,231,183,0.9)]",
+    "bg-[#6a9a6a] shadow-[0_0_8px_rgba(106,154,106,0.6)]",
 } as const;
 
 export type ColorKey = keyof typeof colors;

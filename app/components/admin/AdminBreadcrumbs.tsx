@@ -23,7 +23,7 @@ export function AdminBreadcrumbs() {
     >
       <Link
         href="/command-center"
-        className="inline-flex items-center gap-1 transition hover:text-white"
+        className={`inline-flex items-center gap-1 transition hover:${colors.textPrimary}`}
       >
         <Home className="h-3.5 w-3.5" aria-hidden="true" />
         Command Center
@@ -37,7 +37,7 @@ export function AdminBreadcrumbs() {
           return (
             <span key={`${part}-${href}`} className="inline-flex items-center gap-1">
               <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
-              <Link href={href} className="transition hover:text-white">
+              <Link href={href} className={`transition hover:${colors.textPrimary}`}>
                 {toTitle(part)}
               </Link>
             </span>

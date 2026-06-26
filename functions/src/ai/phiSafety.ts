@@ -49,7 +49,7 @@ const PHI_PATTERNS: PhiPattern[] = [
     type: "Insurance Identifier",
     severity: "high",
     regex:
-      /\b(?:Policy|Member|Insurance|Medicare|Medicaid|Subscriber)\s*(?:ID|#|Number)?\s*[:\-]?\s*[A-Z0-9]{6,24}\b/gi,
+      /\b(?:Policy|Member|Insurance|Medicare|Medicaid|Subscriber)\s*(?:(?:ID|#|Number|No\.?|Nbr)\s*[:\-]?|[:\-]\s*)[A-Z0-9][A-Z0-9-]{5,23}\b/gi,
     recommendation:
       "Remove or redact insurance identifiers from unsafe fields.",
   },

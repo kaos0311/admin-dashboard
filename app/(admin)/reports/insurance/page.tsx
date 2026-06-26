@@ -553,31 +553,41 @@ export default function InsuranceReportPage() {
       label: "Payer Records",
       value: bridge.payers.length.toLocaleString(),
       detail: "Fed by insurance master, patient profile, and rental imports.",
-      tone: badges.info,
+      tone: "info",
+      href: "#insurance-bridge-table",
+      actionLabel: "View Payer Records",
     },
     {
       label: "Coverage Records",
       value: bridge.coverageRecords.length.toLocaleString(),
       detail: "Patient coverage rows written by the same insurance file routes.",
-      tone: badges.success,
+      tone: "success",
+      href: "#insurance-bridge-table",
+      actionLabel: "View Coverage Records",
     },
     {
       label: "Pending Authorizations",
       value: openQueueItems.length.toLocaleString(),
       detail: "Open PAR and insurance queue records needing follow-up.",
-      tone: openQueueItems.length ? badges.warning : badges.success,
+      tone: openQueueItems.length ? "warning" : "success",
+      href: "#insurance-queue-issues",
+      actionLabel: "View Authorizations",
     },
     {
       label: "Coverage Issues",
       value: coverageIssues.length.toLocaleString(),
       detail: "Inactive, unknown, missing, expired, or denied coverage flags.",
-      tone: coverageIssues.length ? badges.danger : badges.success,
+      tone: coverageIssues.length ? "danger" : "success",
+      href: "#insurance-bridge-table",
+      actionLabel: "View Coverage Issues",
     },
     {
       label: "Missing Documentation",
       value: documentationGaps.length.toLocaleString(),
       detail: "CMN, note, missing-document, and support-file queue signals.",
-      tone: documentationGaps.length ? badges.warning : badges.success,
+      tone: documentationGaps.length ? "warning" : "success",
+      href: "#insurance-queue-issues",
+      actionLabel: "View Missing Docs",
     },
   ];
 
@@ -588,6 +598,9 @@ export default function InsuranceReportPage() {
       description:
         "Insurance company and payer master rows from insurance uploads.",
       icon: WalletCards,
+      tone: "info",
+      href: "#insurance-bridge-table",
+      actionLabel: "View Payers",
     },
     {
       label: "Authorization Issues",
@@ -595,6 +608,9 @@ export default function InsuranceReportPage() {
       description:
         "Open insurance queue and patient authorization records from PAR routes.",
       icon: AlertTriangle,
+      tone: openQueueItems.length ? "warning" : "success",
+      href: "#insurance-queue-issues",
+      actionLabel: "View Issues",
     },
     {
       label: "Coverage Verification",
@@ -602,6 +618,9 @@ export default function InsuranceReportPage() {
       description:
         "Coverage records requiring verification or payer cleanup.",
       icon: BadgeCheck,
+      tone: coverageIssues.length ? "danger" : "success",
+      href: "#insurance-bridge-table",
+      actionLabel: "Verify Coverage",
     },
     {
       label: "Insurance Patients",
@@ -609,8 +628,18 @@ export default function InsuranceReportPage() {
       description:
         "Patient-level insurance bridge records created by upload processors.",
       icon: ClipboardCheck,
+      tone: "success",
+      href: "#insurance-bridge-table",
+      actionLabel: "View Patients",
     },
   ];
+
+  function metricButtonTone(tone: string): string {
+    if (tone === "danger") return "text-red-300";
+    if (tone === "warning") return "text-amber-200";
+    if (tone === "success") return "text-emerald-300";
+    return "text-sky-300";
+  }
 
   async function handleRunInsuranceWebScan() {
     if (jarvisInsuranceScanLoading) return;
@@ -709,7 +738,16 @@ export default function InsuranceReportPage() {
                   {item.label}
                 </p>
 
-                <span className={`${item.tone} shrink-0`}>{item.value}</span>
+                <a
+                  href={item.href}
+                  aria-label={`${item.actionLabel}: ${item.value}`}
+                  className={`${buttons.secondary} shrink-0 whitespace-nowrap px-3 py-2 text-xs`}
+                >
+                  <span className={`tabular-nums ${metricButtonTone(item.tone)}`}>
+                    {item.value}
+                  </span>
+                  <span>{item.actionLabel}</span>
+                </a>
               </div>
 
               <p className={`mt-4 ${typography.bodyMuted}`}>{item.detail}</p>
@@ -731,13 +769,20 @@ export default function InsuranceReportPage() {
                 </div>
 
                 <div className="mt-4 flex items-start justify-between gap-3">
-                  <h2 className="text-sm font-semibold text-white">
+                  <h2 className={typography.bodyStrong}>
                     {area.label}
                   </h2>
 
-                  <span className={badges.info}>
-                    {area.value.toLocaleString()}
-                  </span>
+                  <a
+                    href={area.href}
+                    aria-label={`${area.actionLabel}: ${area.value.toLocaleString()}`}
+                    className={`${buttons.secondary} shrink-0 whitespace-nowrap px-3 py-2 text-xs`}
+                  >
+                    <span className={`tabular-nums ${metricButtonTone(area.tone)}`}>
+                      {area.value.toLocaleString()}
+                    </span>
+                    <span>{area.actionLabel}</span>
+                  </a>
                 </div>
 
                 <p className={`mt-2 ${typography.bodyMuted}`}>
@@ -817,7 +862,7 @@ export default function InsuranceReportPage() {
                     </div>
 
                     <div className="min-w-0">
-                      <h2 className={typography.sectionTitle}>
+                      <h2 id="insurance-bridge-table" className={typography.sectionTitle}>
                         Insurance Upload Bridge
                       </h2>
                       <p className={typography.bodyMuted}>
@@ -864,7 +909,7 @@ export default function InsuranceReportPage() {
                         payerSummaries.slice(0, 60).map((payer) => (
                           <tr key={payer.payerName} className={tables.row}>
                             <td className={tables.cell}>
-                              <span className="font-semibold text-white">
+                              <span className={typography.bodyStrong}>
                                 {payer.payerName}
                               </span>
                             </td>
@@ -878,13 +923,23 @@ export default function InsuranceReportPage() {
                               {payer.activeCount.toLocaleString()}
                             </td>
                             <td className={tables.cell}>
-                              <span
-                                className={
-                                  payer.issueCount ? badges.warning : badges.success
+                              <button
+                                type="button"
+                                className={`${buttons.secondary} px-3 py-2 text-xs`}
+                                onClick={() =>
+                                  setSelectedPayerReportName(payer.payerName)
                                 }
+                                aria-label={`Open issue report for ${payer.payerName}: ${payer.issueCount.toLocaleString()} issues`}
                               >
-                                {payer.issueCount.toLocaleString()}
-                              </span>
+                                <span
+                                  className={`tabular-nums ${
+                                    payer.issueCount ? "text-amber-200" : "text-emerald-300"
+                                  }`}
+                                >
+                                  {payer.issueCount.toLocaleString()}
+                                </span>
+                                <span>Open Issues</span>
+                              </button>
                             </td>
                             <td className={tables.cell}>{payer.source}</td>
                             <td className={tables.cell}>
@@ -969,7 +1024,7 @@ export default function InsuranceReportPage() {
                           <div className="p-4">
                             <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
                               <div className="min-w-0">
-                                <h4 className="break-words text-sm font-semibold text-white">
+                                <h4 className={typography.bodyStrong}>
                                   {issue.title}
                                 </h4>
                                 <p className={`mt-2 ${typography.smallMuted}`}>
@@ -1016,7 +1071,7 @@ export default function InsuranceReportPage() {
                 </div>
 
                 <div className="min-w-0">
-                  <h2 className={typography.sectionTitle}>Queue Feed</h2>
+                  <h2 id="insurance-queue-issues" className={typography.sectionTitle}>Queue Feed</h2>
                   <p className={typography.bodyMuted}>
                     Insurance follow-up from upload-created queues.
                   </p>
@@ -1035,7 +1090,7 @@ export default function InsuranceReportPage() {
                       className={`${glass.insetPadded} ${typography.body}`}
                     >
                       <div className="flex min-w-0 items-start justify-between gap-3">
-                        <span className="min-w-0 break-words font-semibold text-white">
+                        <span className={`min-w-0 break-words ${typography.bodyStrong}`}>
                           {readString(item.issue) ||
                             readString(item.queueType) ||
                             "Insurance review"}

@@ -1,6 +1,6 @@
 "use client";
 
-import { typography } from "@/theme";
+import { colors, metricActionButtonClass, tiles, typography } from "@/theme";
 import {
   AlertTriangle,
   Boxes,
@@ -39,6 +39,7 @@ type StatCardConfig = {
   value: number;
   icon: StatIcon;
   action: ProductStatsAction;
+  tone: string;
 };
 
 export function ProductStatsGrid({
@@ -49,15 +50,15 @@ export function ProductStatsGrid({
   onAction: (action: ProductStatsAction) => void;
 }) {
   const cards: StatCardConfig[] = [
-    { label: "Loaded Products", value: stats.total, icon: "box", action: "all" },
-    { label: "Active", value: stats.active, icon: "box", action: "active" },
-    { label: "Rental Items", value: stats.rental, icon: "money", action: "rental" },
-    { label: "Serialized", value: stats.serialized, icon: "clipboard", action: "serialized" },
-    { label: "Inactive", value: stats.inactive, icon: "box", action: "inactive" },
-    { label: "Discontinued", value: stats.discontinued, icon: "warning", action: "discontinued" },
-    { label: "Recall Flagged", value: stats.recall, icon: "warning", action: "recall" },
-    { label: "High Risk", value: stats.highRisk, icon: "risk", action: "high-risk" },
-    { label: "Needs Cleanup", value: stats.missingInfo, icon: "risk", action: "missing-info" },
+    { label: "Loaded Products", value: stats.total, icon: "box", action: "all", tone: "blue" },
+    { label: "Active", value: stats.active, icon: "box", action: "active", tone: "success" },
+    { label: "Rental Items", value: stats.rental, icon: "money", action: "rental", tone: "blue" },
+    { label: "Serialized", value: stats.serialized, icon: "clipboard", action: "serialized", tone: "blue" },
+    { label: "Inactive", value: stats.inactive, icon: "box", action: "inactive", tone: "neutral" },
+    { label: "Discontinued", value: stats.discontinued, icon: "warning", action: "discontinued", tone: "red" },
+    { label: "Recall Flagged", value: stats.recall, icon: "warning", action: "recall", tone: "red" },
+    { label: "High Risk", value: stats.highRisk, icon: "risk", action: "high-risk", tone: "red" },
+    { label: "Needs Cleanup", value: stats.missingInfo, icon: "risk", action: "missing-info", tone: "yellow" },
   ];
 
   return (
@@ -68,6 +69,7 @@ export function ProductStatsGrid({
           label={card.label}
           value={card.value}
           icon={card.icon}
+          tone={card.tone}
           onClick={() => onAction(card.action)}
         />
       ))}
@@ -79,11 +81,13 @@ function StatCard({
   label,
   value,
   icon,
+  tone,
   onClick,
 }: {
   label: string;
   value: number;
   icon: StatIcon;
+  tone: string;
   onClick: () => void;
 }) {
   const Icon =
@@ -101,21 +105,28 @@ function StatCard({
     <button
       type="button"
       onClick={onClick}
-      className="min-w-0 overflow-visible rounded-3xl border border-white/10 bg-white/[0.07] p-5 text-left shadow-2xl shadow-black/25 backdrop-blur-2xl transition hover:border-cyan-300/30 hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50"
+      className={`${tiles.base} ${tiles.compact} ${tiles.hover} min-h-[10.75rem] min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a9a5e]/40`}
       aria-label={`Show ${label.toLowerCase()} products`}
     >
-      <div className="flex min-w-0 items-center gap-3">
-        <div className="shrink-0 rounded-2xl border border-white/10 bg-white/[0.08] p-3 shadow-inner shadow-white/5">
+      <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
+        <div className={["shrink-0 rounded-2xl p-3 shadow-inner shadow-black/30", colors.neutral].join(" ")}>
           <Icon className="h-5 w-5" aria-hidden="true" />
         </div>
 
-        <div className="min-w-0">
-          <p className={`truncate text-sm ${typography.bodyMuted}`}>{label}</p>
-          <p className="truncate text-2xl font-bold text-white">
-            {Number.isFinite(value) ? value.toLocaleString() : "0"}
-          </p>
-        </div>
       </div>
+
+      <div className="mt-4 min-w-0">
+        <p className={['truncate', typography.metricCompact].join(' ')}>
+          {Number.isFinite(value) ? value.toLocaleString() : "0"}
+        </p>
+        <p className="mt-2 min-w-0 truncate text-[0.7rem] font-semibold uppercase leading-5 text-[#888888]" title={label}>
+          {label}
+        </p>
+      </div>
+
+      <span className={metricActionButtonClass(tone)}>
+        Open
+      </span>
     </button>
   );
 }

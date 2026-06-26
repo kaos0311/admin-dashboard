@@ -113,7 +113,7 @@ export function MiniSelect({
   const id = `filter-${label.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`;
 
   return (
-    <div className="min-w-0">
+    <div className="min-w-[18rem] max-w-full">
       <label
         htmlFor={id}
         className={typography.caption}
@@ -128,7 +128,7 @@ export function MiniSelect({
         value={value}
         aria-label={label}
         onChange={(event) => onChange(event.target.value)}
-        className={forms.select}
+        className={`${forms.select} text-xs`}
       >
         {options.map(([optionValue, optionLabel]) => (
           <option key={optionValue} value={optionValue}>

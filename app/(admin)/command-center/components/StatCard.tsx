@@ -1,34 +1,41 @@
 import type { ReactNode } from "react";
 
-import { badges, glass, typography } from "@/theme";
+import Link from "next/link";
+
+import { colors, glass, metricActionButtonClass, tiles, typography } from "@/theme";
 
 type StatCardProps = {
   title: string;
   value: number;
   icon: ReactNode;
   tone: "red" | "orange" | "blue" | "yellow";
+  href: string;
 };
 
-export function StatCard({ title, value, icon, tone }: StatCardProps) {
-  const toneClass =
-    tone === "red"
-      ? badges.danger
-      : tone === "orange"
-        ? badges.warning
-        : tone === "yellow"
-          ? badges.warning
-          : badges.info;
+function toneClass(tone: StatCardProps["tone"]) {
+  if (tone === "red") return colors.danger;
+  if (tone === "orange" || tone === "yellow") return colors.warning;
+  return colors.info;
+}
 
+export function StatCard({ title, value, icon, tone, href }: StatCardProps) {
   return (
-    <div className={glass.cardPadded}>
-      <div
-        className={`mb-4 flex h-11 w-11 items-center justify-center rounded-2xl ${toneClass}`}
-      >
+    <Link
+      href={href}
+      className={[
+        glass.cardPadded,
+        "group flex min-h-[10.75rem] min-w-0 flex-col transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#7a9a5e]/40",
+      ].join(" ")}
+    >
+      <div className={["mb-4 flex h-11 w-11 items-center justify-center rounded-2xl", toneClass(tone)].join(" ")}>
         {icon}
       </div>
 
-      <p className={typography.bodyMuted}>{title}</p>
+      <p className={tiles.metricLabel} title={title}>{title}</p>
       <p className={`${typography.metric} mt-2`}>{value}</p>
-    </div>
+      <span className={metricActionButtonClass(tone)}>
+        Open details
+      </span>
+    </Link>
   );
 }

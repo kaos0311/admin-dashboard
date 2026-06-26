@@ -11,7 +11,7 @@ import {
   UserRoundSearch,
 } from "lucide-react";
 
-import { badges, buttons, colors, glass, typography } from "@/theme";
+import { colors, glass, metricActionButtonClass, tiles, typography } from "@/theme";
 
 import type {
   ProductionAlert,
@@ -25,16 +25,16 @@ type ProductionReadinessPanelProps = {
 };
 
 function scoreTone(score: number) {
-  if (score >= 85) return badges.active;
-  if (score >= 65) return badges.info;
-  if (score >= 45) return badges.warning;
-  return badges.danger;
+  if (score >= 85) return colors.success;
+  if (score >= 65) return colors.info;
+  if (score >= 40) return colors.warning;
+  return colors.danger;
 }
 
 function severityTone(severity: ProductionAlert["severity"]) {
-  if (severity === "critical") return badges.danger;
-  if (severity === "high") return badges.warning;
-  return badges.info;
+  if (severity === "critical") return colors.danger;
+  if (severity === "high") return colors.warning;
+  return colors.info;
 }
 
 function alertIcon(area: ProductionAlert["area"]) {
@@ -52,26 +52,36 @@ function metricCards(stats: ProductionReadinessStats) {
       label: "Unsigned",
       value: stats.missingSignatures,
       detail: "Delivered tickets",
+      href: "/reports/delivery?focus=missing-signatures",
+      tone: "critical",
     },
     {
       label: "Unassigned",
       value: stats.unassignedDeliveries,
       detail: "Active deliveries",
+      href: "/reports/delivery?focus=unassigned",
+      tone: "high",
     },
     {
       label: "Low Stock",
       value: stats.lowStockItems,
       detail: "At threshold",
+      href: "/inventory?focus=low-stock",
+      tone: "high",
     },
     {
       label: "Import Issues",
       value: stats.failedImports,
       detail: "Need review",
+      href: "/reports/upload?focus=failed-imports",
+      tone: "high",
     },
     {
       label: "Patient Gaps",
       value: stats.patientIdentityGaps,
       detail: "Name/DOB matching",
+      href: "/reports/patients?focus=identity-gaps",
+      tone: "high",
     },
   ];
 }
@@ -107,14 +117,23 @@ export function ProductionReadinessPanel({
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
         {metricCards(stats).map((metric) => (
-          <div
+          <Link
             key={metric.label}
-            className={["rounded-2xl border p-4", colors.border, colors.surfaceInset].join(" ")}
+            href={metric.href}
+            className={[
+              "flex min-h-[10.75rem] flex-col rounded-2xl border p-4 transition hover:-translate-y-0.5 focus:outline-none focus:ring-2 focus:ring-[#7a9a5e]/40",
+              metric.value > 0
+                ? severityTone(metric.tone as ProductionAlert["severity"])
+                : colors.neutral,
+            ].join(" ")}
           >
-            <p className={typography.caption}>{metric.label}</p>
+            <p className={tiles.metricLabel} title={metric.label}>{metric.label}</p>
             <p className={`${typography.metricCompact} mt-2`}>{metric.value}</p>
             <p className={["mt-1", typography.smallMuted].join(" ")}>{metric.detail}</p>
-          </div>
+            <span className={metricActionButtonClass(metric.value > 0 ? metric.tone : undefined)}>
+              Open
+            </span>
+          </Link>
         ))}
       </div>
 
@@ -130,7 +149,7 @@ export function ProductionReadinessPanel({
             return (
               <article
                 key={alert.id}
-                className={["rounded-2xl border p-4", severityTone(alert.severity)].join(" ")}
+                className={["flex min-h-[10.75rem] flex-col rounded-2xl border p-4", severityTone(alert.severity)].join(" ")}
               >
                 <div className="flex min-w-0 items-start gap-3">
                   <Icon className="mt-0.5 h-5 w-5 shrink-0" />
@@ -142,7 +161,7 @@ export function ProductionReadinessPanel({
 
                 <Link
                   href={alert.href}
-                  className={[buttons.secondary, "mt-4 w-full justify-center"].join(" ")}
+                  className={[metricActionButtonClass(alert.severity), "justify-center"].join(" ")}
                 >
                   <AlertTriangle className="h-4 w-4" />
                   {alert.actionLabel}

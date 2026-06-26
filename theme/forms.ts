@@ -1,45 +1,44 @@
-﻿import { glass } from "./glass";
+﻿import { surfaces } from "./surfaces";
 import { typography } from "./typography";
 
 export const forms = {
-  input: glass.inputPadded,
+  input: surfaces.inputPadded,
 
-  textarea: glass.textarea,
+  textarea: surfaces.textarea,
 
   textareaCompact:
     [
       "min-h-28",
-      glass.inputPadded,
+      surfaces.inputPadded,
     ].join(" "),
 
-  select: glass.select,
+  select: surfaces.select,
 
   label: typography.formLabel,
 
   helper: typography.helper,
 
   error:
-    "text-xs font-medium text-rose-300",
+    "text-xs font-medium text-[#d47a7a]",
 
   field:
     "space-y-2",
+
   inputIconLeft:
     [
-      glass.inputPadded,
+      surfaces.inputPadded,
       "pl-11",
     ].join(" "),
 
   inputIconBoth:
     [
-      glass.inputPadded,
+      surfaces.inputPadded,
       "pl-11 pr-12",
     ].join(" "),
 
   fileInput:
-    "block w-full rounded-2xl border border-white/10 bg-black/45 px-4 py-3 text-sm text-slate-300 file:mr-4 file:rounded-xl file:border-0 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-black disabled:opacity-60",
+    "block w-full rounded-xl border border-[#3a3a3a] bg-[#181818] px-4 py-3 text-sm text-[#b8b8b8] file:mr-4 file:rounded-lg file:border-0 file:bg-[#ececec] file:px-4 file:py-2 file:text-sm file:font-medium file:text-[#141414] disabled:opacity-60",
 
 } as const;
 
 export type FormKey = keyof typeof forms;
-
-

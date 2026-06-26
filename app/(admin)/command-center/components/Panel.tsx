@@ -3,15 +3,16 @@ import type { ReactNode } from "react";
 import { glass, typography } from "@/theme";
 
 type PanelProps = {
+  id?: string;
   title: string;
   subtitle: string;
   icon: ReactNode;
   children: ReactNode;
 };
 
-export function Panel({ title, subtitle, icon, children }: PanelProps) {
+export function Panel({ id, title, subtitle, icon, children }: PanelProps) {
   return (
-    <section className={glass.cardPadded}>
+    <section id={id} className={glass.cardPadded}>
       <div className="mb-5 flex items-start gap-3">
         <div className={glass.iconBoxSm}>{icon}</div>
 

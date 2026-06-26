@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-import { glass } from "@/theme";
+import { colors, glass } from "@/theme";
 
 type ModalShellProps = {
   open: boolean;
@@ -26,7 +26,7 @@ export function ModalShell({
       role="dialog"
       aria-modal="true"
       aria-labelledby={labelledBy}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 px-4 backdrop-blur-md"
+      className={`fixed inset-0 z-50 flex items-center justify-center ${colors.overlay} px-4 backdrop-blur-md`}
     >
       <section
         className={`${glass.cardPadded} max-h-[90vh] w-full overflow-y-auto ${maxWidthClassName}`}

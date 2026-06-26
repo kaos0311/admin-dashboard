@@ -17,7 +17,7 @@ import {
 } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
-import { alerts, buttons, colors, typography } from "@/theme";
+import { alerts, buttons, colors, surfaces, typography } from "@/theme";
 
 type SafetyIssueKind = "phi" | "compliance" | "import";
 
@@ -276,17 +276,17 @@ export function JarvisSafetyInterlock() {
       role="dialog"
       aria-modal="true"
       aria-labelledby="jarvis-safety-title"
-      className="fixed inset-0 z-[250] flex items-center justify-center bg-black/80 px-4 backdrop-blur-md"
+      className={`fixed inset-0 z-[250] flex items-center justify-center ${colors.overlay} px-4 backdrop-blur-md`}
     >
-      <section className="max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border border-red-300/20 bg-[#090d14]/95 p-6 text-white shadow-2xl shadow-black/50">
+      <section className={`max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-3xl border ${colors.danger} ${surfaces.cardPadded} shadow-2xl shadow-black/50`}>
         <div className="flex items-start gap-4">
-          <div className="rounded-2xl border border-red-300/20 bg-red-500/15 p-3 text-red-100">
+          <div className={`rounded-2xl border ${colors.danger} p-3`}>
             {issueIcon(activeIssue.kind)}
           </div>
 
           <div className="min-w-0 flex-1">
             <p className={typography.eyebrow}>Jarvis Safety Interlock</p>
-            <h2 id="jarvis-safety-title" className="mt-2 text-2xl font-bold tracking-tight">
+            <h2 id="jarvis-safety-title" className={`mt-2 text-2xl font-bold tracking-tight ${colors.textPrimary}`}>
               {activeIssue.title}
             </h2>
             <p className={`mt-2 ${typography.bodyMuted}`}>
@@ -308,16 +308,16 @@ export function JarvisSafetyInterlock() {
           </p>
         </div>
 
-        <div className="mt-4 rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+        <div className={`mt-4 rounded-2xl border ${colors.border} ${colors.surfaceStrong} p-4`}>
           <div className="flex items-center gap-2">
-            <Wrench className="h-4 w-4 text-cyan-200" aria-hidden="true" />
+            <Wrench className={`h-4 w-4 ${colors.textInfo}`} aria-hidden="true" />
             <p className={typography.cardTitle}>Steps To Fix Before Proceeding</p>
           </div>
 
-          <ol className="mt-3 space-y-2 text-sm leading-6 text-slate-200">
+          <ol className={`mt-3 space-y-2 text-sm leading-6 ${colors.textSecondary}`}>
             {activeIssue.correctiveMeasures.map((measure, index) => (
               <li key={`${measure}-${index}`} className="flex gap-2">
-                <span className="font-semibold text-cyan-200">{index + 1}.</span>
+                <span className={`font-semibold ${colors.textInfo}`}>{index + 1}.</span>
                 <span>{measure}</span>
               </li>
             ))}

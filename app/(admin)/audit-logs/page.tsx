@@ -14,7 +14,7 @@ import {
   Shield,
 } from "lucide-react";
 
-import { colors, glass, typography } from "@/theme";
+import { badges, buttons, colors, glass, typography } from "@/theme";
 
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 
@@ -42,15 +42,16 @@ export default function AuditLogsPage() {
   const { loading: authLoading, isAdmin } =
     useAuthRole();
 
+  const canViewAuditLogs = !!isAdmin;
+
   const {
     logs,
     loading,
     refreshing,
+    purging,
     refresh,
-  } = useAuditLogs({
-    enabled:
-      !authLoading && isAdmin,
-  });
+    purgeCurrentAuditLogs,
+  } = useAuditLogs({ enabled: canViewAuditLogs });
 
   const [search, setSearch] =
     useState("");
@@ -330,7 +331,7 @@ export default function AuditLogsPage() {
 
           <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
             <div className="space-y-4">
-              <div className={"inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-slate-200 shadow-sm backdrop-blur-xl"}>
+              <div className={badges.info}>
                 <Shield className="h-3.5 w-3.5" />
 
                 Audit Intelligence
@@ -366,7 +367,7 @@ export default function AuditLogsPage() {
                 disabled={
                   !filteredLogs.length
                 }
-                className={`inline-flex items-center justify-center gap-2 rounded-2xl border border-white/10 bg-transparent px-4 py-2 text-sm font-semibold ${typography.bodyMuted} transition hover:bg-white/10 hover:text-white disabled:cursor-not-allowed disabled:opacity-50`}
+                className={buttons.ghost}
               >
                 <Download className="h-4 w-4" />
 
@@ -375,15 +376,15 @@ export default function AuditLogsPage() {
 
               <button
                 type="button"
-                onClick={refresh}
+                onClick={purgeCurrentAuditLogs}
                 disabled={
-                  refreshing
+                  purging
                 }
-                className={"inline-flex items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 py-3 text-sm font-bold text-slate-950 shadow-lg shadow-cyan-500/20 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-50"}
+                className={buttons.primary}
               >
                 <RefreshCw
                   className={`h-4 w-4 ${
-                    refreshing
+                    purging
                       ? "animate-spin"
                       : ""
                   }`}
@@ -395,7 +396,11 @@ export default function AuditLogsPage() {
           </div>
         </section>
 
-        <AuditStats logs={logs} />
+        <AuditStats
+          logs={logs}
+          onSeveritySelect={setSeverityFilter}
+          onLogSelect={setSelectedLogId}
+        />
 
         <AuditFilters
           search={search}
@@ -473,4 +478,3 @@ export default function AuditLogsPage() {
     </main>
   );
 }
-

@@ -51,9 +51,9 @@ export default function WipReportPage() {
 
         <section className={cn(glass.shell, spacing.section)}>
           <div className={cn(glass.panel, spacing.card)}>
-            <div className="h-4 w-40 animate-pulse rounded-full bg-white/10" />
-            <div className="mt-5 h-10 w-full max-w-xl animate-pulse rounded-2xl bg-white/10" />
-            <div className="mt-4 h-4 w-full max-w-2xl animate-pulse rounded-full bg-white/10" />
+            <div className={`h-4 w-40 animate-pulse rounded-full ${colors.surface} ${colors.surfaceHover}`} />
+            <div className={`mt-5 h-10 w-full max-w-xl animate-pulse rounded-2xl ${colors.surface} ${colors.surfaceHover}`} />
+            <div className={`mt-4 h-4 w-full max-w-2xl animate-pulse rounded-full ${colors.surface} ${colors.surfaceHover}`} />
           </div>
 
           <WipLoadingState />
@@ -92,7 +92,11 @@ export default function WipReportPage() {
       <section className={cn(glass.shell, spacing.section)}>
         <WipHero onRefresh={refresh} />
 
-        <WipStatGrid analytics={analytics} />
+        <WipStatGrid
+          analytics={analytics}
+          onSelectStatus={setStatus}
+          onSelectAging={setAging}
+        />
 
         <WipFilters
           search={search}

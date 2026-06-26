@@ -1,8 +1,10 @@
-﻿import { glass, typography } from "@/theme";
+import Link from "next/link";
+
+import { glass, typography } from "@/theme";
 
 import type { ComplianceIssue } from "../types";
 
-import { badgeClass, formatIssueType } from "../utils/commandCenterFormat";
+import { alertButtonClass, formatIssueType } from "../utils/commandCenterFormat";
 
 import { EmptyState } from "./EmptyState";
 
@@ -22,6 +24,7 @@ export function IssueList({ issues }: IssueListProps) {
       {issues.map((issue) => (
         <div
           key={issue.id}
+          id={`issue-${issue.id}`}
           className={`${glass.card} p-4`}
         >
           <div className="flex items-start justify-between gap-3">
@@ -32,17 +35,17 @@ export function IssueList({ issues }: IssueListProps) {
 
               <p className="mt-1 text-sm text-neutral-400">
                 {issue.patientName || "Unknown patient"}
-                {issue.dob ? ` â€¢ DOB: ${issue.dob}` : ""}
+                {issue.dob ? ` - DOB: ${issue.dob}` : ""}
               </p>
             </div>
 
-            <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${badgeClass(
-                issue.severity
-              )}`}
+            <Link
+              href={`/command-center?issue=${encodeURIComponent(issue.id)}#issue-${issue.id}`}
+              className={alertButtonClass(issue.severity)}
+              aria-label={`Open ${issue.severity || "unknown"} compliance issue ${formatIssueType(issue.issueType)}`}
             >
               {issue.severity || "unknown"}
-            </span>
+            </Link>
           </div>
 
           {issue.notes ? (
@@ -55,10 +58,3 @@ export function IssueList({ issues }: IssueListProps) {
     </div>
   );
 }
-
-
-
-
-
-
-

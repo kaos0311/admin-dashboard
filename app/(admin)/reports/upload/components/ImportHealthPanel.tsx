@@ -49,31 +49,43 @@ export function ImportHealthPanel({
         <MiniStat
           label="Patients"
           value={formatStat(stats.patients ?? stats.totalPatients)}
+          href="/reports/patients"
+          tone="blue"
         />
 
         <MiniStat
           label="Hospice Patients"
           value={formatStat(stats.hospicePatients)}
+          href="/reports/hospice"
+          tone="blue"
         />
 
         <MiniStat
           label="Open WIP"
           value={formatStat(stats.wipOpen)}
+          href="/reports/wip?status=open"
+          tone="yellow"
         />
 
         <MiniStat
           label="Completed WIP"
           value={formatStat(stats.wipCompleted)}
+          href="/reports/wip?status=completed"
+          tone="success"
         />
 
         <MiniStat
           label="Hospice Living"
           value={formatStat(stats.hospiceLiving)}
+          href="/reports/hospice?status=living"
+          tone="success"
         />
 
         <MiniStat
           label="Hospice Deceased"
           value={formatStat(stats.hospiceDeceased)}
+          href="/reports/hospice?status=deceased"
+          tone="neutral"
         />
       </div>
 

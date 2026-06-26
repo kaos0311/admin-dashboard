@@ -1,5 +1,5 @@
 ﻿import type { ReactNode } from "react";
-import { glass } from "@/theme";
+import { surfaces } from "@/theme";
 
 type AdminContentShellProps = {
   children: ReactNode;
@@ -14,10 +14,10 @@ export function AdminContentShell({
 }: AdminContentShellProps) {
   const shellClass =
     size === "tight"
-      ? glass.shellTight
+      ? surfaces.shellTight
       : size === "full"
-        ? glass.shellFull
-        : glass.shell;
+        ? surfaces.shellFull
+        : surfaces.shell;
 
   return (
     <main className="min-h-[calc(100vh-64px)] w-full overflow-x-hidden">
@@ -25,6 +25,3 @@ export function AdminContentShell({
     </main>
   );
 }
-
-
-

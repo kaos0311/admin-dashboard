@@ -1,4 +1,4 @@
-﻿import { buttons, colors, glass, typography } from "@/theme";
+﻿import { buttons, colors, surfaces, typography } from "@/theme";
 
 export function pageWrapClass(): string {
   return ["space-y-6 p-4 sm:p-5 lg:p-6", colors.textPrimary].join(" ");
@@ -13,31 +13,31 @@ export function pageSubtitleClass(): string {
 }
 
 export function cardClass(): string {
-  return ["p-5", glass.card].join(" ");
+  return ["p-5", surfaces.card].join(" ");
 }
 
 export function innerCardClass(): string {
-  return ["p-4", glass.inset].join(" ");
+  return ["p-4", surfaces.inset].join(" ");
 }
 
 export function mutedPanelClass(): string {
-  return ["border-dashed p-6", typography.bodyMuted, glass.inset].join(" ");
+  return ["border-dashed p-6", typography.bodyMuted, surfaces.inset].join(" ");
 }
 
 export function errorPanelClass(): string {
-  return glass.alertDanger;
+  return surfaces.alertDanger;
 }
 
 export function successPanelClass(): string {
-  return glass.alertSuccess;
+  return surfaces.alertSuccess;
 }
 
 export function warningPanelClass(): string {
-  return glass.alertWarning;
+  return surfaces.alertWarning;
 }
 
 export function statPillClass(): string {
-  return glass.chip;
+  return surfaces.chip;
 }
 
 export function labelClass(): string {
@@ -45,19 +45,19 @@ export function labelClass(): string {
 }
 
 export function inputClass(): string {
-  return ["text-sm", glass.inputPadded].join(" ");
+  return ["text-sm", surfaces.inputPadded].join(" ");
 }
 
 export function selectClass(): string {
-  return ["text-sm", glass.select].join(" ");
+  return ["text-sm", surfaces.select].join(" ");
 }
 
 export function textareaClass(): string {
-  return ["text-sm", glass.textarea].join(" ");
+  return ["text-sm", surfaces.textarea].join(" ");
 }
 
 export function tableWrapperClass(): string {
-  return ["overflow-hidden", glass.card].join(" ");
+  return ["overflow-hidden", surfaces.card].join(" ");
 }
 
 export function tableScrollClass(): string {
@@ -80,11 +80,11 @@ export function tableCellClass(): string {
 }
 
 export function tableRowClass(): string {
-  return glass.tableRow;
+  return surfaces.tableRow;
 }
 
 export function rowSurfaceClass(): string {
-  return glass.inset;
+  return surfaces.inset;
 }
 
 export function primaryButtonClass(): string {

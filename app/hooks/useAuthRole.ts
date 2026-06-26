@@ -49,6 +49,36 @@ function parseRole(value: unknown): UserRole {
     : null;
 }
 
+function getRoleFromUserRecord(data: Record<string, unknown>): UserRole {
+  const dbRole = parseRole(data.role);
+  if (dbRole) return dbRole;
+
+  if (data.temporaryTankAccess === true) {
+    const prevRole = parseRole(data.previousRole);
+    if (prevRole === "admin" || prevRole === "tank") {
+      return "tank";
+    }
+  }
+
+  return null;
+}
+
+function mergeRoles(tokenRole: UserRole, dbRole: UserRole): UserRole {
+  if (tokenRole === "admin" || dbRole === "admin") {
+    return "admin";
+  }
+
+  if (tokenRole === "tank" || dbRole === "tank") {
+    return "tank";
+  }
+
+  if (tokenRole === "staff" || dbRole === "staff") {
+    return "staff";
+  }
+
+  return null;
+}
+
 function getErrorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim()
     ? error.message
@@ -139,11 +169,8 @@ export function useAuthRole(): UseAuthRoleResult {
             data.disabled !== true &&
             data.deleted !== true;
 
-          const dbRole = parseRole(data.role);
-
-          if (dbRole) {
-            resolvedRole = dbRole;
-          }
+          const dbRole = getRoleFromUserRecord(data);
+          resolvedRole = mergeRoles(resolvedRole, dbRole);
 
           if (
             data.active === false ||

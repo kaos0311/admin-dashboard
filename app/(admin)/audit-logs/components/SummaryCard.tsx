@@ -1,29 +1,44 @@
-import { typography } from "@/theme";
-﻿export function SummaryCard({
+import { colors, metricActionButtonClass, tiles, typography } from "@/theme";
+
+export function SummaryCard({
   label,
   value,
-  critical = false,
+  tone = "blue",
+  onClick,
 }: {
   label: string;
   value: number;
-  critical?: boolean;
+  tone?: string;
+  onClick?: () => void;
 }) {
-  return (
-    <div
-      className={`rounded-3xl border p-5 shadow-sm backdrop-blur-2xl ${
-        critical
-          ? "border-red-500/20 bg-red-500/10"
-          : "border-white/50 bg-white/60 dark:border-white/10 dark:bg-white/[0.06]"
-      }`}
-    >
-      <p className={`text-xs uppercase tracking-[0.18em] ${typography.caption} dark:${typography.bodyMuted}`}>
-        {label}
-      </p>
+  const content = (
+    <>
+      <p className={tiles.metricLabel} title={label}>{label}</p>
+      <p className={["mt-3", typography.metric].join(" ")}>{value.toLocaleString()}</p>
 
-      <p className="mt-3 text-3xl font-semibold">{value.toLocaleString()}</p>
+      {onClick ? (
+        <span className={metricActionButtonClass(tone)}>
+          Open
+        </span>
+      ) : null}
+    </>
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={`${tiles.base} ${tiles.compact} ${tiles.hover} min-h-[10.75rem] min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a9a5e]/40`}
+      >
+        {content}
+      </button>
+    );
+  }
+
+  return (
+    <div className={[tiles.base, tiles.compact, colors.surfaceInset, "min-h-[10.75rem]"].join(" ")}>
+      {content}
     </div>
   );
 }
-
-
-

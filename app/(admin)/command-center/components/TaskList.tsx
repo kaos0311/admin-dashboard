@@ -1,8 +1,10 @@
-﻿import { glass, typography } from "@/theme";
+import Link from "next/link";
+
+import { glass, typography } from "@/theme";
 
 import type { CommandTask } from "../types";
 
-import { badgeClass } from "../utils/commandCenterFormat";
+import { alertButtonClass } from "../utils/commandCenterFormat";
 
 import { EmptyState } from "./EmptyState";
 
@@ -22,6 +24,7 @@ export function TaskList({ tasks }: TaskListProps) {
       {tasks.map((task) => (
         <div
           key={task.id}
+          id={`task-${task.id}`}
           className={`${glass.card} p-4`}
         >
           <div className="flex items-start justify-between gap-3">
@@ -32,17 +35,17 @@ export function TaskList({ tasks }: TaskListProps) {
 
               <p className="mt-1 text-sm text-neutral-400">
                 {task.assignedTo || "Unassigned"}
-                {task.department ? ` â€¢ ${task.department}` : ""}
+                {task.department ? ` - ${task.department}` : ""}
               </p>
             </div>
 
-            <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${badgeClass(
-                task.priority
-              )}`}
+            <Link
+              href={`/command-center?task=${encodeURIComponent(task.id)}#task-${task.id}`}
+              className={alertButtonClass(task.priority)}
+              aria-label={`Open ${task.priority || "normal"} task ${task.title || task.id}`}
             >
               {task.priority || "normal"}
-            </span>
+            </Link>
           </div>
 
           {task.description ? (
@@ -61,10 +64,3 @@ export function TaskList({ tasks }: TaskListProps) {
     </div>
   );
 }
-
-
-
-
-
-
-

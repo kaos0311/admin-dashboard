@@ -1131,7 +1131,7 @@ function AssetRecordsRouteTile({ visibleCount }: { visibleCount: number }) {
   return (
     <Link
       href="/inventory/asset-records"
-      className={`${glass.cardPadded} group flex min-w-0 flex-col gap-4 transition hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-white/[0.07] sm:flex-row sm:items-center sm:justify-between`}
+      className={`${glass.cardPadded} group flex min-w-0 flex-col gap-4 transition hover:-translate-y-0.5 hover:border-[#7a9a5e]/35 hover:bg-[#242424] sm:flex-row sm:items-center sm:justify-between`}
     >
       <div className="flex min-w-0 items-start gap-3">
         <span className={tiles.icon}>
@@ -1164,7 +1164,7 @@ function RentalPropertyRouteTile({ visibleCount }: { visibleCount: number }) {
   return (
     <Link
       href="/inventory/rental-property"
-      className={`${glass.cardPadded} group flex min-w-0 flex-col gap-4 transition hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-white/[0.07] sm:flex-row sm:items-center sm:justify-between`}
+      className={`${glass.cardPadded} group flex min-w-0 flex-col gap-4 transition hover:-translate-y-0.5 hover:border-[#7a9a5e]/35 hover:bg-[#242424] sm:flex-row sm:items-center sm:justify-between`}
     >
       <div className="flex min-w-0 items-start gap-3">
         <span className={tiles.icon}>
