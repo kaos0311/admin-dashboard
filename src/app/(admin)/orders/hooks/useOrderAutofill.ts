@@ -1,12 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import {
-  collection,
-  limit,
-  onSnapshot,
-  query,
-} from "firebase/firestore";
+import { collection, limit, onSnapshot, query } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
 import { useBrightreeReferences } from "@/app/hooks/useBrightreeReferences";
@@ -34,6 +29,14 @@ export type FacilityAutofillOption = {
   phone: string;
   fax: string;
   group: string;
+};
+
+type RolodexFacilityOption = FacilityAutofillOption & {
+  contactType: string;
+};
+
+type InsuranceReference = {
+  name?: string;
 };
 
 function text(value: unknown): string {
@@ -82,7 +85,10 @@ export function useOrderAutofill() {
             const name = text(
               data.patientName ||
                 data.fullName ||
-                [data.firstName, data.lastName].map(text).filter(Boolean).join(" ")
+                [data.firstName, data.lastName]
+                  .map(text)
+                  .filter(Boolean)
+                  .join(" ")
             );
 
             return {
@@ -126,7 +132,7 @@ export function useOrderAutofill() {
     const unsubscribeRolodex = onSnapshot(rolodexQuery, (snapshot) => {
       setFacilities(
         snapshot.docs
-          .map((docSnapshot) => {
+          .map((docSnapshot): RolodexFacilityOption => {
             const data = docSnapshot.data() as Record<string, unknown>;
 
             return {
@@ -159,8 +165,10 @@ export function useOrderAutofill() {
       patients,
       products,
       facilities,
-      insurances: brightreeReferences.insuranceCompanies
-        .map((insurance) => insurance.name)
+      insurances: (
+        brightreeReferences.insuranceCompanies as InsuranceReference[]
+      )
+        .map((insurance) => insurance.name ?? "")
         .filter(Boolean),
     }),
     [brightreeReferences.insuranceCompanies, facilities, patients, products]

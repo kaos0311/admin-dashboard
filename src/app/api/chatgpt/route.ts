@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { verifyChatGptApiKey } from "@/lib/chatgpt-bridge/auth";
 import {
-  type QueryOptions,
   executeQuery,
-  getDocument,
   getCollectionsSummary,
+  getDocument,
+  type QueryOptions,
 } from "@/lib/chatgpt-bridge/queries";
 
 export const runtime = "nodejs";

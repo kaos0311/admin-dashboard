@@ -3,11 +3,11 @@
 import type {
   CurrentEquipmentItem,
   RecentPurchaseItem,
-} from "../(admin)/reports/patients/lib/patientTypes";
+} from "../(dashboard)/reports/patients/lib/patientTypes";
 import {
   formatDate,
   formatMoney,
-} from "../(admin)/reports/patients/lib/patientUtils";
+} from "../(dashboard)/reports/patients/lib/patientUtils";
 
 import { tables, typography } from "@/theme";
 
@@ -168,4 +168,5 @@ function compactStrongCell(): string {
 function compactMutedCell(): string {
   return ["px-3 py-2", typography.bodyMuted].join(" ");
 }
+
 

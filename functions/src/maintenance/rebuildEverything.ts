@@ -3,8 +3,8 @@ import { logger } from "firebase-functions";
 import {
   type DocumentReference,
   FieldValue,
-  Timestamp,
   getFirestore,
+  Timestamp,
 } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 

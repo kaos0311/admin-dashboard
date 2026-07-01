@@ -1,37 +1,19 @@
-﻿import "./globals.css";
+﻿import type { Metadata } from "next";
+import "./globals.css";
 
-import { Inter } from "next/font/google";
-import type { ReactNode } from "react";
-
-import { ThemeProvider } from "@/theme";
-
-const inter = Inter({
-  subsets: ["latin"],
-  variable: "--font-inter",
-  display: "swap",
-});
+export const metadata: Metadata = {
+  title: "Advanced Home Medical",
+  description: "Advanced Home Medical operations dashboard",
+};
 
 export default function RootLayout({
   children,
-}: {
-  children: ReactNode;
-}) {
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html
-      lang="en"
-      suppressHydrationWarning
-     data-scroll-behavior="smooth">
-      <body
-        className={`${inter.variable} min-h-screen antialiased`}
-      >
-        <ThemeProvider>
-          {children}
-        </ThemeProvider>
-      </body>
+    <html lang="en">
+      <body>{children}</body>
     </html>
   );
 }
-
-
-
-

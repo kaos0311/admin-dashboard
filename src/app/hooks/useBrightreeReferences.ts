@@ -4,9 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import { doc, onSnapshot } from "firebase/firestore";
 
 import { db } from "@/lib/firebase";
-import { DEFAULT_BRIGHTREE_REFERENCES } from "@/app/(admin)/settings/brightree-reference-data";
-import { normalizeBrightreeReferences } from "@/app/(admin)/settings/settings-utils";
-import type { BrightreeReferenceSettings } from "@/app/(admin)/settings/settings-types";
+import { DEFAULT_BRIGHTREE_REFERENCES } from "@/app/(dashboard)/settings/brightree-reference-data";
+import { normalizeBrightreeReferences } from "@/app/(dashboard)/settings/settings-utils";
+import type { BrightreeReferenceSettings } from "@/app/(dashboard)/settings/settings-types";
 
 export function useBrightreeReferences() {
   const [references, setReferences] = useState<BrightreeReferenceSettings>(
@@ -37,3 +37,4 @@ export function useBrightreeReferences() {
 
   return useMemo(() => references, [references]);
 }
+

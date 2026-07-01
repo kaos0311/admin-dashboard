@@ -16,6 +16,7 @@ export { screenImportJobWithJarvis } from "./ai/callable/screenImportJobWithJarv
 // Import pipeline
 export { importFileFromStorage } from "./imports/importFileFromStorage";
 export { processImportWorkerQueue } from "./imports/workers/processImportWorkerQueue";
+export { scheduledImportCleanup } from "./imports/cleanup/scheduledMaintenance";
 export { reprocessImportJobFromFirestore } from "./imports/reprocessImportJobFromFirestore";
 export { processPatientDocumentFromStorage } from "./patientDocuments/processPatientDocumentFromStorage";
 export { trackQrScan } from "./qr/trackQrScan";
