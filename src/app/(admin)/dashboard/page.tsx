@@ -1,6 +1,5 @@
 ﻿import Link from "next/link";
 
-import { prisma } from "@/lib/prisma";
 import { Badge } from "@/components/ui/badge";
 import {
   Card,
@@ -10,64 +9,48 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
+import { PageShell } from "@/components/ui/page-shell";
 import { StatCard } from "@/components/ui/stat-card";
+import { getDashboardSummary } from "@/services/equipment/dashboard.service";
 
 export default async function DashboardPage() {
-  const [
-    totalEquipment,
-    availableEquipment,
-    inUseEquipment,
-    repairEquipment,
-    locations,
-    customers,
-  ] = await Promise.all([
-    prisma.equipment.count(),
-    prisma.equipment.count({ where: { status: "AVAILABLE" } }),
-    prisma.equipment.count({ where: { status: "IN_USE" } }),
-    prisma.equipment.count({
-      where: {
-        OR: [{ status: "NEEDS_REPAIR" }, { status: "IN_REPAIR" }],
-      },
-    }),
-    prisma.location.count(),
-    prisma.customer.count(),
-  ]);
+  const summary = await getDashboardSummary();
 
   const cards = [
     {
       label: "Total Equipment",
-      value: totalEquipment,
+      value: summary.total,
       description: "All tracked equipment records",
     },
     {
       label: "Available",
-      value: availableEquipment,
+      value: summary.available,
       description: "Ready for assignment",
     },
     {
       label: "In Use",
-      value: inUseEquipment,
+      value: summary.inUse,
       description: "Currently assigned",
     },
     {
       label: "Repair Needed",
-      value: repairEquipment,
+      value: summary.repair,
       description: "Needs repair or in repair",
     },
     {
       label: "Locations",
-      value: locations,
+      value: summary.locations,
       description: "Active service locations",
     },
     {
       label: "Customers",
-      value: customers,
+      value: summary.customers,
       description: "Customer records",
     },
   ];
 
   return (
-    <>
+    <PageShell>
       <PageHeader
         title="Dashboard"
         description="Equipment inventory, repairs, preventive maintenance, and customer tracking."
@@ -85,7 +68,7 @@ export default async function DashboardPage() {
         ))}
       </section>
 
-      <section className="mt-6 grid gap-4 md:grid-cols-2">
+      <section className="grid gap-4 md:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
@@ -133,6 +116,6 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
       </section>
-    </>
+    </PageShell>
   );
 }
