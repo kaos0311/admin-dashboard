@@ -1,45 +1,97 @@
-import { prisma } from "@/lib/prisma";
+generator client {
+  provider = "prisma-client-js"
+}
 
-export default async function EquipmentPage() {
-  const equipment = await prisma.equipment.findMany({
-    include: {
-      model: { include: { manufacturer: true } },
-      location: true,
-      customer: true,
-    },
-    orderBy: { createdAt: "desc" },
-  });
+datasource db {
+  provider = "postgresql"
+}
 
-  return (
-    <main className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Equipment Inventory</h1>
+enum EquipmentStatus {
+  AVAILABLE
+  IN_USE
+  NEEDS_REPAIR
+  IN_REPAIR
+  RETIRED
+  LOST
+}
 
-      <table className="w-full border-collapse border">
-        <thead>
-          <tr>
-            <th className="border p-2">Asset Tag</th>
-            <th className="border p-2">Manufacturer</th>
-            <th className="border p-2">Model</th>
-            <th className="border p-2">Category</th>
-            <th className="border p-2">Status</th>
-            <th className="border p-2">Location</th>
-            <th className="border p-2">Customer</th>
-          </tr>
-        </thead>
-        <tbody>
-          {equipment.map((item) => (
-            <tr key={item.id}>
-              <td className="border p-2">{item.assetTag}</td>
-              <td className="border p-2">{item.model?.manufacturer.name ?? ""}</td>
-              <td className="border p-2">{item.model?.name ?? ""}</td>
-              <td className="border p-2">{item.model?.category ?? ""}</td>
-              <td className="border p-2">{item.status}</td>
-              <td className="border p-2">{item.location?.name ?? ""}</td>
-              <td className="border p-2">{item.customer?.name ?? ""}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </main>
-  );
+enum WorkOrderStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Customer {
+  id        Int         @id @default(autoincrement())
+  name      String      @unique
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  equipment Equipment[]
+  createdAt DateTime    @default(now())
+}
+
+model Location {
+  id        Int         @id @default(autoincrement())
+  name      String      @unique
+  address   String?
+  notes     String?
+  equipment Equipment[]
+  createdAt DateTime    @default(now())
+}
+
+model Manufacturer {
+  id        Int              @id @default(autoincrement())
+  name      String           @unique
+  models    EquipmentModel[]
+  createdAt DateTime         @default(now())
+}
+
+model EquipmentModel {
+  id             Int          @id @default(autoincrement())
+  name           String
+  category       String
+  manufacturerId Int
+  manufacturer   Manufacturer @relation(fields: [manufacturerId], references: [id])
+  equipment      Equipment[]
+
+  @@unique([manufacturerId, name])
+}
+
+model Equipment {
+  id                 Int             @id @default(autoincrement())
+  assetTag           String          @unique
+  serialNumber       String?         @unique
+  status             EquipmentStatus @default(AVAILABLE)
+  condition          String?
+  purchaseDate       DateTime?
+  warrantyExpiration DateTime?
+  notes              String?
+
+  modelId Int?
+  model   EquipmentModel? @relation(fields: [modelId], references: [id])
+
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  locationId Int?
+  location   Location? @relation(fields: [locationId], references: [id])
+
+  workOrders WorkOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WorkOrder {
+  id          Int             @id @default(autoincrement())
+  equipmentId Int
+  equipment   Equipment       @relation(fields: [equipmentId], references: [id])
+  status      WorkOrderStatus @default(OPEN)
+  issue       String
+  resolution  String?
+  openedAt    DateTime        @default(now())
+  closedAt    DateTime?
 }

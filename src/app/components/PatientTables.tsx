@@ -3,11 +3,11 @@
 import type {
   CurrentEquipmentItem,
   RecentPurchaseItem,
-} from "../(dashboard)/reports/patients/lib/patientTypes";
+} from "../(admin)/reports/patients/lib/patientTypes";
 import {
   formatDate,
   formatMoney,
-} from "../(dashboard)/reports/patients/lib/patientUtils";
+} from "../(admin)/reports/patients/lib/patientUtils";
 
 import { tables, typography } from "@/theme";
 

@@ -1,0 +1,19 @@
+import type { InventoryItem } from "@/app/(admin)/inventory/lib/inventoryTypes";
+
+export type DeceasedPatientSummary = {
+  id: string;
+  fullName: string;
+  dateOfDeath?: string;
+  phone: string;
+  lastDeliveryDate: string;
+  lastPickupDate: string;
+};
+
+export type DeceasedPickupCandidate = {
+  item: InventoryItem;
+  patient: DeceasedPatientSummary;
+  lastDeliveryDate: string;
+  pickupDate?: string;
+  needsDateReview: boolean;
+  reason: "deceased" | "pickup_after_delivery";
+};
