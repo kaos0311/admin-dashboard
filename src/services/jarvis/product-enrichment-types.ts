@@ -32,3 +32,9 @@ export type BarcodeLookupProduct = {
   image?: unknown;
 };
 
+
+export type VendorResearchSite = {
+  id: string;
+  name: string;
+  url: string;
+};
