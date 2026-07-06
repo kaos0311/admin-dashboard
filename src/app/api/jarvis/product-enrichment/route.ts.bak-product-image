@@ -3,7 +3,7 @@ import { FieldValue as AdminFieldValue } from "firebase-admin/firestore";
 
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
 import { normalizeBarcode } from "@/lib/barcode";
-import { findImageUrl, processProductImageUrl } from "@/services/jarvis/product-image.service";
+import { findImageUrl } from "@/services/jarvis/product-image.service";
 
 export const runtime = "nodejs";
 
@@ -405,6 +405,12 @@ async function lookupBarcodeProduct(barcode: string): Promise<ProductGuess | nul
     return null;
   }
 }
+
+
+
+async 
+
+async 
 
 async function identifyProduct(
   queryParts: string[],
@@ -1153,8 +1159,5 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ error: "Unsupported enrichment mode" }, { status: 400 });
 }
-
-
-
 
 
