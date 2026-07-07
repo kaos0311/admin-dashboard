@@ -1,19 +1,6 @@
 "use client";
 
-import {
-  AlertTriangle,
-  CheckCircle2,
-  ClipboardList,
-  FileDown,
-  MapPin,
-  PackageCheck,
-  Printer,
-  RotateCcw,
-  ScanLine,
-  Truck,
-} from "lucide-react";
-
-import { alerts, badges, buttons, glass, typography } from "@/theme";
+import { alerts, badges, glass, typography } from "@/theme";
 
 import type {
   BossDeliveryRun,
@@ -23,7 +10,7 @@ import type {
   TechLocationCheckIn,
   TruckLoadSummary,
 } from "../types/deliveryTypes";
-import { ticketRequiredScanCount, ticketScanProgress } from "./deliveryFulfillment";
+import { ticketScanProgress } from "./deliveryFulfillment";
 
 const RETURN_CONDITIONS = [
   { value: "returned_ready", label: "Returned - Ready" },

@@ -12,7 +12,6 @@ import {
   saveDeliverySignature,
   saveTechLocationCheckIn,
   scanMatchesTicket,
-  ticketRequiredScanCount,
   ticketScanProgress,
   updateDeliveryActors,
   updateDeliveryRouteEstimate,
