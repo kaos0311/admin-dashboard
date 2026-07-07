@@ -1,22 +1,19 @@
-import Link from "next/link";
-import { prisma } from "@/lib/prisma";
+﻿import Link from "next/link";
+
+import { getAllEquipmentModels } from "@/services/equipment-model/equipment-model.service";
+import { getAllLocations } from "@/services/location/location.service";
+
 import { createEquipment } from "../actions";
 
 export default async function NewEquipmentPage() {
-  const models = await prisma.equipmentModel.findMany({
-    include: { manufacturer: true },
-    orderBy: { name: "asc" },
-  });
-
-  const locations = await prisma.location.findMany({
-    orderBy: { name: "asc" },
-  });
+  const models = await getAllEquipmentModels();
+  const locations = await getAllLocations();
 
   return (
     <main className="min-h-screen bg-neutral-950 p-8 text-white">
       <div className="mb-6">
         <Link href="/equipment" className="text-sm text-neutral-400">
-          ← Back to Equipment
+          Back to Equipment
         </Link>
         <h1 className="mt-4 text-3xl font-bold">Add Equipment</h1>
       </div>
@@ -29,7 +26,7 @@ export default async function NewEquipmentPage() {
           <option value="">Select Model</option>
           {models.map((model) => (
             <option key={model.id} value={model.id}>
-              {model.manufacturer.name} {model.name} — {model.category}
+              {model.manufacturer.name} {model.name} - {model.category}
             </option>
           ))}
         </select>

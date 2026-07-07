@@ -1,21 +1,10 @@
-import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+﻿import { NextResponse } from "next/server";
+
+import { getEquipment } from "@/services/equipment/equipment.service";
 
 export async function GET() {
-  const equipment = await prisma.equipment.findMany({
-    include: {
-      model: {
-        include: {
-          manufacturer: true,
-        },
-      },
-      location: true,
-      customer: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+  const equipment = await getEquipment();
 
   return NextResponse.json(equipment);
 }
+

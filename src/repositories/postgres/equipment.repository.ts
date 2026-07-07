@@ -1,4 +1,4 @@
-import { EquipmentStatus } from "@prisma/client";
+﻿import { EquipmentStatus, Prisma } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 
@@ -17,6 +17,12 @@ export const EquipmentRepository = {
       orderBy: {
         createdAt: "desc",
       },
+    });
+  },
+
+  async create(data: Prisma.EquipmentUncheckedCreateInput) {
+    return prisma.equipment.create({
+      data,
     });
   },
 

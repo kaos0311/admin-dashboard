@@ -1,23 +1,10 @@
-import { requireUser } from "@/lib/auth/require-user";
-import { prisma } from "@/lib/prisma";
+﻿import { requireUser } from "@/lib/auth/require-user";
+import { getEquipment } from "@/services/equipment/equipment.service";
 
 export default async function EquipmentPage() {
   await requireUser();
 
-  const equipment = await prisma.equipment.findMany({
-    include: {
-      model: {
-        include: {
-          manufacturer: true,
-        },
-      },
-      location: true,
-      customer: true,
-    },
-    orderBy: {
-      createdAt: "desc",
-    },
-  });
+  const equipment = await getEquipment();
 
   return (
     <main className="space-y-6 p-6">
@@ -48,10 +35,7 @@ export default async function EquipmentPage() {
             <tbody className="divide-y divide-slate-200">
               {equipment.length === 0 ? (
                 <tr>
-                  <td
-                    colSpan={7}
-                    className="px-4 py-8 text-center text-slate-500"
-                  >
+                  <td colSpan={7} className="px-4 py-8 text-center text-slate-500">
                     No equipment found.
                   </td>
                 </tr>
@@ -91,3 +75,4 @@ export default async function EquipmentPage() {
     </main>
   );
 }
+
