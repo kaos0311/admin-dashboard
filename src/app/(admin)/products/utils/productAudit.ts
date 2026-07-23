@@ -1,5 +1,4 @@
-﻿import { addDoc, collection, serverTimestamp } from "firebase/firestore";
-import { db } from "@/lib/firebase";
+﻿import { ProductRepository } from "@/repositories/firestore/product.repository";
 
 export type ProductAuditAction =
   | "create"
@@ -20,7 +19,7 @@ export async function writeProductAuditLog(args: {
   } | null;
 }) {
   try {
-    await addDoc(collection(db, "auditLogs"), {
+    await ProductRepository.writeAuditLog({
       entityType: "product",
       action: args.action,
       entityId: args.entityId ?? null,
@@ -31,11 +30,8 @@ export async function writeProductAuditLog(args: {
       userEmail: args.user?.email ?? null,
       actorUid: args.user?.uid ?? null,
       actorEmail: args.user?.email ?? null,
-      createdAt: serverTimestamp(),
     });
   } catch (error) {
     console.warn("PRODUCT AUDIT LOG WRITE FAILED:", error);
   }
 }
-
-

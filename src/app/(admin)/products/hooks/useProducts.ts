@@ -1,26 +1,11 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import {
-  addDoc,
-  collection,
-  doc,
-  type DocumentData,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  type QueryDocumentSnapshot,
-  serverTimestamp,
-  setDoc,
-  startAfter,
-  updateDoc,
-  writeBatch,
-} from "firebase/firestore";
+import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
 import toast from "react-hot-toast";
 
 import { normalizeBarcode } from "@/lib/barcode";
-import { db } from "@/lib/firebase";
+import { ProductRepository } from "@/repositories/firestore/product.repository";
 
 import {
   BATCH_SIZE,
@@ -30,7 +15,6 @@ import {
 } from "../utils/productTypes";
 import {
   buildSearchKeywords,
-  normalizeProduct,
   normalizeSearchText,
   toSafeNumber,
 } from "../utils/productNormalize";
@@ -84,45 +68,23 @@ export function useProducts(args: {
       }
 
       try {
-        const productsQuery =
-          mode === "more" && currentLastDoc
-            ? query(
-                collection(db, "products"),
-                orderBy("name", "asc"),
-                startAfter(currentLastDoc),
-                limit(PAGE_SIZE)
-              )
-            : query(
-                collection(db, "products"),
-                orderBy("name", "asc"),
-                limit(PAGE_SIZE)
-              );
-
-        const snapshot = await getDocs(productsQuery);
-
-        const rows = snapshot.docs
-          .map((docSnap) =>
-            normalizeProduct(
-              docSnap.id,
-              docSnap.data() as Record<string, unknown>
-            )
-          )
-          .filter((product) => !product.deleted);
+        const { products: rows, nextCursor, hasMore: nextHasMore } =
+          await ProductRepository.getPage(
+            PAGE_SIZE,
+            mode === "more" ? currentLastDoc : null,
+          );
 
         setProducts((current) => {
           const next = mode === "more" ? [...current, ...rows] : rows;
 
           setSelectedIds((selected) =>
-            selected.filter((id) => next.some((product) => product.id === id))
+            selected.filter((id) => next.some((product) => product.id === id)),
           );
 
           return next;
         });
 
-        const nextLastDoc = snapshot.docs[snapshot.docs.length - 1] ?? null;
-        const nextHasMore = snapshot.docs.length === PAGE_SIZE;
-
-        lastDocRef.current = nextLastDoc;
+        lastDocRef.current = nextCursor;
         hasMoreRef.current = nextHasMore;
         setHasMore(nextHasMore);
       } catch (error) {
@@ -133,7 +95,7 @@ export function useProducts(args: {
         setLoadingMore(false);
       }
     },
-    [canRead]
+    [canRead],
   );
 
   const saveProduct = useCallback(
@@ -253,7 +215,6 @@ export function useProducts(args: {
           deleted: false,
           searchText: normalizeSearchText(searchValues.join(" ")),
           searchKeywords: buildSearchKeywords(searchValues),
-          updatedAt: serverTimestamp(),
           updatedBy: user?.uid ?? null,
           updatedByEmail: user?.email ?? null,
         };
@@ -262,7 +223,7 @@ export function useProducts(args: {
           const before =
             products.find((product) => product.id === form.id) ?? null;
 
-          await updateDoc(doc(db, "products", form.id), payload);
+          await ProductRepository.update(form.id, payload);
 
           await writeProductAuditLog({
             action: "update",
@@ -274,16 +235,15 @@ export function useProducts(args: {
 
           toast.success("Product updated.");
         } else {
-          const createdRef = await addDoc(collection(db, "products"), {
+          const createdRef = await ProductRepository.create({
             ...payload,
-            createdAt: serverTimestamp(),
             createdBy: user?.uid ?? null,
             createdByEmail: user?.email ?? null,
           });
 
           await writeProductAuditLog({
             action: "create",
-            entityId: createdRef.id,
+            entityId: createdRef,
             after: payload,
             user,
           });
@@ -292,15 +252,13 @@ export function useProducts(args: {
         }
 
         if (/^[A-Z]\d{4}[A-Z0-9]{0,2}$/.test(hcpcs)) {
-          await setDoc(doc(db, "hcpcsCodes", hcpcs), {
+          await ProductRepository.upsertHcpcsCode(hcpcs, {
             code: hcpcs,
             shopDescription: name,
             shopCategory: category,
             observedInShop: true,
             lastObservedSource: "product_catalog",
-            lastObservedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          }, { merge: true });
+          });
         }
 
         await loadProducts("reset");
@@ -313,7 +271,7 @@ export function useProducts(args: {
         setSaving(false);
       }
     },
-    [canWrite, loadProducts, products, user]
+    [canWrite, loadProducts, products, user],
   );
 
   const softDeleteProduct = useCallback(
@@ -324,19 +282,15 @@ export function useProducts(args: {
       }
 
       const confirmed = window.confirm(
-        `Archive "${product.name}" from the product catalog? Inventory history will stay intact.`
+        `Archive "${product.name}" from the product catalog? Inventory history will stay intact.`,
       );
 
       if (!confirmed) return false;
 
       try {
-        await updateDoc(doc(db, "products", product.id), {
-          deleted: true,
-          deletedAt: serverTimestamp(),
+        await ProductRepository.softDelete(product.id, {
           deletedBy: user?.uid ?? null,
           deletedByEmail: user?.email ?? null,
-          status: "discontinued",
-          updatedAt: serverTimestamp(),
         });
 
         await writeProductAuditLog({
@@ -347,11 +301,11 @@ export function useProducts(args: {
         });
 
         setProducts((current) =>
-          current.filter((row) => row.id !== product.id)
+          current.filter((row) => row.id !== product.id),
         );
 
         setSelectedIds((current) =>
-          current.filter((id) => id !== product.id)
+          current.filter((id) => id !== product.id),
         );
 
         toast.success("Product archived.");
@@ -362,7 +316,7 @@ export function useProducts(args: {
         return false;
       }
     },
-    [canWrite, user]
+    [canWrite, user],
   );
 
   const batchSoftDeleteProducts = useCallback(async () => {
@@ -377,7 +331,7 @@ export function useProducts(args: {
     }
 
     const confirmed = window.confirm(
-      `Archive ${selectedIds.length} selected product(s)? Inventory history will stay intact.`
+      `Archive ${selectedIds.length} selected product(s)? Inventory history will stay intact.`,
     );
 
     if (!confirmed) return false;
@@ -385,23 +339,10 @@ export function useProducts(args: {
     setDeleting(true);
 
     try {
-      for (let i = 0; i < selectedIds.length; i += BATCH_SIZE) {
-        const batch = writeBatch(db);
-        const chunk = selectedIds.slice(i, i + BATCH_SIZE);
-
-        chunk.forEach((id) => {
-          batch.update(doc(db, "products", id), {
-            deleted: true,
-            deletedAt: serverTimestamp(),
-            deletedBy: user?.uid ?? null,
-            deletedByEmail: user?.email ?? null,
-            status: "discontinued",
-            updatedAt: serverTimestamp(),
-          });
-        });
-
-        await batch.commit();
-      }
+      await ProductRepository.batchSoftDelete(selectedIds, BATCH_SIZE, {
+        deletedBy: user?.uid ?? null,
+        deletedByEmail: user?.email ?? null,
+      });
 
       await writeProductAuditLog({
         action: "bulk-soft-delete",
@@ -410,7 +351,7 @@ export function useProducts(args: {
       });
 
       setProducts((current) =>
-        current.filter((product) => !selectedIds.includes(product.id))
+        current.filter((product) => !selectedIds.includes(product.id)),
       );
 
       toast.success(`Archived ${selectedIds.length} product(s).`);
@@ -433,7 +374,7 @@ export function useProducts(args: {
     }
 
     const confirmed = window.confirm(
-      "Danger zone: permanently delete the currently loaded product records? Use this only for test resets."
+      "Danger zone: permanently delete the currently loaded product records? Use this only for test resets.",
     );
 
     if (!confirmed) return false;
@@ -450,16 +391,7 @@ export function useProducts(args: {
     try {
       const ids = products.map((product) => product.id);
 
-      for (let i = 0; i < ids.length; i += BATCH_SIZE) {
-        const batch = writeBatch(db);
-        const chunk = ids.slice(i, i + BATCH_SIZE);
-
-        chunk.forEach((id) => {
-          batch.delete(doc(db, "products", id));
-        });
-
-        await batch.commit();
-      }
+      await ProductRepository.purge(ids, BATCH_SIZE);
 
       await writeProductAuditLog({
         action: "purge",
@@ -485,7 +417,7 @@ export function useProducts(args: {
     setSelectedIds((current) =>
       current.includes(id)
         ? current.filter((selectedId) => selectedId !== id)
-        : [...current, id]
+        : [...current, id],
     );
   }
 
@@ -521,5 +453,3 @@ export function useProducts(args: {
     purgeLoadedProducts,
   };
 }
-
-
