@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { requireApiRole } from "@/lib/auth/require-api-auth";
 
 type CodeFixRequest = {
   title: string;
@@ -8,6 +9,9 @@ type CodeFixRequest = {
 
 export async function POST(request: NextRequest) {
   try {
+    const auth = await requireApiRole(request, ["admin", "tank"]);
+    if (!auth.ok) return auth.response;
+
     const body = (await request.json()) as CodeFixRequest;
 
     if (!body.title || !body.description) {

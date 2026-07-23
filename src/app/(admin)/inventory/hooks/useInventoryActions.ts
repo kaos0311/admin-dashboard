@@ -1,24 +1,12 @@
 "use client";
 
 import type { FormEvent } from "react";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-  writeBatch,
-} from "firebase/firestore";
 import toast from "react-hot-toast";
 
 import { normalizeBarcode } from "@/lib/barcode";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
 import { smartMergeInventory } from "@/lib/inventory/smartMergeInventory";
+import { InventoryRepository } from "@/repositories/firestore/inventory.repository";
 
 import { FIRESTORE_BATCH_LIMIT } from "../lib/inventoryConstants";
 import { isLowStock } from "../lib/inventoryAlerts";
@@ -66,142 +54,28 @@ export function useInventoryActions({
   setSaving,
 }: UseInventoryActionsArgs) {
   async function findInventoryByScan(rawCode: string): Promise<InventoryItem | null> {
-    const clean = normalizeBarcode(rawCode);
-    const upper = clean.toUpperCase();
-    const fields: Array<[keyof InventoryItem, string]> = [
-      ["barcode", clean],
-      ["serial", clean],
-      ["lotNumber", clean],
-      ["sku", clean],
-      ["hcpc", upper],
-    ];
-
-    for (const [field, value] of fields) {
-      if (!value) continue;
-
-      const snap = await getDocs(
-        query(collection(db, "inventory"), where(field, "==", value), limit(5))
-      );
-      const match = snap.docs.find((item) => item.data().isDeleted !== true);
-
-      if (match) {
-        const data = match.data() as Record<string, unknown>;
-        return {
-          id: match.id,
-          productId: String(data.productId ?? ""),
-          name: String(data.name ?? ""),
-          category: String(data.category ?? ""),
-          sku: String(data.sku ?? ""),
-          hcpc: String(data.hcpc ?? data.hcpcs ?? ""),
-          barcode: String(data.barcode ?? ""),
-          serial: String(data.serial ?? ""),
-          lotNumber: String(data.lotNumber ?? ""),
-          locationName: String(data.locationName ?? "Main Location"),
-          binLocation: String(data.binLocation ?? ""),
-          quantityOnHand: Number(data.quantityOnHand ?? 0),
-          committed: Number(data.committed ?? 0),
-          onRent: Number(data.onRent ?? 0),
-          onOrder: Number(data.onOrder ?? 0),
-          available: Number(data.available ?? 0),
-          reorderLevel: Number(data.reorderLevel ?? 0),
-          unitCost: Number(data.unitCost ?? 0),
-          totalValue: Number(data.totalValue ?? 0),
-          status: data.status === "inactive" ||
-            data.status === "damaged" ||
-            data.status === "lost" ||
-            data.status === "discontinued"
-            ? data.status
-            : "available",
-          manufacturer: String(data.manufacturer ?? ""),
-          manufacturerItemId: String(data.manufacturerItemId ?? ""),
-          modelNumber: String(data.modelNumber ?? ""),
-          warrantyProvider: String(data.warrantyProvider ?? ""),
-          warrantyStartDate: String(data.warrantyStartDate ?? ""),
-          warrantyEndDate: String(data.warrantyEndDate ?? ""),
-          warrantyNotes: String(data.warrantyNotes ?? ""),
-          purchaseDate: String(data.purchaseDate ?? ""),
-          usefulLifeMonths: Number(data.usefulLifeMonths ?? 0),
-          lifecycleStatus: data.lifecycleStatus === "new" ||
-            data.lifecycleStatus === "needs_service" ||
-            data.lifecycleStatus === "end_of_life" ||
-            data.lifecycleStatus === "retired"
-            ? data.lifecycleStatus
-            : "active",
-          nextServiceDate: String(data.nextServiceDate ?? ""),
-          lifecycleNotes: String(data.lifecycleNotes ?? ""),
-          notes: String(data.notes ?? ""),
-          pendingScanReview: data.pendingScanReview === true,
-          scanSource: String(data.scanSource ?? ""),
-          searchText: String(data.searchText ?? ""),
-          isDeleted: data.isDeleted === true,
-        };
-      }
-    }
-
-    return null;
+    return InventoryRepository.findByScan(rawCode);
   }
 
   async function findProductByScan(rawCode: string): Promise<ProductScanMatch | null> {
-    const clean = normalizeBarcode(rawCode);
-    const upper = clean.toUpperCase();
-    const checks: Array<[string, string]> = [
-      ["upc", clean],
-      ["sku", clean],
-      ["hcpcs", upper],
-      ["manufacturerItemId", clean],
-    ];
+    const product = await InventoryRepository.findProductByScan(rawCode);
+    if (!product) return null;
 
-    const directSnap = await getDoc(doc(db, "products", clean.toLowerCase()));
-    if (directSnap.exists() && directSnap.data().deleted !== true) {
-      const data = directSnap.data() as Record<string, unknown>;
-
-      return {
-        id: directSnap.id,
-        name: String(data.name ?? ""),
-        category: String(data.category ?? ""),
-        sku: String(data.sku ?? ""),
-        hcpcs: String(data.hcpcs ?? ""),
-        upc: String(data.upc ?? ""),
-        manufacturer: String(data.manufacturer ?? data.brand ?? ""),
-        manufacturerItemId: String(data.manufacturerItemId ?? ""),
-        model: String(data.model ?? ""),
-        defaultPurchasePrice: Number(data.defaultPurchasePrice ?? 0),
-        reorderLevel: Number(data.reorderLevel ?? 0),
-        status: String(data.status ?? "active"),
-        deleted: data.deleted === true,
-      };
-    }
-
-    for (const [field, value] of checks) {
-      if (!value) continue;
-
-      const snap = await getDocs(
-        query(collection(db, "products"), where(field, "==", value), limit(1))
-      );
-      const match = snap.docs.find((product) => product.data().deleted !== true);
-
-      if (match) {
-        const data = match.data() as Record<string, unknown>;
-
-        return {
-          id: match.id,
-          name: String(data.name ?? ""),
-          category: String(data.category ?? ""),
-          sku: String(data.sku ?? ""),
-          hcpcs: String(data.hcpcs ?? ""),
-          upc: String(data.upc ?? ""),
-          manufacturer: String(data.manufacturer ?? data.brand ?? ""),
-          manufacturerItemId: String(data.manufacturerItemId ?? ""),
-          model: String(data.model ?? ""),
-          defaultPurchasePrice: Number(data.defaultPurchasePrice ?? 0),
-          reorderLevel: Number(data.reorderLevel ?? 0),
-          status: String(data.status ?? "active"),
-          deleted: data.deleted === true,
-        };
-      }
-    }
-
-    return null;
+    return {
+      id: product.id,
+      name: product.name,
+      category: product.category,
+      sku: product.sku,
+      hcpcs: product.hcpcs,
+      upc: product.upc,
+      manufacturer: product.manufacturer || product.brand || "",
+      manufacturerItemId: product.manufacturerItemId,
+      model: product.model,
+      defaultPurchasePrice: product.defaultPurchasePrice,
+      reorderLevel: product.reorderLevel,
+      status: product.status,
+      deleted: product.deleted,
+    };
   }
 
   async function createInventoryFromProductScan(rawCode: string, product: ProductScanMatch) {
@@ -269,15 +143,14 @@ export function useInventoryActions({
       sourceId: product.id,
     });
 
-    await updateDoc(doc(db, "inventory", result.inventoryId), {
+    await InventoryRepository.update(result.inventoryId, {
       ...payload,
       searchText,
       isDeleted: false,
       pendingScanReview: false,
       scanSource: "product_catalog_scan",
-      lastScannedAt: serverTimestamp(),
+      lastScannedAt: new Date().toISOString(),
       lastScanDirection: "in",
-      updatedAt: serverTimestamp(),
     });
 
     await logInventoryMovement({
@@ -408,16 +281,15 @@ export function useInventoryActions({
       sourceId: clean,
     });
 
-    await updateDoc(doc(db, "inventory", result.inventoryId), {
+    await InventoryRepository.update(result.inventoryId, {
       ...payload,
       productId: "",
       searchText,
       isDeleted: false,
       pendingScanReview: true,
       scanSource: "scan_in_unmatched",
-      lastScannedAt: serverTimestamp(),
+      lastScannedAt: new Date().toISOString(),
       lastScanDirection: "in",
-      updatedAt: serverTimestamp(),
     });
 
     await logInventoryMovement({
@@ -491,11 +363,10 @@ export function useInventoryActions({
       ? `Scanned out for ${outReason.replace(/_/g, " ")} by barcode/manual lookup.`
       : `${direction === "in" ? "Scanned in" : "Scanned out"} by barcode/manual lookup.`;
 
-    await updateDoc(doc(db, "inventory", item.id), {
+    await InventoryRepository.update(item.id, {
       quantityOnHand,
       available,
-      updatedAt: serverTimestamp(),
-      lastScannedAt: serverTimestamp(),
+      lastScannedAt: new Date().toISOString(),
       lastScanDirection: direction,
     });
 
@@ -634,7 +505,7 @@ export function useInventoryActions({
           isDeleted: false,
         });
 
-        await updateDoc(doc(db, "inventory", form.id), {
+        await InventoryRepository.update(form.id, {
           ...payload,
           productId: syncedProductId ?? payload.productId,
           searchText,
@@ -647,7 +518,6 @@ export function useInventoryActions({
             searchText,
             isDeleted: false,
           }),
-          updatedAt: serverTimestamp(),
         });
 
         await logInventoryMovement({
@@ -700,7 +570,7 @@ export function useInventoryActions({
           isDeleted: false,
         });
 
-        await updateDoc(doc(db, "inventory", result.inventoryId), {
+        await InventoryRepository.update(result.inventoryId, {
           ...payload,
           productId: syncedProductId ?? payload.productId,
           searchText,
@@ -713,7 +583,6 @@ export function useInventoryActions({
             searchText,
             isDeleted: false,
           }),
-          updatedAt: serverTimestamp(),
         });
 
         await logInventoryMovement({
@@ -765,11 +634,7 @@ export function useInventoryActions({
     }
 
     try {
-      await updateDoc(doc(db, "inventory", item.id), {
-        isDeleted: true,
-        deletedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
+      await InventoryRepository.softDelete(item.id);
 
       await logInventoryMovement({
         productId: item.productId,
@@ -806,7 +671,7 @@ export function useInventoryActions({
     }
 
     try {
-      await deleteDoc(doc(db, "inventory", item.id));
+      await InventoryRepository.hardDelete(item.id);
 
       await logInventoryMovement({
         productId: item.productId,
@@ -835,10 +700,9 @@ export function useInventoryActions({
     }
 
     try {
-      await updateDoc(doc(db, "inventory", item.id), {
+      await InventoryRepository.update(item.id, {
         status: "discontinued",
         lifecycleStatus: "retired",
-        updatedAt: serverTimestamp(),
       });
 
       await logInventoryMovement({
@@ -876,21 +740,15 @@ export function useInventoryActions({
     }
 
     try {
-      const chunks = chunkArray(selectedIds, FIRESTORE_BATCH_LIMIT);
-
-      for (const chunk of chunks) {
-        const batch = writeBatch(db);
-
-        chunk.forEach((id) => {
-          batch.update(doc(db, "inventory", id), {
+      await InventoryRepository.batchUpdate(
+        selectedIds.map((id) => ({
+          id,
+          data: {
             isDeleted: true,
-            deletedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        });
-
-        await batch.commit();
-      }
+            deletedAt: new Date().toISOString(),
+          },
+        }))
+      );
 
       await logInventoryMovement({
         productId: "",
@@ -925,21 +783,15 @@ export function useInventoryActions({
     }
 
     try {
-      const chunks = chunkArray(selectedIds, FIRESTORE_BATCH_LIMIT);
-
-      for (const chunk of chunks) {
-        const batch = writeBatch(db);
-
-        chunk.forEach((id) => {
-          batch.update(doc(db, "inventory", id), {
+      await InventoryRepository.batchUpdate(
+        selectedIds.map((id) => ({
+          id,
+          data: {
             status: "discontinued",
             lifecycleStatus: "retired",
-            updatedAt: serverTimestamp(),
-          });
-        });
-
-        await batch.commit();
-      }
+          },
+        }))
+      );
 
       await logInventoryMovement({
         productId: "",
@@ -972,5 +824,3 @@ export function useInventoryActions({
     handleBatchDiscontinue,
   };
 }
-
-

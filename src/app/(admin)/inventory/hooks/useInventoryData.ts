@@ -2,14 +2,11 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { collection, limit, onSnapshot, orderBy, query } from "firebase/firestore";
-
 import toast from "react-hot-toast";
 
-import { db } from "@/lib/firebase";
+import { InventoryRepository } from "@/repositories/firestore/inventory.repository";
 
 import { INVENTORY_LIMIT } from "../lib/inventoryConstants";
-import { normalizeInventoryItem } from "../lib/inventoryNormalize";
 import type { InventoryItem } from "../lib/inventoryTypes";
 
 type UseInventoryDataArgs = {
@@ -61,26 +58,10 @@ export function useInventoryData({
 
     permissionToastShownRef.current = false;
 
-    const inventoryQuery = query(
-      collection(db, "inventory"),
-      orderBy("name", "asc"),
-      limit(INVENTORY_LIMIT),
-    );
-
-    const unsubscribe = onSnapshot(
-      inventoryQuery,
-      (snapshot) => {
+    const unsubscribe = InventoryRepository.subscribeToInventory(
+      INVENTORY_LIMIT,
+      (rows) => {
         if (!isActive) return;
-
-        const rows = snapshot.docs
-          .map((docSnap) =>
-            normalizeInventoryItem(
-              docSnap.id,
-              docSnap.data() as Record<string, unknown>,
-            ),
-          )
-          .filter((item) => !item.isDeleted);
-
         setItems(rows);
         setLastLoadedAt(new Date());
         setHasResolvedInitialLoad(true);
@@ -107,5 +88,3 @@ export function useInventoryData({
     lastLoadedAt,
   };
 }
-
-

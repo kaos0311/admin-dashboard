@@ -11,10 +11,12 @@ import {
 
 import { useRouter, useSearchParams } from "next/navigation";
 import { onAuthStateChanged, signInWithEmailAndPassword } from "firebase/auth";
-import { Eye, EyeOff, Loader2, Lock, Mail } from "lucide-react";
+import { Eye, EyeOff, KeyRound, Loader2, Lock, Mail, Smartphone } from "lucide-react";
 import toast from "react-hot-toast";
 
 import { auth } from "@/lib/firebase";
+import { checkMfaRequired, resolveChallenge, type MfaSignInChallenge } from "@/lib/auth/mfa";
+import Link from "next/link";
 import { badges, buttons, forms, glass, typography } from "@/theme";
 
 function getSafeNextPath(rawNext: string | null): string {
@@ -75,6 +77,11 @@ export default function LoginPage() {
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  // MFA challenge state
+  const [mfaChallenge, setMfaChallenge] = useState<MfaSignInChallenge | null>(null);
+  const [mfaCode, setMfaCode] = useState("");
+  const [resolvingMfa, setResolvingMfa] = useState(false);
+
   const nextPath = useMemo(() => {
     return getSafeNextPath(searchParams.get("next"));
   }, [searchParams]);
@@ -109,6 +116,15 @@ export default function LoginPage() {
       await signInWithEmailAndPassword(auth, trimmedEmail, password);
       toast.success("Signed in.");
     } catch (error: unknown) {
+      // Check if this is an MFA challenge
+      const challenge = checkMfaRequired(auth, error);
+      if (challenge) {
+        setMfaChallenge(challenge);
+        setMfaCode("");
+        setSubmitting(false);
+        return;
+      }
+
       console.error("LOGIN ERROR:", error);
       toast.error(getFriendlyAuthError(error));
       setSubmitting(false);
@@ -123,6 +139,40 @@ export default function LoginPage() {
     [handleLogin]
   );
 
+  const handleMfaSubmit = useCallback(async () => {
+    const code = mfaCode.trim();
+    if (!code || code.length !== 6) {
+      toast.error("Enter the 6-digit code from your authenticator app.");
+      return;
+    }
+
+    if (!mfaChallenge) return;
+
+    setResolvingMfa(true);
+
+    try {
+      const factorUid = mfaChallenge.factors[0]?.uid;
+      if (!factorUid) {
+        toast.error("No MFA factor found for this account.");
+        setResolvingMfa(false);
+        return;
+      }
+
+      await resolveChallenge(mfaChallenge.resolver, factorUid, code);
+      toast.success("Signed in.");
+      // The onAuthStateChanged listener will redirect
+    } catch (error) {
+      console.error("MFA CHALLENGE ERROR:", error);
+      toast.error(getFriendlyAuthError(error));
+      setResolvingMfa(false);
+    }
+  }, [mfaCode, mfaChallenge]);
+
+  const handleCancelMfa = useCallback(() => {
+    setMfaChallenge(null);
+    setMfaCode("");
+  }, []);
+
   if (checkingUser) {
     return (
       <div className={glass.pageCenter}>
@@ -133,6 +183,98 @@ export default function LoginPage() {
       </div>
     );
   }
+
+  /* -------------------------- MFA CHALLENGE SCREEN ------------------------- */
+
+  if (mfaChallenge) {
+    return (
+      <main className={glass.pageCenter}>
+        <div className={glass.authCard}>
+          <div className="space-y-1">
+            <div className={badges.info}>
+              <Smartphone className="h-3.5 w-3.5" />
+              Second Factor Required
+            </div>
+
+            <h1 className={typography.sectionTitle}>Verification code</h1>
+
+            <p className={typography.bodyMuted}>
+              This account requires a one-time code from your authenticator app
+              to complete sign-in.
+            </p>
+          </div>
+
+          <div className="space-y-4 mt-6">
+            <div className={forms.field}>
+              <label htmlFor="mfa-challenge-code" className={forms.label}>
+                Authentication code
+              </label>
+
+              <div className="relative">
+                <KeyRound
+                  className={glass.inputIcon}
+                  aria-hidden={true}
+                />
+
+                <input
+                  id="mfa-challenge-code"
+                  name="mfa-code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  title="Enter the 6-digit code from your authenticator app"
+                  aria-label="Authentication code"
+                  value={mfaCode}
+                  onChange={(e) =>
+                    setMfaCode(e.target.value.replace(/\D/g, "").slice(0, 6))
+                  }
+                  placeholder="000000"
+                  maxLength={6}
+                  disabled={resolvingMfa}
+                  className={`${forms.inputIconLeft} font-mono text-center text-lg tracking-[0.25em]`}
+                />
+              </div>
+            </div>
+
+            {mfaChallenge.factors.length > 0 ? (
+              <p className={`text-xs ${typography.bodyFaint}`}>
+                Using: {mfaChallenge.factors[0]?.displayName ?? "Authenticator App"}
+              </p>
+            ) : null}
+          </div>
+
+          <div className="mt-6 flex flex-col gap-3">
+            <button
+              type="button"
+              onClick={handleMfaSubmit}
+              disabled={resolvingMfa || mfaCode.length !== 6}
+              className={buttons.fullPrimary}
+            >
+              {resolvingMfa ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Verifying...
+                </>
+              ) : (
+                "Verify & Sign In"
+              )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCancelMfa}
+              disabled={resolvingMfa}
+              className={buttons.secondary}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      </main>
+    );
+  }
+
+  /* -------------------------- NORMAL LOGIN SCREEN ------------------------- */
 
   return (
     <main className={glass.pageCenter}>
@@ -224,6 +366,16 @@ export default function LoginPage() {
           </div>
         </div>
 
+        <div className="text-right">
+          <Link
+            href="/forgot-password"
+            className="text-xs font-semibold tracking-wide text-[#888888] underline-offset-2 hover:text-[#9aba7e] hover:underline transition-colors"
+            tabIndex={0}
+          >
+            Forgot password?
+          </Link>
+        </div>
+
         <button
           type="submit"
           disabled={submitting}
@@ -242,4 +394,3 @@ export default function LoginPage() {
     </main>
   );
 }
-

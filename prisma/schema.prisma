@@ -95,3 +95,18 @@ model WorkOrder {
   openedAt    DateTime        @default(now())
   closedAt    DateTime?
 }
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     String?
+  userEmail  String?
+  userRole   String?
+  action     String
+  entityType String?
+  entityId   String?
+  success    Boolean  @default(true)
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+}

@@ -1,19 +1,7 @@
 "use client";
 
-import {
-  collection,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  setDoc,
-  where,
-} from "firebase/firestore";
-
 import { normalizeBarcode } from "@/lib/barcode";
-import { db } from "@/lib/firebase";
+import { InventoryRepository } from "@/repositories/firestore/inventory.repository";
 
 import type { InventoryItem } from "./inventoryTypes";
 
@@ -82,33 +70,16 @@ function inferProductTypeFromCategory(category: string) {
 }
 
 async function findExistingProduct(item: ProductSyncInput): Promise<string | null> {
-  const directProductId = clean(item.productId);
-  if (directProductId) {
-    const directSnap = await getDoc(doc(db, "products", directProductId));
-    if (directSnap.exists()) return directProductId;
-  }
-
-  const barcode = item.barcode ? normalizeBarcode(item.barcode) : "";
-  const checks: Array<[string, string]> = [
-    ["upc", barcode],
-    ["sku", clean(item.sku)],
-    ["hcpcs", clean(item.hcpc).toUpperCase()],
-    ["manufacturerItemId", clean(item.manufacturerItemId)],
-  ];
-
-  for (const [field, value] of checks) {
-    if (!value) continue;
-
-    const snap = await getDocs(
-      query(collection(db, "products"), where(field, "==", value), limit(1))
-    );
-
-    const match = snap.docs.find((docSnap) => docSnap.data().deleted !== true);
-    if (match) return match.id;
-  }
-
-  return null;
+  return InventoryRepository.findExistingProduct({
+    productId: item.productId,
+    barcode: item.barcode,
+    sku: item.sku,
+    hcpc: item.hcpc,
+    manufacturerItemId: item.manufacturerItemId,
+  });
 }
+
+const now = () => new Date().toISOString();
 
 export async function ensureProductFromInventory(item: ProductSyncInput) {
   const name = clean(item.name);
@@ -141,58 +112,50 @@ export async function ensureProductFromInventory(item: ProductSyncInput) {
     hcpcs,
   ];
 
-  await setDoc(
-    doc(db, "products", productId),
-    {
-      name,
-      brand: manufacturer,
-      model,
-      category: resolvedCategory,
-      productType,
-      manufacturer,
-      manufacturerItemId,
-      sku,
-      upc: barcode,
-      hcpcs,
-      defaultPurchasePrice: item.unitCost || 0,
-      unitOfMeasure: "each",
-      reorderLevel: item.reorderLevel || 0,
-      status: item.status === "discontinued" ? "discontinued" : "active",
-      isRentalItem: false,
-      isSerialized: Boolean(item.serial),
-      requiresSerialTracking: Boolean(item.serial),
-      lotTracking: Boolean(item.lotNumber),
-      deleted: false,
-      source: "inventory_auto_sync",
-      inventoryLinkedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-      searchText: normalizeSearchText(searchValues.join(" ")),
-      searchKeywords: buildSearchKeywords(searchValues),
-      ...(existingId
-        ? {}
-        : {
-            createdAt: serverTimestamp(),
-            autoCreatedFromInventory: true,
-            notes: "Created automatically from inventory scan/save.",
-          }),
-    },
-    { merge: true }
-  );
+  await InventoryRepository.upsertProduct(productId, {
+    name,
+    brand: manufacturer,
+    model,
+    category: resolvedCategory,
+    productType,
+    manufacturer,
+    manufacturerItemId,
+    sku,
+    upc: barcode,
+    hcpcs,
+    defaultPurchasePrice: item.unitCost || 0,
+    unitOfMeasure: "each",
+    reorderLevel: item.reorderLevel || 0,
+    status: item.status === "discontinued" ? "discontinued" : "active",
+    isRentalItem: false,
+    isSerialized: Boolean(item.serial),
+    requiresSerialTracking: Boolean(item.serial),
+    lotTracking: Boolean(item.lotNumber),
+    deleted: false,
+    source: "inventory_auto_sync",
+    inventoryLinkedAt: now(),
+    updatedAt: now(),
+    searchText: normalizeSearchText(searchValues.join(" ")),
+    searchKeywords: buildSearchKeywords(searchValues),
+    ...(existingId
+      ? {}
+      : {
+          createdAt: now(),
+          autoCreatedFromInventory: true,
+          notes: "Created automatically from inventory scan/save.",
+        }),
+  });
 
   if (hcpcs && /^[A-Z]\d{4}[A-Z0-9]{0,2}$/.test(hcpcs)) {
-    await setDoc(
-      doc(db, "hcpcsCodes", hcpcs),
-      {
-        code: hcpcs,
-        shopDescription: name,
-        shopCategory: resolvedCategory,
-        observedInShop: true,
-        lastObservedSource: "inventory_auto_sync",
-        lastObservedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      },
-      { merge: true }
-    );
+    await InventoryRepository.upsertHcpcsCode(hcpcs, {
+      code: hcpcs,
+      shopDescription: name,
+      shopCategory: resolvedCategory,
+      observedInShop: true,
+      lastObservedSource: "inventory_auto_sync",
+      lastObservedAt: now(),
+      updatedAt: now(),
+    });
   }
 
   return productId;

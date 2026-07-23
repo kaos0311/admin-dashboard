@@ -10,13 +10,8 @@ import {
 } from "lucide-react";
 
 import toast from "react-hot-toast";
-import {
-  collection,
-  limit,
-  onSnapshot,
-  query,
-} from "firebase/firestore";
 
+import { InventoryRepository } from "@/repositories/firestore/inventory.repository";
 import { colors, glass, tiles, typography } from "@/theme";
 import {
   AssetRecordsRouteTile,
@@ -141,16 +136,14 @@ export default function InventoryPage() {
       return;
     }
 
-    const patientsQuery = query(collection(db, "patients"), limit(2500));
-
-    const unsubscribe = onSnapshot(
-      patientsQuery,
-      (snapshot) => {
+    const unsubscribe = InventoryRepository.subscribeToPatients(
+      2500,
+      (patientDocs) => {
         setDeceasedPatients(
-          snapshot.docs.flatMap((patientDoc) => {
+          patientDocs.flatMap((patientDoc) => {
             const patient = mapPatientForPickup(
               patientDoc.id,
-              patientDoc.data() as Partial<PatientIndex> as Record<string, unknown>
+              patientDoc.data as Partial<PatientIndex> as Record<string, unknown>
             );
 
             return patient ? [patient] : [];

@@ -1,39 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";
+import { requireApiRole } from "@/lib/auth/require-api-auth";
 
 export const runtime = "nodejs";
-
-async function requireAdmin(authorizationHeader: string | null) {
-  if (!authorizationHeader) {
-    return { ok: false as const, response: NextResponse.json({ error: "Missing auth token" }, { status: 401 }) };
-  }
-
-  const token = authorizationHeader.replace("Bearer ", "");
-
-  try {
-    const decoded = await adminAuth.verifyIdToken(token);
-    if (decoded.role !== "admin" && decoded.role !== "tank") {
-      return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
-    }
-
-    const userSnap = await adminDb.collection("users").doc(decoded.uid).get();
-    const userData = userSnap.exists ? userSnap.data() : null;
-    const docRole = userData?.role;
-    const isAdminRole = docRole === "admin" || docRole === "tank";
-    const isDisabled =
-      userData?.active === false ||
-      userData?.disabled === true ||
-      userData?.deleted === true;
-
-    if (!userSnap.exists || isDisabled || !isAdminRole) {
-      return { ok: false as const, response: NextResponse.json({ error: "Forbidden" }, { status: 403 }) };
-    }
-
-    return { ok: true as const, uid: decoded.uid, email: decoded.email ?? null };
-  } catch {
-    return { ok: false as const, response: NextResponse.json({ error: "Invalid auth token" }, { status: 401 }) };
-  }
-}
 
 function toIso(value: unknown): string {
   if (!value) {
@@ -53,7 +22,7 @@ function toIso(value: unknown): string {
 
 export async function GET(request: NextRequest) {
   try {
-    const authResult = await requireAdmin(request.headers.get("authorization"));
+    const authResult = await requireApiRole(request, ["admin", "tank"]);
 
     if (!authResult.ok) {
       return authResult.response;
@@ -115,7 +84,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid priority level." }, { status: 400 });
     }
 
-    const authResult = await requireAdmin(request.headers.get("authorization"));
+    const authResult = await requireApiRole(request, ["admin", "tank"]);
 
     if (!authResult.ok) {
       return authResult.response;
@@ -169,7 +138,7 @@ export async function PATCH(request: NextRequest) {
       return NextResponse.json({ error: "Invalid action." }, { status: 400 });
     }
 
-    const authResult = await requireAdmin(request.headers.get("authorization"));
+    const authResult = await requireApiRole(request, ["admin", "tank"]);
 
     if (!authResult.ok) {
       return authResult.response;
