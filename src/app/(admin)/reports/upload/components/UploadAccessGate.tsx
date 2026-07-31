@@ -28,14 +28,7 @@ export function UploadAccessGate({ children }: UploadAccessGateProps) {
       ? authRole.error
       : authRole.error?.message ?? null;
 
-  const canManageUploads = Boolean(
-    authRole.isAdmin ||
-      authRole.isStaff ||
-      authRole.isTank ||
-      role === "admin" ||
-      role === "staff" ||
-      role === "tank"
-  );
+  const canManageUploads = Boolean(authRole.canUploadReports);
 
   if (roleLoading) {
     return (

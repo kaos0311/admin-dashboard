@@ -6,7 +6,9 @@ import Link from "next/link";
 import {
   AlertTriangle,
   CalendarClock,
+  Loader2,
   PackageCheck,
+  RefreshCcw,
   ShieldCheck,
   Stethoscope,
   Wrench,
@@ -50,6 +52,7 @@ export default function RentalsPage() {
     saving,
     saveRental,
     editRental,
+    exchangeRental,
     resetForm,
   } = useRentals();
 
@@ -73,6 +76,16 @@ export default function RentalsPage() {
     useState("");
   const [parSyncMessage, setParSyncMessage] =
     useState("");
+  const [exchangeRecord, setExchangeRecord] =
+    useState<RentalRecord | null>(null);
+  const [exchangeReplacementId, setExchangeReplacementId] =
+    useState("");
+  const [exchangeReplacementSerial, setExchangeReplacementSerial] =
+    useState("");
+  const [exchangeReason, setExchangeReason] =
+    useState("");
+  const [exchangeSaving, setExchangeSaving] =
+    useState(false);
   const syncedParKeysRef = useRef(new Set<string>());
 
   useEffect(() => {
@@ -160,6 +173,40 @@ export default function RentalsPage() {
     }));
     setActiveReport("maintenance");
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function startExchange(record: RentalRecord) {
+    setExchangeRecord(record);
+    setExchangeReplacementId("");
+    setExchangeReplacementSerial("");
+    setExchangeReason("");
+    setError("");
+  }
+
+  async function submitExchange() {
+    if (!exchangeRecord) return;
+
+    const confirmed = window.confirm(
+      `Exchange ${exchangeRecord.productName || "this rental"} for replacement inventory ${exchangeReplacementId.trim()}?`
+    );
+    if (!confirmed) return;
+
+    setExchangeSaving(true);
+    setError("");
+
+    try {
+      await exchangeRental({
+        record: exchangeRecord,
+        replacementInventoryItemId: exchangeReplacementId,
+        replacementSerialNumber: exchangeReplacementSerial,
+        reason: exchangeReason,
+      });
+      setExchangeRecord(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to exchange rental.");
+    } finally {
+      setExchangeSaving(false);
+    }
   }
 
   return (
@@ -287,11 +334,27 @@ export default function RentalsPage() {
             parSyncMessage={parSyncMessage}
             loading={loading}
             onStartRepair={startRepairRecord}
+            onStartExchange={startExchange}
             onEdit={editRental}
             onParFocus={setParFocus}
             onClearParFocus={() => setParFocus("")}
           />
         </section>
+
+        {exchangeRecord ? (
+          <ExchangeRentalModal
+            record={exchangeRecord}
+            replacementInventoryItemId={exchangeReplacementId}
+            setReplacementInventoryItemId={setExchangeReplacementId}
+            replacementSerialNumber={exchangeReplacementSerial}
+            setReplacementSerialNumber={setExchangeReplacementSerial}
+            reason={exchangeReason}
+            setReason={setExchangeReason}
+            saving={exchangeSaving}
+            onCancel={() => setExchangeRecord(null)}
+            onSubmit={submitExchange}
+          />
+        ) : null}
       </div>
     </main>
   );
@@ -308,6 +371,7 @@ function RentalCallableReport({
   onEdit,
   onParFocus,
   onClearParFocus,
+  onStartExchange,
 }: {
   report: RentalReportKey;
   records: RentalRecord[];
@@ -319,6 +383,7 @@ function RentalCallableReport({
   onEdit: (record: RentalRecord) => void;
   onParFocus: (value: string) => void;
   onClearParFocus: () => void;
+  onStartExchange: (record: RentalRecord) => void;
 }) {
   const selectedEquipmentRows = selectedEquipment
     ? records.filter((record) => {
@@ -360,6 +425,7 @@ function RentalCallableReport({
         rows={selectedEquipmentRows}
         empty="No patients found for this equipment."
         onStartRepair={onStartRepair}
+        onStartExchange={onStartExchange}
         onEdit={onEdit}
       />
     );
@@ -374,6 +440,7 @@ function RentalCallableReport({
         rows={overdueRows}
         empty="No overdue rentals found."
         onStartRepair={onStartRepair}
+        onStartExchange={onStartExchange}
         onEdit={onEdit}
       />
     );
@@ -388,6 +455,7 @@ function RentalCallableReport({
         rows={maintenanceRows}
         empty="No maintenance records yet."
         onStartRepair={onStartRepair}
+        onStartExchange={onStartExchange}
         onEdit={onEdit}
         action={
           <button
@@ -422,6 +490,7 @@ function RentalCallableReport({
           ) : null
         }
         onStartRepair={onStartRepair}
+        onStartExchange={onStartExchange}
         onEdit={onEdit}
         mode="pars"
         parFocus={parFocus}
@@ -456,6 +525,7 @@ function RentalCallableReport({
       rows={rows}
       empty="No rows found for this report."
       onStartRepair={onStartRepair}
+      onStartExchange={onStartExchange}
       onEdit={onEdit}
     />
   );
@@ -473,6 +543,7 @@ function ReportTable({
   parSyncMessage,
   onParFocus,
   onStartRepair,
+  onStartExchange,
   onEdit,
 }: {
   title: string;
@@ -486,6 +557,7 @@ function ReportTable({
   parSyncMessage?: string;
   onParFocus?: (value: string) => void;
   onStartRepair: (record: RentalRecord) => void;
+  onStartExchange: (record: RentalRecord) => void;
   onEdit: (record: RentalRecord) => void;
 }) {
   return (
@@ -612,6 +684,16 @@ function ReportTable({
                         >
                           Repair
                         </button>
+                        {record.status === "checked_out" || record.status === "overdue" ? (
+                          <button
+                            type="button"
+                            className={buttons.compactPrimary}
+                            onClick={() => onStartExchange(record)}
+                          >
+                            <RefreshCcw className="h-3.5 w-3.5" />
+                            Exchange
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -621,6 +703,90 @@ function ReportTable({
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+function ExchangeRentalModal({
+  record,
+  replacementInventoryItemId,
+  setReplacementInventoryItemId,
+  replacementSerialNumber,
+  setReplacementSerialNumber,
+  reason,
+  setReason,
+  saving,
+  onCancel,
+  onSubmit,
+}: {
+  record: RentalRecord;
+  replacementInventoryItemId: string;
+  setReplacementInventoryItemId: (value: string) => void;
+  replacementSerialNumber: string;
+  setReplacementSerialNumber: (value: string) => void;
+  reason: string;
+  setReason: (value: string) => void;
+  saving: boolean;
+  onCancel: () => void;
+  onSubmit: () => Promise<void>;
+}) {
+  const canSubmit = Boolean(replacementInventoryItemId.trim() && reason.trim()) && !saving;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
+      <div className={`${glass.panelPadded} w-full max-w-2xl shadow-2xl shadow-black/40`}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <h2 className={typography.sectionTitle}>Exchange Rental Asset</h2>
+            <p className={`${typography.bodyMuted} mt-2`}>
+              Current: {record.productName || "Unnamed rental"} · {record.itemId || "No inventory ID"} · SN {record.serialNumber || "—"}
+            </p>
+          </div>
+          <button type="button" className={buttons.compactSecondary} onClick={onCancel} disabled={saving}>
+            Close
+          </button>
+        </div>
+
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+          <label className="block">
+            <span className={typography.smallMuted}>Replacement inventory ID</span>
+            <input
+              value={replacementInventoryItemId}
+              onChange={(event) => setReplacementInventoryItemId(event.target.value)}
+              className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none"
+              placeholder="inventory/{id}"
+            />
+          </label>
+          <label className="block">
+            <span className={typography.smallMuted}>Replacement serial</span>
+            <input
+              value={replacementSerialNumber}
+              onChange={(event) => setReplacementSerialNumber(event.target.value)}
+              className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none"
+              placeholder="Optional serial"
+            />
+          </label>
+          <label className="block sm:col-span-2">
+            <span className={typography.smallMuted}>Reason</span>
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              className="mt-2 min-h-24 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none"
+              placeholder="Required reason for exchange"
+            />
+          </label>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-3">
+          <button type="button" className={buttons.secondary} onClick={onCancel} disabled={saving}>
+            Cancel
+          </button>
+          <button type="button" className={buttons.primary} onClick={onSubmit} disabled={!canSubmit}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+            Exchange
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

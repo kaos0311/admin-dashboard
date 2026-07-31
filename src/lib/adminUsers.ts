@@ -42,6 +42,8 @@ export type CreateDashboardUserResult = {
 
 const functions = getFunctions(app, "us-central1");
 
+const CALLABLE_TIMEOUT_MS = 30_000;
+
 function cleanMessage(message: string): string {
   return message
     .replace(/^Firebase:\s*/i, "")
@@ -49,9 +51,9 @@ function cleanMessage(message: string): string {
     .trim();
 }
 
-export function getErrorMessage(error: unknown): string {
+function getErrorMessage(error: unknown): string {
   if (error instanceof FirebaseError) {
-    return cleanMessage(error.message);
+    return cleanMessage(error.message || "Firebase request failed.");
   }
 
   if (error instanceof Error) {
@@ -61,21 +63,88 @@ export function getErrorMessage(error: unknown): string {
   return "An unexpected error occurred.";
 }
 
+async function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs = CALLABLE_TIMEOUT_MS
+): Promise<T> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const timeoutPromise = new Promise<never>((_, reject) => {
+    timeoutId = setTimeout(() => {
+      reject(
+        new Error(
+          `The server did not respond within ${Math.round(
+            timeoutMs / 1000
+          )} seconds. Please try again.`
+        )
+      );
+    }, timeoutMs);
+  });
+
+  try {
+    return await Promise.race([promise, timeoutPromise]);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
+}
+
+async function verifyCurrentUser(): Promise<void> {
+  const auth = getAuth(app);
+  const currentUser = auth.currentUser;
+
+  console.log("[adminUsers] Current auth state", {
+    uid: currentUser?.uid ?? null,
+    email: currentUser?.email ?? null,
+  });
+
+  if (!currentUser) {
+    throw new Error(
+      "Your session is no longer active. Refresh the page and sign in again."
+    );
+  }
+
+  const tokenResult = await withTimeout(
+    currentUser.getIdTokenResult(true),
+    15_000
+  );
+
+  console.log("[adminUsers] Current token claims", tokenResult.claims);
+}
+
 async function callFunction<TPayload, TResult>(
-  name: string,
+  functionName: string,
   payload: TPayload
 ): Promise<TResult> {
+  console.log(`[adminUsers] Preparing ${functionName}`, payload);
+
   try {
+    await verifyCurrentUser();
+
     const callable = httpsCallable<TPayload, TResult>(
       functions,
-      name
+      functionName
     );
 
-    const result = await callable(payload);
+    console.log(`[adminUsers] Calling ${functionName}`);
 
-    return result.data;
+    const response = await withTimeout(callable(payload));
+
+    console.log(`[adminUsers] ${functionName} succeeded`, response.data);
+
+    return response.data;
   } catch (error) {
-    console.error(`[Cloud Function Error] ${name}:`, error);
+    console.error(`[adminUsers] ${functionName} failed`, error);
+
+    if (error instanceof FirebaseError) {
+      console.error(`[adminUsers] ${functionName} Firebase details`, {
+        code: error.code,
+        message: error.message,
+        customData: error.customData,
+        stack: error.stack,
+      });
+    }
 
     throw new Error(getErrorMessage(error));
   }
@@ -87,47 +156,43 @@ export async function createDashboardUser(
   return callFunction<
     CreateDashboardUserPayload,
     CreateDashboardUserResult
-  >("createDashboardUser", {
-    ...payload,
-    email: payload.email.trim().toLowerCase(),
-    displayName: payload.displayName?.trim() ?? "",
-  });
+  >("createDashboardUser", payload);
 }
 
 export async function updateUserRole(
   payload: UpdateUserRolePayload
 ): Promise<CloudFunctionResult> {
-  return callFunction<
-    UpdateUserRolePayload,
-    CloudFunctionResult
-  >("updateUserRole", payload);
-}
-
-export async function disableDashboardUser(
-  payload: UserActionPayload
-): Promise<CloudFunctionResult> {
-  return callFunction<
-    UserActionPayload,
-    CloudFunctionResult
-  >("disableDashboardUser", payload);
+  return callFunction<UpdateUserRolePayload, CloudFunctionResult>(
+    "updateUserRole",
+    payload
+  );
 }
 
 export async function enableDashboardUser(
   payload: UserActionPayload
 ): Promise<CloudFunctionResult> {
-  return callFunction<
-    UserActionPayload,
-    CloudFunctionResult
-  >("enableDashboardUser", payload);
+  return callFunction<UserActionPayload, CloudFunctionResult>(
+    "enableDashboardUser",
+    payload
+  );
+}
+
+export async function disableDashboardUser(
+  payload: UserActionPayload
+): Promise<CloudFunctionResult> {
+  return callFunction<UserActionPayload, CloudFunctionResult>(
+    "disableDashboardUser",
+    payload
+  );
 }
 
 export async function deleteUserAccount(
   payload: UserActionPayload
 ): Promise<CloudFunctionResult> {
-  return callFunction<
-    UserActionPayload,
-    CloudFunctionResult
-  >("deleteUserAccount", payload);
+  return callFunction<UserActionPayload, CloudFunctionResult>(
+    "deleteUserAccount",
+    payload
+  );
 }
 
 export async function resetUserPassword(
@@ -138,14 +203,3 @@ export async function resetUserPassword(
     CloudFunctionResult
   >("resetUserPassword", payload);
 }
-
-export async function forceRefreshCurrentUserToken(): Promise<void> {
-  const auth = getAuth(app);
-
-  if (!auth.currentUser) {
-    return;
-  }
-
-  await auth.currentUser.getIdToken(true);
-}
-

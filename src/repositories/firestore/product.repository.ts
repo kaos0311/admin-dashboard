@@ -48,6 +48,29 @@ const DOC_SETTINGS_APP = "app";
 // Helpers
 // ---------------------------------------------------------------------------
 
+const PROTECTED_PRODUCT_STOCK_FIELDS = new Set([
+  "quantityOnHand",
+  "available",
+  "onRent",
+  "committed",
+  "reserved",
+  "allocated",
+]);
+
+function assertProductMetadataOnlyWrite(data: Record<string, unknown>): void {
+  const blocked = Object.keys(data).filter((field) =>
+    PROTECTED_PRODUCT_STOCK_FIELDS.has(field)
+  );
+
+  if (blocked.length > 0) {
+    throw new Error(
+      `ProductRepository metadata writes cannot change protected stock fields: ${blocked.join(
+        ", "
+      )}. Use inventory movements instead.`
+    );
+  }
+}
+
 function readString(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -165,6 +188,7 @@ export const ProductRepository = {
    * Update an existing product document (merge semantics with updatedAt).
    */
   async update(id: string, data: Record<string, unknown>): Promise<void> {
+    assertProductMetadataOnlyWrite(data);
     await updateDoc(doc(db, COLLECTION_PRODUCTS, id), {
       ...data,
       updatedAt: serverTimestamp(),

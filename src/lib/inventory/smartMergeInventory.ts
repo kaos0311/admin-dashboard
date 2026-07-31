@@ -1,7 +1,6 @@
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDocs,
   limit,
@@ -214,37 +213,6 @@ async function findExistingInventory(input: SmartMergeInventoryInput) {
   return null;
 }
 
-async function consolidateDuplicate(
-  keepId: string,
-  removeId: string,
-  mergedPayload: Record<string, unknown>,
-  nextQuantity: number,
-  unitCost: number
-) {
-  await updateDoc(doc(db, "inventory", keepId), {
-    ...mergedPayload,
-    quantityOnHand: nextQuantity,
-    totalValue: nextQuantity * unitCost,
-    updatedAt: serverTimestamp(),
-  });
-
-  await addDoc(collection(db, "stockMovements"), {
-    productId: mergedPayload.productId,
-    productName: mergedPayload.name,
-    barcode: mergedPayload.barcode,
-    serial: mergedPayload.serial,
-    lotNumber: mergedPayload.lotNumber,
-    type: "inventory_update",
-    quantity: nextQuantity,
-    source: "smart_merge_consolidation",
-    sourceId: keepId,
-    notes: `Consolidated duplicate inventory record ${removeId} into ${keepId}.`,
-    createdAt: serverTimestamp(),
-  });
-
-  await deleteDoc(doc(db, "inventory", removeId));
-}
-
 async function logStockMovement(args: {
   productId: string;
   productName: string;
@@ -344,11 +312,6 @@ export async function smartMergeInventory(
   }
 
   const previousQuantity = numberSafe(existing.data.quantityOnHand);
-  const nextQuantity = previousQuantity + quantityOnHand;
-  const nextAvailable =
-    nextQuantity -
-    numberSafe(existing.data.committed) -
-    numberSafe(existing.data.onRent);
 
   const mergedPayload = {
     productId: pick(existing.data.productId, payload.productId),
@@ -367,15 +330,8 @@ export async function smartMergeInventory(
     expirationDate: pick(existing.data.expirationDate, payload.expirationDate),
     locationName: payload.locationName,
     binLocation: pick(existing.data.binLocation, payload.binLocation),
-    quantityOnHand: nextQuantity,
-    committed,
-    onRent,
-    onOrder,
-    available: nextAvailable,
     reorderLevel: pick(existing.data.reorderLevel, payload.reorderLevel),
     unitCost,
-    totalValue: nextQuantity * unitCost,
-    status: payload.status,
     notes:
       payload.notes ||
       clean(existing.data.notes) ||
@@ -403,7 +359,7 @@ export async function smartMergeInventory(
       ),
       locationName: payload.locationName,
       binLocation: clean(pick(existing.data.binLocation, payload.binLocation)),
-      quantityOnHand: nextQuantity,
+      quantityOnHand: previousQuantity,
       status: payload.status,
       notes:
         payload.notes ||
@@ -418,18 +374,9 @@ export async function smartMergeInventory(
 
   await updateDoc(doc(db, "inventory", existing.id), mergedPayload);
 
-  await logStockMovement({
-    productId: String(pick(existing.data.productId, payload.productId)),
-    productName: payload.name,
-    barcode: String(pick(existing.data.barcode, payload.barcode)),
-    serial: String(pick(existing.data.serial, payload.serial)),
-    lotNumber: String(pick(existing.data.lotNumber, payload.lotNumber)),
-    type: quantityOnHand >= 0 ? "restock" : "manual_adjustment",
-    quantity: Math.abs(quantityOnHand),
-    source: mergeSource,
-    sourceId: mergeSourceId,
-    notes: `Smart merge updated quantity from ${previousQuantity} to ${nextQuantity}.`,
-  });
+  void quantityOnHand;
+  void mergeSource;
+  void mergeSourceId;
 
   return {
     action: "merged",

@@ -4,7 +4,6 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   onSnapshot,
   orderBy,
@@ -12,6 +11,12 @@ import {
   serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
+import {
+  cancelRentalWorkflow,
+  createAndCheckoutRentalWorkflow,
+  exchangeRentalWorkflow,
+  returnRentalWorkflow,
+} from "@/lib/domainWorkflows";
 import { db } from "@/lib/firebase";
 import {
   DEFAULT_RENTAL_FILTERS,
@@ -88,18 +93,25 @@ export function useRentals() {
     setSaving(true);
 
     try {
-      const payload = {
-        ...form,
+      const {
+        status: workflowStatus,
+        patientId: workflowPatientId,
+        patientName: workflowPatientName,
+        itemId: workflowItemId,
+        ...metadataForm
+      } = form;
+      const rentalMetadata = {
+        ...metadataForm,
         productName: cleanProductName,
-        itemId: form.itemId.trim(),
+        itemId: workflowItemId.trim(),
         itemGroup: form.itemGroup.trim(),
         procCode: form.procCode.trim(),
         modifiers: form.modifiers.trim(),
         serialNumber: cleanSerialNumber,
         assetNumber: form.assetNumber.trim(),
         assetTag: cleanAssetTag,
-        patientName: form.patientName.trim(),
-        patientId: form.patientId.trim(),
+        patientName: workflowPatientName.trim(),
+        patientId: workflowPatientId.trim(),
         patientDob: form.patientDob.trim(),
         phone: form.phone.trim(),
         location: form.location.trim(),
@@ -132,16 +144,46 @@ export function useRentals() {
         salesOrderDetailId: form.salesOrderDetailId.trim(),
         hospice: form.hospice,
         sourceReport: form.sourceReport.trim(),
-        updatedAt: serverTimestamp(),
       };
 
       if (editingId) {
-        await updateDoc(doc(db, RENTALS_COLLECTION, editingId), payload);
+        const safeMetadataPayload: Partial<typeof rentalMetadata> & { updatedAt?: ReturnType<typeof serverTimestamp> } = {
+          ...rentalMetadata,
+          updatedAt: serverTimestamp(),
+        };
+        delete safeMetadataPayload.itemId;
+        delete safeMetadataPayload.patientId;
+        delete safeMetadataPayload.patientName;
+        await updateDoc(doc(db, RENTALS_COLLECTION, editingId), safeMetadataPayload);
       } else {
-        await addDoc(collection(db, RENTALS_COLLECTION), {
-          ...payload,
-          createdAt: serverTimestamp(),
-        });
+        if (workflowStatus === "checked_out") {
+          const rentalId = doc(collection(db, RENTALS_COLLECTION)).id;
+          const result = await createAndCheckoutRentalWorkflow({
+            operationId: `rental-create-checkout-${rentalId}`,
+            rentalId,
+            inventoryItemId: workflowItemId.trim(),
+            productId: form.productId.trim(),
+            patientId: workflowPatientId.trim(),
+            patientName: workflowPatientName.trim(),
+            serialNumber: cleanSerialNumber,
+            quantity: Number.isFinite(Number(form.quantity))
+              ? Number(form.quantity)
+              : 1,
+            reason: "Rental created and checked out from rentals page.",
+            rentalData: rentalMetadata,
+          });
+
+          if (result.status !== "success" && result.status !== "duplicate_operation") {
+            throw new Error(result.message || "Rental create-and-checkout workflow failed.");
+          }
+        } else {
+          await addDoc(collection(db, RENTALS_COLLECTION), {
+            ...rentalMetadata,
+            status: workflowStatus || "draft",
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          });
+        }
       }
 
       resetForm();
@@ -199,19 +241,75 @@ export function useRentals() {
   }, []);
 
   const deleteRental = useCallback(async (recordId: string) => {
-    await deleteDoc(doc(db, RENTALS_COLLECTION, recordId));
+    const result = await cancelRentalWorkflow({
+      operationId: `rental-cancel-${recordId}`,
+      rentalId: recordId,
+      reason: "Rental cancelled from rentals page.",
+    });
+
+    if (result.status !== "success" && result.status !== "duplicate_operation") {
+      throw new Error(result.message || "Rental cancellation failed.");
+    }
   }, []);
 
   const markReturned = useCallback(async (recordId: string) => {
     const today = new Date().toISOString().slice(0, 10);
+    const record = records.find((item) => item.id === recordId);
 
-    await updateDoc(doc(db, RENTALS_COLLECTION, recordId), {
-      status: "available",
-      patientName: "",
-      patientId: "",
-      returnedDate: today,
-      updatedAt: serverTimestamp(),
+    if (!record) {
+      throw new Error("Rental record was not found.");
+    }
+
+    const result = await returnRentalWorkflow({
+      operationId: `rental-return-${recordId}`,
+      rentalId: recordId,
+      inventoryItemId: record.itemId,
+      productId: record.productId,
+      serialNumber: record.serialNumber,
+      quantity: Math.max(1, Number(record.quantity || 1)),
+      patientId: record.patientId,
+      reason: `Rental marked returned on ${today}.`,
     });
+
+    if (result.status !== "success" && result.status !== "duplicate_operation") {
+      throw new Error(result.message || "Rental return workflow failed.");
+    }
+  }, [records]);
+
+  const exchangeRental = useCallback(async (params: {
+    record: RentalRecord;
+    replacementInventoryItemId: string;
+    replacementSerialNumber?: string;
+    reason: string;
+  }) => {
+    const replacementInventoryItemId = params.replacementInventoryItemId.trim();
+    const reason = params.reason.trim();
+
+    if (!replacementInventoryItemId) {
+      throw new Error("Replacement inventory item ID is required.");
+    }
+    if (!reason) {
+      throw new Error("Reason is required for rental exchange.");
+    }
+
+    const result = await exchangeRentalWorkflow({
+      operationId: `rental-exchange-${params.record.id}-${replacementInventoryItemId}`,
+      rentalId: params.record.id,
+      inventoryItemId: params.record.itemId,
+      replacementInventoryItemId,
+      productId: params.record.productId,
+      replacementProductId: params.record.productId,
+      patientId: params.record.patientId,
+      patientName: params.record.patientName,
+      serialNumber: params.record.serialNumber,
+      replacementSerialNumber: params.replacementSerialNumber?.trim(),
+      quantity: Math.max(1, Number(params.record.quantity || 1)),
+      reason,
+    });
+
+    if (result.status !== "success" && result.status !== "duplicate_operation") {
+      throw new Error(result.message || "Rental exchange workflow failed.");
+    }
   }, []);
 
   return {
@@ -228,6 +326,7 @@ export function useRentals() {
     editRental,
     deleteRental,
     markReturned,
+    exchangeRental,
     resetForm,
   };
 }

@@ -1,0 +1,141 @@
+import { httpsCallable } from "firebase/functions";
+
+import { functions } from "@/lib/firebase";
+
+export type DomainWorkflowResult = {
+  status:
+    | "success"
+    | "duplicate_operation"
+    | "not_found"
+    | "invalid"
+    | "permission_denied";
+  operationId: string;
+  workflowType: string;
+  message?: string;
+  movementIds?: string[];
+};
+
+export type DeliveryWorkflowRequest = {
+  operationId: string;
+  ticketId: string;
+  lineId?: string;
+  inventoryItemId: string;
+  productId?: string;
+  barcode?: string;
+  serialNumber?: string;
+  lotNumber?: string;
+  quantity?: number;
+  mode: "load" | "deliver" | "return";
+  patientId?: string;
+  patientName?: string;
+  deliveryTicketNumber?: string;
+  salesOrderNumber?: string;
+  vehicleId?: string;
+  truckId?: string;
+  returnCondition?: string;
+  returnNotes?: string;
+};
+
+export type RentalWorkflowRequest = {
+  operationId: string;
+  rentalId: string;
+  inventoryItemId?: string;
+  productId?: string;
+  patientId?: string;
+  patientName?: string;
+  serialNumber?: string;
+  quantity?: number;
+  reason?: string;
+};
+
+export type PatientEquipmentWorkflowRequest = {
+  operationId: string;
+  action:
+    | "assign"
+    | "remove"
+    | "transfer"
+    | "recover_deceased"
+    | "replace"
+    | "lost"
+    | "damaged"
+    | "return_to_warehouse";
+  patientId: string;
+  toPatientId?: string;
+  inventoryItemId: string;
+  replacementInventoryItemId?: string;
+  productId?: string;
+  patientName?: string;
+  toPatientName?: string;
+  barcode?: string;
+  serialNumber?: string;
+  lotNumber?: string;
+  quantity?: number;
+  reason?: string;
+};
+
+export async function recordDeliveryScanWorkflow(
+  request: DeliveryWorkflowRequest
+): Promise<DomainWorkflowResult> {
+  const callable = httpsCallable<DeliveryWorkflowRequest, DomainWorkflowResult>(
+    functions,
+    "recordDeliveryScanWorkflowCallable"
+  );
+  const result = await callable(request);
+  return result.data;
+}
+
+export async function completeDeliveryTicketWorkflow(request: {
+  operationId: string;
+  ticketId: string;
+}): Promise<DomainWorkflowResult> {
+  const callable = httpsCallable<
+    { operationId: string; ticketId: string },
+    DomainWorkflowResult
+  >(functions, "completeDeliveryTicketWorkflowCallable");
+  const result = await callable(request);
+  return result.data;
+}
+
+export async function returnRentalWorkflow(
+  request: RentalWorkflowRequest
+): Promise<DomainWorkflowResult> {
+  const callable = httpsCallable<RentalWorkflowRequest, DomainWorkflowResult>(
+    functions,
+    "returnRentalWorkflowCallable"
+  );
+  const result = await callable(request);
+  return result.data;
+}
+
+export async function checkoutRentalWorkflow(
+  request: RentalWorkflowRequest
+): Promise<DomainWorkflowResult> {
+  const callable = httpsCallable<RentalWorkflowRequest, DomainWorkflowResult>(
+    functions,
+    "checkoutRentalWorkflowCallable"
+  );
+  const result = await callable(request);
+  return result.data;
+}
+
+export async function cancelRentalWorkflow(
+  request: RentalWorkflowRequest
+): Promise<DomainWorkflowResult> {
+  const callable = httpsCallable<RentalWorkflowRequest, DomainWorkflowResult>(
+    functions,
+    "cancelRentalWorkflowCallable"
+  );
+  const result = await callable(request);
+  return result.data;
+}
+
+export async function patientEquipmentWorkflow(
+  request: PatientEquipmentWorkflowRequest
+): Promise<DomainWorkflowResult> {
+  const callable = httpsCallable<PatientEquipmentWorkflowRequest, DomainWorkflowResult>(
+    functions,
+    "patientEquipmentWorkflowCallable"
+  );
+  const result = await callable(request);
+  return result.data;
+}

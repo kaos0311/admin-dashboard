@@ -3,6 +3,8 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+import { writeAuditEntry } from "./audit/writeAuditEntry.js";
+
 if (!getApps().length) {
   initializeApp();
 }
@@ -186,13 +188,14 @@ export const createDashboardUser = onCall(
         { merge: true }
       );
 
-      await db.collection("auditLogs").add({
-        action: "dashboard_user_created",
+      await writeAuditEntry({
+        action: "user_created",
+        performedByUid: request.auth.uid,
+        performedByEmail: String(request.auth.token?.email ?? ""),
         targetUid: userRecord.uid,
         targetEmail: email,
-        role,
-        createdBy: request.auth.uid,
-        createdAt: FieldValue.serverTimestamp(),
+        details: { displayName, role },
+        success: true,
       });
 
       return {

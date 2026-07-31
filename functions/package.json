@@ -15,7 +15,10 @@
     "deploy": "firebase deploy --only functions",
     "logs": "firebase functions:log",
     "clean": "rimraf lib",
-    "rebuild": "npm run clean && npm run build"
+    "rebuild": "npm run clean && npm run build",
+    "test": "vitest run --config vitest.config.ts",
+    "test:integration": "vitest run --config vitest.integration.config.ts",
+    "test:emulator": "firebase emulators:exec --only firestore,auth \"npm run test:integration\""
   },
   "dependencies": {
     "firebase-admin": "^13.6.0",
@@ -34,6 +37,7 @@
     "eslint-plugin-import": "^2.32.0",
     "firebase-functions-test": "^3.4.1",
     "rimraf": "^6.0.1",
-    "typescript": "^5.8.3"
+    "typescript": "^5.8.3",
+    "vitest": "^4.1.10"
   }
 }

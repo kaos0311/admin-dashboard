@@ -1,16 +1,6 @@
-﻿import {
-  collection,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  where,
-} from "firebase/firestore";
-
-import { db } from "@/lib/firebase";
+﻿import { OrderRepository } from "@/repositories/firestore/order.repository";
 
 import { IMPORT_SAMPLE_BYTES } from "./orderConstants";
-import { normalizeImportJob } from "./orderNormalize";
 
 import type {
   ImportJob,
@@ -160,24 +150,5 @@ export const detectReportTypeFromFile =
 export async function findRecentDuplicateImport(
   duplicateKey: string
 ): Promise<ImportJob | null> {
-  const importsRef = collection(db, "importJobs");
-
-  const duplicateQuery = query(
-    importsRef,
-    where("duplicateKey", "==", duplicateKey),
-    orderBy("createdAt", "desc"),
-    limit(1)
-  );
-
-  const snapshot = await getDocs(duplicateQuery);
-
-  if (snapshot.empty) {
-    return null;
-  }
-
-  const doc = snapshot.docs[0];
-
-  return normalizeImportJob(doc.id, doc.data() as ImportJob);
+  return OrderRepository.findDuplicateImport(duplicateKey);
 }
-
-

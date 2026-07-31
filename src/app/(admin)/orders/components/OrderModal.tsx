@@ -9,7 +9,7 @@ import type {
   FacilityAutofillOption,
   PatientAutofillOption,
   ProductAutofillOption,
-} from "../hooks/useOrderAutofill";
+} from "@/repositories/firestore/order.types";
 import type { OrderFormState, OrderStatus } from "../lib/orderTypes";
 
 const statusOptions: Array<{ value: OrderStatus; label: string }> = [
@@ -384,6 +384,3 @@ function TextField({
     </div>
   );
 }
-
-
-

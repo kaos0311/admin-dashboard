@@ -12,8 +12,18 @@ import {
 import { doc, getDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
+import {
+  type UserRole as DefinedUserRole,
+  getRoleFromUserRecord,
+  hasPermission,
+  isActiveUserRecord,
+  isAdminRole,
+  isStaffRole,
+  parseRole,
+  resolveUserRole,
+} from "@/lib/permissions/roles";
 
-export type UserRole = "admin" | "staff" | "tank" | null;
+export type UserRole = DefinedUserRole | null;
 
 type UseAuthRoleResult = {
   user: User | null;
@@ -42,42 +52,6 @@ type CachedRoleState = {
 const ROLE_CACHE_TTL_MS = 60_000;
 
 let roleCache: CachedRoleState | null = null;
-
-function parseRole(value: unknown): UserRole {
-  return value === "admin" || value === "staff" || value === "tank"
-    ? value
-    : null;
-}
-
-function getRoleFromUserRecord(data: Record<string, unknown>): UserRole {
-  const dbRole = parseRole(data.role);
-  if (dbRole) return dbRole;
-
-  if (data.temporaryTankAccess === true) {
-    const prevRole = parseRole(data.previousRole);
-    if (prevRole === "admin" || prevRole === "tank") {
-      return "tank";
-    }
-  }
-
-  return null;
-}
-
-function mergeRoles(tokenRole: UserRole, dbRole: UserRole): UserRole {
-  if (tokenRole === "admin" || dbRole === "admin") {
-    return "admin";
-  }
-
-  if (tokenRole === "tank" || dbRole === "tank") {
-    return "tank";
-  }
-
-  if (tokenRole === "staff" || dbRole === "staff") {
-    return "staff";
-  }
-
-  return null;
-}
 
 function getErrorMessage(error: unknown): string {
   return error instanceof Error && error.message.trim()
@@ -157,26 +131,23 @@ export function useAuthRole(): UseAuthRoleResult {
         let resolvedActive: boolean | null = true;
 
         const tokenResult = await getIdTokenResult(currentUser, true);
-        resolvedRole = parseRole(tokenResult.claims.role);
+        const tokenRole = parseRole(tokenResult.claims.role);
 
         const userSnap = await getDoc(doc(db, "users", currentUser.uid));
 
         if (userSnap.exists()) {
           const data = userSnap.data() as Record<string, unknown>;
 
-          resolvedActive =
-            data.active !== false &&
-            data.disabled !== true &&
-            data.deleted !== true;
+          resolvedActive = isActiveUserRecord(data);
 
           const dbRole = getRoleFromUserRecord(data);
-          resolvedRole = mergeRoles(resolvedRole, dbRole);
+          resolvedRole = resolveUserRole({
+            tokenRole,
+            dbRole,
+            hasUserRecord: true,
+          });
 
-          if (
-            data.active === false ||
-            data.disabled === true ||
-            data.deleted === true
-          ) {
+          if (!resolvedActive) {
             roleCache = null;
             await signOut(auth);
 
@@ -190,6 +161,12 @@ export function useAuthRole(): UseAuthRoleResult {
 
             return;
           }
+        } else {
+          resolvedRole = resolveUserRole({
+            tokenRole,
+            dbRole: null,
+            hasUserRecord: false,
+          });
         }
 
         setCachedRole(currentUser.uid, resolvedRole, resolvedActive);
@@ -223,9 +200,9 @@ export function useAuthRole(): UseAuthRoleResult {
 
   return useMemo(() => {
     const isTank = role === "tank";
-    const isAdmin = role === "admin" || isTank;
-    const isStaff = role === "staff";
-    const isAdminOrStaff = isAdmin || isStaff || isTank;
+    const isAdmin = isAdminRole(role);
+    const isStaff = isStaffRole(role);
+    const isAdminOrStaff = hasPermission(role, "access:command-center");
     const isActiveUser = active !== false;
     const canAccessCommandCenter = Boolean(user && isActiveUser && isAdminOrStaff);
 
@@ -240,8 +217,10 @@ export function useAuthRole(): UseAuthRoleResult {
       isTank,
       isAdminOrStaff,
       canAccessCommandCenter,
-      canUploadReports: canAccessCommandCenter,
-      canRefreshImports: canAccessCommandCenter,
+      canUploadReports:
+        canAccessCommandCenter && hasPermission(role, "reports:upload"),
+      canRefreshImports:
+        canAccessCommandCenter && hasPermission(role, "reports:upload"),
       canDeleteImports: canAccessCommandCenter && isAdmin,
       canReadAuditLogs: canAccessCommandCenter && isAdmin,
     };

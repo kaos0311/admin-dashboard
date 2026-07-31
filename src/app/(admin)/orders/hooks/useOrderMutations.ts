@@ -1,15 +1,9 @@
 "use client";
 
-import {
-  addDoc,
-  collection,
-  doc,
-  serverTimestamp,
-  updateDoc,
-} from "firebase/firestore";
 import toast from "react-hot-toast";
 
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
+import { OrderRepository } from "@/repositories/firestore/order.repository";
 import {
   allocateInventoryToOrder,
   findProductByBarcode,
@@ -103,29 +97,26 @@ export function useOrderMutations({
 
       const payload = buildSmartOrderPayload(form);
 
-      const orderRef = await addDoc(collection(db, "orders"), {
+      const orderId = await OrderRepository.create({
         ...payload,
         createdBy: getCurrentUserLabel(),
         createdByUid: auth.currentUser?.uid ?? "",
         updatedBy: getCurrentUserLabel(),
         updatedByUid: auth.currentUser?.uid ?? "",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       });
 
       await allocateInventoryToOrder({
         productId: form.productId.trim(),
         quantity: Number(form.quantity),
-        sourceId: orderRef.id,
+        sourceId: orderId,
         notes: `Order for ${form.patientName.trim()}`,
       });
 
-      await updateDoc(orderRef, {
+      await OrderRepository.updateAfterCreate(orderId, {
         inventoryAllocated: true,
-        inventoryAllocationSourceId: orderRef.id,
+        inventoryAllocationSourceId: orderId,
         inventoryRestored: false,
         needsReview: payload.reviewReasons.length > 0,
-        updatedAt: serverTimestamp(),
       });
 
       onComplete();
@@ -135,7 +126,7 @@ export function useOrderMutations({
     } catch (error: unknown) {
       console.error("CREATE ORDER ERROR:", error);
       setCreateError(
-        error instanceof Error ? error.message : "Failed to create order."
+        error instanceof Error ? error.message : "Failed to create order.",
       );
     } finally {
       setCreating(false);
@@ -173,11 +164,10 @@ export function useOrderMutations({
 
       const payload = buildSmartOrderPayload(editForm);
 
-      await updateDoc(doc(db, "orders", editingOrderId), {
+      await OrderRepository.update(editingOrderId, {
         ...payload,
         updatedBy: getCurrentUserLabel(),
         updatedByUid: auth.currentUser?.uid ?? "",
-        updatedAt: serverTimestamp(),
       });
 
       setOrders((prev) =>
@@ -188,8 +178,8 @@ export function useOrderMutations({
                 ...payload,
                 updatedAt: new Date(),
               })
-            : order
-        )
+            : order,
+        ),
       );
 
       onComplete();
@@ -197,7 +187,7 @@ export function useOrderMutations({
     } catch (error: unknown) {
       console.error("UPDATE ORDER ERROR:", error);
       setEditError(
-        error instanceof Error ? error.message : "Failed to update order."
+        error instanceof Error ? error.message : "Failed to update order.",
       );
     } finally {
       setEditing(false);
@@ -215,8 +205,8 @@ export function useOrderMutations({
               status,
               updatedAt: now,
             })
-          : order
-      )
+          : order,
+      ),
     );
   }
 
@@ -231,14 +221,13 @@ export function useOrderMutations({
         ? normalizeOrder(orderId, { ...currentOrder, status })
         : null;
 
-      await updateDoc(doc(db, "orders", orderId), {
+      await OrderRepository.update(orderId, {
         status,
         needsReview: nextOrder?.needsReview ?? false,
         reviewReasons: nextOrder?.reviewReasons ?? [],
         smartRouteTargets: nextOrder?.smartRouteTargets ?? [],
         updatedBy: getCurrentUserLabel(),
         updatedByUid: auth.currentUser?.uid ?? "",
-        updatedAt: serverTimestamp(),
       });
 
       if (
@@ -255,9 +244,8 @@ export function useOrderMutations({
           notes: `Order cancelled for ${currentOrder.patientName}`,
         });
 
-        await updateDoc(doc(db, "orders", orderId), {
+        await OrderRepository.update(orderId, {
           inventoryRestored: true,
-          updatedAt: serverTimestamp(),
         });
       }
 
@@ -270,7 +258,7 @@ export function useOrderMutations({
       console.error("UPDATE ORDER STATUS ERROR:", error);
       setOrders(previousOrders);
       toast.error(
-        error instanceof Error ? error.message : "Failed to update order status."
+        error instanceof Error ? error.message : "Failed to update order status.",
       );
     }
   }
@@ -281,16 +269,15 @@ export function useOrderMutations({
     try {
       applyLocalStatusUpdate(orderId, "archived");
 
-      await updateDoc(doc(db, "orders", orderId), {
+      await OrderRepository.update(orderId, {
         status: "archived",
         needsReview: false,
         reviewReasons: ["archived"],
-        archivedAt: serverTimestamp(),
+        archivedAt: new Date(),
         archivedBy: getCurrentUserLabel(),
         archivedByUid: auth.currentUser?.uid ?? "",
         updatedBy: getCurrentUserLabel(),
         updatedByUid: auth.currentUser?.uid ?? "",
-        updatedAt: serverTimestamp(),
       });
 
       if (tab !== "all" && tab !== "archived") {
@@ -302,7 +289,7 @@ export function useOrderMutations({
       console.error("ARCHIVE ORDER ERROR:", error);
       setOrders(previousOrders);
       toast.error(
-        error instanceof Error ? error.message : "Failed to archive order."
+        error instanceof Error ? error.message : "Failed to archive order.",
       );
     }
   }
@@ -332,7 +319,7 @@ export function useOrderMutations({
           })
         : null;
 
-      await updateDoc(doc(db, "orders", orderId), {
+      await OrderRepository.update(orderId, {
         status: "processing",
         inventoryAllocated: true,
         inventoryAllocationSourceId: orderId,
@@ -340,12 +327,11 @@ export function useOrderMutations({
         needsReview: nextOrder?.needsReview ?? false,
         reviewReasons: nextOrder?.reviewReasons ?? [],
         smartRouteTargets: nextOrder?.smartRouteTargets ?? [],
-        restoredAt: serverTimestamp(),
+        restoredAt: new Date(),
         restoredBy: getCurrentUserLabel(),
         restoredByUid: auth.currentUser?.uid ?? "",
         updatedBy: getCurrentUserLabel(),
         updatedByUid: auth.currentUser?.uid ?? "",
-        updatedAt: serverTimestamp(),
       });
 
       if (tab !== "all" && tab !== "processing") {
@@ -357,7 +343,7 @@ export function useOrderMutations({
       console.error("RESTORE ORDER ERROR:", error);
       setOrders(previousOrders);
       toast.error(
-        error instanceof Error ? error.message : "Failed to restore order."
+        error instanceof Error ? error.message : "Failed to restore order.",
       );
     }
   }
@@ -372,5 +358,3 @@ export function useOrderMutations({
     restoreOrder,
   };
 }
-
-

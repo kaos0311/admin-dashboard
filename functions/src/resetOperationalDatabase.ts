@@ -1,6 +1,7 @@
-import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { requireCallableAdmin } from "./auth/roles.js";
 
 const db = getFirestore();
 
@@ -36,21 +37,6 @@ type ResetOperationalDatabasePayload = {
 };
 
 type DeletedCounts = Record<string, number>;
-
-function requireAdmin(request: CallableRequest<unknown>) {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be signed in.");
-  }
-
-  const token = request.auth.token as Record<string, unknown>;
-
-  if (token.role !== "admin" && token.role !== "tank") {
-    throw new HttpsError(
-      "permission-denied",
-      "Only admins can reset the operational database."
-    );
-  }
-}
 
 function getPayload(data: unknown): ResetOperationalDatabasePayload {
   if (!data || typeof data !== "object") {
@@ -90,7 +76,10 @@ export const resetOperationalDatabase = onCall(
     memory: "1GiB",
   },
   async (request) => {
-    requireAdmin(request);
+    await requireCallableAdmin(
+      request.auth,
+      "Only admins can reset the operational database."
+    );
 
     const payload = getPayload(request.data);
 

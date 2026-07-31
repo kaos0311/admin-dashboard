@@ -1,7 +1,6 @@
-"use client";
+﻿"use client";
 
-import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   Building2,
@@ -31,6 +30,7 @@ import { InventoryHero } from "./components/InventoryHero";
 import { InventoryLoadingState } from "./components/InventoryLoadingState";
 import { type InventoryStatKey, InventoryStats } from "./components/InventoryStats";
 import { InventoryStatsDrilldownModal } from "./components/InventoryStatsDrilldownModal";
+import { InventoryTable } from "./components/InventoryTable";
 import { JarvisNoticeModal } from "./components/JarvisNoticeModal";
 import { type ScanAssignmentChoice, ScanAssignmentModal } from "./components/ScanAssignmentModal";
 import { ScanSuccessModal } from "./components/ScanSuccessModal";
@@ -67,56 +67,55 @@ export default function InventoryPage() {
     isAdminOrStaff,
   } = useAuthRole();
 
-  const canRead =
-    isAdminOrStaff;
+  const canRead = isAdminOrStaff;
+  const canWrite = isAdminOrStaff;
 
-  const canWrite =
-    isAdminOrStaff;
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const [refreshKey, setRefreshKey] =
-    useState(0);
+  const [saving, setSaving] = useState(false);
 
-  const [saving, setSaving] =
-    useState(false);
+  const [scannerOpen, setScannerOpen] = useState(false);
 
-  const [scannerOpen, setScannerOpen] =
-    useState(false);
+  const [scanTarget, setScanTarget] = useState<ScanTarget>(null);
 
-  const [scanTarget, setScanTarget] =
-    useState<ScanTarget>(null);
+  const [deceasedPatients, setDeceasedPatients] = useState<DeceasedPatientSummary[]>([]);
 
-  const [deceasedPatients, setDeceasedPatients] =
-    useState<DeceasedPatientSummary[]>([]);
+  const [checkingInItemId, setCheckingInItemId] = useState("");
 
-  const [checkingInItemId, setCheckingInItemId] =
-    useState("");
+  const [selectedStatKey, setSelectedStatKey] = useState<InventoryStatKey | null>(null);
 
-  const [selectedStatKey, setSelectedStatKey] =
-    useState<InventoryStatKey | null>(null);
+  const [jarvisIdentifying, setJarvisIdentifying] = useState(false);
 
-  const [jarvisIdentifying, setJarvisIdentifying] =
-    useState(false);
+  const [scanSuccess, setScanSuccess] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
 
-  const [scanSuccess, setScanSuccess] =
-    useState<{
-      title: string;
-      message: string;
-    } | null>(null);
+  const [jarvisNotice, setJarvisNotice] = useState<{
+    title: string;
+    message: string;
+  } | null>(null);
 
-  const [_scanOutCode, setScanOutCode] =
-    useState<string | null>(null);
+  const [pendingScan, setPendingScan] = useState<{ code: string; target: ScanTarget } | null>(null);
 
-  const [_scanOutReason, setScanOutReason] =
-    useState<"rental" | "purchase" | "maintenance">("rental");
+  // ── Selection state ──────────────────────────────────────────
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
 
-  const [jarvisNotice, setJarvisNotice] =
-    useState<{
-      title: string;
-      message: string;
-    } | null>(null);
+  const toggleSelected = useCallback(function toggleSelected(id: string) {
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id],
+    );
+  }, []);
 
-  const [pendingScan, setPendingScan] =
-    useState<{ code: string; target: ScanTarget } | null>(null);
+  const removeSelectedId = useCallback(function removeSelectedId(id: string) {
+    setSelectedIds((prev) => prev.filter((sid) => sid !== id));
+  }, []);
+
+  const clearSelected = useCallback(function clearSelected() {
+    setSelectedIds([]);
+  }, []);
+
+  // ─────────────────────────────────────────────────────────────
 
   const inventoryThresholds = useInventorySettings();
 
@@ -143,18 +142,18 @@ export default function InventoryPage() {
           patientDocs.flatMap((patientDoc) => {
             const patient = mapPatientForPickup(
               patientDoc.id,
-              patientDoc.data as Partial<PatientIndex> as Record<string, unknown>
+              patientDoc.data as Partial<PatientIndex> as Record<string, unknown>,
             );
 
             return patient ? [patient] : [];
-          })
+          }),
         );
       },
       (error) => {
         console.error("LOAD DECEASED PATIENT PICKUP CHECK ERROR:", error);
         toast.error("Could not load deceased patient pickup checks.");
         setDeceasedPatients([]);
-      }
+      },
     );
 
     return unsubscribe;
@@ -164,7 +163,19 @@ export default function InventoryPage() {
     form,
     updateForm,
     resetForm,
+    editItem,
+    syncStockFields,
   } = useInventoryForm();
+
+  // ── Sync stock fields when the actively edited item changes via real-time snapshot ──
+  useEffect(() => {
+    if (!form.id) return;
+
+    const liveItem = items.find((item) => item.id === form.id);
+    if (!liveItem) return;
+
+    syncStockFields(liveItem);
+  }, [items, form.id, syncStockFields]);
 
   const {
     search,
@@ -192,20 +203,26 @@ export default function InventoryPage() {
   const {
     handleSubmit,
     handleScanMovement,
+    handleSoftDelete,
+    handleHardDelete,
+    handleDiscontinue,
+    handleBatchArchive,
+    handleBatchDiscontinue,
   } = useInventoryActions({
     form,
+    items,
     canWrite,
     isAdmin,
-    selectedIds: [],
+    selectedIds,
     resetForm,
-    removeSelectedId: () => {},
-    clearSelected: () => {},
+    removeSelectedId,
+    clearSelected,
     setSaving,
   });
 
   const deceasedPickupCandidates = useMemo(
     () => buildDeceasedPickupCandidates(items, deceasedPatients),
-    [deceasedPatients, items]
+    [deceasedPatients, items],
   );
 
   async function handleCheckInDeceasedPickup(candidate: DeceasedPickupCandidate) {
@@ -223,7 +240,7 @@ export default function InventoryPage() {
     }
 
     const confirmed = window.confirm(
-      `Check "${item.name}" back into inventory from ${patient.fullName}? This will archive the matching equipment in the patient record and return the item to available inventory.`
+      `Check "${item.name}" back into inventory from ${patient.fullName}? This will archive the matching equipment in the patient record and return the item to available inventory.`,
     );
 
     if (!confirmed) return;
@@ -242,9 +259,7 @@ export default function InventoryPage() {
     }
   }
 
-  function openScanner(
-    target: ScanTarget
-  ) {
+  function openScanner(target: ScanTarget) {
     setScanTarget(target);
     setScannerOpen(true);
   }
@@ -279,11 +294,8 @@ export default function InventoryPage() {
     toast.success("Barcode scan captured.");
   }
 
-  function handleScanDetected(
-    code: string
-  ) {
-    const clean =
-      normalizeBarcode(code);
+  function handleScanDetected(code: string) {
+    const clean = normalizeBarcode(code);
 
     switch (scanTarget) {
       case "serial":
@@ -304,27 +316,28 @@ export default function InventoryPage() {
         return;
 
       case "scanOut":
-        setScanOutCode(clean);
-        setScanOutReason("rental");
+        void handleScanMovement(clean, "out", "rental").then((success) => {
+          if (!success) return;
+
+          setScanSuccess({
+            title: "Scan Out Complete",
+            message: `${clean} was removed from available inventory successfully.`,
+          });
+        });
         return;
 
       default:
-        updateForm(
-          "barcode",
-          clean
-        );
+        updateForm("barcode", clean);
         break;
     }
 
-    toast.success(
-      "Barcode scan captured."
-    );
+    toast.success("Barcode scan captured.");
   }
 
   const inventoryAutofillOptions = useMemo(() => {
     function unique(values: string[]) {
       return Array.from(
-        new Set(values.map((value) => value.trim()).filter(Boolean))
+        new Set(values.map((value) => value.trim()).filter(Boolean)),
       )
         .sort((a, b) => a.localeCompare(b))
         .slice(0, 250);
@@ -342,12 +355,12 @@ export default function InventoryPage() {
 
   const rentalPropertyCount = useMemo(
     () => filteredItems.filter(isRentalProperty).length,
-    [filteredItems]
+    [filteredItems],
   );
 
   const assetRecordCount = useMemo(
     () => filteredItems.filter(isActiveAssetRecord).length,
-    [filteredItems]
+    [filteredItems],
   );
 
   const statDrilldowns = useMemo(() => {
@@ -404,10 +417,7 @@ export default function InventoryPage() {
     : null;
 
   function handleRefresh() {
-    setRefreshKey(
-      (current) =>
-        current + 1
-    );
+    setRefreshKey((current) => current + 1);
   }
 
   function handleResetFilters() {
@@ -472,10 +482,7 @@ export default function InventoryPage() {
   |--------------------------------------------------------------------------
   */
 
-  if (
-    !authLoading &&
-    !canRead
-  ) {
+  if (!authLoading && !canRead) {
     return (
       <main className={`${glass.page} ${colors.app}`}>
         <div className={colors.grid} />
@@ -497,39 +504,19 @@ export default function InventoryPage() {
         <InventoryHero canWrite={canWrite} onOpenScanner={openScanner} />
 
         <InventoryHeader
-          lastLoadedAt={
-            lastLoadedAt
-          }
-          onResetFilters={
-            handleResetFilters
-          }
-          onRefresh={
-            handleRefresh
-          }
+          lastLoadedAt={lastLoadedAt}
+          onResetFilters={handleResetFilters}
+          onRefresh={handleRefresh}
         />
 
         <InventoryStats
-          totalItems={
-            summary.totalItems
-          }
-          available={
-            summary.available
-          }
-          lowStock={
-            summary.lowStock
-          }
-          discontinued={
-            summary.discontinued
-          }
-          serviceDue={
-            summary.serviceDue
-          }
-          warrantyExpired={
-            summary.warrantyExpired
-          }
-          totalValue={
-            summary.totalValue
-          }
+          totalItems={summary.totalItems}
+          available={summary.available}
+          lowStock={summary.lowStock}
+          discontinued={summary.discontinued}
+          serviceDue={summary.serviceDue}
+          warrantyExpired={summary.warrantyExpired}
+          totalValue={summary.totalValue}
           onSelect={setSelectedStatKey}
         />
 
@@ -539,18 +526,10 @@ export default function InventoryPage() {
             autofillOptions={inventoryAutofillOptions}
             saving={saving}
             canWrite={canWrite}
-            onSubmit={
-              handleSubmit
-            }
-            onReset={
-              resetForm
-            }
-            onUpdate={
-              updateForm
-            }
-            onOpenScanner={
-              openScanner
-            }
+            onSubmit={handleSubmit}
+            onReset={resetForm}
+            onUpdate={updateForm}
+            onOpenScanner={openScanner}
             onJarvisIdentify={() => {
               void handleJarvisIdentifyCurrentItem();
             }}
@@ -572,48 +551,27 @@ export default function InventoryPage() {
                       {filteredItems.length.toLocaleString()} visible records
                     </p>
                   </div>
-
                 </div>
 
                 <InventoryFilters
                   search={search}
-                  statusFilter={
-                    statusFilter
-                  }
-                  lifecycleFilter={
-                    lifecycleFilter
-                  }
-                  alertFilter={
-                    alertFilter
-                  }
+                  statusFilter={statusFilter}
+                  lifecycleFilter={lifecycleFilter}
+                  alertFilter={alertFilter}
                   sortKey={sortKey}
-                  sortDirection={
-                    sortDirection
-                  }
-                  onSearchChange={
-                    setSearch
-                  }
-                  onStatusFilterChange={
-                    setStatusFilter
-                  }
-                  onLifecycleFilterChange={
-                    setLifecycleFilter
-                  }
-                  onAlertFilterChange={
-                    setAlertFilter
-                  }
-                  onSortChange={
-                    handleSortChange
-                  }
+                  sortDirection={sortDirection}
+                  onSearchChange={setSearch}
+                  onStatusFilterChange={setStatusFilter}
+                  onLifecycleFilterChange={setLifecycleFilter}
+                  onAlertFilterChange={setAlertFilter}
+                  onSortChange={handleSortChange}
                 />
               </div>
 
               <div className="mt-5">
-                {authLoading ||
-                loading ? (
+                {authLoading || loading ? (
                   <InventoryLoadingState />
-                ) : filteredItems.length ===
-                  0 ? (
+                ) : filteredItems.length === 0 ? (
                   <InventoryEmptyState />
                 ) : (
                   <div className="space-y-6">
@@ -633,6 +591,18 @@ export default function InventoryPage() {
                     <AssetRecordsRouteTile
                       visibleCount={assetRecordCount}
                     />
+
+                    <InventoryTable
+                      items={filteredItems}
+                      selectedIds={selectedIds}
+                      isAdmin={isAdmin}
+                      thresholds={inventoryThresholds}
+                      onToggleSelected={toggleSelected}
+                      onEdit={editItem}
+                      onDiscontinue={handleDiscontinue}
+                      onArchive={handleSoftDelete}
+                      onDelete={handleHardDelete}
+                    />
                   </div>
                 )}
               </div>
@@ -643,12 +613,8 @@ export default function InventoryPage() {
 
       <BarcodeScannerModal
         open={scannerOpen}
-        onClose={
-          handleScannerClose
-        }
-        onDetected={
-          handleScanDetected
-        }
+        onClose={handleScannerClose}
+        onDetected={handleScanDetected}
       />
 
       <InventoryStatsDrilldownModal

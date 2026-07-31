@@ -39,3 +39,34 @@ export {
   deleteUserAccount,
   resetUserPassword,
 } from "./adminUserManagement";
+
+// Inventory barcode scanning
+export { lookupInventoryByBarcode } from "./inventory/lookupInventoryByBarcode";
+export { receiveInventoryByBarcode } from "./inventory/receiveInventoryByBarcode";
+export {
+  issueInventoryByBarcode,
+  cycleCountInventoryByBarcode,
+  transferInventoryByBarcode,
+} from "./inventory/inventoryTransactionFunctions";
+export {
+  createInventoryMovementCallable,
+  reverseInventoryMovementCallable,
+  reconcileInventoryCallable,
+} from "./inventory/movementFunctions";
+export {
+  recordDeliveryScanWorkflowCallable,
+  completeDeliveryTicketWorkflowCallable,
+  finalizeDeliverySignatureWorkflowCallable,
+  finalizeDeliveryDamagePhotosWorkflowCallable,
+  deliveryTechCheckInWorkflowCallable,
+  updateDeliveryRouteWorkflowCallable,
+  checkoutRentalWorkflowCallable,
+  createAndCheckoutRentalWorkflowCallable,
+  returnRentalWorkflowCallable,
+  exchangeRentalWorkflowCallable,
+  cancelRentalWorkflowCallable,
+  reportStaleRentalDraftsCallable,
+  patientEquipmentWorkflowCallable,
+  patientLifecycleWorkflowCallable,
+  cleanupPendingWorkflowUploadsCallable,
+} from "./domainWorkflows/domainWorkflowFunctions";

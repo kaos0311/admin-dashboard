@@ -1,12 +1,10 @@
 import {
   addDoc,
   collection,
-  doc,
   getDocs,
   limit,
   query,
   serverTimestamp,
-  updateDoc,
   where,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -115,22 +113,8 @@ export async function updateProductQuantity(args: {
   productId: string;
   delta: number;
 }): Promise<void> {
-  const product = await findProductById(args.productId);
-
-  if (!product) {
-    throw new Error("Inventory item not found.");
-  }
-
-  const nextQuantity = product.quantityOnHand + args.delta;
-
-  if (nextQuantity < 0) {
-    throw new Error("Not enough stock on hand.");
-  }
-
-  await updateDoc(doc(db, "products", args.productId), {
-    quantityOnHand: nextQuantity,
-    updatedAt: serverTimestamp(),
-  });
+  void args;
+  throw new Error("Product quantity is derived from inventory. Use createInventoryMovement against an inventory item.");
 }
 
 export async function logStockMovement(args: {
@@ -164,37 +148,8 @@ export async function allocateInventoryToOrder(args: {
   sourceId: string;
   notes?: string;
 }): Promise<void> {
-  const qty = Math.max(1, Number(args.quantity ?? 1));
-  const product = await findProductById(args.productId);
-
-  if (!product) {
-    throw new Error("Inventory item not found.");
-  }
-
-  if (product.status !== "active") {
-    throw new Error("Inventory item is inactive.");
-  }
-
-  if (product.quantityOnHand < qty) {
-    throw new Error("Not enough stock available.");
-  }
-
-  await updateProductQuantity({
-    productId: product.id,
-    delta: -qty,
-  });
-
-  await logStockMovement({
-    productId: product.id,
-    productName: product.name,
-    barcode: product.barcode,
-    serial: product.serial,
-    type: "order_out",
-    quantity: qty,
-    source: "orders",
-    sourceId: args.sourceId,
-    notes: args.notes ?? "Inventory allocated to order.",
-  });
+  void args;
+  throw new Error("Order inventory allocation must use createInventoryMovement with an inventory item.");
 }
 
 export async function restoreInventoryFromOrder(args: {
@@ -203,29 +158,8 @@ export async function restoreInventoryFromOrder(args: {
   sourceId: string;
   notes?: string;
 }): Promise<void> {
-  const qty = Math.max(1, Number(args.quantity ?? 1));
-  const product = await findProductById(args.productId);
-
-  if (!product) {
-    throw new Error("Inventory item not found.");
-  }
-
-  await updateProductQuantity({
-    productId: product.id,
-    delta: qty,
-  });
-
-  await logStockMovement({
-    productId: product.id,
-    productName: product.name,
-    barcode: product.barcode,
-    serial: product.serial,
-    type: "order_return",
-    quantity: qty,
-    source: "orders",
-    sourceId: args.sourceId,
-    notes: args.notes ?? "Inventory restored from order.",
-  });
+  void args;
+  throw new Error("Order inventory restoration must use createInventoryMovement with an inventory item.");
 }
 
 export async function allocateInventoryToRental(args: {
@@ -234,37 +168,8 @@ export async function allocateInventoryToRental(args: {
   sourceId: string;
   notes?: string;
 }): Promise<void> {
-  const qty = Math.max(1, Number(args.quantity ?? 1));
-  const product = await findProductById(args.productId);
-
-  if (!product) {
-    throw new Error("Inventory item not found.");
-  }
-
-  if (product.status !== "active") {
-    throw new Error("Inventory item is inactive.");
-  }
-
-  if (product.quantityOnHand < qty) {
-    throw new Error("Not enough stock available.");
-  }
-
-  await updateProductQuantity({
-    productId: product.id,
-    delta: -qty,
-  });
-
-  await logStockMovement({
-    productId: product.id,
-    productName: product.name,
-    barcode: product.barcode,
-    serial: product.serial,
-    type: "rental_out",
-    quantity: qty,
-    source: "rentals",
-    sourceId: args.sourceId,
-    notes: args.notes ?? "Inventory checked out to rental.",
-  });
+  void args;
+  throw new Error("Rental checkout must use createInventoryMovement with an inventory item.");
 }
 
 export async function restoreInventoryFromRental(args: {
@@ -273,27 +178,6 @@ export async function restoreInventoryFromRental(args: {
   sourceId: string;
   notes?: string;
 }): Promise<void> {
-  const qty = Math.max(1, Number(args.quantity ?? 1));
-  const product = await findProductById(args.productId);
-
-  if (!product) {
-    throw new Error("Inventory item not found.");
-  }
-
-  await updateProductQuantity({
-    productId: product.id,
-    delta: qty,
-  });
-
-  await logStockMovement({
-    productId: product.id,
-    productName: product.name,
-    barcode: product.barcode,
-    serial: product.serial,
-    type: "rental_return",
-    quantity: qty,
-    source: "rentals",
-    sourceId: args.sourceId,
-    notes: args.notes ?? "Inventory returned from rental.",
-  });
+  void args;
+  throw new Error("Rental return must use createInventoryMovement with an inventory item.");
 }

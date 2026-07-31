@@ -1,7 +1,6 @@
-import {
+﻿import {
   addDoc,
   collection,
-  deleteDoc,
   doc,
   getDoc,
   getDocs,
@@ -14,7 +13,6 @@ import {
   updateDoc,
   where,
   writeBatch,
-  type Firestore,
   type Unsubscribe,
 } from "firebase/firestore";
 
@@ -48,13 +46,48 @@ const COLLECTIONS = {
   HCPCS_CODES: "hcpcsCodes" as const,
 } as const;
 
-function clean(value: unknown): string {
-  return String(value ?? "").trim();
+const PROTECTED_INVENTORY_FIELDS = new Set([
+  "quantityOnHand",
+  "available",
+  "onRent",
+  "onTruck",
+  "committed",
+  "allocated",
+  "reserved",
+  "patientId",
+  "patientKey",
+  "patientName",
+  "rentalId",
+  "locationId",
+  "warehouseId",
+  "status",
+  "inventoryStatus",
+  "rentalStatus",
+  "assignmentStatus",
+  "lifecycleStatus",
+  "isDeleted",
+  "deleted",
+  "deletedAt",
+  "archived",
+  "discontinued",
+]);
+
+function assertMetadataOnlyInventoryWrite(data: Record<string, unknown>): void {
+  const blocked = Object.keys(data).filter((field) =>
+    PROTECTED_INVENTORY_FIELDS.has(field)
+  );
+
+  if (blocked.length > 0) {
+    throw new Error(
+      `InventoryRepository metadata writes cannot change protected stock fields: ${blocked.join(
+        ", "
+      )}. Use createInventoryMovement instead.`
+    );
+  }
 }
 
-function numberSafe(value: unknown): number {
-  const parsed = Number(value ?? 0);
-  return Number.isFinite(parsed) ? parsed : 0;
+function clean(value: unknown): string {
+  return String(value ?? "").trim();
 }
 
 function readNumber(value: unknown, fallback: number): number {
@@ -101,6 +134,7 @@ export const InventoryRepository = {
   async findByScan(rawCode: string): Promise<InventoryItem | null> {
     const clean = normalizeBarcode(rawCode);
     const upper = clean.toUpperCase();
+
     const fields: Array<[keyof InventoryItem, string]> = [
       ["barcode", clean],
       ["serial", clean],
@@ -116,12 +150,44 @@ export const InventoryRepository = {
         query(
           collection(db, COLLECTIONS.INVENTORY),
           where(field as string, "==", value),
-          limit(5),
+          limit(25),
         ),
       );
-      const match = snap.docs.find((d) => d.data().isDeleted !== true);
-      if (match) {
-        return normalizeInventoryItem(match.id, match.data() as Record<string, unknown>);
+
+      const matches = snap.docs
+        .filter((document) => document.data().isDeleted !== true)
+        .map((document) =>
+          normalizeInventoryItem(
+            document.id,
+            document.data() as Record<string, unknown>,
+          ),
+        );
+
+      if (matches.length === 1) {
+        return matches[0];
+      }
+
+      if (matches.length > 1) {
+        console.error("AMBIGUOUS INVENTORY SCAN", {
+          rawCode,
+          normalizedCode: clean,
+          field,
+          matches: matches.map((item) => ({
+            id: item.id,
+            name: item.name,
+            barcode: item.barcode,
+            sku: item.sku,
+            serial: item.serial,
+            lotNumber: item.lotNumber,
+            locationName: item.locationName,
+            quantityOnHand: item.quantityOnHand,
+            available: item.available,
+          })),
+        });
+
+        throw new Error(
+          `Scan code ${clean} matches ${matches.length} inventory records by ${String(field)}.`,
+        );
       }
     }
 
@@ -146,11 +212,27 @@ export const InventoryRepository = {
     const clean = normalizeBarcode(rawCode);
     const upper = clean.toUpperCase();
 
-    // Direct lookup by doc ID
-    const directSnap = await getDoc(doc(db, COLLECTIONS.PRODUCTS, clean.toLowerCase()));
-    if (directSnap.exists() && directSnap.data().deleted !== true) {
-      return { id: directSnap.id, ...directSnap.data() } as ProductDocument;
-    }
+    // Direct document-ID lookup is only safe when the scanned value does not
+// contain Firestore path separators. QR codes may contain full website URLs.
+const directDocumentId = clean.toLowerCase();
+const isSafeDocumentId =
+  directDocumentId.length > 0 &&
+  !directDocumentId.includes("/") &&
+  directDocumentId !== "." &&
+  directDocumentId !== "..";
+
+if (isSafeDocumentId) {
+  const directSnap = await getDoc(
+    doc(db, COLLECTIONS.PRODUCTS, directDocumentId)
+  );
+
+  if (directSnap.exists() && directSnap.data().deleted !== true) {
+    return {
+      id: directSnap.id,
+      ...directSnap.data(),
+    } as ProductDocument;
+  }
+}
 
     // Field-based lookups
     const checks: Array<[string, string]> = [
@@ -190,10 +272,21 @@ export const InventoryRepository = {
     manufacturerItemId?: string;
   }): Promise<string | null> {
     const directProductId = clean(params.productId);
-    if (directProductId) {
-      const directSnap = await getDoc(doc(db, COLLECTIONS.PRODUCTS, directProductId));
-      if (directSnap.exists()) return directProductId;
-    }
+const isSafeProductId =
+  directProductId.length > 0 &&
+  !directProductId.includes("/") &&
+  directProductId !== "." &&
+  directProductId !== "..";
+
+if (isSafeProductId) {
+  const directSnap = await getDoc(
+    doc(db, COLLECTIONS.PRODUCTS, directProductId)
+  );
+
+  if (directSnap.exists()) {
+    return directProductId;
+  }
+}
 
     const barcode = params.barcode ? normalizeBarcode(params.barcode) : "";
     const checks: Array<[string, string]> = [
@@ -446,6 +539,7 @@ export const InventoryRepository = {
    * Update an existing inventory document (merge semantics).
    */
   async update(id: string, data: Record<string, unknown>): Promise<void> {
+    assertMetadataOnlyInventoryWrite(data);
     await updateDoc(doc(db, COLLECTIONS.INVENTORY, id), {
       ...data,
       updatedAt: serverTimestamp(),
@@ -456,18 +550,20 @@ export const InventoryRepository = {
    * Soft-delete (archive) an inventory item.
    */
   async softDelete(id: string): Promise<void> {
-    await updateDoc(doc(db, COLLECTIONS.INVENTORY, id), {
-      isDeleted: true,
-      deletedAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
+    void id;
+    throw new Error(
+      "InventoryRepository.softDelete is disabled. Use createInventoryMovement with movementType archived."
+    );
   },
 
   /**
    * Permanently delete an inventory document.
    */
   async hardDelete(id: string): Promise<void> {
-    await deleteDoc(doc(db, COLLECTIONS.INVENTORY, id));
+    void id;
+    throw new Error(
+      "InventoryRepository.hardDelete is disabled. Use createInventoryMovement with movementType hard_delete."
+    );
   },
 
   /**
@@ -475,6 +571,7 @@ export const InventoryRepository = {
    * Respects the Firestore batch limit of 500 writes.
    */
   async batchUpdate(updates: Array<{ id: string; data: Record<string, unknown> }>): Promise<void> {
+    updates.forEach(({ data }) => assertMetadataOnlyInventoryWrite(data));
     const FIRESTORE_BATCH_LIMIT = 450;
     const chunks: Array<typeof updates> = [];
 
@@ -518,11 +615,56 @@ export const InventoryRepository = {
     createdBy?: string;
     createdByEmail?: string;
   }): Promise<void> {
-    await addDoc(collection(db, COLLECTIONS.STOCK_MOVEMENTS), {
-      ...payload,
+    const movement: Record<string, unknown> = {
+      productId: payload.productId,
+      productName: payload.productName,
+      barcode: payload.barcode,
+      serial: payload.serial,
+      lotNumber: payload.lotNumber,
+      type: payload.type,
+      quantity: payload.quantity,
+      sourceId: payload.sourceId,
+      notes: payload.notes,
       source: "inventory",
       createdAt: serverTimestamp(),
-    });
+    };
+
+    if (payload.affectedIds && payload.affectedIds.length > 0) {
+      movement.affectedIds = payload.affectedIds;
+    }
+
+    if (payload.patientKey !== undefined) {
+      movement.patientKey = payload.patientKey;
+    }
+
+    if (payload.patientName !== undefined) {
+      movement.patientName = payload.patientName;
+    }
+
+    if (payload.dateOfDeath !== undefined) {
+      movement.dateOfDeath = payload.dateOfDeath;
+    }
+
+    if (payload.pickupDate !== undefined) {
+      movement.pickupDate = payload.pickupDate;
+    }
+
+    if (payload.lastDeliveryDate !== undefined) {
+      movement.lastDeliveryDate = payload.lastDeliveryDate;
+    }
+
+    if (payload.createdBy !== undefined) {
+      movement.createdBy = payload.createdBy;
+    }
+
+    if (payload.createdByEmail !== undefined) {
+      movement.createdByEmail = payload.createdByEmail;
+    }
+
+    await addDoc(
+      collection(db, COLLECTIONS.STOCK_MOVEMENTS),
+      movement
+    );
   },
 
   // ---- WRITE: Product documents ------------------------------------------
@@ -595,3 +737,4 @@ export const InventoryRepository = {
     return collection(db, collectionName);
   },
 };
+

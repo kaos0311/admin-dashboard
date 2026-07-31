@@ -5,6 +5,7 @@ import {
   QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
+import { requireCallableAdmin } from "../auth/roles.js";
 
 const db = getFirestore();
 
@@ -50,22 +51,6 @@ function sleep(ms: number): Promise<void> {
 function getPayload(data: unknown): SoftResetPayload {
   if (!data || typeof data !== "object") return {};
   return data as SoftResetPayload;
-}
-
-function requireAdmin(request: CallableRequestLike): void {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be signed in.");
-  }
-
-  if (
-    request.auth.token.role !== "admin" &&
-    request.auth.token.role !== "tank"
-  ) {
-    throw new HttpsError(
-      "permission-denied",
-      "Only admins can reset imported reports."
-    );
-  }
 }
 
 function getAuthEmail(request: CallableRequestLike): string {
@@ -159,7 +144,10 @@ export const softResetReports = onCall(
     memory: "1GiB",
   },
   async (request) => {
-    requireAdmin(request as CallableRequestLike);
+    await requireCallableAdmin(
+      request.auth,
+      "Only admins can reset imported reports."
+    );
 
     const payload = getPayload(request.data);
 

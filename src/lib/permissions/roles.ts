@@ -68,6 +68,50 @@ export function parseRole(value: unknown): UserRole | null {
   return null;
 }
 
+export function isActiveUserRecord(data: Record<string, unknown>): boolean {
+  return (
+    data.active !== false &&
+    data.disabled !== true &&
+    data.deleted !== true
+  );
+}
+
+export function getRoleFromUserRecord(
+  data: Record<string, unknown>
+): UserRole | null {
+  const dbRole = parseRole(data.role);
+  if (dbRole) return dbRole;
+
+  if (data.temporaryTankAccess === true) {
+    const previousRole = parseRole(data.previousRole);
+    if (previousRole === "admin" || previousRole === "tank") {
+      return "tank";
+    }
+  }
+
+  return null;
+}
+
+export function resolveUserRole(params: {
+  tokenRole: UserRole | null;
+  dbRole: UserRole | null;
+  hasUserRecord: boolean;
+}): UserRole | null {
+  if (params.hasUserRecord && params.dbRole) {
+    return params.dbRole;
+  }
+
+  return params.tokenRole;
+}
+
+export function isAdminRole(role: UserRole | null): boolean {
+  return role === "admin" || role === "tank";
+}
+
+export function isStaffRole(role: UserRole | null): boolean {
+  return role === "staff";
+}
+
 /* ------------------------------------------------------------------ */
 /*  Permissions                                                        */
 /* ------------------------------------------------------------------ */
@@ -227,6 +271,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     "audit:read",
   ],
 };
+
+export const COMMAND_CENTER_ROLES: UserRole[] = ALL_ROLES.filter((role) =>
+  ROLE_PERMISSIONS[role].includes("access:command-center")
+);
 
 /**
  * Check whether a given role has a specific permission.

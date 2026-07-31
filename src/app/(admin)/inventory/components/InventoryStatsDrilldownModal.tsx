@@ -15,6 +15,7 @@ import { useInventoryActions } from "../hooks/useInventoryActions";
 import { useInventoryForm } from "../hooks/useInventoryForm";
 import type { InventoryItem, ScanTarget } from "../lib/inventoryTypes";
 import { auth } from "@/lib/firebase";
+import { identifyInventoryProduct } from "@/services/inventory/inventory-jarvis.service";
 
 import { InventoryForm } from "./InventoryForm";
 import { JarvisNoticeModal } from "./JarvisNoticeModal";
@@ -67,6 +68,7 @@ export function InventoryStatsDrilldownModal({
     updateForm,
     resetForm,
     editItem,
+    syncStockFields,
   } = useInventoryForm();
 
   const selectedItem = useMemo(
@@ -79,6 +81,7 @@ export function InventoryStatsDrilldownModal({
     handleScanMovement,
   } = useInventoryActions({
     form,
+    items,
     canWrite,
     isAdmin,
     selectedIds: [],
@@ -99,9 +102,22 @@ export function InventoryStatsDrilldownModal({
       return;
     }
 
+    if (selectedItemId && nextItem.id === selectedItemId) {
+      return;
+    }
+
     setSelectedItemId(nextItem.id);
     editItem(nextItem, { scroll: false });
   }, [editItem, items, open, resetForm, selectedItemId]);
+
+  useEffect(() => {
+    if (!open || !form.id) return;
+
+    const liveItem = items.find((item) => item.id === form.id);
+    if (!liveItem) return;
+
+    syncStockFields(liveItem);
+  }, [items, form.id, open, syncStockFields]);
 
   if (!open) return null;
 
@@ -172,32 +188,13 @@ export function InventoryStatsDrilldownModal({
     setJarvisIdentifying(true);
 
     try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch("/api/jarvis/product-enrichment", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          mode: "identifyInventory",
-          inventoryId: form.id,
-          code: form.barcode || form.sku || form.serial,
-        }),
+      const result = await identifyInventoryProduct({
+        currentUser,
+        inventoryId: form.id,
+        code: form.barcode || form.sku || form.serial,
       });
-      const result = (await response.json()) as {
-        error?: string;
-        product?: {
-          name?: string;
-          category?: string;
-          sku?: string;
-          barcode?: string;
-          manufacturer?: string;
-          modelNumber?: string;
-        };
-      };
 
-      if (!response.ok) {
+      if (!result.ok) {
         setJarvisNotice({
           title: "No Matching Product Found",
           message:

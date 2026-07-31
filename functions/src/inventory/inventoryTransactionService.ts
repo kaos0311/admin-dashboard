@@ -1,0 +1,130 @@
+import { FieldValue, type Firestore } from "firebase-admin/firestore";
+import { HttpsError } from "firebase-functions/v2/https";
+
+/**
+ * Supported inventory transaction types.
+ */
+export type InventoryTransactionType =
+  | "lookup"
+  | "receive"
+  | "issue"
+  | "cycle_count"
+  | "transfer";
+
+/**
+ * Input for an inventory transaction.
+ */
+export interface InventoryTransactionInput {
+  transactionType: InventoryTransactionType;
+  barcode: string;
+  normalizedBarcode: string;
+  inventoryItemId: string | null;
+  quantityChange: number | null;
+  fromLocationId?: string | null;
+  toLocationId?: string | null;
+  performedByUid: string;
+  performedByEmail: string;
+  source: "tera_hid_scanner" | "manual_entry";
+  rawScan: string | null;
+}
+
+/**
+ * Result of an inventory transaction.
+ */
+export interface InventoryTransactionResult {
+  success: boolean;
+  transactionId: string;
+  inventoryItemId: string | null;
+  productName: string | null;
+  quantityBefore: number | null;
+  quantityChange: number | null;
+  quantityAfter: number | null;
+  status: "success" | "not_found" | "duplicate" | "failed";
+  failureReason: string | null;
+}
+
+/**
+ * Resolve an inventory item server-side by barcode.
+ * Searches barcode, serial, lotNumber, sku fields.
+ */
+export async function resolveInventoryItem(
+  db: Firestore,
+  normalizedBarcode: string
+): Promise<{ id: string; data: Record<string, unknown> } | null> {
+  const fieldsToSearch = ["barcode", "serial", "lotNumber", "sku"];
+  const seenIds = new Set<string>();
+
+  for (const field of fieldsToSearch) {
+    const snap = await db
+      .collection("inventory")
+      .where(field, "==", normalizedBarcode)
+      .where("isDeleted", "!=", true)
+      .limit(5)
+      .get();
+
+    for (const doc of snap.docs) {
+      if (!seenIds.has(doc.id)) {
+        seenIds.add(doc.id);
+        // Return first match per field
+        return { id: doc.id, data: doc.data() as Record<string, unknown> };
+      }
+    }
+  }
+
+  return null;
+}
+
+/**
+ * Write an immutable inventory transaction record.
+ */
+export async function writeInventoryTransaction(
+  db: Firestore,
+  input: InventoryTransactionInput,
+  result: InventoryTransactionResult
+): Promise<string> {
+  const ref = await db.collection("inventoryTransactions").add({
+    transactionType: input.transactionType,
+    barcode: input.barcode,
+    normalizedBarcode: input.normalizedBarcode,
+    inventoryItemId: result.inventoryItemId,
+    productName: result.productName,
+    quantityBefore: result.quantityBefore,
+    quantityChange: result.quantityChange,
+    quantityAfter: result.quantityAfter,
+    fromLocationId: input.fromLocationId ?? null,
+    toLocationId: input.toLocationId ?? null,
+    performedByUid: input.performedByUid,
+    performedByEmail: input.performedByEmail,
+    timestamp: FieldValue.serverTimestamp(),
+    status: result.status,
+    failureReason: result.failureReason,
+    source: input.source,
+    rawScan: input.rawScan,
+  });
+
+  return ref.id;
+}
+
+/**
+ * Perform inventory mutation with server-side validation.
+ * Uses Firestore transaction for concurrency safety.
+ */
+export async function mutateInventory(
+  db: Firestore,
+  inventoryItemId: string,
+  quantityChange: number,
+  allowNegative: boolean
+): Promise<{
+  quantityBefore: number;
+  quantityAfter: number;
+  productName: string;
+}> {
+  void db;
+  void inventoryItemId;
+  void quantityChange;
+  void allowNegative;
+  throw new HttpsError(
+    "failed-precondition",
+    "mutateInventory is disabled. Use createInventoryMovement from movementService."
+  );
+}

@@ -1,4 +1,4 @@
-﻿import Link from "next/link";
+import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import {
@@ -93,7 +93,7 @@ export default async function DashboardPage() {
             </Link>
 
             <Link
-              href="/work-orders"
+              href="/orders"
               className="rounded-md border border-[var(--border)] px-4 py-3 text-sm font-semibold text-[var(--foreground)] hover:bg-[var(--muted)]"
             >
               Work Orders

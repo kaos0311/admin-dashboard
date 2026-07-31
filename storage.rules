@@ -145,6 +145,12 @@ service firebase.storage {
         request.resource.size <= 25 * 1024 * 1024;
     }
 
+    function isWorkflowImageSizeAllowed() {
+      return hasIncomingFile() &&
+        request.resource.size > 0 &&
+        request.resource.size <= 15 * 1024 * 1024;
+    }
+
     /*
     |--------------------------------------------------------------------------
     | REPORT UPLOADS
@@ -263,6 +269,46 @@ service firebase.storage {
 
       allow create, update:
         if canAccessDashboard();
+
+      allow delete:
+        if canAdminWrite();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DOMAIN WORKFLOW PENDING UPLOADS
+    |--------------------------------------------------------------------------
+    */
+
+    match /workflow-pending/delivery/{ticketId}/signatures/{fileName} {
+
+      allow read:
+        if canAccessDashboard();
+
+      allow create:
+        if canAccessDashboard() &&
+        isImage() &&
+        isWorkflowImageSizeAllowed();
+
+      allow update:
+        if false;
+
+      allow delete:
+        if canAdminWrite();
+    }
+
+    match /workflow-pending/delivery/{ticketId}/damage-photos/{operationId}/{fileName} {
+
+      allow read:
+        if canAccessDashboard();
+
+      allow create:
+        if canAccessDashboard() &&
+        isImage() &&
+        isWorkflowImageSizeAllowed();
+
+      allow update:
+        if false;
 
       allow delete:
         if canAdminWrite();

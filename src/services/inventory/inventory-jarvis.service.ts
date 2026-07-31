@@ -42,7 +42,8 @@ export async function identifyInventoryProduct(params: {
     }),
   });
 
-  const result = (await response.json()) as {
+  const result = (await response.json().catch(() => ({}))) as {
+    ok?: boolean;
     error?: string;
     product?: {
       name?: string;
@@ -55,6 +56,13 @@ export async function identifyInventoryProduct(params: {
   };
 
   if (!response.ok) {
+    return {
+      ok: false,
+      error: result.error,
+    };
+  }
+
+  if (result.ok === false || !result.product) {
     return {
       ok: false,
       error: result.error,

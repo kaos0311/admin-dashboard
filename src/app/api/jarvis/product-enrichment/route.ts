@@ -78,7 +78,10 @@ async function enrichInventory(body: Record<string, unknown>, actor: string) {
   );
 
   if (!guess) {
-    return NextResponse.json({ error: "Jarvis could not identify a likely product." }, { status: 404 });
+    return NextResponse.json({
+      ok: false,
+      error: "Jarvis could not identify a likely product.",
+    });
   }
 
   const name = guess.name || text(current.name);
@@ -186,6 +189,7 @@ async function enrichInventory(body: Record<string, unknown>, actor: string) {
   );
 
   return NextResponse.json({
+    ok: true,
     productId,
     inventoryId,
     product: {

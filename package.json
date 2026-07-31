@@ -12,6 +12,8 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "verify": "npm run lint && npm run typecheck && npm run build",
+    "validate:inventory-writes": "node scripts/validate-inventory-writes.cjs",
+    "validate:domain-writes": "node scripts/validate-domain-writes.cjs",
     "verify:imports": "tsx scripts/verify-import-routing.ts",
     "import:par": "tsx scripts/import-par-report.ts",
     "import:par:apply": "tsx scripts/import-par-report.ts --apply",
@@ -19,7 +21,8 @@
     "seed:brightree": "tsx scripts/seedBrightreeReferences.ts",
     "seed:rolodex:doctors": "tsx scripts/seedRolodexDoctors.ts",
     "seed:rolodex:facilities": "tsx scripts/seedRolodexFacilities.ts",
-    "repair:users": "tsx scripts/repairUsers.ts"
+    "repair:users": "tsx scripts/repairUsers.ts",
+    "emulators:test": "cd functions && npm run test:emulator"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
@@ -64,7 +67,7 @@
     "eslint-config-next": "16.2.3",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
-    "firebase": "^12.12.0",
+    "firebase": "^12.16.0",
     "tailwindcss": "^4",
     "tsx": "^4.21.0",
     "typescript": "^6.0.3",
