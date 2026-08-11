@@ -6,9 +6,11 @@ import toast from "react-hot-toast";
 import { normalizeBarcode } from "@/lib/barcode";
 import { auth } from "@/lib/firebase";
 import { createInventoryMovement } from "@/lib/inventory/movements";
+import { receiveScannedInventoryIntake } from "@/lib/inventory/receive-scanned-inventory-intake";
 import { smartMergeInventory } from "@/lib/inventory/smartMergeInventory";
 import { InventoryRepository } from "@/repositories/firestore/inventory.repository";
 import { identifyInventoryProduct } from "@/services/inventory/inventory-jarvis.service";
+import { resolveInventoryScan } from "@/services/inventory/inventory-scan-resolver";
 
 import { isLowStock } from "../lib/inventoryAlerts";
 import { buildSearchText, toSafeNumber } from "../lib/inventoryNormalize";
@@ -74,128 +76,25 @@ export function useInventoryActions({
     return rest;
   }
 
-  async function findInventoryByScan(rawCode: string): Promise<InventoryItem | null> {
-    return InventoryRepository.findByScan(rawCode);
-  }
-
-  async function findProductByScan(rawCode: string): Promise<ProductScanMatch | null> {
-    const product = await InventoryRepository.findProductByScan(rawCode);
-    if (!product) return null;
-
-    return {
-      id: product.id,
-      name: product.name,
-      category: product.category,
-      sku: product.sku,
-      hcpcs: product.hcpcs,
-      upc: product.upc,
-      manufacturer: product.manufacturer || product.brand || "",
-      manufacturerItemId: product.manufacturerItemId,
-      model: product.model,
-      defaultPurchasePrice: product.defaultPurchasePrice,
-      reorderLevel: product.reorderLevel,
-      status: product.status,
-      deleted: product.deleted,
-    };
-  }
-
   async function createInventoryFromProductScan(rawCode: string, product: ProductScanMatch) {
     const clean = normalizeBarcode(rawCode);
-    const barcode = product.upc ? normalizeBarcode(product.upc) : clean;
-    const payload: Omit<InventoryItem, "id" | "searchText" | "isDeleted"> = {
-      productId: product.id,
-      name: product.name || `Scanned product ${clean}`,
-      category: product.category || "Uncategorized",
-      sku: product.sku || clean,
-      hcpc: product.hcpcs.toUpperCase(),
-      barcode,
-      serial: "",
-      lotNumber: "",
-      locationName: "Main Location",
-      binLocation: "",
-      quantityOnHand: 0,
-      committed: 0,
-      onRent: 0,
-      onOrder: 0,
-      available: 0,
-      reorderLevel: product.reorderLevel,
-      unitCost: product.defaultPurchasePrice,
-      totalValue: 0,
-      status: product.status === "discontinued" ? "discontinued" : "available",
-      manufacturer: product.manufacturer,
-      manufacturerItemId: product.manufacturerItemId,
-      modelNumber: product.model,
-      warrantyProvider: "",
-      warrantyStartDate: "",
-      warrantyEndDate: "",
-      warrantyNotes: "",
-      purchaseDate: "",
-      usefulLifeMonths: 0,
-      lifecycleStatus: "active",
-      nextServiceDate: "",
-      lifecycleNotes: "",
-      notes: `Created automatically from product catalog scan ${clean}.`,
-    };
-    const searchText = buildSearchText(payload);
 
-    const result = await smartMergeInventory({
-      productId: product.id,
-      name: payload.name,
-      category: payload.category,
-      manufacturer: payload.manufacturer,
-      manufacturerItemId: payload.manufacturerItemId,
-      sku: payload.sku,
-      hcpc: payload.hcpc,
-      barcode: payload.barcode,
-      serial: "",
-      lotNumber: "",
-      expirationDate: "",
-      locationName: payload.locationName,
-      binLocation: "",
-      quantityOnHand: 0,
-      committed: 0,
-      onRent: 0,
-      onOrder: 0,
-      reorderLevel: payload.reorderLevel,
-      unitCost: payload.unitCost,
-      status: payload.status === "discontinued" ? "inactive" : "available",
-      notes: payload.notes,
-      source: "inventory_product_scan",
-      sourceId: product.id,
-    });
-
-    await InventoryRepository.update(result.inventoryId, {
-      ...omitMovementFields(payload),
-      searchText,
-      pendingScanReview: false,
-      scanSource: "product_catalog_scan",
-      lastScannedAt: new Date().toISOString(),
-      lastScanDirection: "in",
-    });
-
-    const movement = await createInventoryMovement({
-      operationId: `scan-in-product-${result.inventoryId}-${clean}`,
-      movementType: "receive",
-      inventoryItemId: result.inventoryId,
-      productId: product.id,
-      barcode: payload.barcode,
+    const result = await receiveScannedInventoryIntake({
+      mode: "product-match",
+      rawScan: rawCode,
+      normalizedScan: clean,
       quantity: 1,
-      reason: "Scanned in from matching product catalog record.",
-      source: "scanner",
-      metadata: {
-        productCatalogScan: true,
-        mergeAction: result.action,
-      },
+      locationId: "Main Location",
+      productId: product.id,
     });
 
-    if (
-      movement.status !== "success" &&
-      movement.status !== "duplicate_operation"
-    ) {
-      throw new Error(movement.message || "Scanned product receive failed.");
+    if (!result.ok) {
+      throw new Error(result.message || "Scanned product receive failed.");
     }
 
-    toast.success(`${payload.name} scanned in from product catalog.`);
+    toast.success(
+      `${product.name || `Scanned product ${clean}`} scanned in from product catalog.`,
+    );
   }
 
   async function runJarvisInventoryIdentification(inventoryId: string, rawCode: string) {
@@ -232,107 +131,26 @@ export function useInventoryActions({
 
   async function createPendingScanIn(rawCode: string) {
     const clean = normalizeBarcode(rawCode);
-    const name = `Pending scanned item ${clean}`;
-    const payload: Omit<InventoryItem, "id" | "searchText" | "isDeleted"> = {
-      productId: "",
-      name,
-      category: "Pending Scan Review",
-      sku: "",
-      hcpc: "",
-      barcode: "",
-      serial: clean,
-      lotNumber: "",
-      locationName: "Main Location",
-      binLocation: "",
-      quantityOnHand: 0,
-      committed: 0,
-      onRent: 0,
-      onOrder: 0,
-      available: 0,
-      reorderLevel: 0,
-      unitCost: 0,
-      totalValue: 0,
-      status: "available",
-      manufacturer: "",
-      manufacturerItemId: "",
-      modelNumber: "",
-      warrantyProvider: "",
-      warrantyStartDate: "",
-      warrantyEndDate: "",
-      warrantyNotes: "",
-      purchaseDate: "",
-      usefulLifeMonths: 0,
-      lifecycleStatus: "active",
-      nextServiceDate: "",
-      lifecycleNotes: "",
-      notes: "Created automatically from an unmatched Scan In. Review and complete item details.",
-    };
-    const searchText = buildSearchText(payload);
 
-    const result = await smartMergeInventory({
-      productId: "",
-      name,
-      category: payload.category,
-      manufacturer: "",
-      manufacturerItemId: "",
-      sku: "",
-      hcpc: "",
-      barcode: "",
-      serial: clean,
-      lotNumber: "",
-      expirationDate: "",
-      locationName: payload.locationName,
-      binLocation: "",
-      quantityOnHand: 0,
-      committed: 0,
-      onRent: 0,
-      onOrder: 0,
-      reorderLevel: 0,
-      unitCost: 0,
-      status: "available",
-      notes: payload.notes,
-      source: "inventory_scan",
-      sourceId: clean,
-    });
-
-    await InventoryRepository.update(result.inventoryId, {
-      ...omitMovementFields(payload),
-      productId: "",
-      searchText,
-      pendingScanReview: true,
-      scanSource: "scan_in_unmatched",
-      lastScannedAt: new Date().toISOString(),
-      lastScanDirection: "in",
-    });
-
-    const movement = await createInventoryMovement({
-      operationId: `scan-in-pending-${result.inventoryId}-${clean}`,
-      movementType: "receive",
-      inventoryItemId: result.inventoryId,
-      serialNumber: clean,
+    const result = await receiveScannedInventoryIntake({
+      mode: "pending-scan",
+      rawScan: rawCode,
+      normalizedScan: clean,
       quantity: 1,
-      reason: "Created pending inventory record from unmatched Scan In.",
-      source: "scanner",
-      metadata: {
-        pendingScanReview: true,
-        mergeAction: result.action,
-      },
+      locationId: "Main Location",
     });
 
-    if (
-      movement.status !== "success" &&
-      movement.status !== "duplicate_operation"
-    ) {
-      throw new Error(movement.message || "Pending scan receive failed.");
+    if (!result.ok) {
+      throw new Error(result.message || "Pending scan receive failed.");
     }
 
-    const identified = await runJarvisInventoryIdentification(result.inventoryId, clean);
+    const identified = await runJarvisInventoryIdentification(result.data.inventoryItemId, clean);
 
     if (!identified) {
       toast.success(
-        result.action === "created"
+        result.data.createdOrMerged === "created"
           ? "Scan intake record created for review."
-          : "Existing scanned product quantity updated for review."
+          : "Existing scanned product quantity updated for review.",
       );
     }
   }
@@ -347,87 +165,102 @@ export function useInventoryActions({
       return false;
     }
 
-    const item = await findInventoryByScan(rawCode);
+    const scanResolution = await resolveInventoryScan({
+      rawCode,
+    });
 
-    if (!item) {
-      if (direction === "in") {
-        const product = await findProductByScan(rawCode);
-
-        if (product) {
-          await createInventoryFromProductScan(rawCode, product);
-          return true;
-        }
-
-        await createPendingScanIn(rawCode);
-        return true;
-      }
-
-      toast.error("No inventory match found for that scan.");
-      return false;
-    }
-
-    if (direction === "out" && item.available <= 0) {
-      toast.error("That item has no available stock to scan out.");
-      return false;
-    }
-
-    try {
-      const movement = await createInventoryMovement({
-        movementType:
-          direction === "in"
-            ? "receive"
-            : outReason === "rental"
-              ? "rental_checkout"
-              : "patient_assignment",
-        inventoryItemId: item.id,
-        productId: item.productId,
-        barcode: item.barcode || normalizeBarcode(rawCode),
-        serialNumber: item.serial,
-        lotNumber: item.lotNumber,
-        quantity: 1,
-        reason:
-          direction === "in"
-            ? "Scanned into inventory."
-            : `Scanned out for ${outReason ?? "issue"}.`,
-        source: "scanner",
-        metadata: {
-          rawCode,
-          direction,
-          outReason: outReason ?? "",
-        },
-      });
-
-      if (
-        movement.status !== "success" &&
-        movement.status !== "duplicate_operation"
-      ) {
-        toast.error(movement.message || "Inventory movement was not applied.");
+    if (scanResolution.status === "existing-inventory") {
+      const item = scanResolution.item;
+      if (direction === "out" && item.available <= 0) {
+        toast.error("That item has no available stock to scan out.");
         return false;
       }
-    } catch (error) {
-      console.error("INVENTORY SCAN UPDATE FAILED", {
-        itemId: item.id,
-        direction,
-        error,
-      });
 
-      toast.error("Inventory quantity could not be updated.");
-      return false;
+      try {
+        const movement = await createInventoryMovement({
+          movementType:
+            direction === "in"
+              ? "receive"
+              : outReason === "rental"
+              ? "rental_checkout"
+              : "patient_assignment",
+          inventoryItemId: item.id,
+          productId: item.productId,
+          barcode: item.barcode || normalizeBarcode(rawCode),
+          serialNumber: item.serial,
+          lotNumber: item.lotNumber,
+          quantity: 1,
+          reason:
+            direction === "in"
+              ? "Scanned into inventory."
+              : `Scanned out for ${outReason ?? "issue"}.`,
+          source: "scanner",
+          metadata: {
+            rawCode,
+            direction,
+            outReason: outReason ?? "",
+          },
+        });
+
+        if (
+          movement.status !== "success" &&
+          movement.status !== "duplicate_operation"
+        ) {
+          toast.error(movement.message || "Inventory movement was not applied.");
+          return false;
+        }
+      } catch (error) {
+        console.error("INVENTORY SCAN UPDATE FAILED", {
+          itemId: item.id,
+          direction,
+          error,
+        });
+
+        toast.error("Inventory quantity could not be updated.");
+        return false;
+      }
+
+      if (direction === "in") {
+        if (item.pendingScanReview) {
+          await runJarvisInventoryIdentification(item.id, rawCode);
+        } else {
+          void ensureProductFromInventory(item).catch((error) => {
+            console.error("INVENTORY PRODUCT SYNC ERROR:", error);
+            toast.error("Inventory moved, but product catalog sync needs review.");
+          });
+        }
+      }
+
+      toast.success(`${item.name} scanned ${direction}.`);
+      return true;
+    }
+
+    if (scanResolution.status === "existing-product" && direction === "in") {
+      await createInventoryFromProductScan(rawCode, {
+        id: scanResolution.product.id,
+        name: scanResolution.product.name,
+        category: scanResolution.product.category,
+        sku: scanResolution.product.sku,
+        hcpcs: scanResolution.product.hcpcs,
+        upc: scanResolution.product.upc,
+        manufacturer: scanResolution.product.manufacturer || scanResolution.product.brand || "",
+        manufacturerItemId: scanResolution.product.manufacturerItemId,
+        model: scanResolution.product.model,
+        defaultPurchasePrice: scanResolution.product.defaultPurchasePrice,
+        reorderLevel: scanResolution.product.reorderLevel,
+        status: scanResolution.product.status,
+        deleted: scanResolution.product.deleted,
+      });
+      return true;
     }
 
     if (direction === "in") {
-      if (item.pendingScanReview) {
-        await runJarvisInventoryIdentification(item.id, rawCode);
-      } else {
-        void ensureProductFromInventory(item).catch((error) => {
-          console.error("INVENTORY PRODUCT SYNC ERROR:", error);
-          toast.error("Inventory moved, but product catalog sync needs review.");
-        });
-      }
+      await createPendingScanIn(rawCode);
+      return true;
     }
 
-    toast.success(`${item.name} scanned ${direction}.`);
-    return true;
+    toast.error("No inventory match found for that scan.");
+    return false;
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -920,5 +753,4 @@ export function useInventoryActions({
     handleBatchDiscontinue,
   };
 }
-
 

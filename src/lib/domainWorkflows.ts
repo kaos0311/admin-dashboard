@@ -140,6 +140,53 @@ export type PatientEquipmentWorkflowRequest = {
   reason?: string;
 };
 
+export type InventoryCleanupAction =
+  | "ASSIGN_CATEGORY"
+  | "LINK_CANONICAL_PRODUCT"
+  | "RELINK_PRODUCT_ID"
+  | "CORRECT_MANUFACTURER"
+  | "CORRECT_MODEL"
+  | "CORRECT_PRODUCT_NAME"
+  | "CORRECT_SERIAL"
+  | "CORRECT_ASSET_TAG"
+  | "CORRECT_ASSET_NUMBER"
+  | "MARK_AS_REVIEWED"
+  | "DISMISS_FALSE_POSITIVE";
+
+export type InventoryCleanupRequest = {
+  mode: "preview" | "apply";
+  operationId: string;
+  action: InventoryCleanupAction;
+  inventoryItemId: string;
+  targetProductId?: string;
+  field?: string;
+  newValue?: string;
+  reason?: string;
+  previewToken?: string;
+  acknowledgement?: string;
+  riskId?: string;
+};
+
+export type InventoryCleanupResult = {
+  status: "preview" | "success" | "duplicate_operation";
+  operationId: string;
+  workflowType: "inventory.cleanup";
+  action: InventoryCleanupAction;
+  riskLevel: "LOW" | "MEDIUM" | "HIGH";
+  inventoryItemId: string;
+  current: Record<string, string>;
+  proposed: Record<string, string>;
+  diff: Array<{ field: string; before: string; after: string }>;
+  affectedRecords: number;
+  sideEffects: string[];
+  warnings: string[];
+  previewToken: string;
+  requiresReason: boolean;
+  requiresAcknowledgement: boolean;
+  auditWritten?: boolean;
+  changedFields?: string[];
+};
+
 export async function recordDeliveryScanWorkflow(
   request: DeliveryWorkflowRequest
 ): Promise<DomainWorkflowResult> {
@@ -284,6 +331,17 @@ export async function patientEquipmentWorkflow(
   const callable = httpsCallable<PatientEquipmentWorkflowRequest, DomainWorkflowResult>(
     functions,
     "patientEquipmentWorkflowCallable"
+  );
+  const result = await callable(request);
+  return result.data;
+}
+
+export async function inventoryCleanupWorkflow(
+  request: InventoryCleanupRequest
+): Promise<InventoryCleanupResult> {
+  const callable = httpsCallable<InventoryCleanupRequest, InventoryCleanupResult>(
+    functions,
+    "inventoryCleanupWorkflowCallable"
   );
   const result = await callable(request);
   return result.data;

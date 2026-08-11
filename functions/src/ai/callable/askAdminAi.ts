@@ -9,6 +9,7 @@ import {
   redactPhi,
   scanTextForPhi,
 } from "../phiSafety";
+import { enforceCallableRateLimit } from "../../security/rateLimit.js";
 
 if (!getApps().length) {
   initializeApp();
@@ -788,6 +789,7 @@ export const askAdminAi = onCall(
     secrets: [OPENAI_API_KEY],
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "ai");
     const actor = requireAdmin(request);
     const prompt = getPrompt(request.data);
 

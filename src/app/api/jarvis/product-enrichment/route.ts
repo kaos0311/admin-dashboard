@@ -4,6 +4,7 @@ import { FieldValue as AdminFieldValue } from "firebase-admin/firestore";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireApiPermission } from "@/lib/auth/require-api-auth";
 import { normalizeBarcode } from "@/lib/barcode";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 import { findImageUrl, processProductImageUrl } from "@/services/jarvis/product-image.service";
 import { lookupBarcodeProduct } from "@/services/jarvis/barcode-lookup.service";
 import type { SearchResult } from "@/services/jarvis/product-enrichment-types";
@@ -689,8 +690,23 @@ async function autoFillBlankFields(
 }
 
 export async function POST(request: NextRequest) {
+  const ipRateLimit = await enforceRateLimit({
+    request,
+    policyName: "ai",
+    scope: "ip",
+  });
+  if (ipRateLimit) return ipRateLimit;
+
   const auth = await requireApiPermission(request, "inventory:write");
   if (!auth.ok) return auth.response;
+
+  const userRateLimit = await enforceRateLimit({
+    request,
+    policyName: "ai",
+    scope: "user",
+    identifier: auth.uid,
+  });
+  if (userRateLimit) return userRateLimit;
 
   const body = (await request.json()) as Record<string, unknown>;
   const mode = text(body.mode);

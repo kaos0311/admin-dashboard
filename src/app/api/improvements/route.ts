@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminDb } from "@/lib/firebaseAdmin";
 import { requireApiRole } from "@/lib/auth/require-api-auth";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -22,11 +23,26 @@ function toIso(value: unknown): string {
 
 export async function GET(request: NextRequest) {
   try {
+    const ipRateLimit = await enforceRateLimit({
+      request,
+      policyName: "general",
+      scope: "ip",
+    });
+    if (ipRateLimit) return ipRateLimit;
+
     const authResult = await requireApiRole(request, ["admin", "tank"]);
 
     if (!authResult.ok) {
       return authResult.response;
     }
+
+    const userRateLimit = await enforceRateLimit({
+      request,
+      policyName: "general",
+      scope: "user",
+      identifier: authResult.uid,
+    });
+    if (userRateLimit) return userRateLimit;
 
     const statusFilter = request.nextUrl.searchParams.get("status") ?? "pending";
     const snapshot = await adminDb
@@ -60,6 +76,13 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
+    const ipRateLimit = await enforceRateLimit({
+      request,
+      policyName: "admin",
+      scope: "ip",
+    });
+    if (ipRateLimit) return ipRateLimit;
+
     const body = (await request.json()) as {
       title?: string;
       description?: string;
@@ -89,6 +112,14 @@ export async function POST(request: NextRequest) {
     if (!authResult.ok) {
       return authResult.response;
     }
+
+    const userRateLimit = await enforceRateLimit({
+      request,
+      policyName: "admin",
+      scope: "user",
+      identifier: authResult.uid,
+    });
+    if (userRateLimit) return userRateLimit;
 
     const now = new Date();
 
@@ -124,6 +155,13 @@ export async function POST(request: NextRequest) {
 
 export async function PATCH(request: NextRequest) {
   try {
+    const ipRateLimit = await enforceRateLimit({
+      request,
+      policyName: "admin",
+      scope: "ip",
+    });
+    if (ipRateLimit) return ipRateLimit;
+
     const body = (await request.json()) as {
       id?: string;
       action?: "approve" | "reject" | "apply";
@@ -143,6 +181,14 @@ export async function PATCH(request: NextRequest) {
     if (!authResult.ok) {
       return authResult.response;
     }
+
+    const userRateLimit = await enforceRateLimit({
+      request,
+      policyName: "admin",
+      scope: "user",
+      identifier: authResult.uid,
+    });
+    if (userRateLimit) return userRateLimit;
 
     const proposalRef = adminDb.collection("improvementProposals").doc(body.id);
     const proposalSnap = await proposalRef.get();

@@ -14,6 +14,7 @@ import {
   getImportRetentionMetadata,
 } from "../importRetention.js";
 import { requireCallableStaffOrAdmin } from "../auth/roles.js";
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 
 const db = getFirestore();
 
@@ -1319,6 +1320,7 @@ export const rebuildReportsAnalytics = onCall(
     memory: "1GiB",
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "import");
     await requireCallableStaffOrAdmin(
       request.auth,
       "Only staff, admins, or Tank users can rebuild report analytics."

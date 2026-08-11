@@ -22,15 +22,16 @@ import { NextRequest } from "next/server";
 
 let nextDocId = 0;
 
-const { mockVerifyIdToken, mockDocGet, mockDocSet, mockDocUpdate, mockCollectionGet } =
+const { mockVerifyIdToken, mockDocGet, mockDocSet, mockDocUpdate, mockCollectionGet, mockEnforceRateLimit } =
   vi.hoisted(() => {
     const mockVerifyIdToken = vi.fn();
     const mockDocGet = vi.fn();
     const mockDocSet = vi.fn();
     const mockDocUpdate = vi.fn();
     const mockCollectionGet = vi.fn();
+    const mockEnforceRateLimit = vi.fn();
 
-    return { mockVerifyIdToken, mockDocGet, mockDocSet, mockDocUpdate, mockCollectionGet };
+    return { mockVerifyIdToken, mockDocGet, mockDocSet, mockDocUpdate, mockCollectionGet, mockEnforceRateLimit };
   });
 
 vi.mock("@/lib/firebaseAdmin", () => ({
@@ -58,6 +59,10 @@ vi.mock("@/lib/firebaseAdmin", () => ({
       return coll;
     }),
   },
+}));
+
+vi.mock("@/lib/security/rate-limit", () => ({
+  enforceRateLimit: mockEnforceRateLimit,
 }));
 
 import { GET, PATCH, POST } from "./route";
@@ -194,6 +199,7 @@ async function getJson(response: Response): Promise<Record<string, unknown>> {
 describe("Improvements API — full workflow E2E", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockEnforceRateLimit.mockResolvedValue(null);
     nextDocId = 0;
   });
 

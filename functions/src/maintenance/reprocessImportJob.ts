@@ -20,6 +20,7 @@ import {
   makeSafeDocId,
 } from "../imports/utils/normalize.js";
 import { requireCallableStaffOrAdmin } from "../auth/roles.js";
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 
 const db = getFirestore();
 const storage = getStorage();
@@ -174,6 +175,7 @@ export const reprocessImportJob =
     async (
       request
     ): Promise<ReprocessImportJobResult> => {
+      await enforceCallableRateLimit(request, "import");
       await requireCallableStaffOrAdmin(
         request.auth,
         "Only staff, admins, or Tank users can reprocess import jobs."

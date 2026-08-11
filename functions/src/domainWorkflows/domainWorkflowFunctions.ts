@@ -1,6 +1,7 @@
 import { getStorage } from "firebase-admin/storage";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 import { requireStaffOrAdmin } from "../inventory/auth.js";
 import * as deliveryWorkflowService from "./deliveryWorkflowService.js";
 import { assertAdmin } from "./shared.js";
@@ -36,6 +37,13 @@ const PATIENT_EQUIPMENT_ACTIONS = new Set([
 ]);
 const PATIENT_LIFECYCLE_ACTIONS = new Set(["archive", "restore", "destroy"]);
 
+async function requireRateLimitedStaffOrAdmin(
+  request: Parameters<typeof requireStaffOrAdmin>[0],
+) {
+  await enforceCallableRateLimit(request, "general");
+  return requireStaffOrAdmin(request);
+}
+
 export const recordDeliveryScanWorkflowCallable = onCall(
   {
     region: "us-central1",
@@ -44,7 +52,7 @@ export const recordDeliveryScanWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     const mode = cleanString(data?.mode) as deliveryWorkflowService.DeliveryScanMode | undefined;
     if (!mode || !DELIVERY_MODES.has(mode)) {
@@ -85,7 +93,7 @@ export const completeDeliveryTicketWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     return deliveryWorkflowService.completeDeliveryTicketWorkflow(
       {
@@ -105,7 +113,7 @@ export const finalizeDeliverySignatureWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     return deliveryWorkflowService.finalizeDeliverySignatureWorkflow(
       {
@@ -137,7 +145,7 @@ export const finalizeDeliveryDamagePhotosWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     const files = Array.isArray(data?.files)
       ? data.files.map((item) => {
@@ -175,7 +183,7 @@ export const deliveryTechCheckInWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     return deliveryWorkflowService.deliveryTechCheckInWorkflow(
       {
@@ -199,7 +207,7 @@ export const updateDeliveryRouteWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     return deliveryWorkflowService.updateDeliveryRouteWorkflow(
       {
@@ -223,7 +231,7 @@ export const checkoutRentalWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     return checkoutRentalWorkflow(
       {
@@ -250,7 +258,7 @@ export const createAndCheckoutRentalWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     return createAndCheckoutRentalWorkflow(
       {
@@ -281,7 +289,7 @@ export const returnRentalWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     return returnRentalWorkflow(
       {
@@ -308,7 +316,7 @@ export const exchangeRentalWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     return exchangeRentalWorkflow(
       {
@@ -338,7 +346,7 @@ export const cancelRentalWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     return cancelRentalWorkflow(
       {
@@ -359,7 +367,7 @@ export const reportStaleRentalDraftsCallable = onCall(
     maxInstances: 2,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     assertAdmin(actor);
     const data = request.data as Record<string, unknown> | undefined;
     return reportStaleRentalDrafts({
@@ -379,7 +387,7 @@ export const patientEquipmentWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     const action = cleanString(data?.action) as PatientEquipmentAction | undefined;
     if (!action || !PATIENT_EQUIPMENT_ACTIONS.has(action)) {
@@ -416,7 +424,7 @@ export const patientLifecycleWorkflowCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
     const action = cleanString(data?.action) as PatientLifecycleAction | undefined;
     if (!action || !PATIENT_LIFECYCLE_ACTIONS.has(action)) {
@@ -445,7 +453,7 @@ export const cleanupPendingWorkflowUploadsCallable = onCall(
     maxInstances: 2,
   },
   async (request) => {
-    const actor = await requireStaffOrAdmin(request);
+    const actor = await requireRateLimitedStaffOrAdmin(request);
     assertAdmin(actor);
     const data = request.data as Record<string, unknown> | undefined;
     const dryRun = data?.dryRun !== false;

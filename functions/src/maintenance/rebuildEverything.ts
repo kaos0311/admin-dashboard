@@ -39,6 +39,7 @@ import {
   IMPORT_RETENTION_MONTHS,
 } from "../importRetention.js";
 import { requireCallableAdmin } from "../auth/roles.js";
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 
 const db = getFirestore();
 const storage = getStorage();
@@ -570,6 +571,7 @@ export const rebuildEverything = onCall(
     timeoutSeconds: 540,
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "admin");
     await requireCallableAdmin(
       request.auth,
       "Only admins can rebuild the database."

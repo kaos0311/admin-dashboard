@@ -1,5 +1,6 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 import { requireStaffOrAdmin } from "./auth";
 import {
   type CreateMovementInput,
@@ -100,6 +101,7 @@ export const createInventoryMovementCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "general");
     const actor = await requireStaffOrAdmin(request);
     const input = parseMovementInput(request.data);
     return createInventoryMovement(input, actor);
@@ -114,6 +116,7 @@ export const reverseInventoryMovementCallable = onCall(
     maxInstances: 10,
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "general");
     const actor = await requireStaffOrAdmin(request);
     const data = request.data as Record<string, unknown> | undefined;
 
@@ -135,6 +138,7 @@ export const reconcileInventoryCallable = onCall(
     maxInstances: 2,
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "admin");
     const actor = await requireStaffOrAdmin(request);
     if (actor.role !== "admin" && actor.role !== "tank") {
       throw new HttpsError("permission-denied", "Admin access is required.");

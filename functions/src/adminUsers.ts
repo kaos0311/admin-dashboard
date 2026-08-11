@@ -4,6 +4,7 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 import { writeAuditEntry } from "./audit/writeAuditEntry.js";
+import { enforceCallableRateLimit } from "./security/rateLimit.js";
 
 if (!getApps().length) {
   initializeApp();
@@ -151,6 +152,8 @@ export const createDashboardUser = onCall(
     maxInstances: 10,
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "admin");
+
     if (!request.auth) {
       throw new HttpsError("unauthenticated", "You must be signed in.");
     }

@@ -6,6 +6,7 @@ import {
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions";
 import { requireCallableAdmin } from "../auth/roles.js";
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 
 const db = getFirestore();
 
@@ -144,6 +145,7 @@ export const softResetReports = onCall(
     memory: "1GiB",
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "admin");
     await requireCallableAdmin(
       request.auth,
       "Only admins can reset imported reports."

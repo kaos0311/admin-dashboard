@@ -161,3 +161,20 @@ repo-snapshot-*.txt
 # ------------------------------------------------------------------------------
 *.local
 /src/generated/prisma
+
+# AI/agent backups
+.codex-backups/
+
+# Temporary diagnostic output
+*-scan.txt
+out.txt
+tess_test_out.txt
+tsc_output.txt
+tsc_full_output.txt
+tsc_trace.txt
+functions/build_out.txt
+functions/golden-*-before.json
+
+# Windows/device garbage
+nul
+**/nul

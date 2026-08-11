@@ -20,6 +20,12 @@ import type {
   SortKey,
 } from "../lib/inventoryTypes";
 
+export type InventorySerializationFilter = "all" | "serialized" | "quantity";
+
+function hasSerializedIdentifier(item: InventoryItem): boolean {
+  return Boolean(item.serial || item.assetTag || item.assetNumber);
+}
+
 export function useInventoryFilters(
   items: InventoryItem[],
   thresholds?: InventoryThresholdSettings
@@ -34,6 +40,9 @@ export function useInventoryFilters(
     "all" | LifecycleStatus
   >("all");
   const [alertFilter, setAlertFilter] = useState<AlertFilter>("all");
+  const [locationFilter, setLocationFilter] = useState("all");
+  const [serializationFilter, setSerializationFilter] =
+    useState<InventorySerializationFilter>("all");
 
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDirection, setSortDirection] = useState<SortDirection>("asc");
@@ -61,6 +70,22 @@ export function useInventoryFilters(
         return false;
       }
 
+      if (locationFilter !== "all" && item.locationName !== locationFilter) return false;
+
+      if (
+        serializationFilter === "serialized" &&
+        !hasSerializedIdentifier(item)
+      ) {
+        return false;
+      }
+
+      if (
+        serializationFilter === "quantity" &&
+        hasSerializedIdentifier(item)
+      ) {
+        return false;
+      }
+
       if (!term) return true;
 
       return item.searchText.includes(term);
@@ -73,10 +98,23 @@ export function useInventoryFilters(
     statusFilter,
     lifecycleFilter,
     alertFilter,
+    locationFilter,
+    serializationFilter,
     sortKey,
     sortDirection,
     thresholds,
   ]);
+
+  const locationOptions = useMemo(() => {
+    return Array.from(
+      new Set(items.map((item) => item.locationName.trim()).filter(Boolean)),
+    ).sort((left, right) =>
+      left.localeCompare(right, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      })
+    );
+  }, [items]);
 
   const summary = useMemo(() => {
     return {
@@ -98,6 +136,8 @@ export function useInventoryFilters(
     setStatusFilter("all");
     setLifecycleFilter("all");
     setAlertFilter("all");
+    setLocationFilter("all");
+    setSerializationFilter("all");
     setSortKey("name");
     setSortDirection("asc");
   }
@@ -119,6 +159,13 @@ export function useInventoryFilters(
 
     alertFilter,
     setAlertFilter,
+
+    locationFilter,
+    setLocationFilter,
+    locationOptions,
+
+    serializationFilter,
+    setSerializationFilter,
 
     sortKey,
     sortDirection,

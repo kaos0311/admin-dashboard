@@ -2,6 +2,7 @@ import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 import {
   resolveInventoryItem,
 } from "./inventoryTransactionService.js";
@@ -173,6 +174,7 @@ export const issueInventoryByBarcode = onCall(
     maxInstances: 10,
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "general");
     return executeTransaction(request, "issue");
   }
 );
@@ -188,6 +190,7 @@ export const cycleCountInventoryByBarcode = onCall(
     maxInstances: 10,
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "general");
     return executeTransaction(request, "cycle_count");
   }
 );
@@ -203,6 +206,7 @@ export const transferInventoryByBarcode = onCall(
     maxInstances: 10,
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "general");
     const toLocation = request.data?.toLocation;
     if (!toLocation || typeof toLocation !== "string" || !toLocation.trim()) {
       throw new HttpsError("invalid-argument", "Destination location is required for transfer.");

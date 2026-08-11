@@ -4,6 +4,7 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 import { writeAuditEntry } from "./audit/writeAuditEntry.js";
+import { enforceCallableRateLimit } from "./security/rateLimit.js";
 
 if (!getApps().length) {
   initializeApp();
@@ -84,6 +85,7 @@ function requirePassword(value: unknown): string {
 }
 
 export const updateUserRole = onCall<UpdateUserRolePayload>(async (request) => {
+  await enforceCallableRateLimit(request, "admin");
   const actorUid = await assertAdmin(request);
   const uid = requireUid(request.data?.uid);
   const role = requireRole(request.data?.role);
@@ -121,6 +123,7 @@ export const updateUserRole = onCall<UpdateUserRolePayload>(async (request) => {
 });
 
 export const disableDashboardUser = onCall<UserUidPayload>(async (request) => {
+  await enforceCallableRateLimit(request, "admin");
   const actorUid = await assertAdmin(request);
   const uid = requireUid(request.data?.uid);
   const actorEmail = String(request.auth?.token?.email ?? "");
@@ -165,6 +168,7 @@ export const disableDashboardUser = onCall<UserUidPayload>(async (request) => {
 });
 
 export const enableDashboardUser = onCall<UserUidPayload>(async (request) => {
+  await enforceCallableRateLimit(request, "admin");
   const actorUid = await assertAdmin(request);
   const uid = requireUid(request.data?.uid);
   const actorEmail = String(request.auth?.token?.email ?? "");
@@ -202,6 +206,7 @@ export const enableDashboardUser = onCall<UserUidPayload>(async (request) => {
 });
 
 export const deleteUserAccount = onCall<UserUidPayload>(async (request) => {
+  await enforceCallableRateLimit(request, "admin");
   const actorUid = await assertAdmin(request);
   const uid = requireUid(request.data?.uid);
   const actorEmail = String(request.auth?.token?.email ?? "");
@@ -247,6 +252,7 @@ export const deleteUserAccount = onCall<UserUidPayload>(async (request) => {
 
 export const resetUserPassword = onCall<ResetUserPasswordPayload>(
   async (request) => {
+    await enforceCallableRateLimit(request, "admin");
     const actorUid = await assertAdmin(request);
     const uid = requireUid(request.data?.uid);
     const newPassword = requirePassword(request.data?.newPassword);

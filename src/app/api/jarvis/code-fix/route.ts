@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireApiRole } from "@/lib/auth/require-api-auth";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 type CodeFixRequest = {
   title: string;
@@ -9,8 +10,23 @@ type CodeFixRequest = {
 
 export async function POST(request: NextRequest) {
   try {
+    const ipRateLimit = await enforceRateLimit({
+      request,
+      policyName: "ai",
+      scope: "ip",
+    });
+    if (ipRateLimit) return ipRateLimit;
+
     const auth = await requireApiRole(request, ["admin", "tank"]);
     if (!auth.ok) return auth.response;
+
+    const userRateLimit = await enforceRateLimit({
+      request,
+      policyName: "ai",
+      scope: "user",
+      identifier: auth.uid,
+    });
+    if (userRateLimit) return userRateLimit;
 
     const body = (await request.json()) as CodeFixRequest;
 

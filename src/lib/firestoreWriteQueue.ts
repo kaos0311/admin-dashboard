@@ -7,6 +7,14 @@ import {
   writeBatch,
   type WriteBatch,
 } from "firebase/firestore";
+import {
+  assertMetadataOnlyInventoryWrite,
+  isInventoryCollectionPath,
+} from "@/lib/inventory/protectedFields";
+import {
+  assertDraftRentalCreate,
+  assertMetadataOnlyDomainWrite,
+} from "@/lib/domain/protectedFields";
 
 type PlainObject = Record<string, unknown>;
 
@@ -14,6 +22,10 @@ type QueueOptions = {
   chunkSize?: number;
   delayMs?: number;
   debugLabel?: string;
+};
+
+type CustomQueueOptions<T> = QueueOptions & {
+  validateItem?: (item: T, context: string) => void;
 };
 
 const DEFAULT_CHUNK_SIZE = 250;
@@ -43,6 +55,19 @@ export async function commitChunkedSets(
 
   if (!rows.length) {
     return { written: 0 };
+  }
+
+  if (isInventoryCollectionPath(collectionName)) {
+    rows.forEach((row) =>
+      assertMetadataOnlyInventoryWrite(row, "commitChunkedSets")
+    );
+  }
+  if (collectionName === "rentals") {
+    rows.forEach((row) => assertDraftRentalCreate(row, "commitChunkedSets"));
+  } else {
+    rows.forEach((row) =>
+      assertMetadataOnlyDomainWrite(collectionName, row, "commitChunkedSets")
+    );
   }
 
   const chunks = chunkArray(rows, chunkSize);
@@ -78,7 +103,7 @@ export async function commitChunkedWithCustomBuilder<T>(
   db: Firestore,
   items: T[],
   builder: (batch: WriteBatch, item: T) => void,
-  options: QueueOptions = {}
+  options: CustomQueueOptions<T> = {}
 ): Promise<{ written: number }> {
   const chunkSize = Math.min(options.chunkSize ?? DEFAULT_CHUNK_SIZE, 450);
   const delayMs = options.delayMs ?? DEFAULT_DELAY_MS;
@@ -87,6 +112,14 @@ export async function commitChunkedWithCustomBuilder<T>(
   if (!items.length) {
     return { written: 0 };
   }
+
+  if (!options.validateItem) {
+    throw new Error(
+      "commitChunkedWithCustomBuilder requires validateItem so custom batch writes cannot bypass protected-field enforcement."
+    );
+  }
+
+  items.forEach((item) => options.validateItem?.(item, debugLabel));
 
   const chunks = chunkArray(items, chunkSize);
   let written = 0;

@@ -13,6 +13,7 @@ import {
 
 import { getStorage } from "firebase-admin/storage";
 import { requireCallableAdmin } from "../auth/roles.js";
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 
 const db = getFirestore();
 const storage = getStorage();
@@ -278,6 +279,7 @@ export const cleanDatabase = onCall(
   },
 
   async (request) => {
+    await enforceCallableRateLimit(request, "admin");
     await requireCallableAdmin(
       request.auth,
       "Only admins can clean the database."

@@ -11,6 +11,7 @@ import StaffOrAdmin from "@/app/components/auth/StaffOrAdmin";
 import MaintenanceGate from "@/app/components/MaintenanceGate";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 import { auth } from "@/lib/firebase";
+import { clearSessionCookie } from "@/lib/auth/session-client";
 import { colors, spacing, surfaces, typography } from "@/theme";
 
 type AdminLayoutProps = {
@@ -38,6 +39,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     setLoggingOut(true);
 
     try {
+      await clearSessionCookie();
       await signOut(auth);
       router.replace("/login");
       router.refresh();

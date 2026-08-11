@@ -8,6 +8,10 @@ import { Loader2, ShieldAlert } from "lucide-react";
 
 import { auth, db } from "@/lib/firebase";
 import {
+  clearSessionCookie,
+  createSessionCookie,
+} from "@/lib/auth/session-client";
+import {
   getRoleFromUserRecord,
   isActiveUserRecord,
   isAdminRole,
@@ -59,6 +63,7 @@ export default function AuthGuard({
 
       try {
         if (!user) {
+          void clearSessionCookie();
           if (!cancelled) {
             setGuardState("signedOut");
             setMessage("Redirecting to sign in...");
@@ -85,6 +90,7 @@ export default function AuthGuard({
           const data = userSnap.data() as Record<string, unknown>;
 
           if (!isActiveUserRecord(data)) {
+            await clearSessionCookie();
             await auth.signOut();
 
             if (!cancelled) {
@@ -124,6 +130,17 @@ export default function AuthGuard({
 
           return;
         }
+
+        // Keep the server-side session cookie in sync with the
+        // authenticated sign-in state.
+        void (async () => {
+          try {
+            const idToken = await user.getIdToken(true);
+            await createSessionCookie(idToken);
+          } catch (sessionError) {
+            console.error("SESSION COOKIE SYNC ERROR:", sessionError);
+          }
+        })();
 
         redirectedRef.current = false;
 
@@ -195,6 +212,3 @@ export default function AuthGuard({
 
   return <>{children}</>;
 }
-
-
-

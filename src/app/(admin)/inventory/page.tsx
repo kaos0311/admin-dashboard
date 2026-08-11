@@ -11,7 +11,7 @@ import {
 import toast from "react-hot-toast";
 
 import { InventoryRepository } from "@/repositories/firestore/inventory.repository";
-import { colors, glass, tiles, typography } from "@/theme";
+import { buttons, colors, glass, tiles, typography } from "@/theme";
 import {
   AssetRecordsRouteTile,
   RentalPropertyRouteTile,
@@ -23,6 +23,7 @@ import { normalizeBarcode } from "@/lib/barcode";
 import { auth, db } from "@/lib/firebase";
 
 import { InventoryEmptyState } from "./components/InventoryEmptyState";
+import { InventoryDataQualityPanel } from "./components/InventoryDataQualityPanel";
 import { InventoryFilters } from "./components/InventoryFilters";
 import { InventoryForm } from "./components/InventoryForm";
 import { InventoryHeader } from "./components/InventoryHeader";
@@ -60,6 +61,8 @@ import {
 import { checkInDeceasedPickup } from "@/services/inventory/inventory-return.service";
 import { identifyInventoryProduct } from "@/services/inventory/inventory-jarvis.service";
 
+type InventoryView = "browse" | "dataQuality";
+
 export default function InventoryPage() {
   const {
     loading: authLoading,
@@ -85,6 +88,8 @@ export default function InventoryPage() {
   const [selectedStatKey, setSelectedStatKey] = useState<InventoryStatKey | null>(null);
 
   const [jarvisIdentifying, setJarvisIdentifying] = useState(false);
+
+  const [inventoryView, setInventoryView] = useState<InventoryView>("browse");
 
   const [scanSuccess, setScanSuccess] = useState<{
     title: string;
@@ -189,6 +194,13 @@ export default function InventoryPage() {
 
     alertFilter,
     setAlertFilter,
+
+    locationFilter,
+    setLocationFilter,
+    locationOptions,
+
+    serializationFilter,
+    setSerializationFilter,
 
     sortKey,
     sortDirection,
@@ -548,29 +560,65 @@ export default function InventoryPage() {
                     </h2>
 
                     <p className={`mt-2 ${typography.bodyMuted}`}>
-                      {filteredItems.length.toLocaleString()} visible records
+                      {inventoryView === "browse"
+                        ? `${filteredItems.length.toLocaleString()} visible records`
+                        : `${items.length.toLocaleString()} loaded records analyzed`}
                     </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setInventoryView("browse")}
+                      className={inventoryView === "browse" ? buttons.primary : buttons.secondary}
+                    >
+                      Browse
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInventoryView("dataQuality")}
+                      className={inventoryView === "dataQuality" ? buttons.primary : buttons.secondary}
+                    >
+                      Data Quality
+                    </button>
                   </div>
                 </div>
 
-                <InventoryFilters
-                  search={search}
-                  statusFilter={statusFilter}
-                  lifecycleFilter={lifecycleFilter}
-                  alertFilter={alertFilter}
-                  sortKey={sortKey}
-                  sortDirection={sortDirection}
-                  onSearchChange={setSearch}
-                  onStatusFilterChange={setStatusFilter}
-                  onLifecycleFilterChange={setLifecycleFilter}
-                  onAlertFilterChange={setAlertFilter}
-                  onSortChange={handleSortChange}
-                />
+                {inventoryView === "browse" ? (
+                  <InventoryFilters
+                    search={search}
+                    statusFilter={statusFilter}
+                    lifecycleFilter={lifecycleFilter}
+                    alertFilter={alertFilter}
+                    locationFilter={locationFilter}
+                    locationOptions={locationOptions}
+                    serializationFilter={serializationFilter}
+                    sortKey={sortKey}
+                    sortDirection={sortDirection}
+                    onSearchChange={setSearch}
+                    onStatusFilterChange={setStatusFilter}
+                    onLifecycleFilterChange={setLifecycleFilter}
+                    onAlertFilterChange={setAlertFilter}
+                    onLocationFilterChange={setLocationFilter}
+                    onSerializationFilterChange={setSerializationFilter}
+                    onSortChange={handleSortChange}
+                  />
+                ) : null}
               </div>
 
               <div className="mt-5">
                 {authLoading || loading ? (
                   <InventoryLoadingState />
+                ) : inventoryView === "dataQuality" ? (
+                  <InventoryDataQualityPanel
+                    items={items}
+                    canCleanup={isAdmin}
+                    onOpenItem={(item) => {
+                      editItem(item);
+                      setInventoryView("browse");
+                    }}
+                    onCleanupApplied={handleRefresh}
+                  />
                 ) : filteredItems.length === 0 ? (
                   <InventoryEmptyState />
                 ) : (

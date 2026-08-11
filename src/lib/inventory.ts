@@ -1,12 +1,4 @@
-import {
-  addDoc,
-  collection,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  where,
-} from "firebase/firestore";
+import { collection, getDocs, limit, query, where } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import { normalizeBarcode } from "@/lib/barcode";
 
@@ -128,18 +120,8 @@ export async function logStockMovement(args: {
   sourceId: string;
   notes?: string;
 }): Promise<void> {
-  await addDoc(collection(db, "stockMovements"), {
-    productId: args.productId,
-    productName: args.productName,
-    barcode: args.barcode ?? "",
-    serial: args.serial ?? "",
-    type: args.type,
-    quantity: Math.abs(args.quantity),
-    source: args.source,
-    sourceId: args.sourceId,
-    notes: args.notes ?? "",
-    createdAt: serverTimestamp(),
-  });
+  void args;
+  throw new Error("Stock movements are server-authored. Use createInventoryMovement instead.");
 }
 
 export async function allocateInventoryToOrder(args: {

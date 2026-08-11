@@ -1,4 +1,4 @@
-﻿import { FirebaseError } from "firebase/app";
+import { FirebaseError } from "firebase/app";
 import { getAuth } from "firebase/auth";
 import { getFunctions, httpsCallable } from "firebase/functions";
 
@@ -94,9 +94,8 @@ async function verifyCurrentUser(): Promise<void> {
   const auth = getAuth(app);
   const currentUser = auth.currentUser;
 
-  console.log("[adminUsers] Current auth state", {
-    uid: currentUser?.uid ?? null,
-    email: currentUser?.email ?? null,
+  console.log("[adminUsers] Auth state", {
+    authenticated: currentUser !== null,
   });
 
   if (!currentUser) {
@@ -105,19 +104,34 @@ async function verifyCurrentUser(): Promise<void> {
     );
   }
 
-  const tokenResult = await withTimeout(
-    currentUser.getIdTokenResult(true),
-    15_000
-  );
+  await withTimeout(currentUser.getIdTokenResult(true), 15_000);
+}
 
-  console.log("[adminUsers] Current token claims", tokenResult.claims);
+function toSafeLogPayload(payload: unknown): Record<string, unknown> {
+  if (payload === null || typeof payload !== "object") {
+    return { hasPayload: payload !== undefined && payload !== null };
+  }
+
+  const record = payload as Record<string, unknown>;
+  return {
+    hasPayload: true,
+    itemCount:
+      typeof record.itemCount === "number"
+        ? record.itemCount
+        : Array.isArray(record.items)
+          ? record.items.length
+          : undefined,
+  };
 }
 
 async function callFunction<TPayload, TResult>(
   functionName: string,
   payload: TPayload
 ): Promise<TResult> {
-  console.log(`[adminUsers] Preparing ${functionName}`, payload);
+  console.log(`[adminUsers] Preparing ${functionName}`, {
+    ...toSafeLogPayload(payload),
+    functionName,
+  });
 
   try {
     await verifyCurrentUser();
@@ -131,20 +145,19 @@ async function callFunction<TPayload, TResult>(
 
     const response = await withTimeout(callable(payload));
 
-    console.log(`[adminUsers] ${functionName} succeeded`, response.data);
+    console.log(`[adminUsers] ${functionName} succeeded`, {
+      functionName,
+    });
 
     return response.data;
   } catch (error) {
-    console.error(`[adminUsers] ${functionName} failed`, error);
-
-    if (error instanceof FirebaseError) {
-      console.error(`[adminUsers] ${functionName} Firebase details`, {
-        code: error.code,
-        message: error.message,
-        customData: error.customData,
-        stack: error.stack,
-      });
-    }
+    const errorCode =
+      error instanceof FirebaseError ? error.code : undefined;
+    console.error(`[adminUsers] ${functionName} failed`, {
+      functionName,
+      errorCode,
+      errorType: error instanceof Error ? error.constructor.name : typeof error,
+    });
 
     throw new Error(getErrorMessage(error));
   }

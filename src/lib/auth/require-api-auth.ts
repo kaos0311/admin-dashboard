@@ -18,7 +18,9 @@
 import { NextResponse } from "next/server";
 import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
 import {
+  getRoleFromUserRecord,
   hasPermission,
+  isActiveUserRecord,
   type Permission,
   type UserRole,
 } from "@/lib/permissions/roles";
@@ -43,32 +45,6 @@ export type ApiAuthResult = ApiAuthSuccess | ApiAuthFailure;
 
 /* ------------------------------------------------------------------ */
 /*  Internal helpers                                                   */
-/* ------------------------------------------------------------------ */
-
-function parseRole(raw: unknown): UserRole | null {
-  if (typeof raw !== "string") return null;
-  const valid: UserRole[] = [
-    "admin",
-    "manager",
-    "technician",
-    "billing",
-    "read-only",
-    "staff",
-    "tank",
-  ];
-  return valid.includes(raw as UserRole) ? (raw as UserRole) : null;
-}
-
-function isActiveUser(userData: Record<string, unknown>): boolean {
-  return (
-    userData.active !== false &&
-    userData.disabled !== true &&
-    userData.deleted !== true
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Core auth — verify token + fetch user + check active               */
 /* ------------------------------------------------------------------ */
 
 type RequestLike = { headers: { get(name: string): string | null } };
@@ -124,14 +100,14 @@ export async function requireApiAuth(
   }
 
   const userData = userSnap.data() as Record<string, unknown>;
-  if (!isActiveUser(userData)) {
+  if (!isActiveUserRecord(userData)) {
     return {
       ok: false,
       response: NextResponse.json({ error: "Forbidden" }, { status: 403 }),
     };
   }
 
-  const role = parseRole(userData.role);
+  const role = getRoleFromUserRecord(userData);
   if (!role) {
     return {
       ok: false,

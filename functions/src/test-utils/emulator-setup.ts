@@ -1,74 +1,133 @@
 /**
  * Emulator test setup for Firestore integration tests.
  *
- * REQUIREMENTS:
- *   - FIRESTORE_EMULATOR_HOST must be set (e.g. "localhost:8080")
- *   - FIREBASE_AUTH_EMULATOR_HOST must be set (e.g. "localhost:9099")
- *   - GCLOUD_PROJECT must be set (e.g. "advanced-home-medical-55772")
- *   - FIRESTORE_EMULATOR_HOST must not point to production
- *
- * This module FAILS FAST if any of these are missing — it never
- * silently falls back to production credentials.
+ * Emulator tests are credential-free. They must run against local emulator
+ * hosts and an isolated demo project ID, and they must fail before any test
+ * can accidentally connect to production Firebase services.
  */
 
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 
-/** Validate that emulator environment is properly configured. */
-export function requireEmulatorEnv(): void {
-  const firestoreHost = process.env.FIRESTORE_EMULATOR_HOST;
-  const authHost = process.env.FIREBASE_AUTH_EMULATOR_HOST;
-  const projectId = process.env.GCLOUD_PROJECT;
+export const DEFAULT_EMULATOR_PROJECT_ID = "demo-advanced-home-medical";
 
-  if (!firestoreHost) {
-    throw new Error(
-      "FIRESTORE_EMULATOR_HOST is not set. " +
-      "Integration tests require a running Firestore emulator. " +
-      "Run: firebase emulators:exec --only firestore,auth 'npm run test:integration'"
-    );
+export type EmulatorEnv = NodeJS.ProcessEnv;
+
+const LOCAL_HOST_RE = /^(localhost|127\.0\.0\.1|\[::1\]|::1):\d+$/;
+const REPOSITORY_ROOT = resolve(__dirname, "../../..");
+const EXTERNAL_CREDENTIAL_FLAG = "ALLOW_EXTERNAL_CREDENTIALS_FOR_EMULATOR_TESTS";
+
+function envValue(env: EmulatorEnv, name: string): string | undefined {
+  const value = env[name];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function requireLocalHost(env: EmulatorEnv, name: string): string {
+  const value = envValue(env, name);
+  if (!value) {
+    throw new Error(`${name} is required for emulator tests.`);
   }
 
-  if (!authHost) {
-    throw new Error(
-      "FIREBASE_AUTH_EMULATOR_HOST is not set. " +
-      "Integration tests require a running Auth emulator."
-    );
+  if (!LOCAL_HOST_RE.test(value)) {
+    throw new Error(`${name} must point to a local emulator host.`);
   }
 
+  return value;
+}
+
+function pathIsInsideRepository(filePath: string): boolean {
+  const resolved = resolve(filePath);
+  return (
+    resolved === REPOSITORY_ROOT ||
+    resolved.startsWith(`${REPOSITORY_ROOT}\\`) ||
+    resolved.startsWith(`${REPOSITORY_ROOT}/`)
+  );
+}
+
+export function getEmulatorProjectId(env: EmulatorEnv = process.env): string {
+  const projectId = envValue(env, "GCLOUD_PROJECT");
   if (!projectId) {
-    throw new Error(
-      "GCLOUD_PROJECT is not set. " +
-      "Set it to your Firebase project ID (e.g. advanced-home-medical-55772)."
-    );
+    throw new Error("GCLOUD_PROJECT is required for emulator tests.");
   }
 
-  // Safety check: ensure we're NOT pointing at production
-  if (
-    firestoreHost !== "localhost:8080" &&
-    !firestoreHost.includes("localhost") &&
-    !firestoreHost.includes("127.0.0.1")
-  ) {
-    throw new Error(
-      `FIRESTORE_EMULATOR_HOST is set to "${firestoreHost}" which does not look ` +
-      "like a local emulator. Refusing to run integration tests against a non-local target."
-    );
+  if (!projectId.startsWith("demo-")) {
+    throw new Error("GCLOUD_PROJECT must use an isolated demo-* project ID for emulator tests.");
   }
 
-  // Check for service account key file in the functions directory
-  const serviceAccountPath = resolve(__dirname, "../../serviceAccountKey.json");
-  if (existsSync(serviceAccountPath)) {
-    throw new Error(
-      "serviceAccountKey.json found in functions directory. " +
-      "Remove it before running integration tests. " +
-      "Emulator tests must never load production credentials."
-    );
+  return projectId;
+}
+
+export function requireEmulatorEnv(env: EmulatorEnv = process.env): void {
+  requireLocalHost(env, "FIRESTORE_EMULATOR_HOST");
+  requireLocalHost(env, "FIREBASE_AUTH_EMULATOR_HOST");
+
+  const storageHost = envValue(env, "FIREBASE_STORAGE_EMULATOR_HOST");
+  if (storageHost && !LOCAL_HOST_RE.test(storageHost)) {
+    throw new Error("FIREBASE_STORAGE_EMULATOR_HOST must point to a local emulator host.");
   }
 
-  console.log("[emulator-setup] Emulator environment validated:");
-  console.log(`  FIRESTORE_EMULATOR_HOST=${firestoreHost}`);
-  console.log(`  FIREBASE_AUTH_EMULATOR_HOST=${authHost}`);
-  console.log(`  GCLOUD_PROJECT=${projectId}`);
-  console.log(`  serviceAccountKey.json: NOT PRESENT (safe)`);
+  getEmulatorProjectId(env);
+}
+
+export function assertNoProductionCredentialEnv(env: EmulatorEnv = process.env): void {
+  const blockedCredentialEnv = [
+    "FIREBASE_SERVICE_ACCOUNT_JSON",
+    "FIREBASE_ADMIN_SERVICE_ACCOUNT_PATH",
+    "FIREBASE_CLIENT_EMAIL",
+    "FIREBASE_PRIVATE_KEY",
+  ];
+
+  for (const name of blockedCredentialEnv) {
+    if (envValue(env, name)) {
+      throw new Error(`${name} must not be set for emulator tests.`);
+    }
+  }
+
+  const googleCredentials = envValue(env, "GOOGLE_APPLICATION_CREDENTIALS");
+  if (!googleCredentials) return;
+
+  if (envValue(env, EXTERNAL_CREDENTIAL_FLAG) !== "true") {
+    throw new Error("GOOGLE_APPLICATION_CREDENTIALS must not be set for emulator tests.");
+  }
+
+  if (pathIsInsideRepository(googleCredentials)) {
+    throw new Error("GOOGLE_APPLICATION_CREDENTIALS must be outside the repository for emulator tests.");
+  }
+}
+
+export function assertNoRepositoryServiceAccountFiles(): void {
+  const pathsToCheck = [
+    resolve(REPOSITORY_ROOT, "serviceAccountKey.json"),
+    resolve(REPOSITORY_ROOT, "functions", "serviceAccountKey.json"),
+  ];
+
+  const found = findRepositoryServiceAccountFiles(pathsToCheck, existsSync);
+  if (found.length > 0) {
+    throw new Error(
+      `Repository-local service account file found at ${found[0]}. Move it outside the repository before running emulator tests.`
+    );
+  }
+}
+
+export function findRepositoryServiceAccountFiles(
+  pathsToCheck: string[],
+  fileExists: (filePath: string) => boolean,
+): string[] {
+  return pathsToCheck.filter((filePath) => fileExists(filePath));
+}
+
+/**
+ * Verify no production credentials are loaded.
+ * Call this at the top of every integration test file.
+ */
+export function assertNoProductionCredentials(env: EmulatorEnv = process.env): void {
+  assertNoProductionCredentialEnv(env);
+  assertNoRepositoryServiceAccountFiles();
+}
+
+export function validateEmulatorSafety(env: EmulatorEnv = process.env): void {
+  requireEmulatorEnv(env);
+  assertNoProductionCredentials(env);
 }
 
 /**
@@ -76,14 +135,20 @@ export function requireEmulatorEnv(): void {
  * Uses the Firestore emulator REST API to delete all documents.
  */
 export async function clearEmulatorData(): Promise<void> {
-  const host = process.env.FIRESTORE_EMULATOR_HOST || "localhost:8080";
-  const projectId = process.env.GCLOUD_PROJECT || "advanced-home-medical-55772";
+  const host = requireLocalHost(process.env, "FIRESTORE_EMULATOR_HOST");
+  const projectId = getEmulatorProjectId(process.env);
 
   const collections = [
-    "inventory",
-    "inventoryTransactions",
-    "inventoryOperations",
     "auditLogs",
+    "domainWorkflowOperations",
+    "inventory",
+    "inventoryOperations",
+    "inventoryGroupingRiskReviews",
+    "inventoryTransactions",
+    "patients",
+    "products",
+    "rateLimitBuckets",
+    "rentals",
     "users",
   ];
 
@@ -91,9 +156,8 @@ export async function clearEmulatorData(): Promise<void> {
     const url = `http://${host}/v1/projects/${projectId}/databases/(default)/documents/${collectionId}`;
 
     try {
-      // Get all document IDs in the collection
       const response = await fetch(url);
-      if (!response.ok) continue; // Collection may not exist
+      if (!response.ok) continue;
 
       const body = (await response.json()) as { documents?: Array<{ name: string }> };
       if (!body.documents) continue;
@@ -104,41 +168,28 @@ export async function clearEmulatorData(): Promise<void> {
         await fetch(deleteUrl, { method: "DELETE" });
       }
     } catch {
-      // Ignore errors during cleanup
-    }
-  }
-}
-
-/**
- * Verify no production credentials are loaded.
- * Call this at the top of every integration test file.
- */
-export function assertNoProductionCredentials(): void {
-  // Check env vars
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    throw new Error(
-      "GOOGLE_APPLICATION_CREDENTIALS is set. " +
-      "Integration tests must not use production credentials."
-    );
-  }
-
-  // Check for service account files in common locations
-  const pathsToCheck = [
-    resolve(__dirname, "../../serviceAccountKey.json"),
-    resolve(__dirname, "../../../serviceAccountKey.json"),
-  ];
-
-  for (const filePath of pathsToCheck) {
-    if (existsSync(filePath)) {
-      throw new Error(
-        `Production service account file found at ${filePath}. Remove it before running integration tests.`
-      );
+      // Best-effort cleanup. Test assertions catch any data contamination.
     }
   }
 }
 
 /** Default emulator ports used by this test suite. */
 export const EMULATOR_PORTS = {
-  firestore: 8080,
+  firestore: 8085,
   auth: 9099,
 } as const;
+
+export function getFirestoreEmulatorHost(): { host: string; port: number } {
+  const value = process.env.FIRESTORE_EMULATOR_HOST;
+  if (!value) {
+    throw new Error("FIRESTORE_EMULATOR_HOST is required for emulator tests.");
+  }
+
+  const [host, rawPort] = value.split(":");
+  const port = Number(rawPort);
+  if (!host || !Number.isInteger(port) || port <= 0) {
+    throw new Error("FIRESTORE_EMULATOR_HOST must be formatted as host:port.");
+  }
+
+  return { host, port };
+}

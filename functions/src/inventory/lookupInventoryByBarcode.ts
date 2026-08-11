@@ -1,6 +1,7 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 import { requireStaffOrAdmin } from "./auth";
 import { normalizeScanValue } from "./movementService.js";
 import type {
@@ -80,6 +81,7 @@ export const lookupInventoryByBarcode = onCall(
     maxInstances: 10,
   },
   async (request): Promise<InventoryLookupResult> => {
+    await enforceCallableRateLimit(request, "general");
     // --- Authorization ---
     await requireStaffOrAdmin(request);
 

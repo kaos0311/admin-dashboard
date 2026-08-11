@@ -13,6 +13,10 @@ import { doc, getDoc } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
 import {
+  clearSessionCookie,
+  createSessionCookie,
+} from "@/lib/auth/session-client";
+import {
   type UserRole as DefinedUserRole,
   getRoleFromUserRecord,
   hasPermission,
@@ -103,6 +107,7 @@ export function useAuthRole(): UseAuthRoleResult {
 
       if (!currentUser) {
         roleCache = null;
+        void clearSessionCookie();
 
         if (!cancelled) {
           clearAuthState(setUser, setRole, setActive);
@@ -149,6 +154,7 @@ export function useAuthRole(): UseAuthRoleResult {
 
           if (!resolvedActive) {
             roleCache = null;
+            await clearSessionCookie();
             await signOut(auth);
 
             if (!cancelled) {
@@ -168,6 +174,17 @@ export function useAuthRole(): UseAuthRoleResult {
             hasUserRecord: false,
           });
         }
+
+        // Keep the server-side session cookie in sync: a signed-in active
+        // user should have a valid session for protected server components.
+        void (async () => {
+          try {
+            const idToken = await currentUser.getIdToken(true);
+            await createSessionCookie(idToken);
+          } catch (sessionError) {
+            console.error("SESSION COOKIE SYNC ERROR:", sessionError);
+          }
+        })();
 
         setCachedRole(currentUser.uid, resolvedRole, resolvedActive);
 

@@ -48,6 +48,7 @@ import { Timestamp, getFirestore, FieldValue } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 import { requireStaffOrAdmin } from "./auth";
 import {
   createInventoryMovement,
@@ -396,6 +397,7 @@ export const receiveInventoryByBarcode = onCall(
     maxInstances: 10,
   },
   async (request): Promise<ReceiveInventoryResult> => {
+    await enforceCallableRateLimit(request, "general");
     // ── 1. Authorization ──────────────────────
     let auth: { uid: string; email: string; role: string };
     try {

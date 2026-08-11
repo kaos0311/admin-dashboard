@@ -81,6 +81,7 @@ export const DELIVERY_EVIDENCE_TRANSITIONS: Record<string, Set<string>> = {
 
 const OPERATION_ID_PATTERN = /^[a-zA-Z0-9_-]{8,160}$/;
 const SAFE_DOC_ID_PATTERN = /^[^/.][^/]{0,159}$/;
+const pendingWorkflowFingerprints = new WeakMap<Transaction, Map<string, string>>();
 
 export function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
@@ -168,16 +169,12 @@ export async function claimWorkflowOperation(params: {
     };
   }
 
-  transaction.set(ref, {
-    operationId,
-    workflowType,
-    requestFingerprint,
-    actorUid: actor.uid,
-    actorEmail: actor.email,
-    actorRole: actor.role,
-    status: "processing",
-    createdAt: FieldValue.serverTimestamp(),
-  });
+  let pending = pendingWorkflowFingerprints.get(transaction);
+  if (!pending) {
+    pending = new Map<string, string>();
+    pendingWorkflowFingerprints.set(transaction, pending);
+  }
+  pending.set(ref.path, requestFingerprint);
 
   return { duplicate: false };
 }
@@ -192,21 +189,25 @@ export function completeWorkflowOperation(params: {
 }): void {
   const { transaction, database, operationId, workflowType, actor, result } = params;
   const ref = database.collection("domainWorkflowOperations").doc(`${actor.uid}_${operationId}`);
+  const requestFingerprint = pendingWorkflowFingerprints.get(transaction)?.get(ref.path);
   transaction.set(
     ref,
     {
       operationId,
       workflowType,
+      ...(requestFingerprint ? { requestFingerprint } : {}),
       actorUid: actor.uid,
       actorEmail: actor.email,
       actorRole: actor.role,
       status: "completed",
       result,
       movementIds: result.movementIds ?? [],
+      createdAt: FieldValue.serverTimestamp(),
       completedAt: FieldValue.serverTimestamp(),
     },
     { merge: true }
   );
+  pendingWorkflowFingerprints.get(transaction)?.delete(ref.path);
 }
 
 export function writeWorkflowAudit(params: {

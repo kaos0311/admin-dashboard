@@ -60,6 +60,58 @@ const PROTECTED_FIELDS = [
   "lifecycleUpdatedByEmail",
 ];
 
+const PROTECTED_RENTAL_FIELDS = [
+  "status",
+  "patientId",
+  "patientName",
+  "inventoryItemId",
+  "itemId",
+  "checkedOutAt",
+  "checkedOutByUid",
+  "checkedOutByEmail",
+  "returnedDate",
+  "returnedAt",
+  "returnedByUid",
+  "returnedByEmail",
+  "returnMovementId",
+  "movementId",
+  "cancelledAt",
+  "cancelledByUid",
+  "cancelledByEmail",
+  "previousInventoryItemId",
+  "exchangedAt",
+  "exchangedByUid",
+  "exchangedByEmail",
+  "exchangeReturnMovementId",
+  "exchangeCheckoutMovementId",
+];
+
+const PROTECTED_PATIENT_EQUIPMENT_FIELDS = [
+  "inventoryId",
+  "productId",
+  "status",
+  "assignedAt",
+  "assignedByUid",
+  "assignedByEmail",
+  "closedAt",
+  "closedByUid",
+  "closedByEmail",
+  "movementId",
+  "deliveryTicketId",
+  "deliveryTicketNumber",
+  "deliveredAt",
+  "returnedAt",
+  "returnMovementId",
+  "transferredAt",
+  "transferredByUid",
+  "transferredByEmail",
+  "transferredFromPatientId",
+  "replacementInventoryItemId",
+  "replacesInventoryItemId",
+  "closeReason",
+  "systemGenerated",
+];
+
 const DOMAIN_SCOPES = [
   "patientDeliveryTickets",
   "deliveryFulfillmentScans",
@@ -77,6 +129,7 @@ const ALLOWLIST = new Set([
   "functions/src/domainWorkflows/patientEquipmentWorkflowService.ts",
   "functions/src/domainWorkflows/patientLifecycleWorkflowService.ts",
   "functions/src/domainWorkflows/domainWorkflowFunctions.ts",
+  "functions/src/inventory/movementService.ts",
   "functions/src/patientDocuments/processPatientDocumentFromStorage.ts",
   "src/lib/__tests__/domain-write-validation.test.ts",
   "src/lib/domainWorkflows.ts",
@@ -87,6 +140,7 @@ const EXTENSIONS = new Set([".ts", ".tsx", ".js", ".cjs", ".mjs"]);
 const SKIP_DIRS = new Set([
   ".git",
   ".next",
+  ".codex-backups",
   "node_modules",
   "functions/lib",
   ".kilo",
@@ -121,6 +175,7 @@ function walk(dir, files = []) {
 function containsWriteCall(text) {
   return (
     /\b(updateDoc|setDoc|addDoc|writeBatch|runTransaction)\s*\(/.test(text) ||
+    /\b(safeUpdateDocument|safeSetDocument|commitChunkedSets|commitChunkedWithCustomBuilder)\s*\(/.test(text) ||
     /\b(transaction|batch|writer)\.(update|set|create)\s*\(/.test(text) ||
     /\.collection\s*\([^)]*["'](?:patientDeliveryTickets|deliveryFulfillmentScans|deliverySignatures|deliveryDamagePhotos|rentals|patients|domainWorkflowOperations)["'][\s\S]{0,260}\.(update|set|create|add)\s*\(/.test(text)
   );
@@ -132,6 +187,21 @@ function containsStorageUpload(text) {
 
 function containsProtectedField(text) {
   return PROTECTED_FIELDS.some((field) => new RegExp(`\\b${field}\\b`).test(text));
+}
+
+function containsAnyField(text, fields) {
+  return fields.some((field) => new RegExp(`\\b${field}\\b`).test(text));
+}
+
+function looksRentalScoped(text) {
+  return /\brentals\b|RENTALS_COLLECTION/.test(text);
+}
+
+function looksPatientEquipmentScoped(text) {
+  return (
+    /\bpatients\b[\s\S]{0,160}\bequipment\b/.test(text) ||
+    /\bequipment\b[\s\S]{0,160}\bpatients\b/.test(text)
+  );
 }
 
 function looksDomainScoped(text) {
@@ -148,6 +218,31 @@ function containsTwoPhaseRentalCheckout(text) {
     /addDoc\s*\(\s*collection\s*\([^)]*(?:RENTALS_COLLECTION|["']rentals["'])[\s\S]{0,400}status\s*:\s*["']checked_out["']/.test(text);
 }
 
+function containsDirectProtectedDomainWrite(text) {
+  if (!containsWriteCall(text)) return false;
+  if (/\bassertMetadataOnlyDomainWrite\s*\(/.test(text)) return false;
+
+  if (
+    looksRentalScoped(text) &&
+    containsAnyField(text, PROTECTED_RENTAL_FIELDS)
+  ) {
+    const safeDraftCreate =
+      /addDoc\s*\(\s*collection\s*\([^)]*(?:RENTALS_COLLECTION|["']rentals["'])/.test(text) &&
+      /status\s*:\s*["']draft["']/.test(text) &&
+      /\bassertDraftRentalCreate\s*\(/.test(text);
+    return !safeDraftCreate;
+  }
+
+  if (
+    looksPatientEquipmentScoped(text) &&
+    containsAnyField(text, PROTECTED_PATIENT_EQUIPMENT_FIELDS)
+  ) {
+    return true;
+  }
+
+  return containsProtectedField(text) && looksDomainScoped(text);
+}
+
 const violations = [];
 
 for (const file of walk(ROOT)) {
@@ -157,11 +252,7 @@ for (const file of walk(ROOT)) {
   const lines = fs.readFileSync(file, "utf8").split(/\r?\n/);
   for (let index = 0; index < lines.length; index += 1) {
     const windowText = lines.slice(index, index + 22).join("\n");
-    if (
-      containsWriteCall(windowText) &&
-      containsProtectedField(windowText) &&
-      looksDomainScoped(windowText)
-    ) {
+    if (containsDirectProtectedDomainWrite(windowText)) {
       violations.push(`${rel}:${index + 1}`);
       break;
     }

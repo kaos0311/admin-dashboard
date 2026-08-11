@@ -16,6 +16,7 @@ import toast from "react-hot-toast";
 
 import { auth } from "@/lib/firebase";
 import { checkMfaRequired, resolveChallenge, type MfaSignInChallenge } from "@/lib/auth/mfa";
+import { createSessionCookie } from "@/lib/auth/session-client";
 import Link from "next/link";
 import { badges, buttons, forms, glass, typography } from "@/theme";
 
@@ -100,6 +101,27 @@ export default function LoginPage() {
     return () => unsub();
   }, [router, nextPath]);
 
+  /** Mints a fresh ID token and exchanges it for the HttpOnly session cookie. */
+  const establishSessionCookie = useCallback(async () => {
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      toast.error("Sign-in did not complete. Please try again.");
+      return false;
+    }
+
+    const idToken = await currentUser.getIdToken(true);
+
+    const created = await createSessionCookie(idToken);
+    if (!created) {
+      toast.error(
+        "Signed in, but the server session could not be established. Refresh and sign in again.",
+      );
+      return false;
+    }
+
+    return true;
+  }, []);
+
   const handleLogin = useCallback(async () => {
     const trimmedEmail = email.trim();
 
@@ -114,6 +136,13 @@ export default function LoginPage() {
 
     try {
       await signInWithEmailAndPassword(auth, trimmedEmail, password);
+
+      const sessionEstablished = await establishSessionCookie();
+      if (!sessionEstablished) {
+        setSubmitting(false);
+        return;
+      }
+
       toast.success("Signed in.");
     } catch (error: unknown) {
       // Check if this is an MFA challenge
@@ -129,7 +158,7 @@ export default function LoginPage() {
       toast.error(getFriendlyAuthError(error));
       setSubmitting(false);
     }
-  }, [email, password, submitting]);
+  }, [email, password, submitting, establishSessionCookie]);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -159,6 +188,13 @@ export default function LoginPage() {
       }
 
       await resolveChallenge(mfaChallenge.resolver, factorUid, code);
+
+      const sessionEstablished = await establishSessionCookie();
+      if (!sessionEstablished) {
+        setResolvingMfa(false);
+        return;
+      }
+
       toast.success("Signed in.");
       // The onAuthStateChanged listener will redirect
     } catch (error) {
@@ -166,7 +202,7 @@ export default function LoginPage() {
       toast.error(getFriendlyAuthError(error));
       setResolvingMfa(false);
     }
-  }, [mfaCode, mfaChallenge]);
+  }, [mfaCode, mfaChallenge, establishSessionCookie]);
 
   const handleCancelMfa = useCallback(() => {
     setMfaChallenge(null);

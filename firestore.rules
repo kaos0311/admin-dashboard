@@ -167,9 +167,18 @@ service cloud.firestore {
         && (!("reserved" in data) || data.reserved == 0)
         && (!("patientId" in data) || data.patientId == "")
         && (!("patientKey" in data) || data.patientKey == "")
+        && (!("patientName" in data) || data.patientName == "")
         && (!("rentalId" in data) || data.rentalId == "")
+        && (!("locationId" in data) || data.locationId == "")
+        && (!("warehouseId" in data) || data.warehouseId == "")
+        && (!("status" in data) || data.status == "available")
+        && (!("inventoryStatus" in data) || data.inventoryStatus == "")
+        && (!("rentalStatus" in data) || data.rentalStatus == "")
+        && (!("assignmentStatus" in data) || data.assignmentStatus == "")
+        && (!("lifecycleStatus" in data) || data.lifecycleStatus == "active")
         && (!("isDeleted" in data) || data.isDeleted == false)
         && (!("deleted" in data) || data.deleted == false)
+        && (!("deletedAt" in data) || data.deletedAt == null)
         && (!("archived" in data) || data.archived == false)
         && (!("discontinued" in data) || data.discontinued == false);
     }
@@ -238,7 +247,40 @@ service cloud.firestore {
         "movementId",
         "cancelledAt",
         "cancelledByUid",
-        "cancelledByEmail"
+        "cancelledByEmail",
+        "previousInventoryItemId",
+        "exchangedAt",
+        "exchangedByUid",
+        "exchangedByEmail",
+        "exchangeReturnMovementId",
+        "exchangeCheckoutMovementId"
+      ];
+    }
+
+    function protectedRentalCreateFields() {
+      return [
+        "patientId",
+        "patientName",
+        "inventoryItemId",
+        "itemId",
+        "checkedOutAt",
+        "checkedOutByUid",
+        "checkedOutByEmail",
+        "returnedDate",
+        "returnedAt",
+        "returnedByUid",
+        "returnedByEmail",
+        "returnMovementId",
+        "movementId",
+        "cancelledAt",
+        "cancelledByUid",
+        "cancelledByEmail",
+        "previousInventoryItemId",
+        "exchangedAt",
+        "exchangedByUid",
+        "exchangedByEmail",
+        "exchangeReturnMovementId",
+        "exchangeCheckoutMovementId"
       ];
     }
 
@@ -258,6 +300,14 @@ service cloud.firestore {
         "deliveryTicketNumber",
         "deliveredAt",
         "returnedAt",
+        "returnMovementId",
+        "transferredAt",
+        "transferredByUid",
+        "transferredByEmail",
+        "transferredFromPatientId",
+        "replacementInventoryItemId",
+        "replacesInventoryItemId",
+        "closeReason",
         "systemGenerated"
       ];
     }
@@ -277,6 +327,11 @@ service cloud.firestore {
 
     function workflowFieldsUnchanged(fields) {
       return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function validDraftRentalCreate(data) {
+      return data.status == "draft"
+        && !data.keys().hasAny(protectedRentalCreateFields());
     }
 
     function notSystemGeneratedTimeline(data) {
@@ -369,7 +424,7 @@ service cloud.firestore {
 
     match /stockMovements/{docId} {
       allow read: if isStaffOrAdmin();
-      allow create: if isStaffOrAdmin();
+      allow create: if false; // Only Cloud Functions may author movement history
       allow update, delete: if false;
     }
 
@@ -402,7 +457,8 @@ service cloud.firestore {
 
     match /rentals/{docId} {
       allow read: if isStaffOrAdmin();
-      allow create: if isStaffOrAdmin();
+      allow create: if isStaffOrAdmin()
+        && validDraftRentalCreate(request.resource.data);
       allow update: if isStaffOrAdmin()
         && workflowFieldsUnchanged(protectedRentalWorkflowFields());
       allow delete: if false;
@@ -502,7 +558,7 @@ service cloud.firestore {
       match /equipment/{equipmentId} {
         allow read: if isStaffOrAdmin();
         allow create: if isStaffOrAdmin()
-          && notSystemGeneratedTimeline(request.resource.data);
+          && !request.resource.data.keys().hasAny(protectedPatientEquipmentFields());
         allow update: if isStaffOrAdmin()
           && workflowFieldsUnchanged(protectedPatientEquipmentFields())
           && notSystemGeneratedTimeline(request.resource.data);

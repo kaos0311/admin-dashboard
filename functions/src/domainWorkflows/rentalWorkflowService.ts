@@ -4,6 +4,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import {
   createInventoryMovementInTransaction,
   type MovementActor,
+  prepareInventoryMovementInTransaction,
 } from "../inventory/movementService.js";
 import {
   assertAdmin,
@@ -304,6 +305,13 @@ export async function checkoutRentalWorkflow(
     const rental = rentalSnap.data() ?? {};
     const currentStatus = text(rental.status) || "available";
     assertTransition(RENTAL_TRANSITIONS, currentStatus, "checked_out", "rental");
+    const patientId = text(input.patientId) || text(rental.patientId);
+    const patientName = text(input.patientName) || text(rental.patientName);
+    const patientRef = patientId ? database.collection("patients").doc(patientId) : null;
+    const patientSnap = patientRef ? await transaction.get(patientRef) : null;
+    if (patientRef && !patientSnap?.exists) {
+      throw new HttpsError("not-found", "Patient was not found.");
+    }
 
     const serialNumber = text(input.serialNumber) || text(rental.serialNumber);
     if (serialNumber) {
@@ -330,8 +338,8 @@ export async function checkoutRentalWorkflow(
         serialNumber,
         quantity,
         rentalId: input.rentalId,
-        patientId: input.patientId || text(rental.patientId),
-        patientName: input.patientName || text(rental.patientName),
+        patientId,
+        patientName,
         reason: input.reason || "Rental checked out.",
         source: "rental",
         correlationId: input.rentalId,
@@ -348,8 +356,8 @@ export async function checkoutRentalWorkflow(
         inventoryItemId,
         itemId: inventoryItemId,
         productId: input.productId || text(rental.productId),
-        patientId: input.patientId || text(rental.patientId),
-        patientName: input.patientName || text(rental.patientName),
+        patientId,
+        patientName,
         checkedOutAt: FieldValue.serverTimestamp(),
         checkedOutByUid: actor.uid,
         checkedOutByEmail: actor.email,
@@ -359,10 +367,9 @@ export async function checkoutRentalWorkflow(
       { merge: true }
     );
 
-    const patientId = input.patientId || text(rental.patientId);
-    if (patientId) {
+    if (patientRef) {
       transaction.set(
-        database.collection("patients").doc(patientId).collection("equipment").doc(inventoryItemId),
+        patientRef.collection("equipment").doc(inventoryItemId),
         {
           inventoryId: inventoryItemId,
           productId: input.productId || text(rental.productId),
@@ -378,7 +385,7 @@ export async function checkoutRentalWorkflow(
         },
         { merge: true }
       );
-      transaction.set(database.collection("patients").doc(patientId).collection("timeline").doc(input.operationId), {
+      transaction.set(patientRef.collection("timeline").doc(input.operationId), {
         type: "rental_checked_out",
         title: "Rental checked out",
         body: `${text(rental.productName) || "Rental equipment"} was checked out.`,
@@ -443,6 +450,12 @@ export async function returnRentalWorkflow(
     const inventoryItemId = text(input.inventoryItemId) || text(rental.inventoryItemId) || text(rental.itemId);
     if (!inventoryItemId) throw new HttpsError("failed-precondition", "Rental is not linked to an inventory item.");
     assertSafeDocId(inventoryItemId, "inventoryItemId");
+    const patientId = text(input.patientId) || text(rental.patientId);
+    const patientRef = patientId ? database.collection("patients").doc(patientId) : null;
+    const patientSnap = patientRef ? await transaction.get(patientRef) : null;
+    if (patientRef && !patientSnap?.exists) {
+      throw new HttpsError("not-found", "Patient was not found.");
+    }
 
     const movement = await createInventoryMovementInTransaction({
       transaction,
@@ -456,7 +469,7 @@ export async function returnRentalWorkflow(
         serialNumber: input.serialNumber || text(rental.serialNumber),
         quantity: Math.max(1, numberValue(input.quantity, numberValue(rental.quantity, 1))),
         rentalId: input.rentalId,
-        patientId: input.patientId || text(rental.patientId),
+        patientId,
         reason: input.reason || "Rental returned.",
         source: "rental",
         correlationId: input.rentalId,
@@ -466,7 +479,6 @@ export async function returnRentalWorkflow(
       throw new HttpsError("failed-precondition", movement.message || "Rental return movement failed.");
     }
 
-    const patientId = text(input.patientId) || text(rental.patientId);
     transaction.set(
       rentalRef,
       {
@@ -483,8 +495,26 @@ export async function returnRentalWorkflow(
       { merge: true }
     );
 
-    if (patientId) {
-      transaction.set(database.collection("patients").doc(patientId).collection("timeline").doc(input.operationId), {
+    if (patientRef) {
+      transaction.set(
+        patientRef.collection("equipment").doc(inventoryItemId),
+        {
+          inventoryId: inventoryItemId,
+          productId: input.productId || text(rental.productId),
+          serialNumber: input.serialNumber || text(rental.serialNumber),
+          status: "returned",
+          closedAt: FieldValue.serverTimestamp(),
+          closedByUid: actor.uid,
+          closedByEmail: actor.email,
+          returnedAt: FieldValue.serverTimestamp(),
+          returnMovementId: movement.movementId ?? "",
+          movementId: movement.movementId ?? "",
+          updatedAt: FieldValue.serverTimestamp(),
+          systemGenerated: true,
+        },
+        { merge: true }
+      );
+      transaction.set(patientRef.collection("timeline").doc(input.operationId), {
         type: "rental_returned",
         title: "Rental returned",
         body: `${text(rental.productName) || "Rental equipment"} was returned.`,
@@ -559,6 +589,15 @@ export async function cancelRentalWorkflow(
 
     const result: WorkflowResult = { status: "success", operationId: input.operationId, workflowType, movementIds: [] };
     completeWorkflowOperation({ transaction, database, operationId: input.operationId, workflowType, actor, result });
+    writeWorkflowAudit({
+      transaction,
+      database,
+      actor,
+      action: workflowType,
+      targetCollection: "rentals",
+      targetId: input.rentalId,
+      details: { operationId: input.operationId, previousStatus: currentStatus },
+    });
     return result;
   });
 }
@@ -602,9 +641,14 @@ export async function exchangeRentalWorkflow(
 
     const patientId = text(input.patientId) || text(rental.patientId);
     const patientName = text(input.patientName) || text(rental.patientName);
+    const patientRef = patientId ? database.collection("patients").doc(patientId) : null;
+    const patientSnap = patientRef ? await transaction.get(patientRef) : null;
+    if (patientRef && !patientSnap?.exists) {
+      throw new HttpsError("not-found", "Patient was not found.");
+    }
     const quantity = Math.max(1, numberValue(input.quantity, numberValue(rental.quantity, 1)));
 
-    const returnMovement = await createInventoryMovementInTransaction({
+    const returnMovementPlan = await prepareInventoryMovementInTransaction({
       transaction,
       database,
       actor,
@@ -623,11 +667,12 @@ export async function exchangeRentalWorkflow(
         metadata: { exchangeOperationId: input.operationId, exchangeSide: "return" },
       },
     });
+    const returnMovement = returnMovementPlan.result;
     if (returnMovement.status !== "success" && returnMovement.status !== "duplicate_operation") {
       throw new HttpsError("failed-precondition", returnMovement.message || "Rental exchange return failed.");
     }
 
-    const checkoutMovement = await createInventoryMovementInTransaction({
+    const checkoutMovementPlan = await prepareInventoryMovementInTransaction({
       transaction,
       database,
       actor,
@@ -651,9 +696,13 @@ export async function exchangeRentalWorkflow(
         },
       },
     });
+    const checkoutMovement = checkoutMovementPlan.result;
     if (checkoutMovement.status !== "success" && checkoutMovement.status !== "duplicate_operation") {
       throw new HttpsError("failed-precondition", checkoutMovement.message || "Rental exchange checkout failed.");
     }
+
+    returnMovementPlan.apply();
+    checkoutMovementPlan.apply();
 
     transaction.set(
       rentalRef,
@@ -676,8 +725,7 @@ export async function exchangeRentalWorkflow(
       { merge: true }
     );
 
-    if (patientId) {
-      const patientRef = database.collection("patients").doc(patientId);
+    if (patientRef) {
       transaction.set(
         patientRef.collection("equipment").doc(oldInventoryItemId),
         {

@@ -9,6 +9,11 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
+import {
+  assertMetadataOnlyInventoryWrite,
+  isInventoryCollectionPath,
+} from "@/lib/inventory/protectedFields";
+import { assertMetadataOnlyDomainWrite } from "@/lib/domain/protectedFields";
 
 type AuditDetails = Record<string, unknown>;
 
@@ -24,6 +29,11 @@ export async function safeUpdateDocument(
     details?: AuditDetails;
   }
 ): Promise<void> {
+  if (isInventoryCollectionPath(ref.path)) {
+    assertMetadataOnlyInventoryWrite(data, "safeUpdateDocument");
+  }
+  assertMetadataOnlyDomainWrite(ref.path, data, "safeUpdateDocument");
+
   await updateDoc(ref, data);
 
   if (audit) {
@@ -51,6 +61,11 @@ export async function safeSetDocument(
     details?: AuditDetails;
   }
 ): Promise<void> {
+  if (isInventoryCollectionPath(ref.path)) {
+    assertMetadataOnlyInventoryWrite(data, "safeSetDocument");
+  }
+  assertMetadataOnlyDomainWrite(ref.path, data, "safeSetDocument");
+
   await setDoc(ref, data, { merge: true });
 
   if (audit) {

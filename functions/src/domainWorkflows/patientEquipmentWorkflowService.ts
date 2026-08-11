@@ -53,8 +53,13 @@ function movementForAction(action: PatientEquipmentAction): InventoryMovementTyp
   return "rental_return";
 }
 
+function inventoryMovementForAction(action: PatientEquipmentAction): InventoryMovementType {
+  return action === "transfer" ? "patient_transfer" : movementForAction(action);
+}
+
 function nextAssignmentStatus(action: PatientEquipmentAction): string {
   if (action === "assign") return "active";
+  if (action === "remove") return "removed";
   if (action === "transfer") return "transferred";
   if (action === "recover_deceased") return "recovered";
   if (action === "return_to_warehouse") return "returned";
@@ -90,6 +95,15 @@ export async function patientEquipmentWorkflow(
     const patientRef = database.collection("patients").doc(input.patientId);
     const patientSnap = await transaction.get(patientRef);
     if (!patientSnap.exists) throw new HttpsError("not-found", "Patient was not found.");
+    const toPatientRef = input.toPatientId ? database.collection("patients").doc(input.toPatientId) : null;
+    if (input.action === "transfer" && !toPatientRef) {
+      throw new HttpsError("invalid-argument", "toPatientId is required for transfer.");
+    }
+    const toPatientSnap = toPatientRef ? await transaction.get(toPatientRef) : null;
+    if (input.action === "transfer" && !toPatientSnap?.exists) {
+      throw new HttpsError("not-found", "Destination patient was not found.");
+    }
+    const toPatientData = toPatientSnap?.exists ? toPatientSnap.data() ?? {} : {};
 
     const equipmentRef = patientRef.collection("equipment").doc(input.inventoryItemId);
     const equipmentSnap = await transaction.get(equipmentRef);
@@ -260,18 +274,21 @@ export async function patientEquipmentWorkflow(
       actor,
       input: {
         operationId: `${input.operationId}-movement`,
-        movementType: movementForAction(input.action),
+        movementType: inventoryMovementForAction(input.action),
         inventoryItemId: input.inventoryItemId,
         productId: input.productId,
         barcode: input.barcode,
         serialNumber: input.serialNumber,
         lotNumber: input.lotNumber,
         quantity,
-        patientId: input.patientId,
-        patientName: input.patientName,
+        patientId: input.action === "transfer" ? text(input.toPatientId) : input.patientId,
+        patientName:
+          input.action === "transfer"
+            ? text(input.toPatientName) || text(toPatientData.fullName) || text(toPatientData.patientName)
+            : input.patientName,
         reason: input.reason || `Patient equipment ${input.action}.`,
         source: input.action === "recover_deceased" ? "deceased_pickup" : "patient",
-        correlationId: input.patientId,
+        correlationId: input.action === "transfer" ? text(input.toPatientId) : input.patientId,
         metadata: {
           patientId: input.patientId,
           toPatientId: text(input.toPatientId),
@@ -321,19 +338,36 @@ export async function patientEquipmentWorkflow(
       );
     }
 
-    if (input.action === "transfer" && input.toPatientId) {
+    if (input.action === "transfer" && toPatientRef) {
       transaction.set(
-        database.collection("patients").doc(input.toPatientId).collection("equipment").doc(input.inventoryItemId),
+        toPatientRef.collection("equipment").doc(input.inventoryItemId),
         {
           ...baseEquipment,
           status: "active",
           transferredFromPatientId: input.patientId,
+          transferredAt: FieldValue.serverTimestamp(),
+          transferredByUid: actor.uid,
+          transferredByEmail: actor.email,
           assignedAt: FieldValue.serverTimestamp(),
           assignedByUid: actor.uid,
           assignedByEmail: actor.email,
         },
         { merge: true }
       );
+      transaction.set(toPatientRef.collection("timeline").doc(input.operationId), {
+        type: "equipment_transfer_received",
+        title: "Equipment transfer received",
+        body: text(input.reason) || "Patient equipment was transferred to this patient.",
+        metadata: {
+          inventoryItemId: input.inventoryItemId,
+          fromPatientId: input.patientId,
+          movementId: movement.movementId ?? "",
+        },
+        actorUid: actor.uid,
+        actorEmail: actor.email,
+        createdAt: FieldValue.serverTimestamp(),
+        systemGenerated: true,
+      });
     }
 
     transaction.set(patientRef.collection("timeline").doc(input.operationId), {

@@ -6,6 +6,7 @@ import {
   getDocument,
   type QueryOptions,
 } from "@/lib/chatgpt-bridge/queries";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
 
 export const runtime = "nodejs";
 
@@ -19,10 +20,25 @@ export const runtime = "nodejs";
  *   "ask"         — Send a natural-language prompt to the existing Jarvis AI
  */
 export async function POST(request: NextRequest) {
+  const ipRateLimit = await enforceRateLimit({
+    request,
+    policyName: "ai",
+    scope: "ip",
+  });
+  if (ipRateLimit) return ipRateLimit;
+
   const auth = verifyChatGptApiKey(request.headers.get("authorization"));
   if (!auth.ok) {
     return NextResponse.json({ error: auth.error }, { status: 401 });
   }
+
+  const apiKeyRateLimit = await enforceRateLimit({
+    request,
+    policyName: "ai",
+    scope: "api-key",
+    identifier: request.headers.get("authorization") ?? "missing",
+  });
+  if (apiKeyRateLimit) return apiKeyRateLimit;
 
   try {
     const body = (await request.json()) as {
@@ -108,9 +124,11 @@ export async function POST(request: NextRequest) {
         });
 
         if (!response.ok) {
-          const errorText = await response.text();
+          // NOTE: The upstream error body is intentionally NOT forwarded to the
+          // browser. It may contain prompt text, patient data, or internal
+          // function details. Preserve only the HTTP status for the caller.
           return NextResponse.json(
-            { error: `AI function error: ${response.status} — ${errorText.slice(0, 500)}` },
+            { error: `AI function returned HTTP ${response.status}.` },
             { status: 502 }
           );
         }
@@ -121,7 +139,11 @@ export async function POST(request: NextRequest) {
         };
 
         if (result.error?.message) {
-          return NextResponse.json({ error: result.error.message }, { status: 502 });
+          // Forward only a generic failure; never echo the upstream message.
+          return NextResponse.json(
+            { error: "The AI assistant encountered an error. Try again or use query mode." },
+            { status: 502 }
+          );
         }
 
         return NextResponse.json({
@@ -139,8 +161,12 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
     }
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Invalid request body";
-    return NextResponse.json({ error: message }, { status: 400 });
+  } catch (_error) {
+    // Sanitize the outer parse/processing error: raw error messages may carry
+    // request-body fragments. Return a generic client-safe message only.
+    return NextResponse.json(
+      { error: "Invalid request or processing failure." },
+      { status: 400 }
+    );
   }
 }

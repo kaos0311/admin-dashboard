@@ -12,6 +12,7 @@ export type InventoryMovementType =
   | "receive"
   | "manual_adjustment"
   | "patient_assignment"
+  | "patient_transfer"
   | "rental_checkout"
   | "rental_return"
   | "warehouse_transfer"
@@ -94,6 +95,10 @@ export type MovementResult = {
 };
 
 type InventoryDoc = Record<string, unknown>;
+export type InventoryMovementWritePlan = {
+  result: MovementResult;
+  apply: () => void;
+};
 
 const MAX_SCAN_LENGTH = 128;
 const OPERATION_ID_PATTERN = /^[a-zA-Z0-9_-]{8,160}$/;
@@ -241,6 +246,8 @@ function getMovementDeltas(
     case "patient_assignment":
     case "rental_checkout":
       return { quantityDelta: 0, onRentDelta: quantity, onTruckDelta: 0 };
+    case "patient_transfer":
+      return { quantityDelta: 0, onRentDelta: 0, onTruckDelta: 0 };
     case "rental_return":
     case "deceased_patient_equipment_return":
       return { quantityDelta: 0, onRentDelta: -quantity, onTruckDelta: 0 };
@@ -456,19 +463,23 @@ function operationRefFor(database: Firestore, input: CreateMovementInput, actor:
   return database.collection("inventoryOperations").doc(`${actor.uid}_${input.operationId}`);
 }
 
-export async function createInventoryMovementInTransaction(params: {
+export async function prepareInventoryMovementInTransaction(params: {
   transaction: Transaction;
   database: Firestore;
   input: CreateMovementInput & { inventoryItemId: string };
   actor: MovementActor;
-}): Promise<MovementResult> {
+  inventorySeed?: InventoryDoc;
+}): Promise<InventoryMovementWritePlan> {
   const { transaction, database, input, actor } = params;
 
   if (ADMIN_ONLY_MOVEMENTS.has(input.movementType) && actor.role !== "admin" && actor.role !== "tank") {
     return {
-      status: "permission_denied",
-      operationId: input.operationId,
-      message: "Admin access is required for this movement.",
+      result: {
+        status: "permission_denied",
+        operationId: input.operationId,
+        message: "Admin access is required for this movement.",
+      },
+      apply: () => undefined,
     };
   }
 
@@ -493,26 +504,30 @@ export async function createInventoryMovementInTransaction(params: {
     }
 
     return {
-      status: "duplicate_operation",
-      operationId: input.operationId,
-      movementId: text(data.movementId),
-      inventoryItemId: text(data.inventoryItemId),
-      productId: text(data.productId),
-      quantityBefore: readNumber(data, "quantityBefore", 0),
-      quantityDelta: readNumber(data, "quantityDelta", 0),
-      quantityAfter: readNumber(data, "quantityAfter", 0),
-      message: "Movement already applied.",
+      result: {
+        status: "duplicate_operation",
+        operationId: input.operationId,
+        movementId: text(data.movementId),
+        inventoryItemId: text(data.inventoryItemId),
+        productId: text(data.productId),
+        quantityBefore: readNumber(data, "quantityBefore", 0),
+        quantityDelta: readNumber(data, "quantityDelta", 0),
+        quantityAfter: readNumber(data, "quantityAfter", 0),
+        message: "Movement already applied.",
+      },
+      apply: () => undefined,
     };
   }
 
   const inventorySnap = await transaction.get(inventoryRef);
-  if (!inventorySnap.exists) {
+  if (!inventorySnap.exists && !params.inventorySeed) {
     throw new HttpsError("not-found", "Inventory item was not found.");
   }
 
   const inventory: InventoryDoc = {
-    id: inventorySnap.id,
-    ...(inventorySnap.data() as InventoryDoc),
+    id: inventoryRef.id,
+    ...(params.inventorySeed ?? {}),
+    ...(inventorySnap.exists ? (inventorySnap.data() as InventoryDoc) : {}),
   };
   const productId = text(input.productId) || text(inventory.productId);
   const productRef = productId ? database.collection("products").doc(productId) : null;
@@ -585,7 +600,7 @@ export async function createInventoryMovementInTransaction(params: {
     inventoryUpdate.restoredAt = FieldValue.serverTimestamp();
   }
 
-  if (["patient_assignment", "rental_checkout", "delivery_delivered"].includes(input.movementType)) {
+  if (["patient_assignment", "patient_transfer", "rental_checkout", "delivery_delivered"].includes(input.movementType)) {
     inventoryUpdate.status =
       input.movementType === "rental_checkout" ? "rental_out" : "assigned";
     if (input.patientId) inventoryUpdate.patientKey = text(input.patientId);
@@ -601,161 +616,185 @@ export async function createInventoryMovementInTransaction(params: {
     inventoryUpdate.lastReturnedAt = FieldValue.serverTimestamp();
   }
 
-  transaction.update(inventoryRef, inventoryUpdate);
-
-  if (patientRef) {
-    const archivedAt = now.toDate().toISOString();
-    const patientData = patientSnap?.exists ? (patientSnap.data() as InventoryDoc) : {};
-    const archivedEquipment = archiveCurrentEquipment(
-      patientData.currentEquipment,
-      inventory,
-      archivedAt,
-      input.movementType
-    );
-
-    const patientUpdate: InventoryDoc = {
-      currentEquipmentArchivedAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-    };
-
-    if (archivedEquipment) {
-      patientUpdate.currentEquipment = archivedEquipment;
+  const apply = (): void => {
+    if (inventorySnap.exists) {
+      transaction.update(inventoryRef, inventoryUpdate);
+    } else {
+      transaction.set(inventoryRef, {
+        ...(params.inventorySeed ?? {}),
+        ...inventoryUpdate,
+      });
     }
 
-    transaction.set(patientRef, patientUpdate, { merge: true });
+    if (patientRef) {
+      const archivedAt = now.toDate().toISOString();
+      const patientData = patientSnap?.exists ? (patientSnap.data() as InventoryDoc) : {};
+      const archivedEquipment = archiveCurrentEquipment(
+        patientData.currentEquipment,
+        inventory,
+        archivedAt,
+        input.movementType
+      );
 
-    transaction.set(
-      patientRef.collection("equipment").doc(input.inventoryItemId),
-      {
-        inventoryId: input.inventoryItemId,
-        productId,
-        itemName: text(inventory.name),
-        barcode: text(input.barcode) || text(inventory.barcode),
-        serialNumber:
-          text(input.serialNumber) || text(inventory.serialNumber) || text(inventory.serial),
-        lotNumber: text(input.lotNumber) || text(inventory.lotNumber),
-        status: "returned",
-        archived: true,
-        archivedAt: FieldValue.serverTimestamp(),
-        archiveReason: input.movementType,
-        returnReason: input.movementType,
-        returnedAt: FieldValue.serverTimestamp(),
+      const patientUpdate: InventoryDoc = {
+        currentEquipmentArchivedAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+      };
 
-    transaction.set(patientRef.collection("timeline").doc(), {
-      type: "equipment_returned",
-      title: "Equipment archived and checked back into inventory",
-      body: `${text(inventory.name) || "Equipment"} was checked back into inventory.`,
-      metadata: {
-        inventoryId: input.inventoryItemId,
-        productId,
-        barcode: text(input.barcode) || text(inventory.barcode),
-        serialNumber:
-          text(input.serialNumber) || text(inventory.serialNumber) || text(inventory.serial),
-        lotNumber: text(input.lotNumber) || text(inventory.lotNumber),
-        movementId: movementRef.id,
-        reason,
-      },
+      if (archivedEquipment) {
+        patientUpdate.currentEquipment = archivedEquipment;
+      }
+
+      transaction.set(patientRef, patientUpdate, { merge: true });
+
+      transaction.set(
+        patientRef.collection("equipment").doc(input.inventoryItemId),
+        {
+          inventoryId: input.inventoryItemId,
+          productId,
+          itemName: text(inventory.name),
+          barcode: text(input.barcode) || text(inventory.barcode),
+          serialNumber:
+            text(input.serialNumber) || text(inventory.serialNumber) || text(inventory.serial),
+          lotNumber: text(input.lotNumber) || text(inventory.lotNumber),
+          status: "returned",
+          archived: true,
+          archivedAt: FieldValue.serverTimestamp(),
+          archiveReason: input.movementType,
+          returnReason: input.movementType,
+          returnedAt: FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      transaction.set(patientRef.collection("timeline").doc(), {
+        type: "equipment_returned",
+        title: "Equipment archived and checked back into inventory",
+        body: `${text(inventory.name) || "Equipment"} was checked back into inventory.`,
+        metadata: {
+          inventoryId: input.inventoryItemId,
+          productId,
+          barcode: text(input.barcode) || text(inventory.barcode),
+          serialNumber:
+            text(input.serialNumber) || text(inventory.serialNumber) || text(inventory.serial),
+          lotNumber: text(input.lotNumber) || text(inventory.lotNumber),
+          movementId: movementRef.id,
+          reason,
+        },
+        actorUid: actor.uid,
+        actorEmail: actor.email,
+        createdAt: FieldValue.serverTimestamp(),
+      });
+    }
+
+    transaction.set(movementRef, {
+      id: movementRef.id,
+      operationId: input.operationId,
+      productId,
+      inventoryItemId: input.inventoryItemId,
+      movementType: input.movementType,
+      quantityDelta,
+      quantityBefore,
+      quantityAfter,
+      fromLocation: text(input.fromLocation) || text(inventory.locationName),
+      toLocation: text(input.toLocation),
+      patientId: text(input.patientId),
+      rentalId: text(input.rentalId),
+      barcode: text(input.barcode) || text(inventory.barcode),
+      serialNumber:
+        text(input.serialNumber) || text(inventory.serialNumber) || text(inventory.serial),
+      lotNumber: text(input.lotNumber) || text(inventory.lotNumber),
       actorUid: actor.uid,
       actorEmail: actor.email,
-      createdAt: FieldValue.serverTimestamp(),
+      actorRole: actor.role,
+      reason,
+      source,
+      correlationId: text(input.correlationId),
+      createdAt: now,
+      reversedMovementId: "",
+      reversalMovementId: "",
+      status: "success",
+      metadata: {
+        ...(input.metadata ?? {}),
+        onRentBefore,
+        onRentDelta,
+        onRentAfter,
+        onTruckBefore,
+        onTruckDelta,
+        onTruckAfter,
+        committed,
+        availableAfter,
+      },
     });
-  }
 
-  transaction.set(movementRef, {
-    id: movementRef.id,
-    operationId: input.operationId,
-    productId,
-    inventoryItemId: input.inventoryItemId,
-    movementType: input.movementType,
-    quantityDelta,
-    quantityBefore,
-    quantityAfter,
-    fromLocation: text(input.fromLocation) || text(inventory.locationName),
-    toLocation: text(input.toLocation),
-    patientId: text(input.patientId),
-    rentalId: text(input.rentalId),
-    barcode: text(input.barcode) || text(inventory.barcode),
-    serialNumber:
-      text(input.serialNumber) || text(inventory.serialNumber) || text(inventory.serial),
-    lotNumber: text(input.lotNumber) || text(inventory.lotNumber),
-    actorUid: actor.uid,
-    actorEmail: actor.email,
-    actorRole: actor.role,
-    reason,
-    source,
-    correlationId: text(input.correlationId),
-    createdAt: now,
-    reversedMovementId: "",
-    reversalMovementId: "",
-    status: "success",
-    metadata: {
-      ...(input.metadata ?? {}),
-      onRentBefore,
-      onRentDelta,
-      onRentAfter,
-      onTruckBefore,
-      onTruckDelta,
-      onTruckAfter,
-      committed,
-      availableAfter,
-    },
-  });
+    transaction.set(operationRef, {
+      operationId: input.operationId,
+      operationType: input.movementType,
+      requestFingerprint: fingerprint,
+      performedByUid: actor.uid,
+      performedByEmail: actor.email,
+      inventoryItemId: input.inventoryItemId,
+      productId,
+      movementId: movementRef.id,
+      quantityBefore,
+      quantityDelta,
+      quantityAfter,
+      status: "completed",
+      createdAt: FieldValue.serverTimestamp(),
+      completedAt: FieldValue.serverTimestamp(),
+    });
 
-  transaction.set(operationRef, {
-    operationId: input.operationId,
-    operationType: input.movementType,
-    requestFingerprint: fingerprint,
-    performedByUid: actor.uid,
-    performedByEmail: actor.email,
-    inventoryItemId: input.inventoryItemId,
-    productId,
-    movementId: movementRef.id,
-    quantityBefore,
-    quantityDelta,
-    quantityAfter,
-    status: "completed",
-    createdAt: FieldValue.serverTimestamp(),
-    completedAt: FieldValue.serverTimestamp(),
-  });
+    transaction.set(database.collection("auditLogs").doc(), {
+      action: `inventory.${input.movementType}`,
+      actorUid: actor.uid,
+      actorEmail: actor.email,
+      targetCollection: "inventory",
+      targetId: input.inventoryItemId,
+      details: {
+        operationId: input.operationId,
+        movementId: movementRef.id,
+        productId,
+        quantityBefore,
+        quantityDelta,
+        quantityAfter,
+        reason,
+        source,
+      },
+      createdAt: FieldValue.serverTimestamp(),
+      success: true,
+    });
 
-  transaction.set(database.collection("auditLogs").doc(), {
-    action: `inventory.${input.movementType}`,
-    actorUid: actor.uid,
-    actorEmail: actor.email,
-    targetCollection: "inventory",
-    targetId: input.inventoryItemId,
-    details: {
+    if (input.movementType === "hard_delete") {
+      transaction.delete(inventoryRef);
+    }
+  };
+
+  return {
+    result: {
+      status: "success",
       operationId: input.operationId,
       movementId: movementRef.id,
+      inventoryItemId: input.inventoryItemId,
       productId,
       quantityBefore,
       quantityDelta,
       quantityAfter,
-      reason,
-      source,
     },
-    createdAt: FieldValue.serverTimestamp(),
-    success: true,
-  });
-
-  if (input.movementType === "hard_delete") {
-    transaction.delete(inventoryRef);
-  }
-
-  return {
-    status: "success",
-    operationId: input.operationId,
-    movementId: movementRef.id,
-    inventoryItemId: input.inventoryItemId,
-    productId,
-    quantityBefore,
-    quantityDelta,
-    quantityAfter,
+    apply,
   };
+}
+
+export async function createInventoryMovementInTransaction(params: {
+  transaction: Transaction;
+  database: Firestore;
+  input: CreateMovementInput & { inventoryItemId: string };
+  actor: MovementActor;
+  inventorySeed?: InventoryDoc;
+}): Promise<MovementResult> {
+  const plan = await prepareInventoryMovementInTransaction(params);
+  plan.apply();
+  return plan.result;
 }
 
 export async function createInventoryMovement(
@@ -896,7 +935,7 @@ export async function createInventoryMovement(
       inventoryUpdate.restoredAt = FieldValue.serverTimestamp();
     }
 
-    if (["patient_assignment", "rental_checkout", "delivery_delivered"].includes(input.movementType)) {
+    if (["patient_assignment", "patient_transfer", "rental_checkout", "delivery_delivered"].includes(input.movementType)) {
       inventoryUpdate.status =
         input.movementType === "rental_checkout" ? "rental_out" : "assigned";
       if (input.patientId) inventoryUpdate.patientKey = text(input.patientId);

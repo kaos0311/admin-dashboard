@@ -63,7 +63,11 @@ function pick(existingValue: unknown, newValue: unknown): unknown {
   return newStr || (existingStr ? existingValue : newValue);
 }
 
-function buildSearchText(input: SmartMergeInventoryInput): string {
+type InventorySearchTextInput = Omit<SmartMergeInventoryInput, "quantityOnHand"> & {
+  quantityOnHand?: number;
+};
+
+function buildSearchText(input: InventorySearchTextInput): string {
   return [
     input.name,
     input.category,
@@ -213,44 +217,12 @@ async function findExistingInventory(input: SmartMergeInventoryInput) {
   return null;
 }
 
-async function logStockMovement(args: {
-  productId: string;
-  productName: string;
-  barcode: string;
-  serial: string;
-  lotNumber: string;
-  type: "inventory_add" | "inventory_update" | "restock" | "manual_adjustment";
-  quantity: number;
-  source: string;
-  sourceId: string;
-  notes: string;
-}) {
-  await addDoc(collection(db, "stockMovements"), {
-    productId: args.productId,
-    productName: args.productName,
-    barcode: args.barcode,
-    serial: args.serial,
-    lotNumber: args.lotNumber,
-    type: args.type,
-    quantity: args.quantity,
-    source: args.source,
-    sourceId: args.sourceId,
-    notes: args.notes,
-    createdAt: serverTimestamp(),
-  });
-}
-
 export async function smartMergeInventory(
   input: SmartMergeInventoryInput
 ): Promise<SmartMergeResult> {
   const barcode = input.barcode ? normalizeBarcode(input.barcode) : "";
   const locationName = clean(input.locationName) || "Main Location";
-  const committed = numberSafe(input.committed);
-  const onRent = numberSafe(input.onRent);
-  const onOrder = numberSafe(input.onOrder);
-  const quantityOnHand = numberSafe(input.quantityOnHand);
   const unitCost = numberSafe(input.unitCost);
-  const available = quantityOnHand - committed - onRent;
 
   const payload = {
     productId: clean(input.productId),
@@ -266,20 +238,26 @@ export async function smartMergeInventory(
     expirationDate: clean(input.expirationDate),
     locationName,
     binLocation: clean(input.binLocation),
-    quantityOnHand,
-    committed,
-    onRent,
-    onOrder,
-    available,
     reorderLevel: numberSafe(input.reorderLevel),
     unitCost,
-    totalValue: quantityOnHand * unitCost,
-    status: input.status ?? "available",
     notes: clean(input.notes),
     searchText: buildSearchText({
-      ...input,
+      productId: clean(input.productId),
+      name: clean(input.name),
+      category: clean(input.category),
+      manufacturer: clean(input.manufacturer),
+      manufacturerItemId: clean(input.manufacturerItemId),
+      sku: clean(input.sku),
+      hcpc: clean(input.hcpc).toUpperCase(),
       barcode,
+      serial: clean(input.serial),
+      lotNumber: clean(input.lotNumber),
+      expirationDate: clean(input.expirationDate),
       locationName,
+      binLocation: clean(input.binLocation),
+      reorderLevel: numberSafe(input.reorderLevel),
+      unitCost,
+      notes: clean(input.notes),
     }),
     updatedAt: serverTimestamp(),
   };
@@ -292,26 +270,11 @@ export async function smartMergeInventory(
       createdAt: serverTimestamp(),
     });
 
-    await logStockMovement({
-      productId: payload.productId,
-      productName: payload.name,
-      barcode: payload.barcode,
-      serial: payload.serial,
-      lotNumber: payload.lotNumber,
-      type: "inventory_add",
-      quantity: payload.quantityOnHand,
-      source: input.source || "smart_merge",
-      sourceId: input.sourceId || newRef.id,
-      notes: "Smart merge created new inventory record.",
-    });
-
     return {
       action: "created",
       inventoryId: newRef.id,
     };
   }
-
-  const previousQuantity = numberSafe(existing.data.quantityOnHand);
 
   const mergedPayload = {
     productId: pick(existing.data.productId, payload.productId),
@@ -359,8 +322,6 @@ export async function smartMergeInventory(
       ),
       locationName: payload.locationName,
       binLocation: clean(pick(existing.data.binLocation, payload.binLocation)),
-      quantityOnHand: previousQuantity,
-      status: payload.status,
       notes:
         payload.notes ||
         clean(existing.data.notes) ||
@@ -369,14 +330,7 @@ export async function smartMergeInventory(
     updatedAt: serverTimestamp(),
   };
 
-  const mergeSource = input.source || "smart_merge";
-  const mergeSourceId = input.sourceId || existing.id;
-
   await updateDoc(doc(db, "inventory", existing.id), mergedPayload);
-
-  void quantityOnHand;
-  void mergeSource;
-  void mergeSourceId;
 
   return {
     action: "merged",

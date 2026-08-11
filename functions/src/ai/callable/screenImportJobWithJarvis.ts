@@ -2,6 +2,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 
 import { applyJarvisImportScreening } from "../importScreening";
+import { enforceCallableRateLimit } from "../../security/rateLimit.js";
 
 const db = getFirestore();
 
@@ -45,6 +46,7 @@ export const screenImportJobWithJarvis = onCall<ScreenImportRequest>(
     memory: "512MiB",
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "import");
     const actor = requireStaffOrAdmin(request);
     const jobId = String(request.data?.jobId ?? "").trim();
 

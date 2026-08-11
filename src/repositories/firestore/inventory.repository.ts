@@ -10,26 +10,27 @@
   query,
   serverTimestamp,
   setDoc,
+  type Unsubscribe,
   updateDoc,
   where,
   writeBatch,
-  type Unsubscribe,
 } from "firebase/firestore";
 
 import { normalizeBarcode } from "@/lib/barcode";
 import { db } from "@/lib/firebase";
+import { assertMetadataOnlyInventoryWrite } from "@/lib/inventory/protectedFields";
 
 import { normalizeInventoryItem } from "@/app/(admin)/inventory/lib/inventoryNormalize";
 import type { InventoryItem } from "@/app/(admin)/inventory/lib/inventoryTypes";
 
 import type {
+  ErrorCallback,
+  InventoryItemSubscriptionCallback,
+  InventorySubscriptionCallback,
+  PatientSubscriptionCallback,
   ProductDocument,
   SettingsInventoryThresholds,
-  InventorySubscriptionCallback,
-  InventoryItemSubscriptionCallback,
   SettingsSubscriptionCallback,
-  PatientSubscriptionCallback,
-  ErrorCallback,
 } from "./inventory.types";
 
 // ---------------------------------------------------------------------------
@@ -46,53 +47,64 @@ const COLLECTIONS = {
   HCPCS_CODES: "hcpcsCodes" as const,
 } as const;
 
-const PROTECTED_INVENTORY_FIELDS = new Set([
-  "quantityOnHand",
-  "available",
-  "onRent",
-  "onTruck",
-  "committed",
-  "allocated",
-  "reserved",
-  "patientId",
-  "patientKey",
-  "patientName",
-  "rentalId",
-  "locationId",
-  "warehouseId",
-  "status",
-  "inventoryStatus",
-  "rentalStatus",
-  "assignmentStatus",
-  "lifecycleStatus",
-  "isDeleted",
-  "deleted",
-  "deletedAt",
-  "archived",
-  "discontinued",
-]);
-
-function assertMetadataOnlyInventoryWrite(data: Record<string, unknown>): void {
-  const blocked = Object.keys(data).filter((field) =>
-    PROTECTED_INVENTORY_FIELDS.has(field)
-  );
-
-  if (blocked.length > 0) {
-    throw new Error(
-      `InventoryRepository metadata writes cannot change protected stock fields: ${blocked.join(
-        ", "
-      )}. Use createInventoryMovement instead.`
-    );
-  }
-}
-
 function clean(value: unknown): string {
   return String(value ?? "").trim();
 }
 
+type FieldCheck = [string, string];
+
 function readNumber(value: unknown, fallback: number): number {
   const parsed = typeof value === "number" ? value : Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
+}
+
+function isSafeFirestoreDocumentId(value: string): boolean {
+  return (
+    value.length > 0 &&
+    !value.includes("/") &&
+    value !== "." &&
+    value !== ".."
+  );
+}
+
+async function queryDocumentsByField(
+  collectionName: string,
+  field: string,
+  value: string,
+  limitCount: number,
+): Promise<Array<{ id: string; data: Record<string, unknown> }>> {
+  const snapshot = await getDocs(
+    query(
+      collection(db, collectionName),
+      where(field, "==", value),
+      limit(limitCount),
+    ),
+  );
+
+  return snapshot.docs.map((document) => ({
+    id: document.id,
+    data: document.data() as Record<string, unknown>,
+  }));
+}
+
+async function findFirstDocumentByFields<T>(
+  collectionName: string,
+  checks: FieldCheck[],
+  limitCount: number,
+  predicate: (data: Record<string, unknown>) => boolean,
+  mapResult: (id: string, data: Record<string, unknown>) => T,
+): Promise<T | null> {
+  for (const [field, value] of checks) {
+    if (!value) continue;
+
+    const documents = await queryDocumentsByField(collectionName, field, value, limitCount);
+    const match = documents.find((document) => predicate(document.data));
+    if (match) {
+      return mapResult(match.id, match.data);
+    }
+  }
+
+  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -146,21 +158,17 @@ export const InventoryRepository = {
     for (const [field, value] of fields) {
       if (!value) continue;
 
-      const snap = await getDocs(
-        query(
-          collection(db, COLLECTIONS.INVENTORY),
-          where(field as string, "==", value),
-          limit(25),
-        ),
+      const documents = await queryDocumentsByField(
+        COLLECTIONS.INVENTORY,
+        field as string,
+        value,
+        25,
       );
 
-      const matches = snap.docs
-        .filter((document) => document.data().isDeleted !== true)
+      const matches = documents
+        .filter((document) => document.data.isDeleted !== true)
         .map((document) =>
-          normalizeInventoryItem(
-            document.id,
-            document.data() as Record<string, unknown>,
-          ),
+          normalizeInventoryItem(document.id, document.data),
         );
 
       if (matches.length === 1) {
@@ -212,53 +220,34 @@ export const InventoryRepository = {
     const clean = normalizeBarcode(rawCode);
     const upper = clean.toUpperCase();
 
-    // Direct document-ID lookup is only safe when the scanned value does not
-// contain Firestore path separators. QR codes may contain full website URLs.
-const directDocumentId = clean.toLowerCase();
-const isSafeDocumentId =
-  directDocumentId.length > 0 &&
-  !directDocumentId.includes("/") &&
-  directDocumentId !== "." &&
-  directDocumentId !== "..";
+    const directDocumentId = clean.toLowerCase();
+    if (isSafeFirestoreDocumentId(directDocumentId)) {
+      const directSnap = await getDoc(
+        doc(db, COLLECTIONS.PRODUCTS, directDocumentId),
+      );
 
-if (isSafeDocumentId) {
-  const directSnap = await getDoc(
-    doc(db, COLLECTIONS.PRODUCTS, directDocumentId)
-  );
+      if (directSnap.exists() && directSnap.data().deleted !== true) {
+        return {
+          id: directSnap.id,
+          ...directSnap.data(),
+        } as ProductDocument;
+      }
+    }
 
-  if (directSnap.exists() && directSnap.data().deleted !== true) {
-    return {
-      id: directSnap.id,
-      ...directSnap.data(),
-    } as ProductDocument;
-  }
-}
-
-    // Field-based lookups
-    const checks: Array<[string, string]> = [
+    const checks: FieldCheck[] = [
       ["upc", clean],
       ["sku", clean],
       ["hcpcs", upper],
       ["manufacturerItemId", clean],
     ];
 
-    for (const [field, value] of checks) {
-      if (!value) continue;
-
-      const snap = await getDocs(
-        query(
-          collection(db, COLLECTIONS.PRODUCTS),
-          where(field, "==", value),
-          limit(1),
-        ),
-      );
-      const match = snap.docs.find((d) => d.data().deleted !== true);
-      if (match) {
-        return { id: match.id, ...match.data() } as ProductDocument;
-      }
-    }
-
-    return null;
+    return findFirstDocumentByFields(
+      COLLECTIONS.PRODUCTS,
+      checks,
+      1,
+      (data) => data.deleted !== true,
+      (id, data) => ({ id, ...data } as ProductDocument),
+    );
   },
 
   /**
@@ -272,45 +261,33 @@ if (isSafeDocumentId) {
     manufacturerItemId?: string;
   }): Promise<string | null> {
     const directProductId = clean(params.productId);
-const isSafeProductId =
-  directProductId.length > 0 &&
-  !directProductId.includes("/") &&
-  directProductId !== "." &&
-  directProductId !== "..";
+    if (isSafeFirestoreDocumentId(directProductId)) {
+      const directSnap = await getDoc(
+        doc(db, COLLECTIONS.PRODUCTS, directProductId),
+      );
 
-if (isSafeProductId) {
-  const directSnap = await getDoc(
-    doc(db, COLLECTIONS.PRODUCTS, directProductId)
-  );
-
-  if (directSnap.exists()) {
-    return directProductId;
-  }
-}
+      if (directSnap.exists()) {
+        return directProductId;
+      }
+    }
 
     const barcode = params.barcode ? normalizeBarcode(params.barcode) : "";
-    const checks: Array<[string, string]> = [
+    const checks: FieldCheck[] = [
       ["upc", barcode],
       ["sku", clean(params.sku)],
       ["hcpcs", clean(params.hcpc).toUpperCase()],
       ["manufacturerItemId", clean(params.manufacturerItemId)],
     ];
 
-    for (const [field, value] of checks) {
-      if (!value) continue;
+    const product = await findFirstDocumentByFields(
+      COLLECTIONS.PRODUCTS,
+      checks,
+      1,
+      (data) => data.deleted !== true,
+      (id) => id,
+    );
 
-      const snap = await getDocs(
-        query(
-          collection(db, COLLECTIONS.PRODUCTS),
-          where(field, "==", value),
-          limit(1),
-        ),
-      );
-      const match = snap.docs.find((d) => d.data().deleted !== true);
-      if (match) return match.id;
-    }
-
-    return null;
+    return product;
   },
 
   // ---- READ: Settings ----------------------------------------------------
@@ -528,6 +505,7 @@ if (isSafeProductId) {
    * Create a new inventory document.
    */
   async create(data: Record<string, unknown>): Promise<string> {
+    assertMetadataOnlyInventoryWrite(data, "InventoryRepository.create");
     const ref = await addDoc(collection(db, COLLECTIONS.INVENTORY), {
       ...data,
       createdAt: serverTimestamp(),
@@ -539,7 +517,7 @@ if (isSafeProductId) {
    * Update an existing inventory document (merge semantics).
    */
   async update(id: string, data: Record<string, unknown>): Promise<void> {
-    assertMetadataOnlyInventoryWrite(data);
+    assertMetadataOnlyInventoryWrite(data, "InventoryRepository.update");
     await updateDoc(doc(db, COLLECTIONS.INVENTORY, id), {
       ...data,
       updatedAt: serverTimestamp(),
@@ -571,7 +549,9 @@ if (isSafeProductId) {
    * Respects the Firestore batch limit of 500 writes.
    */
   async batchUpdate(updates: Array<{ id: string; data: Record<string, unknown> }>): Promise<void> {
-    updates.forEach(({ data }) => assertMetadataOnlyInventoryWrite(data));
+    updates.forEach(({ data }) =>
+      assertMetadataOnlyInventoryWrite(data, "InventoryRepository.batchUpdate")
+    );
     const FIRESTORE_BATCH_LIMIT = 450;
     const chunks: Array<typeof updates> = [];
 
@@ -615,55 +595,9 @@ if (isSafeProductId) {
     createdBy?: string;
     createdByEmail?: string;
   }): Promise<void> {
-    const movement: Record<string, unknown> = {
-      productId: payload.productId,
-      productName: payload.productName,
-      barcode: payload.barcode,
-      serial: payload.serial,
-      lotNumber: payload.lotNumber,
-      type: payload.type,
-      quantity: payload.quantity,
-      sourceId: payload.sourceId,
-      notes: payload.notes,
-      source: "inventory",
-      createdAt: serverTimestamp(),
-    };
-
-    if (payload.affectedIds && payload.affectedIds.length > 0) {
-      movement.affectedIds = payload.affectedIds;
-    }
-
-    if (payload.patientKey !== undefined) {
-      movement.patientKey = payload.patientKey;
-    }
-
-    if (payload.patientName !== undefined) {
-      movement.patientName = payload.patientName;
-    }
-
-    if (payload.dateOfDeath !== undefined) {
-      movement.dateOfDeath = payload.dateOfDeath;
-    }
-
-    if (payload.pickupDate !== undefined) {
-      movement.pickupDate = payload.pickupDate;
-    }
-
-    if (payload.lastDeliveryDate !== undefined) {
-      movement.lastDeliveryDate = payload.lastDeliveryDate;
-    }
-
-    if (payload.createdBy !== undefined) {
-      movement.createdBy = payload.createdBy;
-    }
-
-    if (payload.createdByEmail !== undefined) {
-      movement.createdByEmail = payload.createdByEmail;
-    }
-
-    await addDoc(
-      collection(db, COLLECTIONS.STOCK_MOVEMENTS),
-      movement
+    void payload;
+    throw new Error(
+      "InventoryRepository.recordMovement is disabled. Use createInventoryMovement instead."
     );
   },
 

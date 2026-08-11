@@ -4,7 +4,7 @@
  * These tests execute the actual Firestore transaction logic, seed data,
  * verify stock mutations, transaction records, and operation records.
  *
- * Run with: firebase emulators:exec --only firestore,auth "npm run test:integration"
+ * Run with: firebase emulators:exec --project demo-advanced-home-medical --only firestore,auth "npm run test:integration"
  *
  * PREREQUISITES:
  *   - Firebase Emulator Suite running (firestore on :8080, auth on :9099)
@@ -12,72 +12,77 @@
  *   - No serviceAccountKey.json in functions/ or project root
  */
 
-import { describe, it, expect, beforeAll, beforeEach, afterAll } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
-  Timestamp,
   FieldValue,
   getFirestore,
-  Firestore,
+  Timestamp,
 } from "firebase-admin/firestore";
 import { getApps, initializeApp } from "firebase-admin/app";
-import { getAuth } from "firebase-admin/auth";
 import { HttpsError } from "firebase-functions/v2/https";
+import {
+  assertFails,
+  initializeTestEnvironment,
+  type RulesTestEnvironment,
+} from "@firebase/rules-unit-testing";
 
 import {
-  requireEmulatorEnv,
   clearEmulatorData,
-  assertNoProductionCredentials,
   EMULATOR_PORTS,
+  getEmulatorProjectId,
+  validateEmulatorSafety,
 } from "./emulator-setup";
+import {
+  cancelRentalWorkflow,
+  checkoutRentalWorkflow,
+  returnRentalWorkflow,
+} from "../domainWorkflows/rentalWorkflowService";
+import { patientEquipmentWorkflow } from "../domainWorkflows/patientEquipmentWorkflowService";
+import type { MovementActor } from "../inventory/movementService";
 
 // ---------------------------------------------------------------------------
 // Emulator environment check
 // ---------------------------------------------------------------------------
 
-beforeAll(() => {
-  assertNoProductionCredentials();
-  requireEmulatorEnv();
+validateEmulatorSafety();
 
-  // Initialize Firebase Admin with emulator config
-  if (!getApps().length) {
-    process.env["FIRESTORE_EMULATOR_HOST"] = process.env.FIRESTORE_EMULATOR_HOST || "localhost:8080";
-    process.env["FIREBASE_AUTH_EMULATOR_HOST"] = process.env.FIREBASE_AUTH_EMULATOR_HOST || "localhost:9099";
+if (!getApps().length) {
+  initializeApp({
+    projectId: getEmulatorProjectId(),
+  });
+}
 
-    initializeApp({
-      projectId: process.env.GCLOUD_PROJECT || "advanced-home-medical-55772",
-    });
-  }
+beforeAll(async () => {
+  validateEmulatorSafety();
+  rulesTestEnv = await initializeTestEnvironment({
+    projectId: getEmulatorProjectId(),
+    firestore: {
+      host: "127.0.0.1",
+      port: EMULATOR_PORTS.firestore,
+      rules: readFileSync(join(process.cwd(), "..", "firestore.rules"), "utf8"),
+    },
+  });
+});
 
-  // Set the auth emulator environment for admin SDK
-  process.env["FIREBASE_AUTH_EMULATOR_HOST"] = process.env.FIREBASE_AUTH_EMULATOR_HOST || "localhost:9099";
+afterAll(async () => {
+  await rulesTestEnv?.cleanup();
 });
 
 // ---------------------------------------------------------------------------
 // Shared state
 // ---------------------------------------------------------------------------
 
-const projectId = process.env.GCLOUD_PROJECT;
-const emulatorHost = process.env.FIRESTORE_EMULATOR_HOST;
-
-if (!projectId) {
-  throw new Error("GCLOUD_PROJECT is required for emulator tests.");
-}
-
-if (
-  !emulatorHost ||
-  (!emulatorHost.startsWith("localhost:") &&
-    !emulatorHost.startsWith("127.0.0.1:"))
-) {
-  throw new Error(
-    "FIRESTORE_EMULATOR_HOST must point to localhost for emulator tests.",
-  );
-}
-
-if (getApps().length === 0) {
-  initializeApp({ projectId });
-}
-
 const db = getFirestore();
+let rulesTestEnv: RulesTestEnvironment | null = null;
+
+const WORKFLOW_ACTOR: MovementActor = {
+  uid: "workflow-staff-001",
+  email: "workflow-staff@test.example.com",
+  role: "staff",
+};
 
 /**
  * Seed a user document for testing.
@@ -127,6 +132,20 @@ async function seedInventory(
 
   const ref = await db.collection("inventory").add(doc);
   return ref.id;
+}
+
+async function seedPatient(
+  id: string,
+  overrides: Record<string, unknown> = {},
+): Promise<void> {
+  await db.collection("patients").doc(id).set({
+    fullName: `Patient ${id}`,
+    patientName: `Patient ${id}`,
+    status: "active",
+    createdAt: Timestamp.now(),
+    updatedAt: Timestamp.now(),
+    ...overrides,
+  });
 }
 
 /**

@@ -43,6 +43,8 @@ export {
 // Inventory barcode scanning
 export { lookupInventoryByBarcode } from "./inventory/lookupInventoryByBarcode";
 export { receiveInventoryByBarcode } from "./inventory/receiveInventoryByBarcode";
+export { receiveScannedInventoryIntakeCallable } from "./inventory/receiveScannedInventoryIntake";
+export { inventoryCleanupWorkflowCallable } from "./inventory/cleanupWorkflow";
 export {
   issueInventoryByBarcode,
   cycleCountInventoryByBarcode,

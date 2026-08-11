@@ -21,19 +21,20 @@ This application is a Next.js 16 / Firebase / Prisma (PostgreSQL) admin dashboar
 
 | # | Risk | Severity | Category |
 |---|------|----------|----------|
-| 1 | **`requireUser()` is a hardcoded development bypass** — returns a fake admin user with no real auth check. Every page using this has zero auth. Exists in production build path. | CRITICAL 10/10 | Auth |
+| 1 | **`requireUser()` hardcoded development bypass** — Remediated in source on August 5, 2026 with Firebase session-cookie verification, Firestore `users/{uid}` loading, inactive-user denial, and role/permission checks. Deployment verification is still required before production release. | REMEDIATED SOURCE / VERIFY DEPLOYMENT | Auth |
 | 2 | **Firebase API key exposed in client bundle** — plaintext API key in `firebase.ts`. While Firebase API keys are somewhat public by design, combined with permissive Firestore rules and no App Check enforcement in all environments, this enables unauthorized Firestore access. | CRITICAL 9/10 | Security |
-| 3 | **No CSRF protection** — Next.js API routes accept POST/PATCH with `Bearer` token only. No CSRF token, no SameSite cookie validation, no origin/referrer checking. | CRITICAL 9/10 | Security |
-| 4 | **Zero audit trail on PHI-modifying operations** — client-side write operations to patients, orders, rentals happen directly from the browser with audit calls being optional (try/catch swallowed). Critical HIPAA requirement not met. | CRITICAL 9/10 | Compliance |
-| 5 | **`serviceAccountKey.json` loaded at runtime from filesystem** — the file is in `.gitignore` but `firebaseAdmin.ts` does a blocking `readFileSync` with no handling if the file is missing. Production deployment will crash immediately if file is absent or permissions wrong. | CRITICAL 8/10 | DevOps |
-| 6 | **No rate limiting on any API route** — login, password reset, API endpoints have zero rate limiting. Brute-force attack vector is wide open. | HIGH 8/10 | Security |
+| 3 | **CSRF protection incomplete** — The Firebase session-cookie endpoint now validates trusted origins in source, but the rest of the state-changing API surface still needs CSRF protection. | HIGH 8/10 | Security |
+| 4 | **Zero audit trail on remaining PHI-modifying operations** — protected rental and patient-equipment workflow fields are source-remediated through callable workflows, but other client-side PHI writes still use direct browser Firestore paths with optional audit calls. | CRITICAL 9/10 | Compliance |
+| 5 | **Firebase Admin credential loading** — Remediated in source on August 5, 2026. `firebaseAdmin.ts` now reuses existing Admin apps, supports ADC, supports environment-provided service-account credentials, and only permits file fallback through explicit local-development configuration. Deployment credential verification is still required. | REMEDIATED SOURCE / VERIFY DEPLOYMENT | DevOps |
+| 5a | **Repository-local service-account key for emulator tests** — Source and local setup now move emulator testing to credential-free Admin initialization with localhost emulators and an isolated `demo-*` project ID. Keep any retained local key outside the repository and rotate exposed keys. | REMEDIATED SOURCE / VERIFY DEPLOYMENT | DevOps |
+| 6 | **Rate limiting partially remediated in source** — Session creation, ChatGPT/Jarvis APIs, selected authenticated API routes, user-management callables, AI/import callables, maintenance rebuild/reset callables, and inventory/domain workflow callables now use Firestore-backed token buckets. Deployment monitoring and remaining direct client Firestore writes still need review. | REMEDIATED SOURCE / VERIFY DEPLOYMENT | Security |
 | 7 | **API routes inconsistent auth check ordering** — `improvements/route.ts` reads request body JSON *before* auth check, making it vulnerable to parsing-based DoS and information disclosure. | HIGH 8/10 | Security |
 | 8 | **ChatGPT Bridge — unversioned API key in env var, no audit logging** — `CHATGPT_API_KEY` provides unfiltered read access to Firestore collections. No logging of queries performed, no row-level filtering, no PII masking. | HIGH 8/10 | Security |
-| 9 | **Inventory allocation functions lack transactions** — `allocateInventoryToOrder`, `restoreInventoryFromOrder` run in Firestore with no transaction or batch. Concurrent requests cause double-allocation or negative inventory. | HIGH 7/10 | Reliability |
+| 9 | **Legacy inventory allocation helpers disabled in source** — Direct client allocation helpers now throw, and direct protected inventory writes are blocked by client guards, validators, rules, and callable workflows. Deployment smoke tests are still required. | REMEDIATED SOURCE / VERIFY DEPLOYMENT | Reliability |
 | 10 | **`buildComplianceIssues.ts` is just string literals** — file contains `"missing_cmn"`, `"expired_par"`, `"missing_serial"` as bare string expressions that do nothing. Compliance issue detection is completely non-functional. | HIGH 7/10 | Architecture |
 | 11 | **Jarvis product enrichment route does heavy writes without validation** — validates only `title` and `description`, then proceeds to blindly mutate `inventory`, `products`, and log collections. No output sanitization, no rollback on failure. | HIGH 7/10 | Security |
 | 12 | **No database indexes on critical Postgres queries** — Prisma schema has 0 custom indexes beyond auto-generated ones. `AuditLog` queries by `userId`, `action`, `createdAt` will be full table scans at scale. | HIGH 7/10 | Database |
-| 13 | **Firestore rules allow staff-level write to PHI collections** — `patients`, `orders`, `rentals`, `insuranceRecords` all allow write from `staff` role. Staff can modify clinical data with no second-person review. | HIGH 7/10 | Compliance |
+| 13 | **Firestore rules allow staff-level metadata writes to PHI collections** — protected rental and patient-equipment state is now blocked from direct staff writes, but `patients`, `orders`, `insuranceRecords`, and lower-risk rental metadata still allow staff writes with no second-person review. | HIGH 7/10 | Compliance |
 | 14 | **No input validation on API routes** — `equipment/route.ts` calls service layer without Zod or schema validation. `improvements/route.ts` does manual string checks but no structured validation. | HIGH 7/10 | Security |
 | 15 | **`safeUpdateDocument` client-side audit is unreliable** — audit is called after the write completes. If the audit write fails (permission denied, network), the main operation has already succeeded with no record. | HIGH 6/10 | Reliability |
 | 16 | **Cloud Function `bootstrapAdminClaim` hardcodes a UID** — a specific Firebase Auth UID can claim admin role by calling this function. If the function is exposed (no App Check enforcement), anyone with that UID gets admin. | HIGH 6/10 | Security |
@@ -50,16 +51,16 @@ This application is a Next.js 16 / Firebase / Prisma (PostgreSQL) admin dashboar
 |---|------|--------|----------|
 | 1 | **Zero test coverage across the entire application** — No unit, integration, or E2E tests in `src/` or `functions/src/`. `vitest` is in devDependencies but unused. | 10/10 | Testing |
 | 2 | **Dual audit log systems (Postgres + Firestore) with no synchronization** — `src/lib/audit.ts` writes to Postgres via repository, `src/lib/auditLogs.ts` writes to Firestore from client. Same events logged to different stores with no correlation ID. | 9/10 | Architecture |
-| 3 | **Firestore direct writes from client code at scale** — `src/lib/inventory.ts`, `src/lib/auditLogs.ts`, `src/lib/firestoreSafeActions.ts` all write directly to Firestore from browser. Bypasses all server-side validation, authZ, and rate limiting. | 9/10 | Architecture |
+| 3 | **Firestore direct writes from client code at scale** — Inventory, rental workflow, and patient-equipment protected writes are source-remediated, but other browser-originated Firestore writes remain and need domain-by-domain migration. | 9/10 | Architecture |
 | 4 | **Duplicate error handling utilities (`errors.ts` vs `getErrorMessage.ts`)** — identical 200+ line files with same exports. A maintainability time bomb. | 8/10 | Maintainability |
-| 5 | **`require-user.ts` is a complete auth bypass** — this server component guard returns a hardcoded admin session. Any page or server action using it has zero authentication in production. | 8/10 | Architecture |
+| 5 | **`require-user.ts` server auth path** — source now requires a verified Firebase session cookie and active Firestore user document. Keep deployment verification and session-cookie route smoke tests in the release gate. | 4/10 | Architecture |
 | 6 | **No TypeScript `strict` mode violations caught** — `skipLibCheck: true` means third-party type issues are suppressed but so are potential real errors at module boundaries. | 7/10 | Maintainability |
 | 7 | **Prisma client is global singleton but adapter is created every time** — `prisma.ts` creates a `new PrismaPg(new Pool(...))` in module scope. Pool is created at import time, not lazily. | 7/10 | Reliability |
 | 8 | **`product-enrichment/route.ts` is 600+ lines** — violates the documented architecture guideline that services should be under 300 lines. Contains inline logic for enrichment, auto-fill, image search, and reference matching. | 7/10 | Maintainability |
 | 9 | **Firestore schema has no TypeScript validation layer** — `firestore.rules` validates some fields for CPAP pulls/call notes but the vast majority of collections have no field-level validation. | 7/10 | Architecture |
 | 10 | **No Firestore security rules for collection group queries to `rows`** — `match /{path=**}/rows/{rowId}` allows any staff/admin read/write to rows under any path, not just importJobs/importedReports. | 7/10 | Security |
 | 11 | **`CLAUDE.md` and `.blackboxrules` in project root** — AI/LLM configuration files committed to version control. Not a production risk but indicates development workflow contamination. | 5/10 | DevOps |
-| 12 | **`serverExternalPackages: ["firebase-admin"]` in next.config** — forces firebase-admin to be bundled server-side, but `firebaseAdmin.ts` does sync filesystem read which may not work in all serverless environments. | 6/10 | DevOps |
+| 12 | **`serverExternalPackages: ["firebase-admin"]` in next.config** — firebase-admin remains server-only externalized for Next.js. Source no longer depends on a root service-account key file, but the deployment runtime still needs ADC or configured server secrets. | 4/10 | DevOps |
 | 13 | **No monitoring or observability setup** — no OpenTelemetry, Sentry, DataDog, or any APM. `console.error` scattered throughout as the sole error recording mechanism. | 6/10 | DevOps |
 | 14 | **`adhoc-samples/` directory contains CSV/PDF with real-looking PHI data** — files like `Patients_Demographics.csv`, `Insurance.csv`, `Patient_Physicians.csv` contain sample healthcare data committed to the repo. | 6/10 | Compliance |
 | 15 | **Cloud Functions `maxInstances: 10` with no concurrency tuning** — all functions share the same global options. Import processing functions may need different concurrency than lightweight auth functions. | 5/10 | Scalability |
@@ -75,25 +76,27 @@ This application is a Next.js 16 / Firebase / Prisma (PostgreSQL) admin dashboar
 
 | Control | Status | Notes |
 |---------|--------|-------|
-| Authentication | ❌ FAIL | `requireUser()` bypass; JWT verified but soft errors leak info |
+| Authentication | ⚠️ PARTIAL | `requireUser()` bypass, session CSRF, and session rate limiting remediated in source; broader write-path risks remain |
 | Authorization | ❌ FAIL | No server-side enforcement on client Firestore writes |
 | Session Management | ⚠️ WEAK | `browserLocalPersistence` only; no session timeout/rotation |
 | Password Recovery | ⚠️ OK | Masks account enumeration but no rate limit on reset calls |
 | MFA | ✓ IMPLEMENTED | TOTP flow present in `mfa.ts` but unused in any guard |
 | Audit Logging | ❌ FAIL | Dual systems; client-side audit is unreliable; HIPAA non-compliant |
-| Secrets Management | ❌ FAIL | `serviceAccountKey.json` loaded from disk at runtime |
+| Secrets Management | ⚠️ PARTIAL | Next.js Firebase Admin no longer requires a root key file; deployment secrets and local key rotation still need operational verification |
 | Input Validation | ❌ FAIL | No Zod/schema validation on most API routes; manual checks only |
 | Injection Risks | ⚠️ WEAK | Prisma uses parameterized queries (safe); Firestore queries are built from user input |
 | XSS | ⚠️ WEAK | React JSX is safe by default, but `dangerouslySetInnerHTML` not audited |
-| CSRF | ❌ FAIL | Zero CSRF protection on any API route |
+| CSRF | ⚠️ PARTIAL | Firebase session-cookie creation/deletion validates trusted origins; remaining state-changing API routes still need CSRF protection |
 | SSRF | ⚠️ WEAK | Jarvis enrichment fetches external URLs; no allowlist |
-| Rate Limiting | ❌ FAIL | None implemented anywhere |
+| Rate Limiting | ⚠️ PARTIAL | Firestore token-bucket limits protect API routes and high-cost callables; inventory callables are covered, but deployment monitoring remains |
 | App Check | ⚠️ WEAK | Initialized but site key may be empty; debug token enabled in dev |
 
 **Key Findings:**
 
-- **CRITICAL:** `requireUser()` in `src/lib/auth/require-user.ts` returns a hardcoded admin session. Every page using it (via `requireRole` or `requirePermission`) has effectively zero authentication.
-- **CRITICAL:** No server-side authorization layer exists between browser-initiated Firestore writes and the data. Client code writes directly to `patients`, `orders`, `rentals` collections. The *only* protection is Firestore security rules, which are complex and error-prone.
+- **REMEDIATED IN SOURCE:** `requireUser()` in `src/lib/auth/require-user.ts` now verifies a Firebase session cookie through the Admin SDK and loads `users/{uid}` before allowing access. This still needs deployment-environment verification before release.
+- **CRITICAL:** No universal server-side authorization layer exists between browser-initiated Firestore writes and the data. Protected inventory, rental, and patient-equipment workflow writes are blocked in source and rules, but other direct `patients`, `orders`, and metadata writes still rely on Firestore rules.
+- **SOURCE-REMEDIATED:** Protected inventory state changes now use Cloud Functions movement workflows. Client metadata helpers reject protected fields, `stockMovements` client creates are denied in rules, and `npm run validate:inventory-writes` blocks direct/indirect regressions.
+- **SOURCE-REMEDIATED:** Protected rental and patient-equipment workflow state now uses Cloud Functions domain workflows. Client runtime guards, Firestore rules, and `npm run validate:domain-writes` block direct protected rental and `patients/{id}/equipment` writes outside authorized services.
 - **HIGH:** The ChatGPC bridge API key provides unfiltered Firestore access with no PII masking — any ChatGPT user with the API key can query all patient data.
 
 ---
@@ -111,7 +114,7 @@ This application is a Next.js 16 / Firebase / Prisma (PostgreSQL) admin dashboar
 
 **Key Findings:**
 
-- The application architecture is **dual-layered with a gap**: the documented v2 architecture describes services → repositories → database, but a massive amount of client code directly calls Firestore (`src/lib/inventory.ts`, `src/lib/auditLogs.ts`, `src/lib/firestoreSafeActions.ts`). This means:
+- The application architecture is **dual-layered with a gap**: the documented v2 architecture describes services → repositories → database, but client code outside the remediated inventory protected-write path still directly calls Firestore. This means:
   1. Server-side validation is bypassed
   2. Audit logging is unreliable
   3. Authorization checks are partially applied
@@ -142,14 +145,14 @@ This application is a Next.js 16 / Firebase / Prisma (PostgreSQL) admin dashboar
 |--------|-------|-------|
 | Database Query Efficiency | 3/10 | No custom indexes; N+1 risk in `AuditLog` queries |
 | Caching | 0/10 | No Redis, no in-memory cache, no CDN for static assets |
-| Serverless Readiness | 4/10 | `firebaseAdmin.ts` does sync filesystem read; blocks event loop |
-| Concurrent Request Handling | 3/10 | Inventory allocation functions are not transactional |
+| Serverless Readiness | 5/10 | `firebaseAdmin.ts` credential loading remediated in source; other serverless readiness gaps remain |
+| Concurrent Request Handling | 5/10 | Inventory movement workflows are transactional; other domains still need review |
 | Horizontal Scaling | 5/10 | Next.js + Firebase Functions scale horizontally; but Firestore write contention will be an issue |
 
 **Key Findings:**
 
 - **No indexes on Postgres:** The `AuditLog` model has three columns (`userId`, `action`, `entityType`) that will be queried frequently with no indexes — full table scans at any scale.
-- **Inventory allocation race conditions:** `allocateInventoryToOrder` and `restoreInventoryFromOrder` in `src/lib/inventory.ts` are not wrapped in Firestore transactions. Two concurrent requests for the same product will allow both to succeed, resulting in negative inventory.
+- **Inventory allocation race conditions:** legacy client allocation helpers are disabled in source; deployment smoke tests must verify all active inventory paths use callable movement workflows.
 - **Pool connection leak potential:** The Prisma global singleton creates a `Pool` at module import time with no max connection limit. In serverless (Vercel/Functions), this could exhaust database connections.
 
 ---
@@ -172,17 +175,17 @@ This application is a Next.js 16 / Firebase / Prisma (PostgreSQL) admin dashboar
 
 These **must** be resolved before production deployment:
 
-1. **`requireUser()` auth bypass** — The hardcoded admin session in `src/lib/auth/require-user.ts` means any protected page or server action is accessible without authentication. **Fix:** Wire real Firebase Auth token verification. **Blocking: YES**
+1. **`requireUser()` server auth verification** — Source remediation added on August 5, 2026. The login client exchanges a Firebase ID token at `POST /api/auth/session`; the server sets an HttpOnly `__session` cookie; `requireUser()` verifies that cookie and loads the Firestore user record. **Blocking: VERIFY IN TARGET DEPLOYMENT**
 
-2. **CSRF protection missing** — All POST/PATCH/DELETE API routes accept requests from any origin. Without SameSite cookies or CSRF tokens, an attacker can trivially forge authenticated requests. **Blocking: YES**
+2. **CSRF protection incomplete** — `POST /api/auth/session` and `DELETE /api/auth/session` are source-remediated with trusted-origin checks. Other state-changing API routes still need CSRF protection. **Blocking: YES**
 
-3. **No rate limiting** — Login, password reset, and all API endpoints are unprotected against brute-force and DoS attacks. **Blocking: YES**
+3. **Rate limiting deployment verification** — Source remediation added token-bucket limits to the session endpoint, AI/Jarvis APIs, authenticated API routes, user-management callables, AI/import callables, maintenance rebuild/reset callables, and inventory/domain workflow callables. Verify production thresholds, logging, and Cloudflare IP handling in the target environment. **Blocking: VERIFY IN TARGET DEPLOYMENT**
 
-4. **`serviceAccountKey.json` loading from disk** — `firebaseAdmin.ts` will throw `ENOENT` in environments where this file is not present (CI/CD, fresh deployments, containers). **Blocking: YES**
+4. **Firebase Admin deployment credentials** — source remediation removed the root `serviceAccountKey.json` dependency. Configure ADC or server secret env credentials in the target host and run a deployment smoke test. **Blocking: VERIFY IN TARGET DEPLOYMENT**
 
 5. **Zero test coverage** — No tests means every deploy is a blind gamble. Cannot certify production readiness without at minimum smoke tests for critical paths. **Blocking: YES**
 
-6. **Client-side Firestore writes to PHI collections** — The current architecture allows browser-originated writes to `patients`, `orders`, `rentals` etc. **Fix:** Move all PHI writes to server API endpoints with proper authZ. **Blocking: YES**
+6. **Client-side Firestore writes to PHI collections** — Protected rental and patient-equipment workflow writes are remediated in source, but the current architecture still allows browser-originated metadata writes to `patients`, `orders`, `rentals`, etc. **Fix:** Continue moving PHI writes to server API endpoints or callable workflows with proper authZ and atomic audit. **Blocking: YES**
 
 7. **Audit logging is non-compliant** — Client-side audit fires after the fact with no guarantee of delivery. HIPAA requires definitive, non-repudiable audit trails. **Blocking: YES**
 
@@ -193,10 +196,13 @@ These **must** be resolved before production deployment:
 ### Before Release (Week 1-3)
 
 **Week 1 — Critical Security Fixes:**
-- [ ] Replace `requireUser()` with real Firebase ID token verification
-- [ ] Add CSRF protection middleware to all API routes (origin/referrer check + double-submit cookie or SameSite=Strict)
-- [ ] Implement rate limiting on auth endpoints (login, password reset) — use `express-rate-limit` wrapper or Vercel WAF
-- [ ] Remove `serviceAccountKey.json` filesystem loading; use environment variable `FIREBASE_SERVICE_ACCOUNT_JSON` instead
+- [x] Replace `requireUser()` with real Firebase session-cookie verification in source
+- [ ] Add CSRF protection middleware to all remaining state-changing API routes
+- [x] Add trusted-origin CSRF validation to Firebase session-cookie creation/deletion
+- [x] Implement source-level rate limiting on session, AI/Jarvis, import, admin, and high-cost callable endpoints
+- [ ] Verify production rate-limit thresholds, Cloudflare IP extraction, and monitoring alerts
+- [x] Remove implicit `serviceAccountKey.json` filesystem loading from Next.js Firebase Admin initialization
+- [x] Block protected rental and patient-equipment workflow writes from direct client Firestore paths in source and rules
 - [ ] Add input validation (Zod) to all API routes — start with equipment, improvements, jarvis endpoints
 
 **Week 2 — Audit & Compliance:**
@@ -215,7 +221,7 @@ These **must** be resolved before production deployment:
 
 - [ ] **Monitoring:** Add Sentry or OpenTelemetry for error tracking and performance monitoring
 - [ ] **Testing Sprint:** Write integration tests for all API routes, service layer, and critical business logic
-- [ ] **ChatGPT Bridge:** Add PII masking, query logging, and rate limiting to the bridge
+- [ ] **ChatGPT Bridge:** Add PII masking and richer query logging; source rate limiting is now present
 - [ ] **Firestore Backup:** Set up automated daily Firestore exports to Cloud Storage
 - [ ] **Security Headers:** Add CSP, HSTS, X-Frame-Options, Referrer-Policy via Next.js middleware
 - [ ] **Session Management:** Add idle timeout and re-authentication for sensitive operations
@@ -240,30 +246,24 @@ These **must** be resolved before production deployment:
 
 ### Authentication (Scored: 15/100)
 
-The most critical finding is `src/lib/auth/require-user.ts` (line 17-24):
+The former critical finding in `src/lib/auth/require-user.ts` has been
+remediated in source. `requireUser()`, `requireRole()`, and
+`requirePermission()` now read the HttpOnly Firebase session cookie,
+verify it with `adminAuth.verifySessionCookie(..., true)`, load
+`users/{uid}`, reject inactive/disabled/deleted users, and resolve roles
+through the shared RBAC helpers.
 
-```typescript
-export async function requireUser(): Promise<UserSession> {
-  return {
-    id: "dev-user",
-    name: "Development User",
-    email: "dev@advancedhomemedical.local",
-    role: "admin",
-    isActive: true,
-  };
-}
-```
-
-This function has a comment "Temporary guard until full auth is wired in" but it is the implementation used by `requireRole()` and `requirePermission()` which are called by server components like the admin layout. Any page using these guards has zero authentication.
-
-Meanwhile, `require-api-auth.ts` has a correctly implemented Firebase ID token verification — but this is only used by API routes. The server component path is completely unprotected.
+`require-api-auth.ts` continues to verify Firebase ID tokens for API
+routes. The server component path now uses Firebase session cookies
+instead of Authorization headers because server components cannot read the
+browser's client-side Auth state directly.
 
 ### Authorization (Scored: 20/100)
 
 The authorization model is fragmented:
 1. **API routes** use `requireApiPermission()` which checks the permission map — this is well-designed
-2. **Server components** use `requireUser()` which is a no-op (see above)
-3. **Firestore direct writes** rely solely on Firestore security rules
+2. **Server components** use `requireUser()` backed by verified Firebase session cookies and Firestore user records
+3. **Firestore direct writes outside remediated inventory, rental, and patient-equipment protected fields** rely solely on Firestore security rules
 4. **Cloud Functions** have their own `assertAdmin()` helper
 
 The Firestore rules file (`firestore.rules`) is 300+ lines and attempts to implement role-based access, but:
@@ -279,9 +279,9 @@ The Firestore rules file (`firestore.rules`) is 300+ lines and attempts to imple
 - `AuditLog` table has no foreign keys — `userId` is a loose string reference that can point to a non-existent user
 
 **Firestore:**
-- Inventory allocation functions (`allocateInventoryToOrder`, `allocateInventoryToRental`) are not wrapped in Firestore transactions
-- A race condition: two concurrent allocations for the same product will both pass the `quantityOnHand >= qty` check and decrement below zero
-- Stock movements are logged as separate documents; consistency between product quantity and movement log is not guaranteed
+- Legacy client allocation functions now throw and instruct callers to use `createInventoryMovement`.
+- Protected inventory changes are transactional in `functions/src/inventory/movementService.ts` and use idempotency records in `inventoryOperations`.
+- Stock movement history is server-authored through immutable `inventoryTransactions` and audit logs; direct client `stockMovements` creation is denied by rules.
 
 ### Error Handling (Scored: 25/100)
 
@@ -301,7 +301,7 @@ The Firestore rules file (`firestore.rules`) is 300+ lines and attempts to imple
 ### DevOps (Scored: 30/100)
 
 - **No `.env.example`** — developers must guess environment variables
-- **`serviceAccountKey.json` loaded from disk** — will fail in serverless/GitHub Actions
+- **Firebase Admin credentials** — source supports ADC and server-secret env credentials; target deployment must be configured and smoke-tested
 - **No Docker configuration** for local PostgreSQL development
 - **Firebase functions have manual deploy** — no CI/CD pipeline visible
 - **No monitoring/alerting** — console.log is the sole observability mechanism
@@ -326,7 +326,7 @@ The rules are comprehensive but have several issues:
 
 4. **`deliveryTechLocations` read is admin-only** — this seems like an oversight; delivery technicians need to read their locations.
 
-5. **No rate limiting in rules** — Firestore rules cannot rate-limit, but there's no application-layer protection against bulk reads.
+5. **No rate limiting in rules** — Firestore rules cannot rate-limit; API/callable entry points now have source-level token buckets, but direct client Firestore reads still depend on rules and App Check posture.
 
 ---
 

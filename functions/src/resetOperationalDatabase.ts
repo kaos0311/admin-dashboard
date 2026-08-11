@@ -2,6 +2,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { requireCallableAdmin } from "./auth/roles.js";
+import { enforceCallableRateLimit } from "./security/rateLimit.js";
 
 const db = getFirestore();
 
@@ -76,6 +77,7 @@ export const resetOperationalDatabase = onCall(
     memory: "1GiB",
   },
   async (request) => {
+    await enforceCallableRateLimit(request, "admin");
     await requireCallableAdmin(
       request.auth,
       "Only admins can reset the operational database."

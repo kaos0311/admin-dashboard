@@ -113,3 +113,30 @@ export type ReceiveInventoryResult =
   | ReceiveInventorySuccess
   | ReceiveInventoryNotFound
   | ReceiveInventoryDuplicate;
+
+// ──────────────────────────────────────────────
+// Scanned inventory intake
+// ──────────────────────────────────────────────
+
+export type ReceiveScannedInventoryIntakeMode = "product-match" | "pending-scan";
+
+export interface ReceiveScannedInventoryIntakeInput {
+  operationId: string;
+  mode: ReceiveScannedInventoryIntakeMode;
+  rawScan: string;
+  normalizedScan: string;
+  quantity: number;
+  locationId?: string;
+  productId?: string;
+}
+
+export interface ReceiveScannedInventoryIntakeResult {
+  status: "success";
+  inventoryItemId: string;
+  movementId: string;
+  quantityBefore: number;
+  quantityChange: number;
+  quantityAfter: number;
+  createdOrMerged: "created" | "merged";
+  mode: ReceiveScannedInventoryIntakeMode;
+}

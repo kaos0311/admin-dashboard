@@ -111,6 +111,8 @@ const eslintConfig = defineConfig([
 
   globalIgnores([
     ".kilo/**",
+    ".codex-backups/**",
+    "tmp/**",
     ".next/**",
     "out/**",
     "build/**",
