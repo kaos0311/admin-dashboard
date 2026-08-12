@@ -427,5 +427,3 @@ function rawShopReportWrites(row: ImportRow, importId: string, rowIndex: number)
     data: { importId, rowIndex, raw: row },
   }];
 }
-
-
