@@ -23,6 +23,9 @@ resolution, and reliable exit-code capture.
 
 # Run the full release-readiness gate
 .\scripts\toolkit\toolkit.ps1 release
+
+# Include a redacted Git-history secret scan in the release gate
+.\scripts\toolkit\toolkit.ps1 release -IncludeHistorySecretScan
 ```
 
 You can also run any script directly:
@@ -177,6 +180,33 @@ and the Cloud Functions package.
 
 ---
 
+### `release-readiness.ps1`
+
+**Purpose:** Runs the fail-closed production release gate. It verifies Git
+status, branch/upstream, repository hygiene, redacted secret preflight, the
+baseline validation gate with emulator coverage, and root plus Functions
+production dependency audits.
+
+**Parameters:**
+
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `-AllowBranch` | string | empty | Permit a release branch other than `main`/`master` |
+| `-SkipAudit` | switch | off | Skip `npm audit --omit=dev` |
+| `-IncludeHistorySecretScan` | switch | off | Also scan Git history for obvious credential patterns |
+
+**Examples:**
+
+```powershell
+.\scripts\toolkit\release-readiness.ps1
+.\scripts\toolkit\release-readiness.ps1 -AllowBranch release-1.0
+.\scripts\toolkit\release-readiness.ps1 -IncludeHistorySecretScan
+```
+
+**Exit code:** `0` = release gate passed, `1` = one or more checks failed.
+
+---
+
 ### `dead-code.ps1`
 
 **Purpose:** Performs heuristic static analysis to detect potentially unused
@@ -293,28 +323,25 @@ state.
 1. Git working tree is clean (no uncommitted changes)
 2. On an allowed branch (`main` or `master`, or `-AllowBranch <name>`)
 3. Up to date with remote (no unpushed/unpulled commits)
-4. ESLint passes
-5. TypeScript type-checking passes (main + functions)
-6. Next.js production build succeeds
-7. Cloud Functions build succeeds
-8. Unit tests pass (`vitest run`)
-9. No production dependency vulnerabilities (`npm audit --omit=dev`)
+4. Repository hygiene preflight passes
+5. Redacted secret preflight passes
+6. Baseline validation gate passes with emulator coverage
+7. No production dependency vulnerabilities in the root package or Functions package (`npm audit --omit=dev`)
 
 **Parameters:**
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `-AllowBranch` | string | `""` | Allow a specific branch name |
-| `-SkipTests` | switch | off | Skip unit tests |
 | `-SkipAudit` | switch | off | Skip dependency audit |
-| `-SkipFunctions` | switch | off | Skip Cloud Functions checks |
+| `-IncludeHistorySecretScan` | switch | off | Include redacted Git-history secret scan |
 
 **Examples:**
 
 ```powershell
 .\scripts\toolkit\release-readiness.ps1                          # Full gate
 .\scripts\toolkit\release-readiness.ps1 -AllowBranch develop    # Allow branch
-.\scripts\toolkit\release-readiness.ps1 -SkipTests -SkipAudit   # Skip some
+.\scripts\toolkit\release-readiness.ps1 -IncludeHistorySecretScan
 ```
 
 **Exit code:** `0` = project is release-ready, `1` = one or more checks failed.
@@ -348,7 +375,7 @@ of scripts. Forwards extra arguments to the underlying script.
 .\scripts\toolkit\toolkit.ps1 help
 .\scripts\toolkit\toolkit.ps1 lint
 .\scripts\toolkit\toolkit.ps1 all
-.\scripts\toolkit\toolkit.ps1 release -SkipTests
+.\scripts\toolkit\toolkit.ps1 release -IncludeHistorySecretScan
 .\scripts\toolkit\toolkit.ps1 dead-code -IncludeFunctions -ExportReport
 .\scripts\toolkit\toolkit.ps1 git-status -Short
 ```
@@ -410,7 +437,7 @@ These scripts can be used in CI/CD pipelines. Example for GitHub Actions:
 ```yaml
 - name: Release Readiness Gate
   shell: pwsh
-  run: .\scripts\toolkit\toolkit.ps1 release -SkipTests
+  run: .\scripts\toolkit\toolkit.ps1 release -IncludeHistorySecretScan
 ```
 
 Example for Azure DevOps:
@@ -419,7 +446,7 @@ Example for Azure DevOps:
 - task: PowerShell@2
   inputs:
     filePath: 'scripts/toolkit/release-readiness.ps1'
-    arguments: '-SkipTests'
+    arguments: '-IncludeHistorySecretScan'
 ```
 
 ---

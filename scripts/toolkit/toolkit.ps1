@@ -33,8 +33,8 @@
     .\scripts\toolkit\toolkit.ps1 all
     Run lint, typecheck, build, and build-functions in sequence.
 .EXAMPLE
-    .\scripts\toolkit\toolkit.ps1 release -SkipTests
-    Run release readiness gate, skipping unit tests.
+    .\scripts\toolkit\toolkit.ps1 release -IncludeHistorySecretScan
+    Run release readiness gate with Git-history secret scan.
 .NOTES
     Exit code mirrors the underlying script's exit code.
 #>
@@ -76,7 +76,7 @@ if ($Command -eq "help" -or -not $Command) {
     Write-Host "Examples:" -ForegroundColor White
     Write-Host "  .\scripts\toolkit\toolkit.ps1 lint" -ForegroundColor DarkGray
     Write-Host "  .\scripts\toolkit\toolkit.ps1 all" -ForegroundColor DarkGray
-    Write-Host "  .\scripts\toolkit\toolkit.ps1 release -SkipTests" -ForegroundColor DarkGray
+    Write-Host "  .\scripts\toolkit\toolkit.ps1 release -IncludeHistorySecretScan" -ForegroundColor DarkGray
     Write-Host "  .\scripts\toolkit\toolkit.ps1 dead-code -IncludeFunctions" -ForegroundColor DarkGray
     Write-Host ""
     exit 0

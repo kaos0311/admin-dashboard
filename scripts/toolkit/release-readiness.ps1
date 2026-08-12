@@ -9,23 +9,19 @@
       1. Git working tree must be clean (no uncommitted changes)
       2. Must be on the main/master branch (or use -AllowBranch)
       3. Must be up to date with remote (no unpushed commits)
-      4. ESLint must pass (main application)
-      5. TypeScript type-checking must pass (main + functions)
-      6. Next.js production build must succeed
-      7. Cloud Functions build must succeed
-      8. Unit tests must pass
-      9. Dependency audit must not have high/critical vulnerabilities
+      4. Repository hygiene preflight must pass
+      5. Secret preflight must pass
+      6. AHM validation gate must pass with emulator coverage
+      7. Dependency audits must not have production vulnerabilities
 
     Each check is reported with a pass/fail status and a final summary
     determines overall readiness.
 .PARAMETER AllowBranch
     Allow releasing from a branch other than main/master (e.g., -AllowBranch develop).
-.PARAMETER SkipTests
-    Skip the unit test step (not recommended for production releases).
 .PARAMETER SkipAudit
     Skip the dependency audit step.
-.PARAMETER SkipFunctions
-    Skip the Cloud Functions build and type-check.
+.PARAMETER IncludeHistorySecretScan
+    Also scan Git history with the local redacted secret preflight.
 .EXAMPLE
     .\scripts\toolkit\release-readiness.ps1
     Run the full release readiness gate.
@@ -38,9 +34,8 @@
 [CmdletBinding()]
 param(
     [string]$AllowBranch = "",
-    [switch]$SkipTests,
     [switch]$SkipAudit,
-    [switch]$SkipFunctions
+    [switch]$IncludeHistorySecretScan
 )
 
 . "$PSScriptRoot\toolkit-common.ps1"
@@ -120,100 +115,82 @@ $results += if ($syncOk) { 0 } else { 1 }
 $labels  += "Up to date with remote"
 
 # ---------------------------------------------------------------------------
-# 4. Lint
+# 4. Repository hygiene
 # ---------------------------------------------------------------------------
-Write-SubHeader "Check 4: ESLint"
+Write-SubHeader "Check 4: Repository Hygiene"
 
-$lintCode = Invoke-NpmScript -Script "lint" -Description "Running ESLint"
-$results += $lintCode
-$labels  += "ESLint passes"
-if ($lintCode -eq 0) { Write-Success "Lint passed" }
-else { Write-Failure "Lint failed" }
+$hygieneCode = Invoke-ToolCommand -Command "node scripts\check-repo-hygiene.cjs" `
+    -WorkingDirectory $root `
+    -Description "Checking repository hygiene"
+$results += $hygieneCode
+$labels  += "Repository hygiene preflight"
+if ($hygieneCode -eq 0) { Write-Success "Repository hygiene passed" }
+else { Write-Failure "Repository hygiene failed" }
 
 # ---------------------------------------------------------------------------
-# 5. Typecheck
+# 5. Secret preflight
 # ---------------------------------------------------------------------------
-Write-SubHeader "Check 5: TypeScript Type-Check"
+Write-SubHeader "Check 5: Secret Preflight"
 
-$tcCode = Invoke-NpmScript -Script "typecheck" -Description "Type-checking main application"
-$results += $tcCode
-$labels  += "Main app typecheck"
-
-$funcTcCode = 0
-if (-not $SkipFunctions) {
-    $funcDir = Get-FunctionsDir
-    if (Test-Path $funcDir) {
-        $funcTcCode = Invoke-ToolCommand -Command "npx tsc --noEmit" `
-            -WorkingDirectory $funcDir `
-            -Description "Type-checking Cloud Functions"
-        $results += $funcTcCode
-        $labels  += "Functions typecheck"
-    }
+$secretCommand = "node scripts\check-secret-preflight.cjs"
+if ($IncludeHistorySecretScan) {
+    $secretCommand += " --history"
 }
 
-# ---------------------------------------------------------------------------
-# 6. Build (Next.js)
-# ---------------------------------------------------------------------------
-Write-SubHeader "Check 6: Next.js Build"
-
-$buildCode = Invoke-NpmScript -Script "build" -Description "Building Next.js production bundle"
-$results += $buildCode
-$labels  += "Next.js build succeeds"
-
-# ---------------------------------------------------------------------------
-# 7. Cloud Functions build
-# ---------------------------------------------------------------------------
-Write-SubHeader "Check 7: Cloud Functions Build"
-
-$funcBuildCode = 0
-if (-not $SkipFunctions) {
-    $funcDir = Get-FunctionsDir
-    if (Test-Path $funcDir) {
-        $funcBuildCode = Invoke-NpmScript -Script "rebuild" `
-            -WorkingDirectory $funcDir `
-            -Description "Building Cloud Functions (clean + tsc)"
-        $results += $funcBuildCode
-        $labels  += "Functions build succeeds"
-    } else {
-        Write-WarningItem "functions/ not found - skipping functions build"
-    }
-}
+$secretCode = Invoke-ToolCommand -Command $secretCommand `
+    -WorkingDirectory $root `
+    -Description "Checking for obvious credential patterns"
+$results += $secretCode
+$labels  += "Secret preflight"
+if ($secretCode -eq 0) { Write-Success "Secret preflight passed" }
+else { Write-Failure "Secret preflight failed" }
 
 # ---------------------------------------------------------------------------
-# 8. Tests
+# 6. Baseline validation with emulator coverage
 # ---------------------------------------------------------------------------
-Write-SubHeader "Check 8: Unit Tests"
+Write-SubHeader "Check 6: AHM Validation"
 
-if ($SkipTests) {
-    Write-WarningItem "Tests skipped (-SkipTests)"
-    $results += 0
-    $labels  += "Unit tests (skipped)"
-} else {
-    $testCode = Invoke-NpmScript -Script "test" -Description "Running unit tests (vitest)"
-    $results += $testCode
-    $labels  += "Unit tests pass"
-    if ($testCode -eq 0) { Write-Success "Tests passed" }
-    else { Write-Failure "Tests failed" }
-}
+$validationCode = Invoke-ToolCommand -Command "powershell -NoProfile -ExecutionPolicy Bypass -File scripts\toolkit\validate.ps1 -IncludeEmulator" `
+    -WorkingDirectory $root `
+    -Description "Running AHM validation gate with emulator coverage"
+$results += $validationCode
+$labels  += "AHM validation with emulator coverage"
+if ($validationCode -eq 0) { Write-Success "AHM validation passed" }
+elseif ($validationCode -eq 2) { Write-WarningItem "AHM validation blocked" }
+else { Write-Failure "AHM validation failed" }
 
 # ---------------------------------------------------------------------------
-# 9. Dependency audit
+# 7. Dependency audits
 # ---------------------------------------------------------------------------
-Write-SubHeader "Check 9: Dependency Audit"
+Write-SubHeader "Check 7: Dependency Audits"
 
 if ($SkipAudit) {
     Write-WarningItem "Audit skipped (-SkipAudit)"
     $results += 0
-    $labels  += "Dependency audit (skipped)"
+    $labels  += "Dependency audits (skipped)"
 } else {
     $auditCode = Invoke-ToolCommand -Command "npm audit --omit=dev" `
         -WorkingDirectory $root `
-        -Description "Auditing production dependencies"
-    # npm audit returns non-zero if vulnerabilities found
+        -Description "Auditing root production dependencies"
     $results += $auditCode
-    $labels  += "No production vulnerabilities"
-    if ($auditCode -eq 0) { Write-Success "No production vulnerabilities" }
-    else { Write-Failure "Production vulnerabilities detected - run audit-deps.ps1 for details" }
+    $labels  += "Root production dependency audit"
+    if ($auditCode -eq 0) { Write-Success "Root production dependencies passed audit" }
+    else { Write-Failure "Root production dependency vulnerabilities detected" }
+
+    $functionsDir = Join-Path $root "functions"
+    if (Test-Path $functionsDir) {
+        $functionsAuditCode = Invoke-ToolCommand -Command "npm audit --omit=dev" `
+            -WorkingDirectory $functionsDir `
+            -Description "Auditing Functions production dependencies"
+        $results += $functionsAuditCode
+        $labels  += "Functions production dependency audit"
+        if ($functionsAuditCode -eq 0) { Write-Success "Functions production dependencies passed audit" }
+        else { Write-Failure "Functions production dependency vulnerabilities detected" }
+    } else {
+        Write-WarningItem "functions/ not found - cannot audit Functions production dependencies"
+        $results += 1
+        $labels  += "Functions production dependency audit"
+    }
 }
 
 # ---------------------------------------------------------------------------
