@@ -18,6 +18,12 @@ import {
   lotNumberWrites,
   serialAvailabilityWrites,
 } from "./inventoryMappings";
+import { insuranceWrites } from "./insuranceMappings";
+import {
+  mapWipStatus,
+  normalizeWipAssignee,
+  rowHasActionableWip,
+} from "./authorizationUtils";
 import {
   clean,
   normalize,
@@ -635,49 +641,6 @@ function arActivityByPatientWrites(row: ImportRow, importId: string): BulkSetInp
   }
 
   return writes;
-}
-
-function insuranceWrites(row: ImportRow, importId: string): BulkSetInput[] {
-  const insuranceKey = read(row, ["cokey", "payorkey", "PayorCo"]) ||
-    read(row, ["insurance", "PayorGrp", "Insurance Company Name"]);
-  const insuranceName = read(row, ["insurance", "Insurance Company Name"]);
-  if (!insuranceKey && !insuranceName) return [];
-
-  const id = safeFirestoreId(insuranceKey || insuranceName, "insurance");
-  const data = clean({
-    insuranceKey,
-    insuranceName,
-    payerName: insuranceName,
-    payerCompany: read(row, ["PayorCo", "Insurance Company Name"]),
-    description: read(row, ["Insurance Company Description"]),
-    payerGroup: read(row, ["PayorGrp"]),
-    groupingName: read(row, ["insgroupingname"]),
-    planType: read(row, ["PlanType"]),
-    priceTable: read(row, ["PriceTable"]),
-    claimForm: read(row, ["claimform"]),
-    branch: read(row, ["branch"]),
-    submitterId: read(row, ["submitterid"]),
-    providerNumber: read(row, ["providernbr"]),
-    claimProgram: read(row, ["ClaimPrg"]),
-    ecsName: read(row, ["ECSName"]),
-    holdAccount: toBoolean(read(row, ["HoldAccount"])),
-    payPercentage: toNumber(read(row, ["PayPercentage"])),
-    submissionType: read(row, ["SubmissionTypeName"]),
-    autoCrossover: toBoolean(read(row, ["AutoCrossover"])),
-    medigap: read(row, ["Medigap"]),
-    remittanceAddress: compactRemittanceAddress(row),
-    coverageTypes: read(row, ["PayorCoverageTypeNames"]),
-    insuranceStatus: read(row, ["InsuranceStatus"]),
-    status: normalizeStatus(read(row, ["InsuranceStatus"])),
-    source: read(row, ["Insurance Company Name"]) ? "adhoc_insurance_company_master" : "adhoc_insurance",
-    raw: row,
-    lastImportId: importId,
-  });
-
-  return [
-    { path: "insurance", id, data },
-    { path: "insuranceRecords", id, data },
-  ];
 }
 
 function parReportWrites(row: ImportRow, importId: string, rowIndex: number): BulkSetInput[] {
@@ -1338,80 +1301,7 @@ function compactAddress(row: ImportRow, prefix: "Billing Address" | "Delivery Ad
   });
 }
 
-function compactRemittanceAddress(row: ImportRow) {
-  return clean({
-    address1: read(row, ["RemittanceAddress1"]),
-    address2: read(row, ["RemittanceAddress2"]),
-    city: read(row, ["RemittanceCity"]),
-    state: read(row, ["RemittanceState"]),
-    zip: read(row, ["RemittanceZipCode"]),
-  });
-}
 
-function rowHasActionableWip(row: ImportRow): boolean {
-  return Boolean(
-    read(row, [
-      "WIPStatusName",
-      "WIPDaysInState",
-      "WIPAssignedTo",
-      "WIPDateNeeded",
-    ])
-  );
-}
-
-const SYSTEM_WIP_ASSIGNEES = new Set([
-  "administrator",
-  "kayla black",
-  "zach doss",
-  "frank e field",
-  "loraine good",
-  "kelly griffey",
-  "pamela ladd",
-  "oliver steddum",
-  "jennifer sullivan",
-  "joe wilson",
-  "nancy zordel",
-  "nancey zordel",
-]);
-
-function normalizeAssigneeLookupKey(value: string): string {
-  return value
-    .trim()
-    .toLowerCase()
-    .replace(/,/g, " ")
-    .replace(/\s+/g, " ");
-}
-
-function normalizeCommaAssigneeLookupKey(value: string): string {
-  const [last, rest] = value.split(",").map((part) => part?.trim()).filter(Boolean);
-
-  if (!last || !rest) {
-    return normalizeAssigneeLookupKey(value);
-  }
-
-  return normalizeAssigneeLookupKey(`${rest} ${last}`);
-}
-
-function normalizeWipAssignee(value: string): string {
-  const assignee = value.trim() || "Unassigned";
-  const key = normalizeAssigneeLookupKey(assignee);
-  const commaKey = normalizeCommaAssigneeLookupKey(assignee);
-
-  return SYSTEM_WIP_ASSIGNEES.has(key) || SYSTEM_WIP_ASSIGNEES.has(commaKey)
-    ? "System"
-    : assignee;
-}
-
-function mapWipStatus(value: string, completed = false): "open" | "pending" | "completed" | "cancelled" {
-  if (completed) return "completed";
-
-  const text = value.trim().toLowerCase();
-  if (text.includes("complete") || text.includes("done")) return "completed";
-  if (text.includes("resolved")) return "completed";
-  if (text.includes("cancel")) return "cancelled";
-  if (text.includes("pending") || text.includes("hold")) return "pending";
-  return "open";
-}
 
 function personName(firstName: string, lastName: string): string {
   return [firstName, lastName].filter(Boolean).join(" ").trim();

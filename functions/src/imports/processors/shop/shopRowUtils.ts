@@ -59,3 +59,13 @@ export function normalizeStatus(value: string): string {
   if (["inactive", "discontinued", "archived"].includes(text)) return text;
   return "active";
 }
+
+export function compactRemittanceAddress(row: ImportRow) {
+  return clean({
+    address1: read(row, ["RemittanceAddress1"]),
+    address2: read(row, ["RemittanceAddress2"]),
+    city: read(row, ["RemittanceCity"]),
+    state: read(row, ["RemittanceState"]),
+    zip: read(row, ["RemittanceZipCode"]),
+  });
+}
