@@ -42,9 +42,10 @@ export async function processShop(
   const retentionSkippedCount = rows.length - retainedRows.length;
   const headers = Object.keys(retainedRows[0] ?? rows[0] ?? {});
   const contract = detectReportContract(fileName, headers);
-  const kind = contract.processor === "shop"
-    ? (contract.kind as ShopReportKind)
-    : detectShopReportKind(fileName, headers);
+  const kind: ShopReportKind =
+    contract.processor === "shop"
+      ? (contract.kind as ShopReportKind)
+      : "unknown";
   const headerValidation = validateHeaders(contract, headers);
   const importRoute = buildImportRouteMap(contract);
   const issues: RowIssue[] = [];
@@ -175,44 +176,6 @@ function buildWritesForRow(
     default:
       return rawShopReportWrites(row, importId, rowIndex);
   }
-}
-
-function detectShopReportKind(fileName: string, headers: string[]): ShopReportKind {
-  const name = normalize(fileName);
-  const headerText = normalize(headers.join(" "));
-
-  if (name.includes("patients demographics") || name.includes("patients_demographics")) return "patient_demographics";
-  if (name.includes("patients contact") || name.includes("patients_contact")) return "patient_contact";
-  if (name.includes("patient physicians") || name.includes("patient_physicians")) return "patient_physicians";
-  if (name.includes("patient referrals") || name.includes("patient_referrals")) return "patient_referrals";
-  if (name.includes("ar activity by patient")) return "ar_activity_by_patient";
-  if (name.includes("item detail")) return "item_detail";
-  if (name.includes("lot numbers")) return "lot_numbers";
-  if (name.includes("serial number availability")) return "serial_number_availability";
-  if (name.includes("insurance")) return "insurance";
-  if (name.includes("par report")) return "par_report";
-  if (name.includes("work in progress")) return "work_in_progress";
-  if (name.includes("gl account groups")) return "gl_account_groups";
-  if (name.includes("gl detail")) return "gl_detail";
-  if (name.includes("cost of goods sold")) return "cost_of_goods_sold";
-
-  if (headerText.includes("primary doctor npi")) return "patient_physicians";
-  if (headerText.includes("referring provider npi")) return "patient_referrals";
-  if (headerText.includes("invnbrdisplay") && headerText.includes("acctnbr") && headerText.includes("fullname")) return "ar_activity_by_patient";
-  if (headerText.includes("billing address address 1")) return "patient_contact";
-  if (headerText.includes("patient branch office")) return "patient_demographics";
-  if (headerText.includes("serialnbr")) return "serial_number_availability";
-  if (headerText.includes("cokey") && headerText.includes("insurance")) return "insurance";
-  if (headerText.includes("insurance company name")) return "insurance";
-  if (headerText.includes("parnumber")) return "par_report";
-  if (headerText.includes("wipstatusname")) return "work_in_progress";
-  if (headerText.includes("lotnumber")) return "lot_numbers";
-  if (headerText.includes("glacctgrpkey")) return "gl_account_groups";
-  if (headerText.includes("gljournalkey")) return "gl_detail";
-  if (headerText.includes("grossprofitpct")) return "cost_of_goods_sold";
-  if (headerText.includes("manfitemid")) return "item_detail";
-
-  return "unknown";
 }
 
 function patientDemographicWrites(row: ImportRow, importId: string): BulkSetInput[] {
