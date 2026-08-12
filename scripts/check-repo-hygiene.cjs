@@ -6,6 +6,10 @@ const fs = require("node:fs");
 const path = require("node:path");
 
 const ROOT = path.resolve(__dirname, "..");
+const SOURCE_ROOTS = ["src", "functions/src", "scripts"];
+const SOURCE_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
+const IGNORED_SOURCE_ALLOWLIST = ["src/generated/"];
+const IGNORED_NON_SOURCE_ALLOWLIST = new Set(["scripts/serviceAccountKey.json"]);
 
 function git(args) {
   return execFileSync("git", args, {
@@ -21,6 +25,10 @@ function splitNul(value) {
 
 function normalize(value) {
   return value.replace(/\\/g, "/");
+}
+
+function unique(values) {
+  return [...new Set(values.map(normalize))].sort();
 }
 
 function exists(file) {
@@ -63,6 +71,34 @@ function isTrackedArtifact(file) {
   );
 }
 
+function isInSourceRoot(file) {
+  const f = normalize(file);
+  return SOURCE_ROOTS.some((root) => f === root || f.startsWith(`${root}/`));
+}
+
+function isSourceExtension(file) {
+  return SOURCE_EXTENSIONS.has(path.posix.extname(normalize(file)).toLowerCase());
+}
+
+function isIgnoredSourceAllowed(file) {
+  const f = normalize(file);
+  if (IGNORED_NON_SOURCE_ALLOWLIST.has(f)) return true;
+  return IGNORED_SOURCE_ALLOWLIST.some((prefix) => f.startsWith(prefix));
+}
+
+function isSourceTreeBackupArtifact(file) {
+  const f = normalize(file);
+  const base = path.posix.basename(f);
+  return (
+    isInSourceRoot(f) &&
+    (base.endsWith(".bak") ||
+      base.endsWith(".backup") ||
+      base.endsWith(".old") ||
+      base.includes(".cleanup-") ||
+      isTrackedArtifact(f))
+  );
+}
+
 function isMalformedRootName(file) {
   const f = normalize(file);
   if (f.includes("/")) return false;
@@ -90,6 +126,13 @@ function classify(file, tracked) {
 }
 
 const tracked = splitNul(git(["ls-files", "-z"]));
+const trackedSourceRootFiles = splitNul(git(["ls-files", "-z", "--", ...SOURCE_ROOTS]));
+const ignoredSourceRootFiles = splitNul(
+  git(["ls-files", "--others", "--ignored", "--exclude-standard", "-z", "--", ...SOURCE_ROOTS])
+);
+const untrackedSourceRootFiles = splitNul(
+  git(["ls-files", "--others", "--exclude-standard", "-z", "--", ...SOURCE_ROOTS])
+);
 const status = git(["status", "--porcelain=v1", "-z"]);
 const statusEntries = splitNul(status);
 const untracked = [];
@@ -101,6 +144,8 @@ for (const entry of statusEntries) {
 }
 
 const findings = [];
+const ignoredSourceFindings = [];
+const sourceTreeBackupFindings = [];
 
 for (const file of tracked) {
   for (const reason of classify(file, true)) {
@@ -130,12 +175,45 @@ for (const file of untracked) {
   }
 }
 
+for (const file of unique(ignoredSourceRootFiles)) {
+  if (
+    isInSourceRoot(file) &&
+    isSourceExtension(file) &&
+    !isIgnoredSourceAllowed(file)
+  ) {
+    ignoredSourceFindings.push({
+      severity: "FAIL",
+      state: "IGNORED",
+      reason: "unexpected-ignored-source-file",
+      file,
+      size: exists(file) ? sizeOf(file) : null,
+    });
+  }
+}
+
+for (const file of unique([
+  ...trackedSourceRootFiles,
+  ...untrackedSourceRootFiles,
+  ...ignoredSourceRootFiles,
+])) {
+  if (isSourceTreeBackupArtifact(file)) {
+    sourceTreeBackupFindings.push({
+      severity: "FAIL",
+      state: "SOURCE-TREE",
+      reason: "backup-or-scratch-artifact",
+      file,
+      size: exists(file) ? sizeOf(file) : null,
+    });
+  }
+}
+
 console.log("Repository Hygiene Preflight");
 console.log("============================");
 
-if (findings.length === 0) {
+const legacyFailures = findings.filter((finding) => finding.severity === "FAIL");
+
+if (legacyFailures.length === 0) {
   console.log("[PASS] No tracked release-blocking artifacts found.");
-  process.exit(0);
 }
 
 for (const finding of findings) {
@@ -145,11 +223,41 @@ for (const finding of findings) {
   );
 }
 
-const failures = findings.filter((finding) => finding.severity === "FAIL");
+if (ignoredSourceFindings.length === 0) {
+  console.log("[PASS] No unexpected ignored source files found.");
+} else {
+  for (const finding of ignoredSourceFindings) {
+    const size = finding.size === null ? "missing" : `${finding.size} bytes`;
+    console.log(
+      `[${finding.severity}] ${finding.state} ${finding.reason}: ${finding.file} (${size})`
+    );
+  }
+}
+
+if (sourceTreeBackupFindings.length === 0) {
+  console.log("[PASS] No source-tree backup artifacts found.");
+} else {
+  for (const finding of sourceTreeBackupFindings) {
+    const size = finding.size === null ? "missing" : `${finding.size} bytes`;
+    console.log(
+      `[${finding.severity}] ${finding.state} ${finding.reason}: ${finding.file} (${size})`
+    );
+  }
+}
+
+const failures = [
+  ...legacyFailures,
+  ...ignoredSourceFindings,
+  ...sourceTreeBackupFindings,
+];
 if (failures.length > 0) {
   console.error(`\n[FAIL] ${failures.length} release-blocking hygiene finding(s).`);
   process.exit(1);
 }
 
-console.warn(`\n[WARN] ${findings.length} hygiene warning(s).`);
+const warnings = findings.filter((finding) => finding.severity === "WARN");
+if (warnings.length > 0) {
+  console.warn(`\n[WARN] ${warnings.length} hygiene warning(s).`);
+}
+
 process.exit(0);
