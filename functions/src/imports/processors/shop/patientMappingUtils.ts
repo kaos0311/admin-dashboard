@@ -304,3 +304,7 @@ export function compactAddress(row: ImportRow, prefix: "Billing Address" | "Deli
     phone: read(row, [`${prefix} Phone`]),
   });
 }
+
+export function personName(firstName: string, lastName: string): string {
+  return [firstName, lastName].filter(Boolean).join(" ").trim();
+}
