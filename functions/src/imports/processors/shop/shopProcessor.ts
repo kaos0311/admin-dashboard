@@ -11,6 +11,8 @@ import {
   detectReportContract,
   validateHeaders,
 } from "../../reportContracts";
+import { cogsWrites, glAccountGroupWrites, glDetailWrites } from "./financialMappings";
+import { clean, read, toDateString, toNumber } from "./shopRowUtils";
 
 const db = getFirestore();
 
@@ -1136,72 +1138,6 @@ function workInProgressWrites(row: ImportRow, importId: string): BulkSetInput[] 
   return writes;
 }
 
-function glAccountGroupWrites(row: ImportRow, importId: string): BulkSetInput[] {
-  const key = read(row, ["glacctgrpkey"]);
-  if (!key) return [];
-  return [{
-    path: "shopGlAccountGroups",
-    id: safeFirestoreId(key, "gl-group"),
-    data: clean({ ...row, id: key, name: read(row, ["GL Account Group"]), lastImportId: importId }),
-  }];
-}
-
-function glDetailWrites(row: ImportRow, importId: string, rowIndex: number): BulkSetInput[] {
-  const id = safeFirestoreId(read(row, ["GLJournalKey"]) || `${importId}-${rowIndex}`, "gl-detail");
-  return [{
-    path: "shopGlDetails",
-    id,
-    data: clean({
-      year: toNumber(read(row, ["Yr"])),
-      period: toNumber(read(row, ["Pd"])),
-      startDate: toDateString(read(row, ["StartDt"])),
-      endDate: toDateString(read(row, ["EndDt"])),
-      glJournalKey: read(row, ["GLJournalKey"]),
-      glAccount: read(row, ["GLAcct"]),
-      amount: toNumber(read(row, ["Amt"])),
-      actualAmount: toNumber(read(row, ["ActualAmt"])),
-      description: read(row, ["Descr"]),
-      journalType: read(row, ["GLJournalType"]),
-      transactionDate: toDateString(read(row, ["TransactionDate"])),
-      itemId: read(row, ["ItemID"]),
-      itemName: read(row, ["ItemName"]),
-      itemGroup: read(row, ["ItemGroup"]),
-      raw: row,
-      lastImportId: importId,
-    }),
-  }];
-}
-
-function cogsWrites(row: ImportRow, importId: string, rowIndex: number): BulkSetInput[] {
-  const id = safeFirestoreId(read(row, ["TransDtlKey"]) || `${importId}-${rowIndex}`, "cogs");
-  return [{
-    path: "shopCostOfGoodsSold",
-    id,
-    data: clean({
-      transactionDetailKey: read(row, ["TransDtlKey"]),
-      itemGroup: read(row, ["ItemGroup"]),
-      itemId: read(row, ["ItemID"]),
-      itemName: read(row, ["ItemName"]),
-      transactionDate: toDateString(read(row, ["TransactionDate"])),
-      glDate: toDateString(read(row, ["GLDate"])),
-      quantity: toNumber(read(row, ["Qty"])),
-      revenue: toNumber(read(row, ["Revenue"])),
-      cost: toNumber(read(row, ["Cost"])),
-      originalCost: toNumber(read(row, ["OriginalCost"])),
-      grossProfit: toNumber(read(row, ["GrossProfit"])),
-      grossProfitPct: toNumber(read(row, ["GrossProfitPct"])),
-      locationName: read(row, ["LocationName"]),
-      invoiceNumber: read(row, ["InvoiceNumber"]),
-      patientId: read(row, ["PtID"]),
-      patientName: read(row, ["PatientName"]),
-      payor: read(row, ["Payor"]),
-      orderingDoctor: read(row, ["OrderingDr"]),
-      raw: row,
-      lastImportId: importId,
-    }),
-  }];
-}
-
 function rawShopReportWrites(row: ImportRow, importId: string, rowIndex: number): BulkSetInput[] {
   return [{
     path: "shopRawReports",
@@ -1516,47 +1452,8 @@ function compactRemittanceAddress(row: ImportRow) {
   });
 }
 
-function read(row: ImportRow, keys: string[]): string {
-  const normalizedRow = new Map<string, unknown>();
-
-  for (const [key, value] of Object.entries(row)) {
-    normalizedRow.set(normalizeLookupKey(key), value);
-  }
-
-  for (const key of keys) {
-    const value = row[key] ?? normalizedRow.get(normalizeLookupKey(key));
-    if (value === null || value === undefined) continue;
-    const text = String(value).trim();
-    if (text) return text;
-  }
-  return "";
-}
-
-function clean<T extends Record<string, unknown>>(data: T): T {
-  return Object.fromEntries(
-    Object.entries(data).filter(([, value]) => {
-      if (value === undefined || value === null) return false;
-      if (typeof value === "string" && value.trim() === "") return false;
-      if (typeof value === "object" && !Array.isArray(value) && Object.keys(value).length === 0) return false;
-      return true;
-    })
-  ) as T;
-}
-
 function normalize(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
-}
-
-function normalizeLookupKey(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/#/g, "number")
-    .replace(/[^a-z0-9]+/g, "");
-}
-
-function toNumber(value: string): number {
-  const parsed = Number(value.replace(/[$,% ,]/g, ""));
-  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function toBoolean(value: string): boolean {
@@ -1615,12 +1512,6 @@ function normalizeWipAssignee(value: string): string {
   return SYSTEM_WIP_ASSIGNEES.has(key) || SYSTEM_WIP_ASSIGNEES.has(commaKey)
     ? "System"
     : assignee;
-}
-
-function toDateString(value: string): string {
-  if (!value) return "";
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString().slice(0, 10);
 }
 
 function normalizeStatus(value: string): string {
