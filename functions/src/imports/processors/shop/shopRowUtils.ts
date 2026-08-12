@@ -44,3 +44,18 @@ export function toDateString(value: string): string {
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? value : parsed.toISOString().slice(0, 10);
 }
+
+export function normalize(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+export function toBoolean(value: string): boolean {
+  return ["true", "yes", "y", "1"].includes(value.toLowerCase());
+}
+
+export function normalizeStatus(value: string): string {
+  const text = value.trim().toLowerCase();
+  if (!text) return "active";
+  if (["inactive", "discontinued", "archived"].includes(text)) return text;
+  return "active";
+}
