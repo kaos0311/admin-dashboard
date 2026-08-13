@@ -33,6 +33,12 @@ import {
   type SaveMovementState,
 } from "../lib/saveMovementLifecycle";
 import {
+  createArchiveRetryState,
+  executeArchiveWithRetry,
+  markArchiveOutcomeUncertain,
+  type ArchiveRetryState,
+} from "../lib/archiveLifecycle";
+import {
   createHardDeleteRetryState,
   executeHardDeleteWithRetry,
   markHardDeleteOutcomeUncertain,
@@ -112,6 +118,11 @@ export function useInventoryActions({
   }
 
   const saveMovementStateRef = useRef<SaveMovementState | null>(null);
+
+  const archiveStateRef = useRef(
+    new Map<string, ArchiveRetryState>(),
+  );
+  const archiveInFlightRef = useRef(new Set<string>());
 
   const hardDeleteStateRef = useRef(
     new Map<string, HardDeleteRetryState>(),
@@ -778,37 +789,103 @@ export function useInventoryActions({
       return;
     }
 
-    if (
-      !window.confirm(
-        `Archive "${item.name}"? This keeps history but removes it from active inventory.`
-      )
-    ) {
+    if (archiveInFlightRef.current.has(item.id)) {
       return;
     }
 
+    let state = archiveStateRef.current.get(item.id);
+
+    if (state?.outcomeUncertain) {
+      const retryUncertain = window.confirm(
+        `The previous archive attempt for "${item.name}" has an uncertain outcome.` +
+          "\n\nThe server may already have archived this inventory record." +
+          "\n\nRetry the SAME archive using the same operation ID?",
+      );
+
+      if (!retryUncertain) {
+        return;
+      }
+    } else if (!state) {
+      if (
+        !window.confirm(
+          `Archive "${item.name}"? This keeps history but removes it from active inventory.`,
+        )
+      ) {
+        return;
+      }
+
+      state = createArchiveRetryState(
+        {
+          movementType: "archived",
+          inventoryItemId: item.id,
+          productId: item.productId,
+          barcode: item.barcode,
+          serialNumber: item.serial,
+          lotNumber: item.lotNumber,
+          quantity: 1,
+          reason: "Inventory record archived.",
+          source: "inventory_page",
+        },
+        createInventoryOperationId("inventory-archive"),
+      );
+
+      archiveStateRef.current.set(item.id, state);
+    }
+
+    archiveInFlightRef.current.add(item.id);
+
     try {
-      const movement = await createInventoryMovement({
-        movementType: "archived",
-        inventoryItemId: item.id,
-        productId: item.productId,
-        barcode: item.barcode,
-        serialNumber: item.serial,
-        lotNumber: item.lotNumber,
-        quantity: 1,
-        reason: "Inventory record archived.",
-        source: "inventory_page",
+      const execution = await executeArchiveWithRetry({
+        state,
+        execute: createInventoryMovement,
+        isRetryableError: isRetryableInventoryTransactionError,
+        shouldRetry: (error) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "The archive response was not received.";
+
+          return window.confirm(
+            `${message}\n\n` +
+              "The server may already have archived this inventory record.\n\n" +
+              "Retry this SAME archive now using the same operation ID?",
+          );
+        },
       });
 
-      if (movement.status !== "success" && movement.status !== "duplicate_operation") {
+      if (execution.status === "retry_declined") {
+        archiveStateRef.current.set(
+          item.id,
+          markArchiveOutcomeUncertain(state),
+        );
+
+        toast.error(
+          "Archive outcome is uncertain. Retry this same item to safely reuse the same operation.",
+        );
+        return;
+      }
+
+      const movement = execution.movement;
+
+      if (
+        movement.status !== "success" &&
+        movement.status !== "duplicate_operation"
+      ) {
+        archiveStateRef.current.delete(item.id);
         toast.error(movement.message || "Archive failed.");
         return;
       }
 
+      archiveStateRef.current.delete(item.id);
       removeSelectedId(item.id);
       toast.success("Inventory archived.");
     } catch (error: unknown) {
+      archiveStateRef.current.delete(item.id);
+
       console.error("ARCHIVE INVENTORY ERROR:", error);
       toast.error("Archive failed.");
+    } finally {
+      archiveInFlightRef.current.delete(item.id);
     }
   }
 
