@@ -15,18 +15,24 @@ import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 import { resolveCallableRole } from "../auth/roles.js";
 
 /** Known roles that are allowed to access inventory functions. */
-const ALLOWED_ROLES = new Set(["admin", "staff", "tank"]);
+const ALLOWED_ROLES = new Set([
+  "admin",
+  "staff",
+  "technician",
+  "manager",
+  "tank",
+]);
 
 /**
  * Valid roles that are authorized for inventory operations.
- * Excludes manager, technician, billing, read-only.
+ * Billing and read-only roles remain excluded.
  */
 function isAllowedRole(role: unknown): role is string {
   return typeof role === "string" && ALLOWED_ROLES.has(role);
 }
 
 /**
- * Verify the caller is authenticated, active, and staff-or-admin.
+ * Verify the caller is authenticated, active, and authorized to write inventory.
  *
  * Throws appropriate HttpsError on failure — never returns `undefined`
  * for an authorized caller. The returned uid is always valid.

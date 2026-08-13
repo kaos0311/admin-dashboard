@@ -1,4 +1,4 @@
-﻿"use client";
+"use client";
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
@@ -21,6 +21,7 @@ import { useAuthRole } from "@/app/hooks/useAuthRole";
 
 import { normalizeBarcode } from "@/lib/barcode";
 import { auth, db } from "@/lib/firebase";
+import { hasPermission } from "@/lib/permissions/roles";
 
 import { InventoryEmptyState } from "./components/InventoryEmptyState";
 import { InventoryDataQualityPanel } from "./components/InventoryDataQualityPanel";
@@ -67,11 +68,17 @@ export default function InventoryPage() {
   const {
     loading: authLoading,
     isAdmin,
-    isAdminOrStaff,
+    role,
+    canAccessCommandCenter,
   } = useAuthRole();
 
-  const canRead = isAdminOrStaff;
-  const canWrite = isAdminOrStaff;
+  const canRead =
+    canAccessCommandCenter &&
+    hasPermission(role, "inventory:read");
+
+  const canWrite =
+    canAccessCommandCenter &&
+    hasPermission(role, "inventory:write");
 
   const [refreshKey, setRefreshKey] = useState(0);
 

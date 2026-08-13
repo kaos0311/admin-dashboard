@@ -3073,6 +3073,194 @@ describe("AHM Golden Regression Suite - emulator invariants", () => {
     ).rejects.toMatchObject({ code: "permission-denied" });
   });
 
+  it("GOLDEN-EMU-AUTH-005 technician inventory writer succeeds", async () => {
+    const uid = "golden-technician-005";
+    const inventoryId = "golden-auth-inv-005";
+
+    await seedUser(uid, {
+      role: "technician",
+      email: "golden.technician@example.test",
+    });
+
+    await seedInventory(inventoryId, {
+      quantityOnHand: 2,
+      available: 2,
+    });
+
+    const result = await invokeCreateMovementCallable(
+      {
+        operationId: "golden-emu-auth-005",
+        movementType: "receive",
+        inventoryItemId: inventoryId,
+        quantity: 1,
+        source: "inventory_page",
+      },
+      {
+        uid,
+        role: "technician",
+      },
+    ) as { status: string; quantityAfter?: number };
+
+    expect(result.status).toBe("success");
+    expect(result.quantityAfter).toBe(3);
+  });
+
+  it("GOLDEN-EMU-AUTH-006 manager inventory writer succeeds", async () => {
+    const uid = "golden-manager-006";
+    const inventoryId = "golden-auth-inv-006";
+
+    await seedUser(uid, {
+      role: "manager",
+      email: "golden.manager@example.test",
+    });
+
+    await seedInventory(inventoryId, {
+      quantityOnHand: 2,
+      available: 2,
+    });
+
+    const result = await invokeCreateMovementCallable(
+      {
+        operationId: "golden-emu-auth-006",
+        movementType: "receive",
+        inventoryItemId: inventoryId,
+        quantity: 1,
+        source: "inventory_page",
+      },
+      {
+        uid,
+        role: "manager",
+      },
+    ) as { status: string; quantityAfter?: number };
+
+    expect(result.status).toBe("success");
+    expect(result.quantityAfter).toBe(3);
+  });
+
+  it("GOLDEN-EMU-AUTH-007 billing remains denied ordinary inventory writes", async () => {
+    const uid = "golden-billing-007";
+    const inventoryId = "golden-auth-inv-007";
+
+    await seedUser(uid, {
+      role: "billing",
+      email: "golden.billing@example.test",
+    });
+
+    await seedInventory(inventoryId, {
+      quantityOnHand: 2,
+      available: 2,
+    });
+
+    await expect(
+      invokeCreateMovementCallable(
+        {
+          operationId: "golden-emu-auth-007",
+          movementType: "receive",
+          inventoryItemId: inventoryId,
+          quantity: 1,
+          source: "inventory_page",
+        },
+        {
+          uid,
+          role: "billing",
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "permission-denied",
+      message: "Insufficient permissions for inventory operations.",
+    });
+
+    const inventory = await db
+      .collection("inventory")
+      .doc(inventoryId)
+      .get();
+
+    expect(inventory.data()?.quantityOnHand).toBe(2);
+  });
+
+  it("GOLDEN-EMU-AUTH-008 read-only remains denied ordinary inventory writes", async () => {
+    const uid = "golden-read-only-008";
+    const inventoryId = "golden-auth-inv-008";
+
+    await seedUser(uid, {
+      role: "read-only",
+      email: "golden.readonly@example.test",
+    });
+
+    await seedInventory(inventoryId, {
+      quantityOnHand: 2,
+      available: 2,
+    });
+
+    await expect(
+      invokeCreateMovementCallable(
+        {
+          operationId: "golden-emu-auth-008",
+          movementType: "receive",
+          inventoryItemId: inventoryId,
+          quantity: 1,
+          source: "inventory_page",
+        },
+        {
+          uid,
+          role: "read-only",
+        },
+      ),
+    ).rejects.toMatchObject({
+      code: "permission-denied",
+      message: "Insufficient permissions for inventory operations.",
+    });
+
+    const inventory = await db
+      .collection("inventory")
+      .doc(inventoryId)
+      .get();
+
+    expect(inventory.data()?.quantityOnHand).toBe(2);
+  });
+
+  it("GOLDEN-EMU-AUTH-009 technician remains denied admin-only hard delete", async () => {
+    const uid = "golden-technician-009";
+    const inventoryId = "golden-auth-inv-009";
+
+    await seedUser(uid, {
+      role: "technician",
+      email: "golden.technician.admin-boundary@example.test",
+    });
+
+    await seedInventory(inventoryId, {
+      quantityOnHand: 1,
+      available: 1,
+    });
+
+    const result = await invokeCreateMovementCallable(
+      {
+        operationId: "golden-emu-auth-009",
+        movementType: "hard_delete",
+        inventoryItemId: inventoryId,
+        quantity: 1,
+        source: "inventory_page",
+      },
+      {
+        uid,
+        role: "technician",
+      },
+    ) as {
+      status: string;
+      message?: string;
+    };
+
+    expect(result.status).toBe("permission_denied");
+    expect(result.message).toMatch(/Admin access is required/);
+
+    const inventory = await db
+      .collection("inventory")
+      .doc(inventoryId)
+      .get();
+
+    expect(inventory.exists).toBe(true);
+  });
+
   it("GOLDEN-EMU-CLEAN-001 unauthenticated cleanup rejected", async () => {
     await seedInventory("golden-clean-inv-001", { category: "Uncategorized" });
 

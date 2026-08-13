@@ -1,7 +1,14 @@
 import { HttpsError } from "firebase-functions/v2/https";
 import { getFirestore } from "firebase-admin/firestore";
 
-export type DashboardRole = "admin" | "staff" | "tank";
+export type DashboardRole =
+  | "admin"
+  | "manager"
+  | "technician"
+  | "billing"
+  | "read-only"
+  | "staff"
+  | "tank";
 
 export type CallableAuthLike = {
   uid: string;
@@ -9,7 +16,13 @@ export type CallableAuthLike = {
 };
 
 export function parseRole(value: unknown): DashboardRole | null {
-  return value === "admin" || value === "staff" || value === "tank"
+  return value === "admin" ||
+    value === "manager" ||
+    value === "technician" ||
+    value === "billing" ||
+    value === "read-only" ||
+    value === "staff" ||
+    value === "tank"
     ? value
     : null;
 }
