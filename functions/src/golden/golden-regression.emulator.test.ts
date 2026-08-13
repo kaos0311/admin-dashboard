@@ -392,6 +392,35 @@ async function invokeReceiveInventoryByBarcode(data: Record<string, unknown>) {
   });
 }
 
+async function invokeCycleCountInventoryByBarcode(
+  data: Record<string, unknown>
+) {
+  const { cycleCountInventoryByBarcode } = await import(
+    "../inventory/inventoryTransactionFunctions.js"
+  );
+
+  const callable = cycleCountInventoryByBarcode as unknown as {
+    run: (
+      request: Record<string, unknown>
+    ) => Promise<Record<string, unknown>>;
+  };
+
+  return callable.run({
+    data,
+    auth: {
+      uid: actor.uid,
+      token: {
+        uid: actor.uid,
+        email: actor.email,
+        role: actor.role,
+      },
+    },
+    rawRequest: {
+      ip: "127.0.0.1",
+      headers: {},
+    },
+  });
+}
 async function invokeExchangeRentalCallable(
   data: Record<string, unknown>,
   authContext?: { uid: string; email?: string; role: string },
@@ -973,6 +1002,198 @@ describe("AHM Golden Regression Suite - emulator invariants", () => {
     expect(await countByOperation("inventoryTransactions", "golden-emu-inv-003")).toBe(1);
   });
 
+  it("GOLDEN-EMU-CYCLE-001 applies an absolute cycle-count target", async () => {
+    await seedInventory("golden-cycle-001", {
+      barcode: "GOLDEN-CYCLE-SCAN-001",
+      quantityOnHand: 10,
+      available: 10,
+    });
+
+    const result = await invokeCycleCountInventoryByBarcode({
+      operationId: "golden-emu-cycle-001",
+      barcode: "GOLDEN-CYCLE-SCAN-001",
+      quantity: 7,
+      source: "manual_entry",
+    });
+
+    expect(result).toMatchObject({
+      success: true,
+      status: "success",
+      inventoryItemId: "golden-cycle-001",
+      quantityBefore: 10,
+      quantityChange: -3,
+      quantityAfter: 7,
+    });
+
+    const inventory = (
+      await db.collection("inventory").doc("golden-cycle-001").get()
+    ).data();
+
+    expect(inventory?.quantityOnHand).toBe(7);
+    expect(inventory?.available).toBe(7);
+
+    expect(
+      await countByOperation(
+        "inventoryTransactions",
+        "golden-emu-cycle-001"
+      )
+    ).toBe(1);
+  });
+
+  it("GOLDEN-EMU-CYCLE-002 duplicate cycle-count retry executes once", async () => {
+    await seedInventory("golden-cycle-002", {
+      barcode: "GOLDEN-CYCLE-SCAN-002",
+      quantityOnHand: 10,
+      available: 10,
+    });
+
+    const input = {
+      operationId: "golden-emu-cycle-002",
+      barcode: "GOLDEN-CYCLE-SCAN-002",
+      quantity: 7,
+      source: "manual_entry",
+    };
+
+    const first = await invokeCycleCountInventoryByBarcode(input);
+    const retry = await invokeCycleCountInventoryByBarcode(input);
+
+    expect(first.status).toBe("success");
+    expect(retry.status).toBe("duplicate");
+
+    const inventory = (
+      await db.collection("inventory").doc("golden-cycle-002").get()
+    ).data();
+
+    expect(inventory?.quantityOnHand).toBe(7);
+
+    expect(
+      await countByOperation(
+        "inventoryTransactions",
+        "golden-emu-cycle-002"
+      )
+    ).toBe(1);
+  });
+
+  it("GOLDEN-EMU-CYCLE-003 conflicting target with same operation ID fails closed", async () => {
+    await seedInventory("golden-cycle-003", {
+      barcode: "GOLDEN-CYCLE-SCAN-003",
+      quantityOnHand: 10,
+      available: 10,
+    });
+
+    await invokeCycleCountInventoryByBarcode({
+      operationId: "golden-emu-cycle-003",
+      barcode: "GOLDEN-CYCLE-SCAN-003",
+      quantity: 7,
+      source: "manual_entry",
+    });
+
+    await expect(
+      invokeCycleCountInventoryByBarcode({
+        operationId: "golden-emu-cycle-003",
+        barcode: "GOLDEN-CYCLE-SCAN-003",
+        quantity: 6,
+        source: "manual_entry",
+      })
+    ).rejects.toMatchObject({
+      code: "failed-precondition",
+    });
+
+    const inventory = (
+      await db.collection("inventory").doc("golden-cycle-003").get()
+    ).data();
+
+    expect(inventory?.quantityOnHand).toBe(7);
+
+    expect(
+      await countByOperation(
+        "inventoryTransactions",
+        "golden-emu-cycle-003"
+      )
+    ).toBe(1);
+  });
+
+  it("GOLDEN-EMU-CYCLE-004 missing operation ID is rejected before mutation", async () => {
+    await seedInventory("golden-cycle-004", {
+      barcode: "GOLDEN-CYCLE-SCAN-004",
+      quantityOnHand: 10,
+      available: 10,
+    });
+
+    await expect(
+      invokeCycleCountInventoryByBarcode({
+        barcode: "GOLDEN-CYCLE-SCAN-004",
+        quantity: 7,
+        source: "manual_entry",
+      })
+    ).rejects.toMatchObject({
+      code: "invalid-argument",
+    });
+
+    const inventory = (
+      await db.collection("inventory").doc("golden-cycle-004").get()
+    ).data();
+
+    expect(inventory?.quantityOnHand).toBe(10);
+    expect(inventory?.available).toBe(10);
+
+    expect(
+      await countByOperation(
+        "inventoryTransactions",
+        "golden-emu-cycle-004"
+      )
+    ).toBe(0);
+  });
+
+  it("GOLDEN-EMU-CYCLE-005 absolute count uses current transactional quantity", async () => {
+    await seedInventory("golden-cycle-005", {
+      barcode: "GOLDEN-CYCLE-SCAN-005",
+      quantityOnHand: 10,
+      available: 10,
+    });
+
+    // Simulate an earlier caller/view having observed quantity 10.
+    const staleSnapshot = (
+      await db.collection("inventory").doc("golden-cycle-005").get()
+    ).data();
+
+    expect(staleSnapshot?.quantityOnHand).toBe(10);
+
+    // Inventory changes before the authoritative cycle-count transaction.
+    await db.collection("inventory").doc("golden-cycle-005").update({
+      quantityOnHand: 14,
+      available: 14,
+    });
+
+    const { setInventoryQuantityToCount } = await import(
+      "../inventory/movementService.js"
+    );
+
+    const result = await setInventoryQuantityToCount(
+      {
+        operationId: "golden-emu-cycle-005",
+        inventoryItemId: "golden-cycle-005",
+        barcode: "GOLDEN-CYCLE-SCAN-005",
+        targetQuantity: 7,
+        reason: "Golden stale-snapshot cycle count",
+        source: "scanner",
+      },
+      actor,
+      db
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.quantityBefore).toBe(14);
+    expect(result.quantityDelta).toBe(-7);
+    expect(result.quantityAfter).toBe(7);
+
+    const inventory = (
+      await db.collection("inventory").doc("golden-cycle-005").get()
+    ).data();
+
+    expect(inventory?.quantityOnHand).toBe(7);
+    expect(inventory?.available).toBe(7);
+  });
   it("GOLDEN-EMU-REC-001 valid receive operation succeeds exactly once", async () => {
     await seedInventory("golden-rec-001", { barcode: "GOLDEN-REC-SCAN-001", quantityOnHand: 20, available: 20 });
 

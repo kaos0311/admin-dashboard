@@ -7,7 +7,11 @@ import { requireStaffOrAdmin } from "./auth.js";
 import {
   resolveInventoryItem,
 } from "./inventoryTransactionService.js";
-import { createInventoryMovement, type InventoryMovementType } from "./movementService.js";
+import {
+  createInventoryMovement,
+  setInventoryQuantityToCount,
+  type InventoryMovementType,
+} from "./movementService.js";
 
 if (!getApps().length) {
   initializeApp();
@@ -27,6 +31,19 @@ async function executeTransaction(
   }
 
   const actor = await requireStaffOrAdmin(request);
+
+  const rawOperationId = request.data?.operationId;
+  if (
+    typeof rawOperationId !== "string" ||
+    !rawOperationId.trim()
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "operationId is required."
+    );
+  }
+
+  const operationId = rawOperationId.trim();
 
   const rawBarcode = request.data?.barcode;
   if (typeof rawBarcode !== "string" || !rawBarcode.trim()) {
@@ -58,6 +75,7 @@ async function executeTransaction(
 
   let quantityChange: number;
   let movementType: InventoryMovementType;
+  let cycleCountTarget: number | null = null;
 
   switch (transactionType) {
     case "issue": {
@@ -68,12 +86,20 @@ async function executeTransaction(
     }
     case "cycle_count": {
       const qty = request.data?.quantity;
-      if (typeof qty !== "number" || !Number.isFinite(qty) || qty < 0) {
-        throw new HttpsError("invalid-argument", "Cycle count requires a non-negative quantity.");
+
+      if (
+        typeof qty !== "number" ||
+        !Number.isFinite(qty) ||
+        qty < 0
+      ) {
+        throw new HttpsError(
+          "invalid-argument",
+          "Cycle count requires a non-negative quantity."
+        );
       }
-      // For cycle count, we set delta to (new count - current count)
-      const currentQty = Number((resolved.data.quantityOnHand as number) ?? 0);
-      quantityChange = qty - currentQty;
+
+      cycleCountTarget = qty;
+      quantityChange = 0;
       movementType = "manual_adjustment";
       break;
     }
@@ -86,42 +112,65 @@ async function executeTransaction(
       throw new HttpsError("invalid-argument", "Invalid transaction type.");
   }
 
-  const operationId = String(
-    request.data?.operationId ??
-      [
-        transactionType,
-        actor.uid,
-        resolved.id,
-        normalizedBarcode.replace(/[^a-zA-Z0-9_-]/g, "_"),
-        Date.now(),
-      ].join("-")
-  );
-  const movement = await createInventoryMovement(
-    {
-      operationId,
-      movementType,
-      inventoryItemId: resolved.id,
-      productId: String(resolved.data.productId ?? ""),
-      barcode: normalizedBarcode,
-      quantity: Math.abs(quantityChange) || 1,
-      quantityDelta: movementType === "manual_adjustment" ? quantityChange : undefined,
-      fromLocation: String(resolved.data.locationName ?? ""),
-      toLocation: transactionType === "transfer" ? String(request.data?.toLocation ?? "") : undefined,
-      reason: `Scanner ${transactionType} operation.`,
-      source: "scanner",
-      metadata: {
-        legacyCallable: `${transactionType}InventoryByBarcode`,
-        rawScan,
-        inputSource: source,
-      },
-    },
-    {
-      uid: actor.uid,
-      email: actor.email,
-      role: actor.role,
-    },
-    db
-  );
+
+  const movement =
+    transactionType === "cycle_count"
+      ? await setInventoryQuantityToCount(
+          {
+            operationId,
+            inventoryItemId: resolved.id,
+            productId: String(resolved.data.productId ?? ""),
+            barcode: normalizedBarcode,
+            targetQuantity: cycleCountTarget!,
+            reason: "Scanner cycle_count operation.",
+            source: "scanner",
+            metadata: {
+              legacyCallable: "cycle_countInventoryByBarcode",
+              rawScan,
+              inputSource: source,
+            },
+          },
+          {
+            uid: actor.uid,
+            email: actor.email,
+            role: actor.role,
+          },
+          db
+        )
+      : await createInventoryMovement(
+          {
+            operationId,
+            movementType,
+            inventoryItemId: resolved.id,
+            productId: String(resolved.data.productId ?? ""),
+            barcode: normalizedBarcode,
+            quantity: Math.abs(quantityChange) || 1,
+            quantityDelta:
+              movementType === "manual_adjustment"
+                ? quantityChange
+                : undefined,
+            fromLocation: String(
+              resolved.data.locationName ?? ""
+            ),
+            toLocation:
+              transactionType === "transfer"
+                ? String(request.data?.toLocation ?? "")
+                : undefined,
+            reason: `Scanner ${transactionType} operation.`,
+            source: "scanner",
+            metadata: {
+              legacyCallable: `${transactionType}InventoryByBarcode`,
+              rawScan,
+              inputSource: source,
+            },
+          },
+          {
+            uid: actor.uid,
+            email: actor.email,
+            role: actor.role,
+          },
+          db
+        );
 
   if (movement.status !== "success" && movement.status !== "duplicate_operation") {
     throw new HttpsError(
@@ -136,7 +185,7 @@ async function executeTransaction(
     inventoryItemId: resolved.id,
     productName: String(resolved.data.name ?? "Unknown Product"),
     quantityBefore: movement.quantityBefore,
-    quantityChange,
+    quantityChange: movement.quantityDelta ?? quantityChange,
     quantityAfter: movement.quantityAfter,
     status: movement.status === "duplicate_operation" ? "duplicate" : "success",
   };

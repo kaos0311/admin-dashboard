@@ -3,7 +3,7 @@
 import { useCallback, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "@/lib/firebase";
-
+import { createInventoryOperationId } from "@/lib/inventory/movements";
 /**
  * Fields the barcode scanner searches across.
  */
@@ -149,6 +149,7 @@ export function useInventoryLookup() {
       transactionType: TransactionType,
       params: {
         barcode: string;
+        operationId?: string;
         quantity?: number;
         toLocation?: string;
         source?: "tera_hid_scanner" | "manual_entry";
@@ -161,12 +162,17 @@ export function useInventoryLookup() {
       const functionName = `${transactionType}InventoryByBarcode`;
 
       try {
+        const operationId =
+          params.operationId ??
+          createInventoryOperationId(`legacy-${transactionType}`);
+
         const fn = httpsCallable<Record<string, unknown>, TransactionResult>(
           functions,
           functionName,
         );
         const result = await fn({
           barcode: params.barcode,
+          operationId,
           quantity: params.quantity,
           toLocation: params.toLocation,
           source: params.source ?? "manual_entry",

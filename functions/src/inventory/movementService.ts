@@ -859,6 +859,102 @@ export async function createInventoryMovement(
     })
   );
 }
+export async function setInventoryQuantityToCount(
+  params: {
+    operationId: string;
+    inventoryItemId: string;
+    productId?: string;
+    barcode?: string;
+    targetQuantity: number;
+    reason?: string;
+    source?: MovementSource;
+    correlationId?: string;
+    metadata?: Record<string, unknown>;
+  },
+  actor: MovementActor,
+  database: Firestore = defaultFirestore()
+): Promise<MovementResult> {
+  assertOperationId(params.operationId);
+  assertSafeDocId(params.inventoryItemId, "inventoryItemId");
+
+  if (
+    typeof params.targetQuantity !== "number" ||
+    !Number.isFinite(params.targetQuantity) ||
+    params.targetQuantity < 0
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Cycle count requires a non-negative quantity."
+    );
+  }
+
+  const inventoryRef = database
+    .collection("inventory")
+    .doc(params.inventoryItemId);
+
+  // Fingerprint the stable user intent rather than the state-dependent
+  // quantity delta calculated inside the transaction.
+  const requestFingerprint = JSON.stringify({
+    actorUid: actor.uid,
+    operationType: "cycle_count",
+    inventoryItemId: params.inventoryItemId,
+    productId: text(params.productId),
+    barcode: text(params.barcode),
+    targetQuantity: params.targetQuantity,
+    reason: text(params.reason),
+    source: params.source ?? "system",
+  });
+
+  return database.runTransaction(async (transaction) => {
+    const inventorySnap = await transaction.get(inventoryRef);
+
+    if (!inventorySnap.exists) {
+      throw new HttpsError(
+        "not-found",
+        "Inventory item was not found."
+      );
+    }
+
+    const inventory: InventoryDoc = {
+      id: inventorySnap.id,
+      ...(inventorySnap.data() as InventoryDoc),
+    };
+
+    const quantityBefore = readNumber(
+      inventory,
+      "quantityOnHand",
+      0
+    );
+
+    const quantityDelta =
+      params.targetQuantity - quantityBefore;
+
+    return createInventoryMovementInTransaction({
+      transaction,
+      database,
+      input: {
+        operationId: params.operationId,
+        movementType: "manual_adjustment",
+        inventoryItemId: params.inventoryItemId,
+        productId: params.productId,
+        barcode: params.barcode,
+        quantity: Math.abs(quantityDelta) || 1,
+        quantityDelta,
+        reason: params.reason,
+        source: params.source,
+        correlationId: params.correlationId,
+        metadata: {
+          ...(params.metadata ?? {}),
+          operationType: "cycle_count",
+          cycleCountTarget: params.targetQuantity,
+        },
+      },
+      actor,
+      inventorySeed: inventory,
+      requestFingerprint,
+    });
+  });
+}
 async function assertNoDependenciesForHardDelete(
   transaction: Transaction,
   database: Firestore,
