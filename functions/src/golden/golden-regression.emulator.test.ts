@@ -1002,6 +1002,388 @@ describe("AHM Golden Regression Suite - emulator invariants", () => {
     expect(await countByOperation("inventoryTransactions", "golden-emu-inv-003")).toBe(1);
   });
 
+  it("GOLDEN-EMU-HARD-001 hard delete commits delete, movement, operation, and audit atomically", async () => {
+    const inventoryId = "golden-hard-001";
+    const operationId = "golden-emu-hard-001";
+
+    await seedInventory(inventoryId, {
+      quantityOnHand: 1,
+      available: 1,
+    });
+
+    const result = await createInventoryMovement(
+      {
+        operationId,
+        movementType: "hard_delete",
+        inventoryItemId: inventoryId,
+        quantity: 1,
+        reason: "Golden hard delete",
+        source: "inventory_page",
+      },
+      adminActor,
+      db
+    );
+
+    expect(result.status).toBe("success");
+    expect((await db.collection("inventory").doc(inventoryId).get()).exists).toBe(false);
+    expect(await countByOperation("inventoryTransactions", operationId)).toBe(1);
+
+    const operation = await db
+      .collection("inventoryOperations")
+      .doc(`${adminActor.uid}_${operationId}`)
+      .get();
+
+    expect(operation.data()).toMatchObject({
+      operationId,
+      operationType: "hard_delete",
+      status: "completed",
+      movementId: result.movementId,
+      inventoryItemId: inventoryId,
+    });
+
+    const audits = await db
+      .collection("auditLogs")
+      .where("targetId", "==", inventoryId)
+      .get();
+
+    expect(
+      audits.docs.filter(
+        (doc) => doc.data().action === "inventory.hard_delete"
+      )
+    ).toHaveLength(1);
+  });
+
+  it("GOLDEN-EMU-HARD-002 same hard-delete operation retries after inventory deletion", async () => {
+    const inventoryId = "golden-hard-002";
+    const operationId = "golden-emu-hard-002";
+
+    await seedInventory(inventoryId, {
+      quantityOnHand: 1,
+      available: 1,
+    });
+
+    const input = {
+      operationId,
+      movementType: "hard_delete" as const,
+      inventoryItemId: inventoryId,
+      quantity: 1,
+      reason: "Golden retry hard delete",
+      source: "inventory_page" as const,
+    };
+
+    const first = await createInventoryMovement(
+      input,
+      adminActor,
+      db
+    );
+
+    expect(first.status).toBe("success");
+    expect(
+      (await db.collection("inventory").doc(inventoryId).get()).exists
+    ).toBe(false);
+
+    const retry = await createInventoryMovement(
+      input,
+      adminActor,
+      db
+    );
+
+    expect(retry.status).toBe("duplicate_operation");
+    expect(retry.movementId).toBe(first.movementId);
+
+    expect(
+      await countByOperation(
+        "inventoryTransactions",
+        operationId
+      )
+    ).toBe(1);
+
+    const audits = await db
+      .collection("auditLogs")
+      .where("targetId", "==", inventoryId)
+      .get();
+
+    expect(
+      audits.docs.filter(
+        (doc) => doc.data().action === "inventory.hard_delete"
+      )
+    ).toHaveLength(1);
+  });
+
+  it("GOLDEN-EMU-HARD-003 conflicting hard-delete operation reuse fails after original deletion", async () => {
+    const firstInventoryId = "golden-hard-003-a";
+    const secondInventoryId = "golden-hard-003-b";
+    const operationId = "golden-emu-hard-003";
+
+    await seedInventory(firstInventoryId, {
+      quantityOnHand: 1,
+      available: 1,
+    });
+
+    await seedInventory(secondInventoryId, {
+      quantityOnHand: 1,
+      available: 1,
+    });
+
+    await createInventoryMovement(
+      {
+        operationId,
+        movementType: "hard_delete",
+        inventoryItemId: firstInventoryId,
+        quantity: 1,
+        reason: "Golden original hard delete",
+        source: "inventory_page",
+      },
+      adminActor,
+      db
+    );
+
+    expect(
+      (await db.collection("inventory").doc(firstInventoryId).get()).exists
+    ).toBe(false);
+
+    await expect(
+      createInventoryMovement(
+        {
+          operationId,
+          movementType: "hard_delete",
+          inventoryItemId: secondInventoryId,
+          quantity: 1,
+          reason: "Golden conflicting hard delete",
+          source: "inventory_page",
+        },
+        adminActor,
+        db
+      )
+    ).rejects.toMatchObject({
+      code: "failed-precondition",
+    });
+
+    expect(
+      (await db.collection("inventory").doc(secondInventoryId).get()).exists
+    ).toBe(true);
+
+    expect(
+      await countByOperation(
+        "inventoryTransactions",
+        operationId
+      )
+    ).toBe(1);
+  });
+
+  it("GOLDEN-EMU-HARD-004 concurrent same-operation hard deletes execute once", async () => {
+    const inventoryId = "golden-hard-004";
+    const operationId = "golden-emu-hard-004";
+
+    await seedInventory(inventoryId, {
+      quantityOnHand: 1,
+      available: 1,
+    });
+
+    const input = {
+      operationId,
+      movementType: "hard_delete" as const,
+      inventoryItemId: inventoryId,
+      quantity: 1,
+      reason: "Golden concurrent hard delete",
+      source: "inventory_page" as const,
+    };
+
+    const settled = await Promise.allSettled([
+      createInventoryMovement(input, adminActor, db),
+      createInventoryMovement(input, adminActor, db),
+    ]);
+
+    expect(
+      settled.every((result) => result.status === "fulfilled")
+    ).toBe(true);
+
+    const statuses = settled.map((result) =>
+      result.status === "fulfilled"
+        ? result.value.status
+        : "rejected"
+    );
+
+    expect(statuses.sort()).toEqual([
+      "duplicate_operation",
+      "success",
+    ]);
+
+    expect(
+      (await db.collection("inventory").doc(inventoryId).get()).exists
+    ).toBe(false);
+
+    expect(
+      await countByOperation(
+        "inventoryTransactions",
+        operationId
+      )
+    ).toBe(1);
+
+    const audits = await db
+      .collection("auditLogs")
+      .where("targetId", "==", inventoryId)
+      .get();
+
+    expect(
+      audits.docs.filter(
+        (doc) => doc.data().action === "inventory.hard_delete"
+      )
+    ).toHaveLength(1);
+  });
+
+  it("GOLDEN-EMU-HARD-005 movement history blocks hard delete without creating an operation", async () => {
+    const inventoryId = "golden-hard-005";
+    const operationId = "golden-emu-hard-005";
+
+    await seedInventory(inventoryId, {
+      quantityOnHand: 1,
+      available: 1,
+    });
+
+    await db.collection("inventoryTransactions").doc(
+      "golden-hard-existing-movement-005"
+    ).set({
+      inventoryItemId: inventoryId,
+      operationId: "golden-hard-prior-operation-005",
+      movementType: "receive",
+    });
+
+    await expect(
+      createInventoryMovement(
+        {
+          operationId,
+          movementType: "hard_delete",
+          inventoryItemId: inventoryId,
+          quantity: 1,
+          reason: "Golden protected hard delete",
+          source: "inventory_page",
+        },
+        adminActor,
+        db
+      )
+    ).rejects.toMatchObject({
+      code: "failed-precondition",
+      message:
+        "Cannot hard delete inventory with movement history.",
+    });
+
+    expect(
+      (await db.collection("inventory").doc(inventoryId).get()).exists
+    ).toBe(true);
+
+    expect(
+      (
+        await db
+          .collection("inventoryOperations")
+          .doc(`${adminActor.uid}_${operationId}`)
+          .get()
+      ).exists
+    ).toBe(false);
+
+    expect(
+      await countByOperation(
+        "inventoryTransactions",
+        operationId
+      )
+    ).toBe(0);
+  });
+
+  it("GOLDEN-EMU-HARD-006 rental reference blocks hard delete", async () => {
+    const inventoryId = "golden-hard-006";
+    const operationId = "golden-emu-hard-006";
+
+    await seedInventory(inventoryId, {
+      quantityOnHand: 1,
+      available: 1,
+    });
+
+    await db.collection("rentals").doc(
+      "golden-hard-rental-006"
+    ).set({
+      inventoryItemId: inventoryId,
+    });
+
+    await expect(
+      createInventoryMovement(
+        {
+          operationId,
+          movementType: "hard_delete",
+          inventoryItemId: inventoryId,
+          quantity: 1,
+          reason: "Golden rental-protected hard delete",
+          source: "inventory_page",
+        },
+        adminActor,
+        db
+      )
+    ).rejects.toMatchObject({
+      code: "failed-precondition",
+      message:
+        "Cannot hard delete inventory with rental references.",
+    });
+
+    expect(
+      (await db.collection("inventory").doc(inventoryId).get()).exists
+    ).toBe(true);
+
+    expect(
+      (
+        await db
+          .collection("inventoryOperations")
+          .doc(`${adminActor.uid}_${operationId}`)
+          .get()
+      ).exists
+    ).toBe(false);
+  });
+
+  it("GOLDEN-EMU-HARD-007 patient assignment blocks hard delete", async () => {
+    const inventoryId = "golden-hard-007";
+    const operationId = "golden-emu-hard-007";
+
+    await seedInventory(inventoryId, {
+      quantityOnHand: 1,
+      available: 1,
+    });
+
+    await db.collection("patients").doc(
+      "golden-hard-patient-007"
+    ).set({
+      currentEquipmentIds: [inventoryId],
+    });
+
+    await expect(
+      createInventoryMovement(
+        {
+          operationId,
+          movementType: "hard_delete",
+          inventoryItemId: inventoryId,
+          quantity: 1,
+          reason: "Golden patient-protected hard delete",
+          source: "inventory_page",
+        },
+        adminActor,
+        db
+      )
+    ).rejects.toMatchObject({
+      code: "failed-precondition",
+      message:
+        "Cannot hard delete inventory with patient assignments.",
+    });
+
+    expect(
+      (await db.collection("inventory").doc(inventoryId).get()).exists
+    ).toBe(true);
+
+    expect(
+      (
+        await db
+          .collection("inventoryOperations")
+          .doc(`${adminActor.uid}_${operationId}`)
+          .get()
+      ).exists
+    ).toBe(false);
+  });
   it("GOLDEN-EMU-CYCLE-001 applies an absolute cycle-count target", async () => {
     await seedInventory("golden-cycle-001", {
       barcode: "GOLDEN-CYCLE-SCAN-001",

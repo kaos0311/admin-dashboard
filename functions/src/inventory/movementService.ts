@@ -820,6 +820,27 @@ export async function createInventoryMovement(
   // callers historically fingerprinted before inventoryItemId resolution.
   const requestFingerprint = movementFingerprint(input, actor);
 
+  // A successful hard delete removes the inventory document. When an
+  // explicit inventoryItemId is available, enter the transaction before
+  // resolving inventory so an uncertain-response retry can observe the
+  // completed operation record and return duplicate_operation.
+  const explicitInventoryItemId = text(input.inventoryItemId);
+
+  if (input.movementType === "hard_delete" && explicitInventoryItemId) {
+    return database.runTransaction((transaction) =>
+      createInventoryMovementInTransaction({
+        transaction,
+        database,
+        input: {
+          ...input,
+          inventoryItemId: explicitInventoryItemId,
+        },
+        actor,
+        requestFingerprint,
+      })
+    );
+  }
+
   const resolved = await resolveInventoryForMovement(database, input);
 
   if (resolved.status === "invalid") {
