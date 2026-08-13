@@ -10,7 +10,15 @@ import {
   createInventoryOperationId,
 } from "@/lib/inventory/movements";
 import { isRetryableInventoryTransactionError } from "@/hooks/useInventoryLookup";
-import { receiveScannedInventoryIntake } from "@/lib/inventory/receive-scanned-inventory-intake";
+import { receiveScannedInventoryIntake as receiveScannedInventoryIntakeOnce } from "@/lib/inventory/receive-scanned-inventory-intake";
+import type {
+  ReceiveScannedInventoryIntakeRequest,
+  ReceiveScannedInventoryIntakeResponse,
+} from "@/lib/inventory/receive-scanned-inventory-intake.types";
+import {
+  buildFrozenScanIntakeRequest,
+  executeScanIntakeWithRetry,
+} from "@/lib/inventory/scan-intake-retry";
 import { smartMergeInventory } from "@/lib/inventory/smartMergeInventory";
 import { InventoryRepository } from "@/repositories/firestore/inventory.repository";
 import { identifyInventoryProduct } from "@/services/inventory/inventory-jarvis.service";
@@ -74,6 +82,28 @@ export function useInventoryActions({
   clearSelected,
   setSaving,
 }: UseInventoryActionsArgs) {
+
+  async function receiveScannedInventoryIntake(
+    request: ReceiveScannedInventoryIntakeRequest,
+  ): Promise<ReceiveScannedInventoryIntakeResponse> {
+    const frozenRequest = buildFrozenScanIntakeRequest(
+      request,
+      request.operationId ??
+        createInventoryOperationId("scan-intake"),
+    );
+
+    return executeScanIntakeWithRetry({
+      request: frozenRequest,
+      execute: receiveScannedInventoryIntakeOnce,
+      shouldRetry: (failure) => {
+        return window.confirm(
+          `${failure.message}\n\n` +
+            "The server may have completed this Scan In even though the response was not received.\n\n" +
+            "Retry this SAME Scan In now using the same operation ID?"
+        );
+      },
+    });
+  }
 
   const saveMovementStateRef = useRef<SaveMovementState | null>(null);
 

@@ -2,32 +2,12 @@ import { httpsCallable } from "firebase/functions";
 
 import { functions } from "@/lib/firebase";
 import { createInventoryOperationId } from "./movements";
+import { mapScanIntakeCallableErrorCode } from "./scan-intake-retry";
 import type {
   ReceiveScannedInventoryIntakeRequest,
   ReceiveScannedInventoryIntakeResponse,
   ReceiveScannedInventoryIntakeResult,
 } from "./receive-scanned-inventory-intake.types";
-
-function mapCallableError(code: string): string {
-  switch (code) {
-    case "functions/unauthenticated":
-      return "unauthorized";
-    case "functions/permission-denied":
-      return "permission-denied";
-    case "functions/invalid-argument":
-      return "invalid-argument";
-    case "functions/failed-precondition":
-      return "failed-precondition";
-    case "functions/unavailable":
-      return "unavailable";
-    case "functions/internal":
-      return "internal";
-    case "functions/already-exists":
-      return "duplicate";
-    default:
-      return "internal";
-  }
-}
 
 export async function receiveScannedInventoryIntake(
   request: ReceiveScannedInventoryIntakeRequest,
@@ -58,7 +38,7 @@ export async function receiveScannedInventoryIntake(
     if (err && typeof err === "object") {
       const fbErr = err as { code?: string; message?: string; details?: unknown };
       if (fbErr.code && typeof fbErr.code === "string") {
-        code = mapCallableError(fbErr.code);
+        code = mapScanIntakeCallableErrorCode(fbErr.code);
         message = fbErr.message || fbErr.code;
       }
     }
