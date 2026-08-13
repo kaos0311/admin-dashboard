@@ -24,6 +24,10 @@ import {
   reconcileSaveMovementState,
   type SaveMovementState,
 } from "../lib/saveMovementLifecycle";
+import {
+  executeScanMovementWithRetry,
+  type ScanMovementRequest,
+} from "../lib/scanMovementRetry";
 import { isLowStock } from "../lib/inventoryAlerts";
 import { buildSearchText, toSafeNumber } from "../lib/inventoryNormalize";
 import { logInventoryMovement } from "../lib/inventoryMovements";
@@ -228,47 +232,88 @@ export function useInventoryActions({
         return false;
       }
 
-      try {
-        const movement = await createInventoryMovement({
-          movementType:
-            direction === "in"
-              ? "receive"
-              : outReason === "rental"
+      const movementRequest: ScanMovementRequest = {
+        movementType:
+          direction === "in"
+            ? "receive"
+            : outReason === "rental"
               ? "rental_checkout"
               : "patient_assignment",
-          inventoryItemId: item.id,
-          productId: item.productId,
-          barcode: item.barcode || normalizeBarcode(rawCode),
-          serialNumber: item.serial,
-          lotNumber: item.lotNumber,
-          quantity: 1,
-          reason:
-            direction === "in"
-              ? "Scanned into inventory."
-              : `Scanned out for ${outReason ?? "issue"}.`,
-          source: "scanner",
-          metadata: {
-            rawCode,
-            direction,
-            outReason: outReason ?? "",
-          },
-        });
+        inventoryItemId: item.id,
+        productId: item.productId,
+        barcode: item.barcode || normalizeBarcode(rawCode),
+        serialNumber: item.serial,
+        lotNumber: item.lotNumber,
+        quantity: 1,
+        reason:
+          direction === "in"
+            ? "Scanned into inventory."
+            : `Scanned out for ${outReason ?? "issue"}.`,
+        source: "scanner",
+        metadata: {
+          rawCode,
+          direction,
+          outReason: outReason ?? "",
+        },
+      };
+
+      const operationId =
+        createInventoryOperationId("inventory-scan");
+
+      try {
+        const execution =
+          await executeScanMovementWithRetry({
+            request: movementRequest,
+            operationId,
+            execute: createInventoryMovement,
+            isRetryableError:
+              isRetryableInventoryTransactionError,
+            shouldRetry: (error) => {
+              const message =
+                error instanceof Error
+                  ? error.message
+                  : "Inventory movement response was lost.";
+
+              return window.confirm(
+                `${message}\n\n` +
+                  "The server may have applied this scan even though the response was not received.\n\n" +
+                  "Retry this SAME scan now using the same operation ID?"
+              );
+            },
+          });
+
+        if (execution.status === "retry_declined") {
+          toast.error(
+            "Scan outcome is uncertain. No retry was attempted."
+          );
+          return false;
+        }
+
+        const movement = execution.movement;
 
         if (
           movement.status !== "success" &&
           movement.status !== "duplicate_operation"
         ) {
-          toast.error(movement.message || "Inventory movement was not applied.");
+          toast.error(
+            movement.message ||
+              "Inventory movement was not applied."
+          );
           return false;
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error("INVENTORY SCAN UPDATE FAILED", {
           itemId: item.id,
           direction,
           error,
         });
 
-        toast.error("Inventory quantity could not be updated.");
+        toast.error(
+          error instanceof Error
+            ? error.message
+            : "Inventory quantity could not be updated."
+        );
+
         return false;
       }
 
