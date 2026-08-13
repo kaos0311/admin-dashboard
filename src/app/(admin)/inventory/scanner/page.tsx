@@ -22,6 +22,8 @@ import { useAuthRole } from "@/app/hooks/useAuthRole";
 import {
   useInventoryLookup,
   getMatchedFieldLabel,
+  getInventoryTransactionErrorCode,
+  isRetryableInventoryTransactionError,
   type InventoryLookupItem,
   type InventoryLookupMatchedField,
   type TransactionResult,
@@ -326,18 +328,56 @@ export default function ScannerPage() {
       pendingOperationIdRef.current = operationId;
 
       const receiveQuantity = parseInt(quantity, 10) || 1;
-      const movement = await createInventoryMovement({
-        operationId,
-        barcode: lastScannedBarcode,
-        quantity: receiveQuantity,
-        movementType: "receive",
-        source: "scanner",
-        reason: "Inventory scanner receive.",
-        metadata: {
-          rawScan: lastRawScan || "",
-          scannerSource: "tera_hid_scanner",
-        },
-      });
+
+      let movement;
+
+      try {
+        movement = await createInventoryMovement({
+          operationId,
+          barcode: lastScannedBarcode,
+          quantity: receiveQuantity,
+          movementType: "receive",
+          source: "scanner",
+          reason: "Inventory scanner receive.",
+          metadata: {
+            rawScan: lastRawScan || "",
+            scannerSource: "tera_hid_scanner",
+          },
+        });
+      } catch (error: unknown) {
+        const retryable = isRetryableInventoryTransactionError(error);
+        const errorCode = getInventoryTransactionErrorCode(error);
+        const message =
+          error instanceof Error ? error.message : "Transaction failed.";
+
+        setConfirming(false);
+
+        setTransactionResult({
+          success: false,
+          transactionId: "",
+          inventoryItemId: selectedItem.id,
+          productName: selectedItem.name,
+          quantityBefore: null,
+          quantityChange: null,
+          quantityAfter: null,
+          status: "failed",
+          message,
+          errorCode,
+          retryable,
+        });
+
+        if (retryable) {
+          setShowConfirmation(true);
+          toast.error(`${message} Retry will reuse the same operation.`);
+          return;
+        }
+
+        operationIdManagerRef.current.complete();
+        pendingOperationIdRef.current = null;
+        setShowConfirmation(false);
+        toast.error(message);
+        return;
+      }
 
       // Clear confirming state
       setConfirming(false);
@@ -455,21 +495,48 @@ export default function ScannerPage() {
       operationIdManagerRef.current.complete();
       pendingOperationIdRef.current = null;
     } else {
-      // ── OLD GENERIC PATH (Issue, CycleCount, Transfer) ──
+      // Issue, Cycle Count, and Transfer share the same logical-operation
+      // lifecycle as Receive: generate once and retain across uncertain retries.
+      let operationId = operationIdManagerRef.current.get();
+
+      if (!operationId) {
+        operationId = operationIdManagerRef.current.start();
+      }
+
+      pendingOperationIdRef.current = operationId;
+
       const result = await executeTransaction(
         transactionMode as "issue" | "cycle_count" | "transfer",
         {
           barcode: lastScannedBarcode,
+          operationId,
           quantity: parseInt(quantity, 10),
-          toLocation: transactionMode === "transfer" ? toLocation : undefined,
+          toLocation:
+            transactionMode === "transfer" ? toLocation : undefined,
           source: "tera_hid_scanner",
           rawScan: lastRawScan,
         },
       );
 
       setTransactionResult(result);
-      setShowConfirmation(false);
       setConfirming(false);
+
+      if (result.retryable) {
+        // The server may have committed even though the response was lost.
+        // Keep the confirmation and operationId alive so retry is idempotent.
+        setShowConfirmation(true);
+
+        toast.error(
+          `${result.message || "Transaction failed."} Retry will reuse the same operation.`,
+        );
+
+        return;
+      }
+
+      // A definitive response ends this logical operation.
+      operationIdManagerRef.current.complete();
+      pendingOperationIdRef.current = null;
+      setShowConfirmation(false);
 
       addRecentScan({
         barcode: lastScannedBarcode,
@@ -481,7 +548,13 @@ export default function ScannerPage() {
 
       if (result.success) {
         toast.success(
-          `${selectedItem.name}: ${transactionMode === "issue" ? "Issued" : transactionMode === "cycle_count" ? "Counted" : "Transferred"}`,
+          `${selectedItem.name}: ${
+            transactionMode === "issue"
+              ? "Issued"
+              : transactionMode === "cycle_count"
+                ? "Counted"
+                : "Transferred"
+          }`,
         );
       } else {
         toast.error(result.message || "Transaction failed.");

@@ -10,6 +10,8 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   MATCHED_FIELD_LABELS,
   getMatchedFieldLabel,
+  getInventoryTransactionErrorCode,
+  isRetryableInventoryTransactionError,
   type BarcodeLookupResult,
   type InventoryLookupItem,
   type InventoryLookupMatchedField,
@@ -288,5 +290,67 @@ describe("InventoryLookupMatchedField", () => {
   it("lotNumber is a valid matched field", () => {
     const field: InventoryLookupMatchedField = "lotNumber";
     expect(field).toBe("lotNumber");
+  });
+});
+
+describe("inventory transaction retry classification", () => {
+  it.each([
+    "functions/unavailable",
+    "functions/deadline-exceeded",
+    "functions/cancelled",
+    "functions/aborted",
+    "functions/resource-exhausted",
+  ])("classifies %s as retryable", (code) => {
+    const error = {
+      code,
+      message: "Synthetic transport failure",
+    };
+
+    expect(getInventoryTransactionErrorCode(error)).toBe(
+      code.replace("functions/", ""),
+    );
+
+    expect(
+      isRetryableInventoryTransactionError(error),
+    ).toBe(true);
+  });
+
+  it.each([
+    "functions/invalid-argument",
+    "functions/permission-denied",
+    "functions/unauthenticated",
+    "functions/failed-precondition",
+    "functions/not-found",
+    "functions/already-exists",
+    "functions/internal",
+  ])("classifies %s as terminal", (code) => {
+    expect(
+      isRetryableInventoryTransactionError({
+        code,
+        message: "Synthetic terminal failure",
+      }),
+    ).toBe(false);
+  });
+
+  it("normalizes bare Firebase callable codes", () => {
+    expect(
+      getInventoryTransactionErrorCode({
+        code: "unavailable",
+      }),
+    ).toBe("unavailable");
+  });
+
+  it("returns unknown for errors without a Firebase code", () => {
+    const error = new Error(
+      "Network-shaped error without Firebase code",
+    );
+
+    expect(
+      getInventoryTransactionErrorCode(error),
+    ).toBe("unknown");
+
+    expect(
+      isRetryableInventoryTransactionError(error),
+    ).toBe(false);
   });
 });

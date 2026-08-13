@@ -78,9 +78,47 @@ export interface TransactionResult {
   quantityAfter: number | null;
   status: string;
   message?: string;
+  errorCode?: string;
+  retryable?: boolean;
 }
 
 type TransactionType = "receive" | "issue" | "cycle_count" | "transfer";
+
+const RETRYABLE_INVENTORY_TRANSACTION_CODES = new Set([
+  "unavailable",
+  "deadline-exceeded",
+  "cancelled",
+  "aborted",
+  "resource-exhausted",
+]);
+
+export function getInventoryTransactionErrorCode(
+  error: unknown,
+): string {
+  if (!error || typeof error !== "object") {
+    return "unknown";
+  }
+
+  const rawCode = (error as { code?: unknown }).code;
+
+  if (typeof rawCode !== "string" || !rawCode.trim()) {
+    return "unknown";
+  }
+
+  const normalized = rawCode.trim().toLowerCase();
+
+  return normalized.startsWith("functions/")
+    ? normalized.slice("functions/".length)
+    : normalized;
+}
+
+export function isRetryableInventoryTransactionError(
+  error: unknown,
+): boolean {
+  return RETRYABLE_INVENTORY_TRANSACTION_CODES.has(
+    getInventoryTransactionErrorCode(error),
+  );
+}
 
 /** Human-readable labels for matched fields. */
 export const MATCHED_FIELD_LABELS: Record<InventoryLookupMatchedField, string> = {
@@ -182,6 +220,9 @@ export function useInventoryLookup() {
       } catch (err: unknown) {
         const message =
           err instanceof Error ? err.message : "Transaction failed.";
+
+        const errorCode = getInventoryTransactionErrorCode(err);
+        const retryable = isRetryableInventoryTransactionError(err);
         setError(message);
         return {
           success: false,
@@ -193,6 +234,8 @@ export function useInventoryLookup() {
           quantityAfter: null,
           status: "failed",
           message,
+          errorCode,
+          retryable,
         };
       } finally {
         setLoading(false);
