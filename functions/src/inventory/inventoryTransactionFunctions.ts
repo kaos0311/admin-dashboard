@@ -1,8 +1,9 @@
 import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
-import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/https";
 
 import { enforceCallableRateLimit } from "../security/rateLimit.js";
+import { requireStaffOrAdmin } from "./auth.js";
 import {
   resolveInventoryItem,
 } from "./inventoryTransactionService.js";
@@ -18,36 +19,14 @@ const db = getFirestore();
  * Helper to execute a generic inventory transaction.
  */
 async function executeTransaction(
-  request: {
-    auth?: { uid?: string; token?: Record<string, unknown> };
-    data?: Record<string, unknown>;
-  },
+  request: CallableRequest<Record<string, unknown>>,
   transactionType: "receive" | "issue" | "cycle_count" | "transfer"
 ): Promise<Record<string, unknown>> {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
 
-  const uid = request.auth.uid!;
-  const email = String(request.auth.token?.email ?? request.auth.uid!);
-
-  // Validate authentication via token role or user doc
-  const role = request.auth.token?.role;
-  const isStaffOrAdmin = role === "admin" || role === "staff" || role === "tank";
-  if (!isStaffOrAdmin) {
-    // Double-check via user doc
-    const userSnap = await db.collection("users").doc(uid).get();
-    const userData = userSnap.exists ? userSnap.data() : null;
-    const docRole = userData?.role;
-    const isDisabled =
-      userData?.active === false ||
-      userData?.disabled === true ||
-      userData?.deleted === true;
-
-    if (isDisabled || !(docRole === "admin" || docRole === "staff" || docRole === "tank")) {
-      throw new HttpsError("permission-denied", "Insufficient permissions.");
-    }
-  }
+  const actor = await requireStaffOrAdmin(request);
 
   const rawBarcode = request.data?.barcode;
   if (typeof rawBarcode !== "string" || !rawBarcode.trim()) {
@@ -111,7 +90,7 @@ async function executeTransaction(
     request.data?.operationId ??
       [
         transactionType,
-        uid,
+        actor.uid,
         resolved.id,
         normalizedBarcode.replace(/[^a-zA-Z0-9_-]/g, "_"),
         Date.now(),
@@ -137,9 +116,9 @@ async function executeTransaction(
       },
     },
     {
-      uid,
-      email,
-      role: String(request.auth.token?.role ?? ""),
+      uid: actor.uid,
+      email: actor.email,
+      role: actor.role,
     },
     db
   );
