@@ -33,6 +33,12 @@ import {
   type SaveMovementState,
 } from "../lib/saveMovementLifecycle";
 import {
+  createDiscontinueRetryState,
+  executeDiscontinueWithRetry,
+  markDiscontinueOutcomeUncertain,
+  type DiscontinueRetryState,
+} from "../lib/discontinueLifecycle";
+import {
   createArchiveRetryState,
   executeArchiveWithRetry,
   markArchiveOutcomeUncertain,
@@ -118,6 +124,11 @@ export function useInventoryActions({
   }
 
   const saveMovementStateRef = useRef<SaveMovementState | null>(null);
+
+  const discontinueStateRef = useRef(
+    new Map<string, DiscontinueRetryState>(),
+  );
+  const discontinueInFlightRef = useRef(new Set<string>());
 
   const archiveStateRef = useRef(
     new Map<string, ArchiveRetryState>(),
@@ -995,28 +1006,96 @@ export function useInventoryActions({
       return;
     }
 
+    if (discontinueInFlightRef.current.has(item.id)) {
+      return;
+    }
+
+    let state = discontinueStateRef.current.get(item.id);
+
+    if (state?.outcomeUncertain) {
+      const retryUncertain = window.confirm(
+        `The previous discontinue attempt for "${item.name}" has an uncertain outcome.` +
+          "\n\nThe server may already have discontinued this inventory item." +
+          "\n\nRetry the SAME discontinue using the same operation ID?",
+      );
+
+      if (!retryUncertain) {
+        return;
+      }
+    } else if (!state) {
+      state = createDiscontinueRetryState(
+        {
+          movementType: "discontinued",
+          inventoryItemId: item.id,
+          productId: item.productId,
+          barcode: item.barcode,
+          serialNumber: item.serial,
+          lotNumber: item.lotNumber,
+          quantity: 1,
+          reason: "Inventory item discontinued.",
+          source: "inventory_page",
+        },
+        createInventoryOperationId("inventory-discontinue"),
+      );
+
+      discontinueStateRef.current.set(item.id, state);
+    }
+
+    discontinueInFlightRef.current.add(item.id);
+
     try {
-      const movement = await createInventoryMovement({
-        movementType: "discontinued",
-        inventoryItemId: item.id,
-        productId: item.productId,
-        barcode: item.barcode,
-        serialNumber: item.serial,
-        lotNumber: item.lotNumber,
-        quantity: 1,
-        reason: "Inventory item discontinued.",
-        source: "inventory_page",
+      const execution = await executeDiscontinueWithRetry({
+        state,
+        execute: createInventoryMovement,
+        isRetryableError: isRetryableInventoryTransactionError,
+        shouldRetry: (error) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "The discontinue response was not received.";
+
+          return window.confirm(
+            `${message}\n\n` +
+              "The server may already have discontinued this inventory item.\n\n" +
+              "Retry this SAME discontinue now using the same operation ID?",
+          );
+        },
       });
 
-      if (movement.status !== "success" && movement.status !== "duplicate_operation") {
-        toast.error(movement.message || "Could not discontinue item.");
+      if (execution.status === "retry_declined") {
+        discontinueStateRef.current.set(
+          item.id,
+          markDiscontinueOutcomeUncertain(state),
+        );
+
+        toast.error(
+          "Discontinue outcome is uncertain. Retry this same item to safely reuse the same operation.",
+        );
         return;
       }
 
+      const movement = execution.movement;
+
+      if (
+        movement.status !== "success" &&
+        movement.status !== "duplicate_operation"
+      ) {
+        discontinueStateRef.current.delete(item.id);
+        toast.error(
+          movement.message || "Could not discontinue item.",
+        );
+        return;
+      }
+
+      discontinueStateRef.current.delete(item.id);
       toast.success("Item discontinued.");
     } catch (error: unknown) {
+      discontinueStateRef.current.delete(item.id);
+
       console.error("DISCONTINUE INVENTORY ERROR:", error);
       toast.error("Could not discontinue item.");
+    } finally {
+      discontinueInFlightRef.current.delete(item.id);
     }
   }
 
