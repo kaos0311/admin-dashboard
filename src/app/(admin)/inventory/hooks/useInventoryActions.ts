@@ -33,6 +33,12 @@ import {
   type SaveMovementState,
 } from "../lib/saveMovementLifecycle";
 import {
+  createHardDeleteRetryState,
+  executeHardDeleteWithRetry,
+  markHardDeleteOutcomeUncertain,
+  type HardDeleteRetryState,
+} from "../lib/hardDeleteLifecycle";
+import {
   executeScanMovementWithRetry,
   type ScanMovementRequest,
 } from "../lib/scanMovementRetry";
@@ -106,6 +112,11 @@ export function useInventoryActions({
   }
 
   const saveMovementStateRef = useRef<SaveMovementState | null>(null);
+
+  const hardDeleteStateRef = useRef(
+    new Map<string, HardDeleteRetryState>(),
+  );
+  const hardDeleteInFlightRef = useRef(new Set<string>());
 
   async function executeSaveMovement(state: SaveMovementState): Promise<void> {
     if (state.stage === "complete") {
@@ -807,40 +818,100 @@ export function useInventoryActions({
       return;
     }
 
-    if (
-      !window.confirm(
-        `Permanently delete "${item.name}"? This is not reversible.`
-      )
-    ) {
+    if (hardDeleteInFlightRef.current.has(item.id)) {
+      toast.error("Permanent delete is already in progress for this item.");
       return;
     }
 
+    const existingState = hardDeleteStateRef.current.get(item.id);
+
+    const confirmed = existingState?.outcomeUncertain
+      ? window.confirm(
+          `The previous permanent delete for "${item.name}" has an uncertain outcome.\n\n` +
+            "The server may already have completed it.\n\n" +
+            "Retry this SAME permanent delete now using the same operation ID?",
+        )
+      : window.confirm(
+          `Permanently delete "${item.name}"? This is not reversible.`,
+        );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const state =
+      existingState ??
+      createHardDeleteRetryState(
+        {
+          movementType: "hard_delete",
+          inventoryItemId: item.id,
+          productId: item.productId,
+          barcode: item.barcode,
+          serialNumber: item.serial,
+          lotNumber: item.lotNumber,
+          quantity: 1,
+          reason: "Inventory record permanently deleted.",
+          source: "inventory_page",
+        },
+        createInventoryOperationId("inventory-hard-delete"),
+      );
+
+    hardDeleteStateRef.current.set(item.id, state);
+    hardDeleteInFlightRef.current.add(item.id);
+
     try {
-      const movement = await createInventoryMovement({
-        movementType: "hard_delete",
-        inventoryItemId: item.id,
-        productId: item.productId,
-        barcode: item.barcode,
-        serialNumber: item.serial,
-        lotNumber: item.lotNumber,
-        quantity: 1,
-        reason: "Inventory record permanently deleted.",
-        source: "inventory_page",
+      const execution = await executeHardDeleteWithRetry({
+        state,
+        execute: createInventoryMovement,
+        isRetryableError: isRetryableInventoryTransactionError,
+        shouldRetry: (error) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "The permanent-delete response was not received.";
+
+          return window.confirm(
+            `${message}\n\n` +
+              "The server may already have completed this permanent delete.\n\n" +
+              "Retry this SAME permanent delete now using the same operation ID?",
+          );
+        },
       });
 
-      if (movement.status !== "success" && movement.status !== "duplicate_operation") {
+      if (execution.status === "retry_declined") {
+        hardDeleteStateRef.current.set(
+          item.id,
+          markHardDeleteOutcomeUncertain(state),
+        );
+
+        toast.error(
+          "Permanent delete outcome is uncertain. Retry this same item to safely reuse the same operation.",
+        );
+        return;
+      }
+
+      const movement = execution.movement;
+
+      if (
+        movement.status !== "success" &&
+        movement.status !== "duplicate_operation"
+      ) {
+        hardDeleteStateRef.current.delete(item.id);
         toast.error(movement.message || "Permanent delete failed.");
         return;
       }
 
+      hardDeleteStateRef.current.delete(item.id);
       removeSelectedId(item.id);
       toast.success("Inventory permanently deleted.");
     } catch (error: unknown) {
+      hardDeleteStateRef.current.delete(item.id);
       console.error("HARD DELETE INVENTORY ERROR:", error);
       toast.error("Permanent delete failed.");
+    } finally {
+      hardDeleteInFlightRef.current.delete(item.id);
     }
   }
-
   async function handleDiscontinue(item: InventoryItem) {
     if (!canWrite) {
       toast.error("You do not have permission.");
