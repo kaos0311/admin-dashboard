@@ -469,6 +469,7 @@ export async function prepareInventoryMovementInTransaction(params: {
   input: CreateMovementInput & { inventoryItemId: string };
   actor: MovementActor;
   inventorySeed?: InventoryDoc;
+  requestFingerprint?: string;
 }): Promise<InventoryMovementWritePlan> {
   const { transaction, database, input, actor } = params;
 
@@ -490,7 +491,7 @@ export async function prepareInventoryMovementInTransaction(params: {
   const reason = text(input.reason);
   const quantity = parsePositiveQuantity(input);
   const operationRef = operationRefFor(database, input, actor);
-  const fingerprint = movementFingerprint(input, actor);
+  const fingerprint = params.requestFingerprint ?? movementFingerprint(input, actor);
   const inventoryRef = database.collection("inventory").doc(input.inventoryItemId);
 
   const existingOperation = await transaction.get(operationRef);
@@ -791,6 +792,7 @@ export async function createInventoryMovementInTransaction(params: {
   input: CreateMovementInput & { inventoryItemId: string };
   actor: MovementActor;
   inventorySeed?: InventoryDoc;
+  requestFingerprint?: string;
 }): Promise<MovementResult> {
   const plan = await prepareInventoryMovementInTransaction(params);
   plan.apply();
@@ -810,306 +812,53 @@ export async function createInventoryMovement(
     };
   }
 
-  const source = input.source ?? "system";
-  const reason = text(input.reason);
-  const quantity = parsePositiveQuantity(input);
-  const operationRef = operationRefFor(database, input, actor);
-  const fingerprint = movementFingerprint(input, actor);
+  // Preserve the legacy standalone validation order before identifier resolution.
+  parsePositiveQuantity(input);
+  operationRefFor(database, input, actor);
+
+  // Preserve the fingerprint of the original request. Barcode/serial/lot
+  // callers historically fingerprinted before inventoryItemId resolution.
+  const requestFingerprint = movementFingerprint(input, actor);
+
   const resolved = await resolveInventoryForMovement(database, input);
 
   if (resolved.status === "invalid") {
-    return { status: "invalid", operationId: input.operationId, message: resolved.message };
+    return {
+      status: "invalid",
+      operationId: input.operationId,
+      message: resolved.message,
+    };
   }
 
   if (resolved.status === "not_found") {
-    return { status: "not_found", operationId: input.operationId, message: "Inventory item was not found." };
+    return {
+      status: "not_found",
+      operationId: input.operationId,
+      message: "Inventory item was not found.",
+    };
   }
 
   if (resolved.status === "ambiguous") {
-    return { status: "ambiguous", operationId: input.operationId, matches: resolved.matches };
+    return {
+      status: "ambiguous",
+      operationId: input.operationId,
+      matches: resolved.matches,
+    };
   }
 
-  const inventoryRef = database.collection("inventory").doc(resolved.id);
-
-  return database.runTransaction(async (transaction) => {
-    const existingOperation = await transaction.get(operationRef);
-    if (existingOperation.exists) {
-      const data = existingOperation.data() as InventoryDoc;
-      if (text(data.requestFingerprint) && text(data.requestFingerprint) !== fingerprint) {
-        throw new HttpsError(
-          "failed-precondition",
-          "This operationId was already used with different request data."
-        );
-      }
-
-      return {
-        status: "duplicate_operation",
-        operationId: input.operationId,
-        movementId: text(data.movementId),
-        inventoryItemId: text(data.inventoryItemId),
-        productId: text(data.productId),
-        quantityBefore: readNumber(data, "quantityBefore", 0),
-        quantityDelta: readNumber(data, "quantityDelta", 0),
-        quantityAfter: readNumber(data, "quantityAfter", 0),
-        message: "Movement already applied.",
-      } satisfies MovementResult;
-    }
-
-    const inventorySnap = await transaction.get(inventoryRef);
-    if (!inventorySnap.exists) {
-      throw new HttpsError("not-found", "Inventory item was not found.");
-    }
-
-    const inventory: InventoryDoc = {
-      id: inventorySnap.id,
-      ...(inventorySnap.data() as InventoryDoc),
-    };
-    const productId = text(input.productId) || text(inventory.productId);
-    const productRef = productId ? database.collection("products").doc(productId) : null;
-    const productSnap = productRef ? await transaction.get(productRef) : null;
-    const product = productSnap?.exists ? (productSnap.data() as InventoryDoc) : null;
-    const { quantityDelta, onRentDelta, onTruckDelta } = getMovementDeltas(
-      input.movementType,
-      quantity,
-      input.quantityDelta
-    );
-
-    assertMovementAllowedForState({
-      movementType: input.movementType,
-      quantityDelta,
-      onRentDelta,
-      onTruckDelta,
-      inventory,
-      product,
-      quantity,
-    });
-
-    if (input.movementType === "hard_delete") {
-      await assertNoDependenciesForHardDelete(transaction, database, resolved.id, productId);
-    }
-
-    const quantityBefore = readNumber(inventory, "quantityOnHand", 0);
-    const committed = readNumber(inventory, "committed", 0);
-    const onRentBefore = readNumber(inventory, "onRent", 0);
-    const onTruckBefore = readNumber(inventory, "onTruck", 0);
-    const quantityAfter = quantityBefore + quantityDelta;
-    const onRentAfter = onRentBefore + onRentDelta;
-    const onTruckAfter = onTruckBefore + onTruckDelta;
-    const availableAfter = quantityAfter - committed - onRentAfter - onTruckAfter;
-    const movementRef = database.collection("inventoryTransactions").doc();
-    const now = Timestamp.now();
-    const patientId = text(input.patientId) || text(inventory.patientKey) || text(inventory.patientId);
-    const patientRef =
-      input.movementType === "deceased_patient_equipment_return" && patientId
-        ? database.collection("patients").doc(patientId)
-        : null;
-    const patientSnap = patientRef ? await transaction.get(patientRef) : null;
-
-    const inventoryUpdate: InventoryDoc = {
-      quantityOnHand: quantityAfter,
-      onRent: onRentAfter,
-      onTruck: onTruckAfter,
-      available: availableAfter,
-      updatedAt: FieldValue.serverTimestamp(),
-      updatedByUid: actor.uid,
-      updatedByEmail: actor.email,
-      lastMovementId: movementRef.id,
-    };
-
-    if (input.movementType === "warehouse_transfer") {
-      inventoryUpdate.locationName = text(input.toLocation);
-    }
-
-    if (input.movementType === "discontinued") {
-      inventoryUpdate.status = "discontinued";
-      inventoryUpdate.lifecycleStatus = "retired";
-    }
-
-    if (input.movementType === "archived") {
-      inventoryUpdate.isDeleted = true;
-      inventoryUpdate.deletedAt = FieldValue.serverTimestamp();
-    }
-
-    if (input.movementType === "restored") {
-      inventoryUpdate.isDeleted = false;
-      inventoryUpdate.restoredAt = FieldValue.serverTimestamp();
-    }
-
-    if (["patient_assignment", "patient_transfer", "rental_checkout", "delivery_delivered"].includes(input.movementType)) {
-      inventoryUpdate.status =
-        input.movementType === "rental_checkout" ? "rental_out" : "assigned";
-      if (input.patientId) inventoryUpdate.patientKey = text(input.patientId);
-      if (input.patientName) inventoryUpdate.patientName = text(input.patientName);
-      if (input.rentalId) inventoryUpdate.rentalId = text(input.rentalId);
-    }
-
-    if (["rental_return", "deceased_patient_equipment_return", "delivery_returned"].includes(input.movementType)) {
-      inventoryUpdate.status = "available";
-      inventoryUpdate.patientKey = "";
-      inventoryUpdate.patientName = "";
-      inventoryUpdate.rentalId = "";
-      inventoryUpdate.lastReturnedAt = FieldValue.serverTimestamp();
-    }
-
-    transaction.update(inventoryRef, inventoryUpdate);
-
-    if (patientRef) {
-      const archivedAt = now.toDate().toISOString();
-      const patientData = patientSnap?.exists ? (patientSnap.data() as InventoryDoc) : {};
-      const archivedEquipment = archiveCurrentEquipment(
-        patientData.currentEquipment,
-        inventory,
-        archivedAt,
-        input.movementType
-      );
-
-      const patientUpdate: InventoryDoc = {
-        currentEquipmentArchivedAt: FieldValue.serverTimestamp(),
-        updatedAt: FieldValue.serverTimestamp(),
-      };
-
-      if (archivedEquipment) {
-        patientUpdate.currentEquipment = archivedEquipment;
-      }
-
-      transaction.set(patientRef, patientUpdate, { merge: true });
-
-      transaction.set(
-        patientRef.collection("equipment").doc(resolved.id),
-        {
-          inventoryId: resolved.id,
-          productId,
-          itemName: text(inventory.name),
-          barcode: text(input.barcode) || text(inventory.barcode),
-          serialNumber:
-            text(input.serialNumber) || text(inventory.serialNumber) || text(inventory.serial),
-          lotNumber: text(input.lotNumber) || text(inventory.lotNumber),
-          status: "returned",
-          archived: true,
-          archivedAt: FieldValue.serverTimestamp(),
-          archiveReason: input.movementType,
-          returnReason: input.movementType,
-          returnedAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      transaction.set(patientRef.collection("timeline").doc(), {
-        type: "equipment_returned",
-        title: "Equipment archived and checked back into inventory",
-        body: `${text(inventory.name) || "Equipment"} was checked back into inventory.`,
-        metadata: {
-          inventoryId: resolved.id,
-          productId,
-          barcode: text(input.barcode) || text(inventory.barcode),
-          serialNumber:
-            text(input.serialNumber) || text(inventory.serialNumber) || text(inventory.serial),
-          lotNumber: text(input.lotNumber) || text(inventory.lotNumber),
-          movementId: movementRef.id,
-          reason,
-        },
-        actorUid: actor.uid,
-        actorEmail: actor.email,
-        createdAt: FieldValue.serverTimestamp(),
-      });
-    }
-
-    transaction.set(movementRef, {
-      id: movementRef.id,
-      operationId: input.operationId,
-      productId,
-      inventoryItemId: resolved.id,
-      movementType: input.movementType,
-      quantityDelta,
-      quantityBefore,
-      quantityAfter,
-      fromLocation: text(input.fromLocation) || text(inventory.locationName),
-      toLocation: text(input.toLocation),
-      patientId: text(input.patientId),
-      rentalId: text(input.rentalId),
-      barcode: text(input.barcode) || text(inventory.barcode),
-      serialNumber:
-        text(input.serialNumber) || text(inventory.serialNumber) || text(inventory.serial),
-      lotNumber: text(input.lotNumber) || text(inventory.lotNumber),
-      actorUid: actor.uid,
-      actorEmail: actor.email,
-      actorRole: actor.role,
-      reason,
-      source,
-      correlationId: text(input.correlationId),
-      createdAt: now,
-      reversedMovementId: "",
-      reversalMovementId: "",
-      status: "success",
-      metadata: {
-        ...(input.metadata ?? {}),
-        onRentBefore,
-        onRentDelta,
-        onRentAfter,
-        onTruckBefore,
-        onTruckDelta,
-        onTruckAfter,
-        committed,
-        availableAfter,
+  return database.runTransaction((transaction) =>
+    createInventoryMovementInTransaction({
+      transaction,
+      database,
+      input: {
+        ...input,
+        inventoryItemId: resolved.id,
       },
-    });
-
-    transaction.set(operationRef, {
-      operationId: input.operationId,
-      operationType: input.movementType,
-      requestFingerprint: fingerprint,
-      performedByUid: actor.uid,
-      performedByEmail: actor.email,
-      inventoryItemId: resolved.id,
-      productId,
-      movementId: movementRef.id,
-      quantityBefore,
-      quantityDelta,
-      quantityAfter,
-      status: "completed",
-      createdAt: FieldValue.serverTimestamp(),
-      completedAt: FieldValue.serverTimestamp(),
-    });
-
-    const auditRef = database.collection("auditLogs").doc();
-    transaction.set(auditRef, {
-      action: `inventory.${input.movementType}`,
-      actorUid: actor.uid,
-      actorEmail: actor.email,
-      targetCollection: "inventory",
-      targetId: resolved.id,
-      details: {
-        operationId: input.operationId,
-        movementId: movementRef.id,
-        productId,
-        quantityBefore,
-        quantityDelta,
-        quantityAfter,
-        reason,
-        source,
-      },
-      createdAt: FieldValue.serverTimestamp(),
-      success: true,
-    });
-
-    if (input.movementType === "hard_delete") {
-      transaction.delete(inventoryRef);
-    }
-
-    return {
-      status: "success",
-      operationId: input.operationId,
-      movementId: movementRef.id,
-      inventoryItemId: resolved.id,
-      productId,
-      quantityBefore,
-      quantityDelta,
-      quantityAfter,
-    } satisfies MovementResult;
-  });
+      actor,
+      requestFingerprint,
+    })
+  );
 }
-
 async function assertNoDependenciesForHardDelete(
   transaction: Transaction,
   database: Firestore,
