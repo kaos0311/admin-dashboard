@@ -1,17 +1,29 @@
-﻿"use client";
+"use client";
 
-import type { FormEvent } from "react";
+import { useRef, type FormEvent } from "react";
 import toast from "react-hot-toast";
 
 import { normalizeBarcode } from "@/lib/barcode";
 import { auth } from "@/lib/firebase";
-import { createInventoryMovement } from "@/lib/inventory/movements";
+import {
+  createInventoryMovement,
+  createInventoryOperationId,
+} from "@/lib/inventory/movements";
+import { isRetryableInventoryTransactionError } from "@/hooks/useInventoryLookup";
 import { receiveScannedInventoryIntake } from "@/lib/inventory/receive-scanned-inventory-intake";
 import { smartMergeInventory } from "@/lib/inventory/smartMergeInventory";
 import { InventoryRepository } from "@/repositories/firestore/inventory.repository";
 import { identifyInventoryProduct } from "@/services/inventory/inventory-jarvis.service";
 import { resolveInventoryScan } from "@/services/inventory/inventory-scan-resolver";
 
+import {
+  armResolvedNewSaveMovementState,
+  buildSaveMovementFingerprint,
+  completeSaveMovementState,
+  createResolvedNewSaveMovementState,
+  reconcileSaveMovementState,
+  type SaveMovementState,
+} from "../lib/saveMovementLifecycle";
 import { isLowStock } from "../lib/inventoryAlerts";
 import { buildSearchText, toSafeNumber } from "../lib/inventoryNormalize";
 import { logInventoryMovement } from "../lib/inventoryMovements";
@@ -58,6 +70,46 @@ export function useInventoryActions({
   clearSelected,
   setSaving,
 }: UseInventoryActionsArgs) {
+
+  const saveMovementStateRef = useRef<SaveMovementState | null>(null);
+
+  async function executeSaveMovement(state: SaveMovementState): Promise<void> {
+    if (state.stage === "complete") {
+      return;
+    }
+
+    const request = state.request;
+    const operationId = state.operationId;
+
+    if (state.stage !== "pending" || !operationId || !request) {
+      throw new Error("Inventory save movement is not ready to execute.");
+    }
+
+    try {
+      const movement = await createInventoryMovement({
+        ...request,
+        operationId,
+      });
+
+      if (
+        movement.status === "success" ||
+        movement.status === "duplicate_operation"
+      ) {
+        saveMovementStateRef.current =
+          completeSaveMovementState(state);
+        return;
+      }
+
+      saveMovementStateRef.current = null;
+      throw new Error(movement.message || "Inventory movement was not applied.");
+    } catch (error: unknown) {
+      if (!isRetryableInventoryTransactionError(error)) {
+        saveMovementStateRef.current = null;
+      }
+
+      throw error;
+    }
+  }
   function omitMovementFields(
     payload: Omit<InventoryItem, "id" | "searchText" | "isDeleted">
   ): Partial<Omit<InventoryItem, "id" | "searchText" | "isDeleted">> {
@@ -356,19 +408,56 @@ export function useInventoryActions({
       payload.name.toLowerCase().startsWith("pending scanned item") ||
       payload.category === "Pending Scan Review";
 
+    const saveMovementFingerprint = buildSaveMovementFingerprint({
+      kind: form.id ? "existing_adjustment" : "new_receive",
+      inventoryItemId: form.id || undefined,
+      targetQuantityOnHand: payload.quantityOnHand,
+      productId: payload.productId,
+      barcode: payload.barcode,
+      serialNumber: payload.serial,
+      lotNumber: payload.lotNumber,
+    });
+
+    let saveMovementState = reconcileSaveMovementState(
+      saveMovementStateRef.current,
+      saveMovementFingerprint,
+    );
+
+    saveMovementStateRef.current = saveMovementState;
+
     setSaving(true);
 
     try {
       if (form.id) {
-        const currentItem = items.find((item) => item.id === form.id) ?? null;
-        const quantityDelta = currentItem
-          ? payload.quantityOnHand - currentItem.quantityOnHand
-          : 0;
+        if (
+          saveMovementState &&
+          saveMovementState.context.kind !== "existing"
+        ) {
+          saveMovementStateRef.current = null;
+          saveMovementState = null;
+        }
+
+        let quantityDelta = 0;
+
+        if (!saveMovementState) {
+          const currentItem =
+            items.find((item) => item.id === form.id) ?? null;
+
+          if (!currentItem) {
+            throw new Error(
+              "The inventory item being edited is no longer available in the current inventory snapshot."
+            );
+          }
+
+          quantityDelta =
+            payload.quantityOnHand - currentItem.quantityOnHand;
+        }
+
         const syncedProductId = await ensureProductFromInventory({
-      id: form.id,
-      ...payload,
-      searchText,
-      isDeleted: false,
+          id: form.id,
+          ...payload,
+          searchText,
+          isDeleted: false,
         });
 
         await InventoryRepository.update(form.id, {
@@ -376,7 +465,9 @@ export function useInventoryActions({
           productId: syncedProductId ?? payload.productId,
           searchText,
           pendingScanReview: pendingReview,
-          scanSource: pendingReview ? "scan_in_unmatched" : "inventory_review_completed",
+          scanSource: pendingReview
+            ? "scan_in_unmatched"
+            : "inventory_review_completed",
           lowStock: isLowStock({
             id: form.id,
             ...payload,
@@ -385,26 +476,35 @@ export function useInventoryActions({
           }),
         });
 
-        if (quantityDelta !== 0) {
-          const movement = await createInventoryMovement({
-            movementType: "manual_adjustment",
-            inventoryItemId: form.id,
-            productId: syncedProductId ?? payload.productId,
-            barcode: payload.barcode,
-            serialNumber: payload.serial,
-            lotNumber: payload.lotNumber,
-            quantity: Math.abs(quantityDelta),
-            quantityDelta,
-            reason: "Manual inventory quantity adjustment.",
-            source: "inventory_page",
-          });
+        if (saveMovementState) {
+          await executeSaveMovement(saveMovementState);
+        } else if (quantityDelta !== 0) {
+          const nextState: SaveMovementState = {
+            fingerprint: saveMovementFingerprint,
+            stage: "pending",
+            operationId: createInventoryOperationId("inventory-save"),
+            request: {
+              movementType: "manual_adjustment",
+              inventoryItemId: form.id,
+              productId: syncedProductId ?? payload.productId,
+              barcode: payload.barcode,
+              serialNumber: payload.serial,
+              lotNumber: payload.lotNumber,
+              quantity: Math.abs(quantityDelta),
+              quantityDelta,
+              reason: "Manual inventory quantity adjustment.",
+              source: "inventory_page",
+            },
+            context: {
+              kind: "existing",
+              inventoryItemId: form.id,
+            },
+          };
 
-          if (
-            movement.status !== "success" &&
-            movement.status !== "duplicate_operation"
-          ) {
-            throw new Error(movement.message || "Quantity adjustment failed.");
-          }
+          saveMovementStateRef.current = nextState;
+          saveMovementState = nextState;
+
+          await executeSaveMovement(nextState);
         }
 
         await logInventoryMovement({
@@ -423,37 +523,68 @@ export function useInventoryActions({
       } else {
         const initialQuantity = payload.quantityOnHand;
         const initialAvailable = payload.available;
-        const result = await smartMergeInventory({
-          productId: payload.productId,
-          name: payload.name,
-          category: payload.category,
-          manufacturer: payload.manufacturer,
-          manufacturerItemId: payload.manufacturerItemId,
-          sku: payload.sku,
-          hcpc: payload.hcpc,
-          barcode: payload.barcode,
-          serial: payload.serial,
-          lotNumber: payload.lotNumber,
-          expirationDate: "",
-          locationName: payload.locationName,
-          binLocation: payload.binLocation,
-          quantityOnHand: 0,
-          committed: 0,
-          onRent: 0,
-          onOrder: payload.onOrder,
-          reorderLevel: payload.reorderLevel,
-          unitCost: payload.unitCost,
-          status:
-            payload.status === "discontinued" || payload.status === "rental_out"
-              ? "inactive"
-              : payload.status,
-          notes: payload.notes,
-          source: "inventory",
-          sourceId: "manual_entry",
-        });
+
+        if (
+          saveMovementState &&
+          saveMovementState.context.kind !== "new"
+        ) {
+          saveMovementStateRef.current = null;
+          saveMovementState = null;
+        }
+
+        let inventoryId: string;
+        let resultAction: "created" | "merged";
+
+        if (saveMovementState?.context.kind === "new") {
+          inventoryId = saveMovementState.context.inventoryItemId;
+          resultAction = saveMovementState.context.action;
+        } else {
+          const result = await smartMergeInventory({
+            productId: payload.productId,
+            name: payload.name,
+            category: payload.category,
+            manufacturer: payload.manufacturer,
+            manufacturerItemId: payload.manufacturerItemId,
+            sku: payload.sku,
+            hcpc: payload.hcpc,
+            barcode: payload.barcode,
+            serial: payload.serial,
+            lotNumber: payload.lotNumber,
+            expirationDate: "",
+            locationName: payload.locationName,
+            binLocation: payload.binLocation,
+            quantityOnHand: 0,
+            committed: 0,
+            onRent: 0,
+            onOrder: payload.onOrder,
+            reorderLevel: payload.reorderLevel,
+            unitCost: payload.unitCost,
+            status:
+              payload.status === "discontinued" ||
+              payload.status === "rental_out"
+                ? "inactive"
+                : payload.status,
+            notes: payload.notes,
+            source: "inventory",
+            sourceId: "manual_entry",
+          });
+
+          inventoryId = result.inventoryId;
+          resultAction = result.action;
+
+          const resolvedTargetState =
+            createResolvedNewSaveMovementState({
+              fingerprint: saveMovementFingerprint,
+              inventoryItemId: inventoryId,
+              action: resultAction,
+            });
+
+          saveMovementStateRef.current = resolvedTargetState;
+          saveMovementState = resolvedTargetState;
+        }
 
         const syncedProductId = await ensureProductFromInventory({
-          id: result.inventoryId,
+          id: inventoryId,
           ...payload,
           quantityOnHand: 0,
           available: 0,
@@ -461,14 +592,16 @@ export function useInventoryActions({
           isDeleted: false,
         });
 
-        await InventoryRepository.update(result.inventoryId, {
+        await InventoryRepository.update(inventoryId, {
           ...omitMovementFields(payload),
           productId: syncedProductId ?? payload.productId,
           searchText,
           pendingScanReview: pendingReview,
-          scanSource: pendingReview ? "scan_in_unmatched" : "inventory_review_completed",
+          scanSource: pendingReview
+            ? "scan_in_unmatched"
+            : "inventory_review_completed",
           lowStock: isLowStock({
-            id: result.inventoryId,
+            id: inventoryId,
             ...payload,
             searchText,
             isDeleted: false,
@@ -476,27 +609,36 @@ export function useInventoryActions({
         });
 
         if (initialQuantity > 0) {
-          const movement = await createInventoryMovement({
-            movementType: "receive",
-            inventoryItemId: result.inventoryId,
-            productId: syncedProductId ?? payload.productId,
-            barcode: payload.barcode,
-            serialNumber: payload.serial,
-            lotNumber: payload.lotNumber,
-            quantity: initialQuantity,
-            reason: "Initial inventory quantity received from manual entry.",
-            source: "inventory_page",
-            metadata: {
-              initialAvailable,
-            },
-          });
-
-          if (
-            movement.status !== "success" &&
-            movement.status !== "duplicate_operation"
-          ) {
-            throw new Error(movement.message || "Initial quantity receive failed.");
+          if (!saveMovementState || saveMovementState.context.kind !== "new") {
+            throw new Error("Resolved inventory target is missing for initial receive.");
           }
+
+          if (saveMovementState.stage === "target_resolved") {
+            const armedState = armResolvedNewSaveMovementState({
+              state: saveMovementState,
+              operationId: createInventoryOperationId("inventory-save"),
+              request: {
+                movementType: "receive",
+                inventoryItemId: inventoryId,
+                productId: syncedProductId ?? payload.productId,
+                barcode: payload.barcode,
+                serialNumber: payload.serial,
+                lotNumber: payload.lotNumber,
+                quantity: initialQuantity,
+                reason:
+                  "Initial inventory quantity received from manual entry.",
+                source: "inventory_page",
+                metadata: {
+                  initialAvailable,
+                },
+              },
+            });
+
+            saveMovementStateRef.current = armedState;
+            saveMovementState = armedState;
+          }
+
+          await executeSaveMovement(saveMovementState);
         }
 
         await logInventoryMovement({
@@ -506,28 +648,39 @@ export function useInventoryActions({
           serial: payload.serial,
           lotNumber: payload.lotNumber,
           type:
-            result.action === "created"
+            resultAction === "created"
               ? "inventory_created"
               : "inventory_merged",
           quantity: payload.quantityOnHand,
-          sourceId: result.inventoryId,
+          sourceId: inventoryId,
           notes:
-            result.action === "created"
+            resultAction === "created"
               ? "Inventory record created."
               : "Inventory merged with existing stock.",
         });
 
         toast.success(
-          result.action === "created"
+          resultAction === "created"
             ? "Inventory added."
             : "Inventory merged with existing stock."
         );
       }
 
+      saveMovementStateRef.current = null;
       resetForm();
     } catch (error: unknown) {
       console.error("SAVE INVENTORY ERROR:", error);
-      toast.error("Inventory could not be saved.");
+
+      const pendingMovement = saveMovementStateRef.current;
+      const outcomeIsUncertain =
+        pendingMovement?.stage === "pending" &&
+        isRetryableInventoryTransactionError(error);
+
+      toast.error(
+        outcomeIsUncertain
+          ? "Inventory save outcome is uncertain. Retry Save to safely reuse the same operation."
+          : "Inventory could not be saved."
+      );
     } finally {
       setSaving(false);
     }
