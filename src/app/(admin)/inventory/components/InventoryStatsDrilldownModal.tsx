@@ -131,6 +131,45 @@ export function InventoryStatsDrilldownModal({
     setScannerOpen(true);
   }
 
+  async function handleInventoryMovementScan(
+    clean: string,
+    direction: "in" | "out",
+  ) {
+    try {
+      const success =
+        await handleScanMovement(clean, direction);
+
+      if (!success) {
+        return;
+      }
+
+      setScanSuccess({
+        title:
+          direction === "in"
+            ? "Scan In Complete"
+            : "Scan Out Complete",
+        message:
+          direction === "in"
+            ? `${clean} was saved to inventory successfully.`
+            : `${clean} was removed from available inventory successfully.`,
+      });
+    } catch (error: unknown) {
+      console.error(
+        "INVENTORY DRILLDOWN SCAN ERROR:",
+        {
+          direction,
+          error,
+        },
+      );
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Inventory scan could not be completed.",
+      );
+    }
+  }
+
   function handleScanDetected(code: string) {
     const clean = normalizeBarcode(code);
 
@@ -144,25 +183,17 @@ export function InventoryStatsDrilldownModal({
         break;
 
       case "scanIn":
-        void handleScanMovement(clean, "in").then((success) => {
-          if (!success) return;
-
-          setScanSuccess({
-            title: "Scan In Complete",
-            message: `${clean} was saved to inventory successfully.`,
-          });
-        });
+        void handleInventoryMovementScan(
+          clean,
+          "in",
+        );
         return;
 
       case "scanOut":
-        void handleScanMovement(clean, "out").then((success) => {
-          if (!success) return;
-
-          setScanSuccess({
-            title: "Scan Out Complete",
-            message: `${clean} was removed from available inventory successfully.`,
-          });
-        });
+        void handleInventoryMovementScan(
+          clean,
+          "out",
+        );
         return;
 
       default:
