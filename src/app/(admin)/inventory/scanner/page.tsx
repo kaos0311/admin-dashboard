@@ -19,6 +19,7 @@ import toast from "react-hot-toast";
 
 import { BarcodeScannerInput, type BarcodeScannerInputHandle } from "@/components/scanning/BarcodeScannerInput";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
+import { hasPermission } from "@/lib/permissions/roles";
 import {
   useInventoryLookup,
   getMatchedFieldLabel,
@@ -91,7 +92,16 @@ function MatchedFieldsList({
 }
 
 export default function ScannerPage() {
-  const { isAdminOrStaff, loading: authLoading, user } = useAuthRole();
+  const {
+    loading: authLoading,
+    user,
+    role,
+    canAccessCommandCenter,
+  } = useAuthRole();
+
+  const canWrite =
+    canAccessCommandCenter &&
+    hasPermission(role, "inventory:write");
   const { lookupByBarcode, executeTransaction, loading: txLoading, error: txError, reset: resetTx } = useInventoryLookup();
 
   const [transactionMode, setTransactionMode] = useState<TransactionMode>("lookup");
@@ -135,13 +145,13 @@ export default function ScannerPage() {
 
   // Auto-focus scanner on mount
   useEffect(() => {
-    if (!authLoading && isAdminOrStaff) {
+    if (!authLoading && canWrite) {
       const timer = setTimeout(() => {
         scannerRef.current?.focusScanner();
       }, 500);
       return () => clearTimeout(timer);
     }
-  }, [authLoading, isAdminOrStaff]);
+  }, [authLoading, canWrite]);
 
   /** Refocus the scanner input after a brief delay to let state settle. */
   const refocusScanner = useCallback(() => {
@@ -611,7 +621,7 @@ export default function ScannerPage() {
     );
   }
 
-  if (!isAdminOrStaff) {
+  if (!canWrite) {
     return (
       <main className={`${glass.page} ${tiles.alert}`}>
         <div className="flex min-h-[60vh] items-center justify-center">

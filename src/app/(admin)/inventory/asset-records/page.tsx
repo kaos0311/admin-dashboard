@@ -8,6 +8,7 @@ import { ArrowLeft, PackageCheck, RefreshCcw } from "lucide-react";
 import { buttons, colors, glass, tiles, typography } from "@/theme";
 
 import { useAuthRole } from "@/app/hooks/useAuthRole";
+import { hasPermission } from "@/lib/permissions/roles";
 
 import { InventoryAssetTiles } from "../components/InventoryAssetTiles";
 import { InventoryEmptyState } from "../components/InventoryEmptyState";
@@ -18,10 +19,13 @@ import { isActiveAssetRecord } from "../lib/assetRecords";
 export default function InventoryAssetRecordsPage() {
   const {
     loading: authLoading,
-    isAdminOrStaff,
+    role,
+    canAccessCommandCenter,
   } = useAuthRole();
 
-  const canRead = isAdminOrStaff;
+  const canRead =
+    canAccessCommandCenter &&
+    hasPermission(role, "inventory:read");
 
   const [refreshKey, setRefreshKey] = useState(0);
 
