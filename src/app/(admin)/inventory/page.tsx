@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import {
   Building2,
@@ -41,6 +41,7 @@ import { useInventoryActions } from "./hooks/useInventoryActions";
 import { useInventoryData } from "./hooks/useInventoryData";
 import { useInventoryFilters } from "./hooks/useInventoryFilters";
 import { useInventoryForm } from "./hooks/useInventoryForm";
+import { useInventorySelection } from "./hooks/useInventorySelection";
 import { useInventorySettings } from "./hooks/useInventorySettings";
 
 import { isActiveAssetRecord } from "./lib/assetRecords";
@@ -109,25 +110,6 @@ export default function InventoryPage() {
   } | null>(null);
 
   const [pendingScan, setPendingScan] = useState<{ code: string; target: ScanTarget } | null>(null);
-
-  // ── Selection state ──────────────────────────────────────────
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-
-  const toggleSelected = useCallback(function toggleSelected(id: string) {
-    setSelectedIds((prev) =>
-      prev.includes(id) ? prev.filter((sid) => sid !== id) : [...prev, id],
-    );
-  }, []);
-
-  const removeSelectedId = useCallback(function removeSelectedId(id: string) {
-    setSelectedIds((prev) => prev.filter((sid) => sid !== id));
-  }, []);
-
-  const clearSelected = useCallback(function clearSelected() {
-    setSelectedIds([]);
-  }, []);
-
-  // ─────────────────────────────────────────────────────────────
 
   const inventoryThresholds = useInventorySettings();
 
@@ -218,6 +200,17 @@ export default function InventoryPage() {
 
     resetFilters,
   } = useInventoryFilters(items, inventoryThresholds);
+
+  const {
+    selectedIds,
+    toggleSelected,
+    clearSelected,
+    removeSelectedId,
+  } = useInventorySelection(
+    items,
+    filteredItems,
+    canWrite,
+  );
 
   const {
     handleSubmit,

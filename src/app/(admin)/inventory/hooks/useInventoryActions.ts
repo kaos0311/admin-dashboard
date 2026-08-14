@@ -1088,6 +1088,7 @@ export function useInventoryActions({
       }
 
       discontinueStateRef.current.delete(item.id);
+      removeSelectedId(item.id);
       toast.success("Item discontinued.");
     } catch (error: unknown) {
       discontinueStateRef.current.delete(item.id);
