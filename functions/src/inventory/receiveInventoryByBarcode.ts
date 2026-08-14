@@ -44,7 +44,7 @@
  *    - Issue, CycleCount, Transfer still use the old generic path — retained for those features.
  */
 
-import { Timestamp, getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 
@@ -55,10 +55,6 @@ import {
   normalizeScanValue,
 } from "./movementService.js";
 import type {
-  InventoryLookupMatchedField,
-  InventoryLookupItem,
-  InventoryLookupMatch,
-  ReceiveInventoryRequest,
   ReceiveInventoryResult,
 } from "./types";
 
@@ -66,47 +62,6 @@ const db = getFirestore();
 
 /** Maximum quantity allowed in a single receive transaction. */
 const MAX_RECEIVE_QUANTITY = 999999;
-
-/** Fields to search for barcode matching. */
-const SEARCH_FIELDS: InventoryLookupMatchedField[] = [
-  "barcode",
-  "serial",
-  "lotNumber",
-  "sku",
-];
-
-// ──────────────────────────────────────────────
-// Safe-access helpers
-// ──────────────────────────────────────────────
-
-function asString(value: unknown, fallback = ""): string {
-  if (typeof value === "string") return value;
-  if (typeof value === "number") return String(value);
-  return fallback;
-}
-
-/**
- * Read a numeric field and throw if the stored value is malformed.
- * Only default to `fallback` when the value is absent (null/undefined).
- * If the value exists but is not a finite number, that is a data integrity
- * error that must be surfaced rather than silently coerced.
- */
-function safeNumber(
-  data: Record<string, unknown>,
-  field: string,
-  fallback: number,
-): number {
-  if (!(field in data) || data[field] === null || data[field] === undefined) {
-    return fallback;
-  }
-  const value = data[field];
-  if (typeof value === "number" && Number.isFinite(value)) return value;
-  // Malformed — surface as a precondition failure
-  throw new HttpsError(
-    "failed-precondition",
-    `Inventory document has non-numeric value in field "${field}": ${JSON.stringify(value)}`,
-  );
-}
 
 // ──────────────────────────────────────────────
 // Expiration date validation (PHASE 5)
@@ -146,116 +101,6 @@ function parseExpirationDate(raw: string): Timestamp {
 }
 
 // ──────────────────────────────────────────────
-// Build response items
-// ──────────────────────────────────────────────
-
-function buildLookupItem(
-  id: string,
-  data: FirebaseFirestore.DocumentData,
-): InventoryLookupItem {
-  return {
-    id,
-    name: asString(data.name, "Unnamed Item"),
-    category: asString(data.category),
-    barcode: asString(data.barcode),
-    sku: asString(data.sku),
-    serial: asString(data.serial),
-    lotNumber: asString(data.lotNumber),
-    quantityOnHand: safeNumber(data, "quantityOnHand", 0),
-    available: safeNumber(data, "available", 0),
-    status: asString(data.status),
-    manufacturer: asString(data.manufacturer),
-    locationName: asString(data.locationName),
-    lifecycleStatus: asString(data.lifecycleStatus),
-  };
-}
-
-// ──────────────────────────────────────────────
-// Barcode resolution
-// ──────────────────────────────────────────────
-
-async function resolveItem(
-  barcode: string,
-): Promise<{
-  id: string;
-  data: FirebaseFirestore.DocumentData;
-  matchedFields: InventoryLookupMatchedField[];
-} | null> {
-  const matchesByDoc = new Map<
-    string,
-    {
-      data: FirebaseFirestore.DocumentData;
-      fields: Set<InventoryLookupMatchedField>;
-    }
-  >();
-
-  for (const field of SEARCH_FIELDS) {
-    const snap = await db
-      .collection("inventory")
-      .where(field, "==", barcode)
-      .where("isDeleted", "!=", true)
-      .limit(10)
-      .get();
-
-    for (const doc of snap.docs) {
-      const existing = matchesByDoc.get(doc.id);
-      if (existing) {
-        existing.fields.add(field);
-      } else {
-        matchesByDoc.set(doc.id, {
-          data: doc.data(),
-          fields: new Set([field]),
-        });
-      }
-    }
-
-    // Also try uppercase for mixed-case data
-    const upperBarcode = barcode.toUpperCase();
-    if (upperBarcode !== barcode) {
-      const upperSnap = await db
-        .collection("inventory")
-        .where(field, "==", upperBarcode)
-        .where("isDeleted", "!=", true)
-        .limit(10)
-        .get();
-
-      for (const doc of upperSnap.docs) {
-        const existing = matchesByDoc.get(doc.id);
-        if (existing) {
-          existing.fields.add(field);
-        } else {
-          matchesByDoc.set(doc.id, {
-            data: doc.data(),
-            fields: new Set([field]),
-          });
-        }
-      }
-    }
-  }
-
-  if (matchesByDoc.size === 0) return null;
-  if (matchesByDoc.size === 1) {
-    const [docId, entry] = [...matchesByDoc.entries()][0];
-    return { id: docId, data: entry.data, matchedFields: [...entry.fields] };
-  }
-
-  // Multiple matches — let caller handle as "duplicate"
-  return null;
-}
-
-function buildDuplicateMatches(
-  allMatches: Map<
-    string,
-    { data: FirebaseFirestore.DocumentData; fields: Set<InventoryLookupMatchedField> }
-  >,
-): InventoryLookupMatch[] {
-  return [...allMatches.entries()].map(([docId, entry]) => ({
-    item: buildLookupItem(docId, entry.data),
-    matchedFields: [...entry.fields],
-  }));
-}
-
-// ──────────────────────────────────────────────
 // Quantity parsing
 // ──────────────────────────────────────────────
 
@@ -289,100 +134,6 @@ function parseQuantity(raw: unknown): number {
   }
 
   return raw;
-}
-
-// ──────────────────────────────────────────────
-// Request fingerprint (for idempotency conflict detection)
-// ──────────────────────────────────────────────
-
-function buildRequestFingerprint(
-  performedByUid: string,
-  normalizedBarcode: string,
-  quantity: number,
-  source: string,
-  locationId: string | null,
-  lotNumber: string | null,
-  serial: string | null,
-  expirationDate: string | null,
-  note: string | null,
-): string {
-  // Normalized fields sufficient to detect conflicting reuse of same operationId
-  const parts = [
-    performedByUid,
-    normalizedBarcode,
-    String(quantity),
-    source,
-    locationId ?? "",
-    lotNumber ?? "",
-    serial ?? "",
-    expirationDate ?? "",
-    note ?? "",
-  ];
-  return parts.join("|");
-}
-
-// ──────────────────────────────────────────────
-// gatherDuplicateMatches helper
-// ──────────────────────────────────────────────
-
-async function gatherAllMatches(
-  normalizedBarcode: string,
-): Promise<Map<
-  string,
-  { data: FirebaseFirestore.DocumentData; fields: Set<InventoryLookupMatchedField> }
->> {
-  const matchesByDoc = new Map<
-    string,
-    {
-      data: FirebaseFirestore.DocumentData;
-      fields: Set<InventoryLookupMatchedField>;
-    }
-  >();
-
-  for (const field of SEARCH_FIELDS) {
-    const snap = await db
-      .collection("inventory")
-      .where(field, "==", normalizedBarcode)
-      .where("isDeleted", "!=", true)
-      .limit(10)
-      .get();
-
-    for (const doc of snap.docs) {
-      const existing = matchesByDoc.get(doc.id);
-      if (existing) {
-        existing.fields.add(field);
-      } else {
-        matchesByDoc.set(doc.id, {
-          data: doc.data(),
-          fields: new Set([field]),
-        });
-      }
-    }
-
-    const upperBarcode = normalizedBarcode.toUpperCase();
-    if (upperBarcode !== normalizedBarcode) {
-      const upperSnap = await db
-        .collection("inventory")
-        .where(field, "==", upperBarcode)
-        .where("isDeleted", "!=", true)
-        .limit(10)
-        .get();
-
-      for (const doc of upperSnap.docs) {
-        const existing = matchesByDoc.get(doc.id);
-        if (existing) {
-          existing.fields.add(field);
-        } else {
-          matchesByDoc.set(doc.id, {
-            data: doc.data(),
-            fields: new Set([field]),
-          });
-        }
-      }
-    }
-  }
-
-  return matchesByDoc;
 }
 
 // ──────────────────────────────────────────────
@@ -464,9 +215,9 @@ export const receiveInventoryByBarcode = onCall(
     const note = typeof data.note === "string" ? data.note : null;
 
     // ── 2b. Validate expirationDate (PHASE 5) ──
-    let expirationTimestamp: Timestamp | null = null;
+    let _expirationTimestamp: Timestamp | null = null;
     if (expirationDate !== null) {
-      expirationTimestamp = parseExpirationDate(expirationDate);
+      _expirationTimestamp = parseExpirationDate(expirationDate);
     }
 
     const movement = await createInventoryMovement(

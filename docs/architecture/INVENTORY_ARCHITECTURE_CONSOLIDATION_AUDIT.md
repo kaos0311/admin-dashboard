@@ -27,10 +27,12 @@ server-authoritative mutation workflows:
   scan intake, scanner movement, archive, discontinue, hard delete, and batch
   archive/discontinue retry paths.
 
-The largest remaining architecture debt is no longer backup artifacts or missing
-scanner auth. The current debt is scan-resolution duplication, compatibility
-scanner callables that still exist beside newer scanner/domain workflows, and
-several broad workflow modules that remain correct but dense.
+The largest remaining architecture debt is no longer backup artifacts, missing
+scanner auth, or duplicated backend scan-resolution semantics. A shared backend
+resolver contract now owns scan normalization, inventory candidate lookup,
+deleted-record filtering, and ambiguity classification. Remaining debt is mostly
+client-only presentation/merge scan logic, compatibility scanner callable
+surface area, and broad workflow modules that remain correct but dense.
 
 ## 2. Current Architecture Map
 
@@ -39,6 +41,7 @@ Core backend inventory modules:
 | Area | Files | Role |
 | --- | --- | --- |
 | Movement service | `functions/src/inventory/movementService.ts` | Canonical inventory quantity/status/location movement engine, movement validation, idempotency through `inventoryOperations`, movement history in `inventoryTransactions`, audit logging, reconciliation support |
+| Backend scan resolver | `functions/src/inventory/inventoryScanResolver.ts` | Canonical backend scan normalization, inventory lookup, matched-field tracking, deleted-record filtering, document-id resolution when requested, and fail-closed ambiguity classification |
 | Movement callables | `functions/src/inventory/movementFunctions.ts` | `createInventoryMovementCallable`, `reverseInventoryMovementCallable`, `reconcileInventoryCallable`; includes `retail_sale` in the callable movement allowlist |
 | Receive by barcode | `functions/src/inventory/receiveInventoryByBarcode.ts` | Compatibility receive callable using movement service |
 | Scanned intake | `functions/src/inventory/receiveScannedInventoryIntake.ts` | Product-match and pending-scan intake using `InventoryResolutionPlan` plus prepared movement writes |
@@ -125,31 +128,39 @@ It checks
 actions and routes write modes through callable workflows instead of direct
 client-side protected-field writes.
 
-Scanner architecture is improved but not fully consolidated:
+Scanner architecture is improved and now uses one backend resolver contract for
+inventory-item scan resolution:
 
 - Equipment check-in is server authoritative through
-  `equipmentCheckInByBarcodeCallable`.
+  `equipmentCheckInByBarcodeCallable` and resolves scanned inventory through
+  `inventoryScanResolver.ts` before ownership classification.
 - Retail sale uses the canonical movement callable with `movementType:
-  "retail_sale"`.
+  "retail_sale"`; movement scan fallback also routes through
+  `inventoryScanResolver.ts`.
 - Receive Stock remains connected to the existing scanned intake and receive movement
-  paths.
+  paths; receive mutation identity resolves through the movement service and
+  scanned-intake inventory lookup portions use the shared resolver where
+  transaction-safe.
 - Distribute / Issue, Transfer Location, and Cycle Count remain routed through the
-  compatibility scanner callables backed by the canonical movement service.
+  compatibility scanner callables backed by the canonical movement service. Their
+  scan lookup now uses the shared resolver and fails closed on ambiguity.
 - Rental Check-Out does not invent missing rental or patient context. When scanner-only
   input cannot satisfy the canonical rental checkout requirements, it fails closed and
   directs the user to the rental workflow.
 - Compatibility scanner callables for issue, cycle count, and transfer still
   exist in `functions/src/inventory/inventoryTransactionFunctions.ts`.
-- Scan lookup and normalization logic still appears in multiple modules:
-  `lookupInventoryByBarcode.ts`, `receiveInventoryByBarcode.ts`,
-  `receiveScannedInventoryIntake.ts`, `inventoryTransactionFunctions.ts`,
-  `scannerCheckInWorkflowService.ts`,
-  `src/services/inventory/inventory-scan-resolver.ts`, and
-  `src/lib/inventory/smartMergeInventory.ts`.
+- The backend resolver supports caller-selected field sets so generic scanner
+  identity does not accidentally absorb product fallback identity. Default item
+  identity covers barcode, serial, serialNumber, lotNumber, and SKU; movement
+  keeps its broader legacy manufacturerItemId/productId fallback as an explicit
+  caller option.
+- Remaining duplicate scan logic is client-side presentation/product intake
+  support in `src/services/inventory/inventory-scan-resolver.ts` and
+  metadata-oriented smart merge logic in `src/lib/inventory/smartMergeInventory.ts`.
 
-Recommended interpretation: scanner mutation authority is materially better
-than on 2026-08-12, but scan resolution itself should still be consolidated into
-one shared resolver contract.
+Recommended interpretation: backend mutation-time scan resolution is now
+consolidated. The next consolidation boundary is client presentation/product
+matching, not inventory mutation authority.
 
 ## 6. Equipment Check-In and Warehouse Custody
 
@@ -258,27 +269,30 @@ Current relevant coverage:
 | Golden inventory regression | `functions/src/golden/golden-regression.emulator.test.ts` imports `createInventoryMovementCallable`, `inventoryCleanupWorkflowCallable`, `returnRentalWorkflowCallable`, and `patientEquipmentWorkflowCallable` |
 | Scanner equipment check-in | `functions/src/test-utils/scanner-workflows.emulator.test.ts` covers rental return, duplicate operation replay, repeated physical scan already-in-warehouse, patient return, conflict rejection, explicit warehouse custody, orphan rejection, permission denial, and conflicting operation reuse |
 | Scanner retail sale | same emulator test covers normal quantity sale, insufficient stock, rented serialized rejection, serialized sale, repeat serialized sale rejection, duplicate operation replay, and permission denial |
+| Shared backend scan resolver | `functions/src/inventory/inventoryScanResolver.test.ts` covers barcode, serial, lot, SKU, document ID, normalization, no match, ambiguity, deleted filtering, multi-field same-document dedupe, serialized identifier resolution, quantity inventory resolution, and caller-selected manufacturer matching |
+| Compatibility scanner callables | `functions/src/test-utils/scanner-workflows.emulator.test.ts` covers issue, cycle count, transfer, not-found, and ambiguous scan failure through the shared resolver |
 | Client retry lifecycle | `src/app/(admin)/inventory/lib/*Lifecycle.test.ts`, `scanMovementRetry.test.ts`, and `scan-intake-retry.test.ts` cover operation ID preservation and duplicate handling for save, scan, archive, discontinue, hard delete, and batch retry paths |
 
 Most recent validation evidence available from this workspace context:
 
 - Scanner workflows emulator test passed with
   `npx firebase emulators:exec --project demo-advanced-home-medical --only firestore,auth "npx vitest run --config vitest.integration.config.ts src/test-utils/scanner-workflows.emulator.test.ts"`.
+- Shared resolver unit test passed with
+  `npx vitest run --config vitest.config.ts src/inventory/inventoryScanResolver.test.ts`.
 - Golden regression emulator test passed with
   `npx firebase emulators:exec --project demo-advanced-home-medical --only firestore,auth "npx vitest run --config vitest.integration.config.ts src/golden/golden-regression.emulator.test.ts"`.
-
-This audit refresh did not rerun emulator suites because the requested change was
-documentation-only. The validation for this turn is limited to markdown
-whitespace checking and git status.
 
 ## 11. Remaining Architecture Debt
 
 Remaining source-verified debt:
 
-1. Scan resolution is still duplicated across backend lookup, receive, scanner
-   compatibility, scanner check-in, client scan resolver, and smart-merge code.
+1. Client presentation/product scan resolution remains separate in
+   `src/services/inventory/inventory-scan-resolver.ts`. It is not mutation
+   authority and still combines inventory item, product catalog, and
+   identify-product behavior for UI intake.
 2. Compatibility scanner mutation callables still coexist with the newer scanner
-   UI and domain workflow paths.
+   UI and domain workflow paths, although their inventory lookup semantics now
+   route through the shared backend resolver.
 3. `movementService.ts`, `receiveScannedInventoryIntake.ts`, and
    `domainWorkflowFunctions.ts` are large modules. Size alone is not a correctness
    defect, but future changes should avoid increasing branching complexity there
@@ -288,6 +302,9 @@ Remaining source-verified debt:
 5. Retail sale is covered as a movement type, but broader sales/order accounting
    integration is outside the inventory movement boundary unless a separate
    business workflow is introduced.
+6. `src/lib/inventory/smartMergeInventory.ts` remains metadata-oriented client
+   merge logic and still duplicates some scan identity comparisons. It should not
+   be treated as mutation authority.
 
 Resolved or materially improved since the prior audit:
 
@@ -300,26 +317,30 @@ Resolved or materially improved since the prior audit:
   lifecycles.
 - Batch archive/discontinue actions prevent concurrent runs and resume
   pending/uncertain entries by preserving per-item operation IDs.
+- Backend scan normalization and inventory-item resolution are consolidated in
+  `functions/src/inventory/inventoryScanResolver.ts`.
+- Lookup, movement fallback resolution, scanner check-in, scanned-intake
+  inventory lookup portions, and compatibility scanner callables now consume the
+  shared backend resolver.
 - Tracked source-tree backup artifacts are no longer part of the architecture
   debt described by this document.
 
 ## 12. Recommended Next Architecture Task
 
-The next architecture task should be scan-resolution consolidation:
+The next architecture task should be client scan adapter consolidation:
 
-- Define one backend scan-resolution service that accepts a normalized scan value
-  and returns a typed resolution result for barcode, serial, serial number, lot,
-  SKU, ambiguity, inactive/deleted filtering, and explicit ownership/custody
-  metadata.
-- Migrate lookup, receive, scanner compatibility callables, scanner check-in, and
-  client display adapters to consume that contract.
-- Preserve existing callable names while routing their internals through the
-  shared resolver.
-- Add emulator tests for ambiguous scans, inactive/deleted filtering, duplicate
-  serial/lot/SKU matches, and legacy orphan ownership.
+- Classify `src/services/inventory/inventory-scan-resolver.ts` as a read-only UI
+  adapter and prevent it from becoming mutation authority.
+- Decide whether product-catalog scan matching should remain client-initiated or
+  move behind an authorized backend read adapter.
+- Keep `src/lib/inventory/smartMergeInventory.ts` scoped to metadata merge
+  behavior unless a separate server-authoritative merge workflow is designed.
+- Preserve the backend resolver as the only mutation-time inventory-item
+  resolution contract.
 
-This is a higher-value follow-up than splitting `movementService.ts` for size
-alone because it reduces duplicated workflow semantics at active scan boundaries.
+This is now higher-value than another backend resolver refactor because the
+backend mutation boundary is consolidated and covered by focused unit/emulator
+tests.
 
 ## 13. Release Readiness Interpretation
 

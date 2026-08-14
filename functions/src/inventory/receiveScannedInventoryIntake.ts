@@ -10,6 +10,10 @@ import {
   type MovementActor,
   normalizeScanValue,
 } from "./movementService.js";
+import {
+  type InventoryScanField,
+  resolveInventoryScan,
+} from "./inventoryScanResolver.js";
 import type {
   ReceiveScannedInventoryIntakeInput,
   ReceiveScannedInventoryIntakeResult,
@@ -21,6 +25,20 @@ const PRODUCTS_COLLECTION = "products";
 const OPERATIONS_COLLECTION = "inventoryOperations";
 const PENDING_SCAN_SOURCE = "scan_in_unmatched";
 const PRODUCT_MATCH_SOURCE = "product_catalog_scan";
+const PENDING_SCAN_FIELDS: InventoryScanField[] = [
+  "serial",
+  "barcode",
+  "lotNumber",
+  "sku",
+];
+const PRODUCT_MATCH_INVENTORY_FIELDS: InventoryScanField[] = [
+  "barcode",
+  "serial",
+  "serialNumber",
+  "lotNumber",
+  "sku",
+  "manufacturerItemId",
+];
 
 type InventoryResolutionPlan = {
   inventoryId: string;
@@ -120,36 +138,20 @@ async function findExistingPendingScanInventory(
     }
   }
 
-  const fields: Array<[string, string]> = [
-    ["serial", normalizedScan],
-    ["barcode", normalizedScan],
-    ["lotNumber", normalizedScan],
-    ["sku", normalizedScan],
-  ];
+  const resolved = await resolveInventoryScan(database, normalizedScan, {
+    fields: PENDING_SCAN_FIELDS,
+    includeUppercaseVariant: false,
+    transaction,
+    candidateFilter: (candidate) =>
+      candidate.data.pendingScanReview === true &&
+      text(candidate.data.scanSource) === PENDING_SCAN_SOURCE,
+  });
 
-  const matches = new Map<string, Record<string, unknown>>();
-
-  for (const [field, value] of fields) {
-    const query = database
-      .collection(INVENTORY_COLLECTION)
-      .where(field, "==", value)
-      .where("pendingScanReview", "==", true)
-      .where("scanSource", "==", PENDING_SCAN_SOURCE)
-      .where("isDeleted", "!=", true)
-      .limit(10);
-    const snap = await transaction.get(query);
-
-    for (const doc of snap.docs) {
-      matches.set(doc.id, doc.data() as Record<string, unknown>);
-    }
+  if (resolved.kind === "resolved") {
+    return { id: resolved.inventoryItemId, data: resolved.inventory };
   }
 
-  if (matches.size === 1) {
-    const [id, data] = Array.from(matches.entries())[0];
-    return { id, data };
-  }
-
-  if (matches.size > 1) {
+  if (resolved.kind === "ambiguous") {
     throw new HttpsError(
       "failed-precondition",
       "Multiple pending scan intake records match this scan code.",
@@ -175,55 +177,36 @@ async function findExistingProductMatchInventory(
     }
   }
 
-  const candidates = new Map<string, Record<string, unknown>>();
-  const queries: Array<[string, string]> = [
-    ["barcode", normalizedScan],
-    ["serial", normalizedScan],
-    ["lotNumber", normalizedScan],
-    ["sku", normalizedScan],
-    ["manufacturerItemId", normalizedScan],
-    ["productId", productId],
-  ];
-
-  for (const [field, value] of queries) {
-    const query = database
-      .collection(INVENTORY_COLLECTION)
-      .where(field, "==", value)
-      .where("isDeleted", "!=", true)
-      .limit(10);
-    const snap = await transaction.get(query);
-
-    for (const doc of snap.docs) {
-      candidates.set(doc.id, doc.data() as Record<string, unknown>);
-    }
-  }
-
-  const exactScanMatches = Array.from(candidates.entries()).filter(([, data]) => {
-    return (
-      text(data.barcode) === normalizedScan ||
-      text(data.serial) === normalizedScan ||
-      text(data.serialNumber) === normalizedScan ||
-      text(data.lotNumber) === normalizedScan ||
-      text(data.sku) === normalizedScan ||
-      text(data.manufacturerItemId) === normalizedScan
-    );
+  const exactScan = await resolveInventoryScan(database, normalizedScan, {
+    fields: PRODUCT_MATCH_INVENTORY_FIELDS,
+    includeUppercaseVariant: false,
+    transaction,
   });
 
-  if (exactScanMatches.length === 1) {
-    const [id, data] = exactScanMatches[0];
-    return { id, data };
+  if (exactScan.kind === "resolved") {
+    return { id: exactScan.inventoryItemId, data: exactScan.inventory };
   }
 
-  if (exactScanMatches.length > 1) {
+  if (exactScan.kind === "ambiguous") {
     throw new HttpsError(
       "failed-precondition",
       "Multiple inventory records match this product scan code.",
     );
   }
 
-  const productMatches = Array.from(candidates.entries()).filter(([, data]) => text(data.productId) === productId);
+  const productSnap = await transaction.get(
+    database
+      .collection(INVENTORY_COLLECTION)
+      .where("productId", "==", productId)
+      .where("isDeleted", "!=", true)
+      .limit(10),
+  );
+  const productMatches = productSnap.docs.map((docSnap) => ({
+    id: docSnap.id,
+    data: docSnap.data() as Record<string, unknown>,
+  }));
   if (productMatches.length === 1) {
-    const [id, data] = productMatches[0];
+    const { id, data } = productMatches[0];
     return { id, data };
   }
 

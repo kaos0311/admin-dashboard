@@ -8,6 +8,14 @@ import {
 import { getStorage } from "firebase-admin/storage";
 import { HttpsError } from "firebase-functions/v2/https";
 
+import {
+  type InventoryScanField,
+  normalizeScanValue,
+  resolveInventoryScan,
+} from "./inventoryScanResolver.js";
+
+export { normalizeScanValue };
+
 export type InventoryMovementType =
   | "receive"
   | "manual_adjustment"
@@ -101,10 +109,17 @@ export type InventoryMovementWritePlan = {
   apply: () => void;
 };
 
-const MAX_SCAN_LENGTH = 128;
 const OPERATION_ID_PATTERN = /^[a-zA-Z0-9_-]{8,160}$/;
 const SAFE_DOC_ID_PATTERN = /^[^/.][^/]{0,159}$/;
-const URL_PATTERN = /^[a-z][a-z0-9+.-]*:\/\//i;
+const MOVEMENT_SCAN_FIELDS: InventoryScanField[] = [
+  "barcode",
+  "serial",
+  "serialNumber",
+  "lotNumber",
+  "sku",
+  "manufacturerItemId",
+  "productId",
+];
 
 const ADMIN_ONLY_MOVEMENTS = new Set<InventoryMovementType>([
   "hard_delete",
@@ -147,65 +162,6 @@ function assertSafeDocId(value: string, label: string): void {
 
 function defaultFirestore(): Firestore {
   return getFirestore();
-}
-
-export function normalizeScanValue(rawValue: unknown): {
-  status: "valid" | "invalid";
-  value: string;
-  rawValue: string;
-  error?: string;
-} {
-  const raw = typeof rawValue === "string" ? rawValue : "";
-  const trimmed = raw.trim();
-
-  if (!trimmed) {
-    return { status: "invalid", value: "", rawValue: raw, error: "Scan is empty." };
-  }
-
-  if (URL_PATTERN.test(trimmed)) {
-    return {
-      status: "invalid",
-      value: "",
-      rawValue: raw,
-      error: "URL QR codes are not accepted for inventory movement.",
-    };
-  }
-
-  let value = "";
-  for (const char of trimmed) {
-    if (char !== "\r" && char !== "\n" && char !== "\t" && char !== "\x00") {
-      value += char;
-    }
-  }
-
-  if (!value) {
-    return {
-      status: "invalid",
-      value: "",
-      rawValue: raw,
-      error: "Scan is empty after normalization.",
-    };
-  }
-
-  if (value.length > MAX_SCAN_LENGTH) {
-    return {
-      status: "invalid",
-      value: "",
-      rawValue: raw,
-      error: `Scan exceeds ${MAX_SCAN_LENGTH} characters.`,
-    };
-  }
-
-  if (value.includes("/") || value === "." || value === "..") {
-    return {
-      status: "invalid",
-      value: "",
-      rawValue: raw,
-      error: "Scan contains path characters and cannot be used safely.",
-    };
-  }
-
-  return { status: "valid", value, rawValue: raw };
 }
 
 function parsePositiveQuantity(input: CreateMovementInput): number {
@@ -379,46 +335,28 @@ async function resolveInventoryForMovement(
     return { status: "invalid", message: scan.error ?? "Invalid scan." };
   }
 
-  const fields = [
-    ["barcode", scan.value],
-    ["serial", scan.value],
-    ["serialNumber", scan.value],
-    ["lotNumber", scan.value],
-    ["sku", scan.value],
-    ["manufacturerItemId", scan.value],
-    ["productId", scan.value],
-  ] as const;
-  const matches = new Map<string, InventoryDoc>();
+  const resolved = await resolveInventoryScan(database, scan.value, {
+    fields: MOVEMENT_SCAN_FIELDS,
+    includeUppercaseVariant: false,
+  });
 
-  for (const [field, value] of fields) {
-    const snap = await database
-      .collection("inventory")
-      .where(field, "==", value)
-      .where("isDeleted", "!=", true)
-      .limit(10)
-      .get();
-    snap.docs.forEach((docSnap) => {
-      matches.set(docSnap.id, docSnap.data() as InventoryDoc);
-    });
-  }
-
-  if (matches.size === 0) return { status: "not_found" };
-  if (matches.size > 1) {
+  if (resolved.kind === "not_found") return { status: "not_found" };
+  if (resolved.kind === "ambiguous") {
     return {
       status: "ambiguous",
-      matches: Array.from(matches.entries()).map(([id, data]) => ({
-        inventoryItemId: id,
-        productId: text(data.productId),
-        name: text(data.name),
-        barcode: text(data.barcode),
-        serialNumber: text(data.serialNumber) || text(data.serial),
-        lotNumber: text(data.lotNumber),
+      matches: resolved.candidates.map((candidate) => ({
+        inventoryItemId: candidate.id,
+        productId: text(candidate.data.productId),
+        name: text(candidate.data.name),
+        barcode: text(candidate.data.barcode),
+        serialNumber: text(candidate.data.serialNumber) || text(candidate.data.serial),
+        lotNumber: text(candidate.data.lotNumber),
       })),
     };
   }
 
-  const [id, data] = Array.from(matches.entries())[0];
-  return { status: "found", id, data };
+  const { inventoryItemId, inventory } = resolved;
+  return { status: "found", id: inventoryItemId, data: inventory };
 }
 
 function movementFingerprint(input: CreateMovementInput, actor: MovementActor): string {

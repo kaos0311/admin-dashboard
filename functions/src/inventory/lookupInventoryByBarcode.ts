@@ -3,7 +3,11 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 import { enforceCallableRateLimit } from "../security/rateLimit.js";
 import { requireStaffOrAdmin } from "./auth";
-import { normalizeScanValue } from "./movementService.js";
+import {
+  type InventoryScanDocument,
+  normalizeScanValue,
+  resolveInventoryScan,
+} from "./inventoryScanResolver.js";
 import type {
   InventoryLookupItem,
   InventoryLookupMatchedField,
@@ -57,6 +61,18 @@ function buildItem(
   };
 }
 
+function toLookupMatchedFields(
+  match: InventoryScanDocument,
+): InventoryLookupMatchedField[] {
+  return match.matchedFields.filter(
+    (field): field is InventoryLookupMatchedField =>
+      field === "barcode" ||
+      field === "serial" ||
+      field === "lotNumber" ||
+      field === "sku",
+  );
+}
+
 /**
  * Callable function: lookupInventoryByBarcode
  *
@@ -98,99 +114,39 @@ export const lookupInventoryByBarcode = onCall(
         parsedBarcode.error ?? "Invalid barcode."
       );
     }
-    const barcode = parsedBarcode.value;
+    const resolved = await resolveInventoryScan(db, parsedBarcode.value, {
+      fields: ["barcode", "serial", "lotNumber", "sku"],
+      includeUppercaseVariant: true,
+    });
 
-    // --- Search across multiple fields ---
-    // Track document-level matches: docId -> set of matched fields
-    const matchesByDoc = new Map<
-      string,
-      {
-        data: FirebaseFirestore.DocumentData;
-        fields: Set<InventoryLookupMatchedField>;
-      }
-    >();
-
-    const fieldsToSearch: InventoryLookupMatchedField[] = [
-      "barcode",
-      "serial",
-      "lotNumber",
-      "sku",
-    ];
-
-    for (const field of fieldsToSearch) {
-      // Exact match (Firestore queries are case-sensitive)
-      const snap = await db
-        .collection("inventory")
-        .where(field, "==", barcode)
-        .where("isDeleted", "!=", true)
-        .limit(10)
-        .get();
-
-      for (const doc of snap.docs) {
-        const existing = matchesByDoc.get(doc.id);
-        if (existing) {
-          existing.fields.add(field);
-        } else {
-          matchesByDoc.set(doc.id, {
-            data: doc.data(),
-            fields: new Set([field]),
-          });
-        }
-      }
-
-      // Also try uppercase for fields that might contain mixed-case values
-      const upperBarcode = barcode.toUpperCase();
-      if (upperBarcode !== barcode) {
-        const upperSnap = await db
-          .collection("inventory")
-          .where(field, "==", upperBarcode)
-          .where("isDeleted", "!=", true)
-          .limit(10)
-          .get();
-
-        for (const doc of upperSnap.docs) {
-          const existing = matchesByDoc.get(doc.id);
-          if (existing) {
-            existing.fields.add(field);
-          } else {
-            matchesByDoc.set(doc.id, {
-              data: doc.data(),
-              fields: new Set([field]),
-            });
-          }
-        }
-      }
-    }
-
-    // --- Build typed response ---
-    const totalMatches = matchesByDoc.size;
-
-    if (totalMatches === 0) {
+    if (resolved.kind === "not_found") {
       return {
         status: "not_found",
-        normalizedBarcode: barcode,
+        normalizedBarcode: parsedBarcode.value,
       };
     }
 
-    if (totalMatches === 1) {
-      const [docId, entry] = [...matchesByDoc.entries()][0];
+    if (resolved.kind === "resolved") {
       return {
         status: "found",
-        item: buildItem(docId, entry.data),
-        matchedFields: [...entry.fields],
+        item: buildItem(resolved.inventoryItemId, resolved.inventory),
+        matchedFields: resolved.matchedFields.filter(
+          (field): field is InventoryLookupMatchedField =>
+            field === "barcode" ||
+            field === "serial" ||
+            field === "lotNumber" ||
+            field === "sku",
+        ),
       };
     }
-
-    // Duplicate: two or more distinct documents
-    const matches = [...matchesByDoc.entries()].map(([docId, entry]) => ({
-      item: buildItem(docId, entry.data),
-      matchedFields: [...entry.fields],
-    }));
 
     return {
       status: "duplicate",
-      normalizedBarcode: barcode,
-      matches,
+      normalizedBarcode: parsedBarcode.value,
+      matches: resolved.candidates.map((candidate) => ({
+        item: buildItem(candidate.id, candidate.data),
+        matchedFields: toLookupMatchedFields(candidate),
+      })),
     };
   },
 );

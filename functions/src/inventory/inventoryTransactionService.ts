@@ -1,6 +1,11 @@
 import { FieldValue, type Firestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 
+import {
+  type InventoryScanField,
+  resolveInventoryScan,
+} from "./inventoryScanResolver.js";
+
 /**
  * Supported inventory transaction types.
  */
@@ -43,35 +48,51 @@ export interface InventoryTransactionResult {
   failureReason: string | null;
 }
 
+const COMPATIBILITY_SCAN_FIELDS: InventoryScanField[] = [
+  "barcode",
+  "serial",
+  "lotNumber",
+  "sku",
+];
+
 /**
  * Resolve an inventory item server-side by barcode.
  * Searches barcode, serial, lotNumber, sku fields.
  */
+export async function resolveInventoryItemScan(
+  db: Firestore,
+  normalizedBarcode: string
+): Promise<
+  | { status: "found"; id: string; data: Record<string, unknown> }
+  | { status: "not_found" }
+  | { status: "ambiguous"; candidateIds: string[] }
+> {
+  const resolved = await resolveInventoryScan(db, normalizedBarcode, {
+    fields: COMPATIBILITY_SCAN_FIELDS,
+    includeUppercaseVariant: false,
+  });
+
+  if (resolved.kind === "not_found") {
+    return { status: "not_found" };
+  }
+  if (resolved.kind === "ambiguous") {
+    return { status: "ambiguous", candidateIds: resolved.candidateIds };
+  }
+
+  return {
+    status: "found",
+    id: resolved.inventoryItemId,
+    data: resolved.inventory,
+  };
+}
+
 export async function resolveInventoryItem(
   db: Firestore,
   normalizedBarcode: string
 ): Promise<{ id: string; data: Record<string, unknown> } | null> {
-  const fieldsToSearch = ["barcode", "serial", "lotNumber", "sku"];
-  const seenIds = new Set<string>();
-
-  for (const field of fieldsToSearch) {
-    const snap = await db
-      .collection("inventory")
-      .where(field, "==", normalizedBarcode)
-      .where("isDeleted", "!=", true)
-      .limit(5)
-      .get();
-
-    for (const doc of snap.docs) {
-      if (!seenIds.has(doc.id)) {
-        seenIds.add(doc.id);
-        // Return first match per field
-        return { id: doc.id, data: doc.data() as Record<string, unknown> };
-      }
-    }
-  }
-
-  return null;
+  const resolved = await resolveInventoryItemScan(db, normalizedBarcode);
+  if (resolved.status !== "found") return null;
+  return { id: resolved.id, data: resolved.data };
 }
 
 /**

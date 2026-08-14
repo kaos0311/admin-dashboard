@@ -5,12 +5,13 @@ import { type CallableRequest, HttpsError, onCall } from "firebase-functions/v2/
 import { enforceCallableRateLimit } from "../security/rateLimit.js";
 import { requireStaffOrAdmin } from "./auth.js";
 import {
-  resolveInventoryItem,
+  resolveInventoryItemScan,
 } from "./inventoryTransactionService.js";
+import { normalizeScanValue } from "./inventoryScanResolver.js";
 import {
   createInventoryMovement,
-  setInventoryQuantityToCount,
   type InventoryMovementType,
+  setInventoryQuantityToCount,
 } from "./movementService.js";
 
 if (!getApps().length) {
@@ -50,10 +51,14 @@ async function executeTransaction(
     throw new HttpsError("invalid-argument", "Barcode is required.");
   }
 
-  const normalizedBarcode = rawBarcode.trim();
-  if (normalizedBarcode.length > 128) {
-    throw new HttpsError("invalid-argument", "Barcode exceeds maximum length.");
+  const parsedBarcode = normalizeScanValue(rawBarcode);
+  if (parsedBarcode.status === "invalid") {
+    throw new HttpsError(
+      "invalid-argument",
+      parsedBarcode.error ?? "Invalid barcode."
+    );
   }
+  const normalizedBarcode = parsedBarcode.value;
 
   const rawScan = typeof request.data?.rawScan === "string" ? request.data.rawScan : null;
   const source =
@@ -62,15 +67,22 @@ async function executeTransaction(
       : "manual_entry";
 
   // Resolve the inventory item server-side
-  const resolved = await resolveInventoryItem(db, normalizedBarcode);
+  const resolved = await resolveInventoryItemScan(db, normalizedBarcode);
 
-  if (!resolved) {
+  if (resolved.status === "not_found") {
     return {
       success: false,
       transactionId: "",
       status: "not_found",
       message: "No inventory item matches this barcode.",
     };
+  }
+
+  if (resolved.status === "ambiguous") {
+    throw new HttpsError(
+      "failed-precondition",
+      "Scan matched multiple inventory items."
+    );
   }
 
   let quantityChange: number;

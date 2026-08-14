@@ -1,7 +1,12 @@
 import { type Firestore, getFirestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 
-import { type MovementActor, normalizeScanValue } from "../inventory/movementService.js";
+import {
+  type InventoryScanField,
+  normalizeScanValue,
+  resolveInventoryScan,
+} from "../inventory/inventoryScanResolver.js";
+import { type MovementActor } from "../inventory/movementService.js";
 import { patientEquipmentWorkflow } from "./patientEquipmentWorkflowService.js";
 import { returnRentalWorkflow } from "./rentalWorkflowService.js";
 import { assertOperationId, text, type WorkflowResult } from "./shared.js";
@@ -20,6 +25,14 @@ type ResolvedInventory = {
   id: string;
   data: InventoryDoc;
 };
+
+const CHECK_IN_SCAN_FIELDS: InventoryScanField[] = [
+  "barcode",
+  "serial",
+  "serialNumber",
+  "lotNumber",
+  "sku",
+];
 
 const ACTIVE_RENTAL_STATUSES = new Set([
   "active",
@@ -68,24 +81,6 @@ function alreadyInWarehouseResult(operationId: string, inventoryItemId: string):
   };
 }
 
-async function queryInventoryScanField(
-  database: Firestore,
-  field: string,
-  value: string
-): Promise<Array<{ id: string; data: InventoryDoc }>> {
-  const snap = await database
-    .collection("inventory")
-    .where(field, "==", value)
-    .where("isDeleted", "!=", true)
-    .limit(10)
-    .get();
-
-  return snap.docs.map((docSnap) => ({
-    id: docSnap.id,
-    data: docSnap.data() as InventoryDoc,
-  }));
-}
-
 async function findInventoryByScan(
   database: Firestore,
   rawScan: string
@@ -95,25 +90,22 @@ async function findInventoryByScan(
     throw new HttpsError("invalid-argument", parsed.error ?? "Invalid barcode.");
   }
 
-  const scans = new Set([parsed.value]);
-  const upper = parsed.value.toUpperCase();
-  if (upper !== parsed.value) scans.add(upper);
+  const resolved = await resolveInventoryScan(database, parsed.value, {
+    fields: CHECK_IN_SCAN_FIELDS,
+    includeUppercaseVariant: true,
+  });
 
-  const matches = new Map<string, InventoryDoc>();
-  for (const value of scans) {
-    for (const field of ["barcode", "serial", "serialNumber", "lotNumber", "sku"]) {
-      const rows = await queryInventoryScanField(database, field, value);
-      rows.forEach((row) => {
-        matches.set(row.id, row.data);
-      });
-    }
+  if (resolved.kind === "not_found") return { status: "not_found" };
+  if (resolved.kind === "ambiguous") {
+    return { status: "ambiguous", count: resolved.candidateIds.length };
   }
-
-  if (matches.size === 0) return { status: "not_found" };
-  if (matches.size > 1) return { status: "ambiguous", count: matches.size };
-
-  const [id, data] = Array.from(matches.entries())[0];
-  return { status: "found", item: { id, data } };
+  return {
+    status: "found",
+    item: {
+      id: resolved.inventoryItemId,
+      data: resolved.inventory,
+    },
+  };
 }
 
 async function getExistingWorkflowDuplicate(

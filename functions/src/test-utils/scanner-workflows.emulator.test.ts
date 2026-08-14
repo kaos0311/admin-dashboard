@@ -11,6 +11,11 @@ import { equipmentCheckInByBarcodeCallable } from "../domainWorkflows/domainWork
 import { equipmentCheckInByBarcodeWorkflow } from "../domainWorkflows/scannerCheckInWorkflowService";
 import { createInventoryMovementCallable } from "../inventory/movementFunctions";
 import { createInventoryMovement, type MovementActor } from "../inventory/movementService";
+import {
+  cycleCountInventoryByBarcode,
+  issueInventoryByBarcode,
+  transferInventoryByBarcode,
+} from "../inventory/inventoryTransactionFunctions";
 
 validateEmulatorSafety();
 
@@ -72,6 +77,21 @@ async function invokeCreateMovementCallable(
     run: (request: Record<string, unknown>) => Promise<Record<string, unknown>>;
   };
   return callable.run(callableRequest(data, authContext, ip));
+}
+
+async function invokeCompatibilityScannerCallable(
+  callableExport: unknown,
+  data: Record<string, unknown>,
+  authContext: CallableAuthContext = {
+    uid: actor.uid,
+    role: actor.role,
+    email: actor.email,
+  },
+) {
+  const callable = callableExport as {
+    run: (request: Record<string, unknown>) => Promise<Record<string, unknown>>;
+  };
+  return callable.run(callableRequest(data, authContext));
 }
 
 async function seedInventory(id: string, overrides: Record<string, unknown> = {}) {
@@ -552,5 +572,140 @@ describe("scanner retail sale movement", () => {
       quantityOnHand: 3,
       available: 3,
     });
+  });
+});
+
+describe("compatibility scanner inventory transactions", () => {
+  it("issues inventory through shared scan resolution", async () => {
+    await seedInventory("compat-issue", {
+      barcode: "COMPAT-ISSUE",
+      quantityOnHand: 4,
+      available: 4,
+    });
+
+    const result = await invokeCompatibilityScannerCallable(
+      issueInventoryByBarcode,
+      {
+        operationId: "compat-issue-001",
+        barcode: "COMPAT-ISSUE",
+        quantity: 2,
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.inventoryItemId).toBe("compat-issue");
+    expect(result.quantityAfter).toBe(2);
+  });
+
+  it("resolves legacy inventory without isDeleted through compatibility scanner issue", async () => {
+    await db.collection("inventory").doc("compat-legacy-no-delete").set({
+      name: "Legacy Scanner Test Item",
+      productId: "product-compat-legacy-no-delete",
+      barcode: "LEGACY-COMPAT-NO-DELETE-FLAG",
+      quantityOnHand: 3,
+      committed: 0,
+      onRent: 0,
+      onTruck: 0,
+      available: 3,
+      status: "available",
+      lifecycleStatus: "active",
+      createdAt: Timestamp.now(),
+    });
+
+    const result = await invokeCompatibilityScannerCallable(
+      issueInventoryByBarcode,
+      {
+        operationId: "compat-legacy-no-delete-001",
+        barcode: "LEGACY-COMPAT-NO-DELETE-FLAG",
+        quantity: 1,
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.inventoryItemId).toBe("compat-legacy-no-delete");
+    expect(result.quantityAfter).toBe(2);
+    expect((await db.collection("inventory").doc("compat-legacy-no-delete").get()).data()).toMatchObject({
+      quantityOnHand: 2,
+      available: 2,
+    });
+  });
+
+  it("cycle counts inventory through shared scan resolution", async () => {
+    await seedInventory("compat-cycle", {
+      serial: "COMPAT-CYCLE-SERIAL",
+      quantityOnHand: 3,
+      available: 3,
+    });
+
+    const result = await invokeCompatibilityScannerCallable(
+      cycleCountInventoryByBarcode,
+      {
+        operationId: "compat-cycle-001",
+        barcode: "COMPAT-CYCLE-SERIAL",
+        quantity: 9,
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.inventoryItemId).toBe("compat-cycle");
+    expect(result.quantityAfter).toBe(9);
+  });
+
+  it("transfers inventory through shared scan resolution", async () => {
+    await seedInventory("compat-transfer", {
+      lotNumber: "COMPAT-LOT",
+      locationName: "Warehouse A",
+      quantityOnHand: 2,
+      available: 2,
+    });
+
+    const result = await invokeCompatibilityScannerCallable(
+      transferInventoryByBarcode,
+      {
+        operationId: "compat-transfer-001",
+        barcode: "COMPAT-LOT",
+        toLocation: "Warehouse B",
+      },
+    );
+
+    expect(result.status).toBe("success");
+    expect(result.inventoryItemId).toBe("compat-transfer");
+  });
+
+  it("returns not_found for compatibility scans without matches", async () => {
+    const result = await invokeCompatibilityScannerCallable(
+      issueInventoryByBarcode,
+      {
+        operationId: "compat-missing-001",
+        barcode: "COMPAT-MISSING",
+        quantity: 1,
+      },
+    );
+
+    expect(result).toMatchObject({
+      success: false,
+      status: "not_found",
+    });
+  });
+
+  it("fails closed for ambiguous compatibility scans", async () => {
+    await seedInventory("compat-ambiguous-a", {
+      barcode: "COMPAT-DUP",
+      quantityOnHand: 2,
+      available: 2,
+    });
+    await seedInventory("compat-ambiguous-b", {
+      serial: "COMPAT-DUP",
+      quantityOnHand: 2,
+      available: 2,
+    });
+
+    await expect(
+      invokeCompatibilityScannerCallable(issueInventoryByBarcode, {
+        operationId: "compat-ambiguous-001",
+        barcode: "COMPAT-DUP",
+        quantity: 1,
+      }),
+    ).rejects.toMatchObject({ code: "failed-precondition" });
   });
 });
