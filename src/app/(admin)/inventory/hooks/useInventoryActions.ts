@@ -1131,6 +1131,13 @@ export function useInventoryActions({
       return;
     }
 
+    if (batchMutationInFlightRef.current.size > 0) {
+      toast.error(
+        "Another batch inventory action is already running.",
+      );
+      return;
+    }
+
     let ledger =
       batchMutationLedgerRef.current.get(
         movementType,
