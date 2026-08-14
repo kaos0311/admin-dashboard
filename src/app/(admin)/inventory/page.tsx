@@ -32,6 +32,7 @@ import { InventoryHero } from "./components/InventoryHero";
 import { InventoryLoadingState } from "./components/InventoryLoadingState";
 import { type InventoryStatKey, InventoryStats } from "./components/InventoryStats";
 import { InventoryStatsDrilldownModal } from "./components/InventoryStatsDrilldownModal";
+import { InventoryBatchActions } from "./components/InventoryBatchActions";
 import { InventoryTable } from "./components/InventoryTable";
 import { JarvisNoticeModal } from "./components/JarvisNoticeModal";
 import { type ScanAssignmentChoice, ScanAssignmentModal } from "./components/ScanAssignmentModal";
@@ -203,7 +204,9 @@ export default function InventoryPage() {
 
   const {
     selectedIds,
+    selectedVisibleCount,
     toggleSelected,
+    toggleSelectAll,
     clearSelected,
     removeSelectedId,
   } = useInventorySelection(
@@ -640,9 +643,24 @@ export default function InventoryPage() {
                       visibleCount={assetRecordCount}
                     />
 
+                    {canWrite ? (
+                      <InventoryBatchActions
+                        selectedCount={selectedIds.length}
+                        selectedVisibleCount={selectedVisibleCount}
+                        onToggleSelectAll={toggleSelectAll}
+                        onBatchDiscontinue={() => {
+                          void handleBatchDiscontinue();
+                        }}
+                        onBatchArchive={() => {
+                          void handleBatchArchive();
+                        }}
+                      />
+                    ) : null}
+
                     <InventoryTable
                       items={filteredItems}
                       selectedIds={selectedIds}
+                      canWrite={canWrite}
                       isAdmin={isAdmin}
                       thresholds={inventoryThresholds}
                       onToggleSelected={toggleSelected}

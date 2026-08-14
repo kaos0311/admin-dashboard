@@ -40,6 +40,7 @@ type InventoryTableProps = {
   items: InventoryItem[];
   selectedIds: string[];
   isAdmin: boolean;
+  canWrite: boolean;
   thresholds: InventoryThresholdSettings;
   onToggleSelected: (id: string) => void;
   onEdit: (item: InventoryItem) => void;
@@ -54,6 +55,7 @@ export function InventoryTable({
   items,
   selectedIds,
   isAdmin,
+  canWrite,
   thresholds,
   onToggleSelected,
   onEdit,
@@ -139,6 +141,7 @@ export function InventoryTable({
                       onToggle={() => toggleProduct(product.key)}
                       selectedIds={selectedIds}
                       isAdmin={isAdmin}
+                      canWrite={canWrite}
                       thresholds={thresholds}
                       onToggleSelected={onToggleSelected}
                       onEdit={onEdit}
@@ -196,6 +199,7 @@ function ProductSection({
   onToggle,
   selectedIds,
   isAdmin,
+  canWrite,
   thresholds,
   onToggleSelected,
   onEdit,
@@ -252,6 +256,7 @@ function ProductSection({
               units={product.units}
               selectedIds={selectedIds}
               isAdmin={isAdmin}
+              canWrite={canWrite}
               thresholds={thresholds}
               onToggleSelected={onToggleSelected}
               onEdit={onEdit}
@@ -266,6 +271,7 @@ function ProductSection({
               quantities={product.quantities}
               selectedIds={selectedIds}
               isAdmin={isAdmin}
+              canWrite={canWrite}
               thresholds={thresholds}
               onToggleSelected={onToggleSelected}
               onEdit={onEdit}
@@ -282,6 +288,7 @@ function ProductSection({
 
 function SerializedUnitsTable({
   units,
+  canWrite,
   ...actions
 }: {
   units: InventoryUnitNode[];
@@ -291,14 +298,14 @@ function SerializedUnitsTable({
       <table className="w-full min-w-[980px] text-left text-sm">
         <thead className={typography.bodyMuted}>
           <tr className="border-y border-white/10">
-            <th className="px-3 py-2">Select</th>
+            {canWrite ? <th className="px-3 py-2">Select</th> : null}
             <th className="px-3 py-2">Serial Number</th>
             <th className="px-3 py-2">On Hand</th>
             <th className="px-3 py-2">Available</th>
             <th className="px-3 py-2">Status</th>
             <th className="px-3 py-2">Location</th>
             <th className="px-3 py-2">Value</th>
-            <th className="px-3 py-2 text-right">Actions</th>
+            {canWrite ? <th className="px-3 py-2 text-right">Actions</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -307,6 +314,7 @@ function SerializedUnitsTable({
               key={unit.id}
               item={unit.item}
               identity={unit.label}
+              canWrite={canWrite}
               {...actions}
             />
           ))}
@@ -320,6 +328,7 @@ function QuantityTable({
   quantities,
   selectedIds,
   isAdmin,
+  canWrite,
   thresholds,
   onToggleSelected,
   onEdit,
@@ -356,14 +365,14 @@ function QuantityTable({
             <table className="w-full min-w-[980px] text-left text-sm">
               <thead className={typography.bodyMuted}>
                 <tr className="border-b border-white/10">
-                  <th className="px-3 py-2">Select</th>
+                  {canWrite ? <th className="px-3 py-2">Select</th> : null}
                   <th className="px-3 py-2">Inventory Record</th>
                   <th className="px-3 py-2">On Hand</th>
                   <th className="px-3 py-2">Available</th>
                   <th className="px-3 py-2">Status</th>
                   <th className="px-3 py-2">Location</th>
                   <th className="px-3 py-2">Value</th>
-                  <th className="px-3 py-2 text-right">Actions</th>
+                  {canWrite ? <th className="px-3 py-2 text-right">Actions</th> : null}
                 </tr>
               </thead>
               <tbody>
@@ -374,6 +383,7 @@ function QuantityTable({
                     identity={item.lotNumber ? `Lot ${item.lotNumber}` : item.name}
                     selectedIds={selectedIds}
                     isAdmin={isAdmin}
+                    canWrite={canWrite}
                     thresholds={thresholds}
                     onToggleSelected={onToggleSelected}
                     onEdit={onEdit}
@@ -396,6 +406,7 @@ function InventoryRecordRow({
   identity,
   selectedIds,
   isAdmin,
+  canWrite,
   thresholds,
   onToggleSelected,
   onEdit,
@@ -411,24 +422,30 @@ function InventoryRecordRow({
 
   return (
     <tr className="border-t border-white/10 align-top hover:bg-white/[0.04]">
-      <td className="px-3 py-3">
-        <input
-          type="checkbox"
-          checked={selectedIds.includes(item.id)}
-          title={`Select ${item.name}`}
-          aria-label={`Select ${item.name}`}
-          onChange={() => onToggleSelected(item.id)}
-        />
-      </td>
+      {canWrite ? (
+        <td className="px-3 py-3">
+          <input
+            type="checkbox"
+            checked={selectedIds.includes(item.id)}
+            title={`Select ${item.name}`}
+            aria-label={`Select ${item.name}`}
+            onChange={() => onToggleSelected(item.id)}
+          />
+        </td>
+      ) : null}
 
       <td className="px-3 py-3">
-        <button
-          type="button"
-          onClick={() => onEdit(item)}
-          className={`${typography.bodyStrong} text-left underline-offset-4 hover:underline`}
-        >
-          {identity}
-        </button>
+        {canWrite ? (
+          <button
+            type="button"
+            onClick={() => onEdit(item)}
+            className={`${typography.bodyStrong} text-left underline-offset-4 hover:underline`}
+          >
+            {identity}
+          </button>
+        ) : (
+          <div className={typography.bodyStrong}>{identity}</div>
+        )}
         <div className={typography.smallMuted}>{item.name}</div>
       </td>
 
@@ -468,51 +485,53 @@ function InventoryRecordRow({
         </div>
       </td>
 
-      <td className="px-3 py-3">
-        <div className="flex justify-end gap-2">
-          <button
-            type="button"
-            onClick={() => onEdit(item)}
-            className={buttons.icon}
-            title="Edit"
-            aria-label={`Edit ${item.name}`}
-          >
-            <Pencil className="h-4 w-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onDiscontinue(item)}
-            className={buttons.iconWarning}
-            title="Discontinue"
-            aria-label={`Discontinue ${item.name}`}
-          >
-            <X className="h-4 w-4" />
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onArchive(item)}
-            className={buttons.iconArchive}
-            title="Archive"
-            aria-label={`Archive ${item.name}`}
-          >
-            <Trash2 className="h-4 w-4" />
-          </button>
-
-          {isAdmin ? (
+      {canWrite ? (
+        <td className="px-3 py-3">
+          <div className="flex justify-end gap-2">
             <button
               type="button"
-              onClick={() => onDelete(item)}
-              className={buttons.iconDelete}
-              title="Permanent Delete"
-              aria-label={`Permanently delete ${item.name}`}
+              onClick={() => onEdit(item)}
+              className={buttons.icon}
+              title="Edit"
+              aria-label={`Edit ${item.name}`}
             >
-              <DatabaseZap className="h-4 w-4" />
+              <Pencil className="h-4 w-4" />
             </button>
-          ) : null}
-        </div>
-      </td>
+
+            <button
+              type="button"
+              onClick={() => onDiscontinue(item)}
+              className={buttons.iconWarning}
+              title="Discontinue"
+              aria-label={`Discontinue ${item.name}`}
+            >
+              <X className="h-4 w-4" />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => onArchive(item)}
+              className={buttons.iconArchive}
+              title="Archive"
+              aria-label={`Archive ${item.name}`}
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+
+            {isAdmin ? (
+              <button
+                type="button"
+                onClick={() => onDelete(item)}
+                className={buttons.iconDelete}
+                title="Permanent Delete"
+                aria-label={`Permanently delete ${item.name}`}
+              >
+                <DatabaseZap className="h-4 w-4" />
+              </button>
+            ) : null}
+          </div>
+        </td>
+      ) : null}
     </tr>
   );
 }
