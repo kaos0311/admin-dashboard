@@ -33,6 +33,14 @@ import {
   type SaveMovementState,
 } from "../lib/saveMovementLifecycle";
 import {
+  createBatchMutationLedger,
+  executeBatchMutationLedger,
+  getCompletedBatchItemIds,
+  summarizeBatchMutation,
+  type BatchMutationLedger,
+  type BatchMutationType,
+} from "../lib/batchMutationLifecycle";
+import {
   createDiscontinueRetryState,
   executeDiscontinueWithRetry,
   markDiscontinueOutcomeUncertain,
@@ -124,6 +132,13 @@ export function useInventoryActions({
   }
 
   const saveMovementStateRef = useRef<SaveMovementState | null>(null);
+
+  const batchMutationLedgerRef = useRef(
+    new Map<BatchMutationType, BatchMutationLedger>(),
+  );
+  const batchMutationInFlightRef = useRef(
+    new Set<BatchMutationType>(),
+  );
 
   const discontinueStateRef = useRef(
     new Map<string, DiscontinueRetryState>(),
@@ -1100,103 +1115,218 @@ export function useInventoryActions({
     }
   }
 
-  async function handleBatchArchive() {
+  async function executeInventoryBatchMutation(
+    movementType: BatchMutationType,
+  ) {
     if (!canWrite) {
       toast.error("You do not have permission.");
       return;
     }
 
-    if (!selectedIds.length) {
-      toast.error("Select items first.");
+    if (
+      batchMutationInFlightRef.current.has(
+        movementType,
+      )
+    ) {
       return;
     }
 
-    if (!window.confirm(`Archive ${selectedIds.length} selected item(s)?`)) {
-      return;
+    let ledger =
+      batchMutationLedgerRef.current.get(
+        movementType,
+      );
+
+    const existingSummary = ledger
+      ? summarizeBatchMutation(ledger)
+      : null;
+
+    if (
+      ledger &&
+      existingSummary &&
+      existingSummary.uncertain > 0
+    ) {
+      const label =
+        movementType === "archived"
+          ? "archive"
+          : "discontinue";
+
+      const resume = window.confirm(
+        `A previous batch ${label} has ${existingSummary.uncertain} item(s) with an uncertain outcome.` +
+          "\n\nThe server may already have completed those items." +
+          "\n\nRetry ONLY those uncertain items now using their original operation IDs?",
+      );
+
+      if (!resume) {
+        return;
+      }
+    } else {
+      if (!selectedIds.length) {
+        toast.error("Select items first.");
+        return;
+      }
+
+      if (
+        movementType === "archived" &&
+        !window.confirm(
+          `Archive ${selectedIds.length} selected item(s)?`,
+        )
+      ) {
+        return;
+      }
+
+      const batchId =
+        createInventoryOperationId(
+          movementType === "archived"
+            ? "inventory-batch-archive"
+            : "inventory-batch-discontinue",
+        );
+
+      ledger = createBatchMutationLedger({
+        batchId,
+        movementType,
+        requests: selectedIds.map((id) => ({
+          movementType,
+          inventoryItemId: id,
+          quantity: 1,
+          reason:
+            movementType === "archived"
+              ? "Batch inventory archive."
+              : "Batch inventory discontinue.",
+          source: "inventory_page",
+        })),
+        operationIdForItem: (
+          _itemId,
+          index,
+        ) =>
+          createInventoryOperationId(
+            movementType === "archived"
+              ? `inventory-batch-archive-${index + 1}`
+              : `inventory-batch-discontinue-${index + 1}`,
+          ),
+      });
+
+      batchMutationLedgerRef.current.set(
+        movementType,
+        ledger,
+      );
     }
+
+    batchMutationInFlightRef.current.add(
+      movementType,
+    );
 
     try {
-      const results = await Promise.allSettled(
-        selectedIds.map((id) =>
-          createInventoryMovement({
-            movementType: "archived",
-            inventoryItemId: id,
-            quantity: 1,
-            reason: "Batch inventory archive.",
-            source: "inventory_page",
-          })
-        )
-      );
+      while (true) {
+        ledger =
+          await executeBatchMutationLedger({
+            ledger,
+            execute:
+              createInventoryMovement,
+            isRetryableError:
+              isRetryableInventoryTransactionError,
+          });
 
-      const failed = results.filter(
-        (result) =>
-          result.status === "rejected" ||
-          (result.status === "fulfilled" &&
-            result.value.status !== "success" &&
-            result.value.status !== "duplicate_operation")
-      );
-
-      if (failed.length > 0) {
-        toast.error(
-          `Archived ${selectedIds.length - failed.length} of ${selectedIds.length} selected items.`
+        batchMutationLedgerRef.current.set(
+          movementType,
+          ledger,
         );
-      } else {
-        toast.success("Selected items archived.");
-      }
 
-      if (failed.length === 0) {
+        const completedItemIds =
+          getCompletedBatchItemIds(ledger);
+
+        for (
+          const itemId of completedItemIds
+        ) {
+          removeSelectedId(itemId);
+        }
+
+        const summary =
+          summarizeBatchMutation(ledger);
+
+        if (summary.uncertain > 0) {
+          const label =
+            movementType === "archived"
+              ? "Archive"
+              : "Discontinue";
+
+          const retry = window.confirm(
+            `${label} batch results:` +
+              `\n\nCompleted: ${summary.completed}` +
+              `\nFailed: ${summary.failed}` +
+              `\nUncertain: ${summary.uncertain}` +
+              "\n\nRetry ONLY the uncertain items now using the same operation IDs?",
+          );
+
+          if (retry) {
+            continue;
+          }
+
+          toast.error(
+            `${summary.uncertain} batch item(s) have an uncertain outcome. Retry this same batch action to safely resume them.`,
+          );
+
+          return;
+        }
+
+        batchMutationLedgerRef.current.delete(
+          movementType,
+        );
+
+        const actionPastTense =
+          movementType === "archived"
+            ? "Archived"
+            : "Discontinued";
+
+        if (summary.failed > 0) {
+          toast.error(
+            `${actionPastTense} ${summary.completed} of ${summary.total} selected items. ${summary.failed} item(s) failed and remain selected.`,
+          );
+          return;
+        }
+
         clearSelected();
+
+        toast.success(
+          movementType === "archived"
+            ? "Selected items archived."
+            : "Selected items discontinued.",
+        );
+
+        return;
       }
     } catch (error: unknown) {
-      console.error("BATCH ARCHIVE INVENTORY ERROR:", error);
-      toast.error("Batch archive failed.");
+      console.error(
+        movementType === "archived"
+          ? "BATCH ARCHIVE INVENTORY ERROR:"
+          : "BATCH DISCONTINUE INVENTORY ERROR:",
+        error,
+      );
+
+      /*
+       * Do not discard the ledger here. An unexpected
+       * orchestration error after requests began must not
+       * cause fresh operation IDs on the next attempt.
+       */
+      toast.error(
+        "Batch processing stopped unexpectedly. Retry the same batch action before starting a new one.",
+      );
+    } finally {
+      batchMutationInFlightRef.current.delete(
+        movementType,
+      );
     }
   }
 
+  async function handleBatchArchive() {
+    await executeInventoryBatchMutation(
+      "archived",
+    );
+  }
+
   async function handleBatchDiscontinue() {
-    if (!canWrite) {
-      toast.error("You do not have permission.");
-      return;
-    }
-
-    if (!selectedIds.length) {
-      toast.error("Select items first.");
-      return;
-    }
-
-    try {
-      const results = await Promise.allSettled(
-        selectedIds.map((id) =>
-          createInventoryMovement({
-            movementType: "discontinued",
-            inventoryItemId: id,
-            quantity: 1,
-            reason: "Batch inventory discontinue.",
-            source: "inventory_page",
-          })
-        )
-      );
-
-      const failed = results.filter(
-        (result) =>
-          result.status === "rejected" ||
-          (result.status === "fulfilled" &&
-            result.value.status !== "success" &&
-            result.value.status !== "duplicate_operation")
-      );
-
-      if (failed.length > 0) {
-        toast.error(
-          `Discontinued ${selectedIds.length - failed.length} of ${selectedIds.length} selected items.`
-        );
-      } else {
-        toast.success("Selected items discontinued.");
-        clearSelected();
-      }
-    } catch (error: unknown) {
-      console.error("BATCH DISCONTINUE INVENTORY ERROR:", error);
-      toast.error("Batch discontinue failed.");
-    }
+    await executeInventoryBatchMutation(
+      "discontinued",
+    );
   }
 
   return {
