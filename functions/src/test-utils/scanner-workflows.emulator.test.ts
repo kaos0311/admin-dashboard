@@ -37,6 +37,48 @@ type CallableAuthContext = {
   email?: string;
 };
 
+const compatibilityCallables = [
+  {
+    name: "issue",
+    callable: issueInventoryByBarcode,
+    barcode: "COMPAT-ISSUE-TABLE",
+    successData: {
+      operationId: "compat-issue-table-001",
+      quantity: 1,
+    },
+    conflictData: {
+      quantity: 2,
+    },
+    expectedQuantityAfter: 4,
+  },
+  {
+    name: "cycle count",
+    callable: cycleCountInventoryByBarcode,
+    barcode: "COMPAT-CYCLE-TABLE",
+    successData: {
+      operationId: "compat-cycle-table-001",
+      quantity: 7,
+    },
+    conflictData: {
+      quantity: 8,
+    },
+    expectedQuantityAfter: 7,
+  },
+  {
+    name: "transfer",
+    callable: transferInventoryByBarcode,
+    barcode: "COMPAT-TRANSFER-TABLE",
+    successData: {
+      operationId: "compat-transfer-table-001",
+      toLocation: "Warehouse B",
+    },
+    conflictData: {
+      toLocation: "Warehouse C",
+    },
+    expectedQuantityAfter: 5,
+  },
+] as const;
+
 function callableRequest(data: Record<string, unknown>, authContext?: CallableAuthContext, ip = "127.0.0.1") {
   return {
     data,
@@ -576,6 +618,166 @@ describe("scanner retail sale movement", () => {
 });
 
 describe("compatibility scanner inventory transactions", () => {
+  for (const scenario of compatibilityCallables) {
+    it(`rejects missing operationId for ${scenario.name}`, async () => {
+      await expect(
+        invokeCompatibilityScannerCallable(scenario.callable, {
+          barcode: scenario.barcode,
+          ...("quantity" in scenario.successData
+            ? { quantity: scenario.successData.quantity }
+            : {}),
+          ...("toLocation" in scenario.successData
+            ? { toLocation: scenario.successData.toLocation }
+            : {}),
+        }),
+      ).rejects.toMatchObject({ code: "invalid-argument" });
+    });
+
+    it(`rejects malformed operationId for ${scenario.name} before mutation`, async () => {
+      const barcode = `${scenario.barcode}-MALFORMED`;
+      await seedInventory(`compat-malformed-${scenario.name.replace(/\s+/g, "-")}`, {
+        barcode,
+        quantityOnHand: 5,
+        available: 5,
+      });
+
+      await expect(
+        invokeCompatibilityScannerCallable(scenario.callable, {
+          ...scenario.successData,
+          barcode,
+          operationId: "bad id with spaces",
+        }),
+      ).rejects.toMatchObject({ code: "invalid-argument" });
+    });
+
+    it(`replays ${scenario.name} with same operationId without double mutation`, async () => {
+      const inventoryId = `compat-replay-${scenario.name.replace(/\s+/g, "-")}`;
+      const barcode = `${scenario.barcode}-REPLAY`;
+      const operationId = `${scenario.successData.operationId}-replay`;
+      await seedInventory(inventoryId, {
+        barcode,
+        quantityOnHand: 5,
+        available: 5,
+        locationName: "Warehouse A",
+      });
+
+      const first = await invokeCompatibilityScannerCallable(scenario.callable, {
+        ...scenario.successData,
+        operationId,
+        barcode,
+      });
+      const second = await invokeCompatibilityScannerCallable(scenario.callable, {
+        ...scenario.successData,
+        operationId,
+        barcode,
+      });
+
+      expect(first.status).toBe("success");
+      expect(second.status).toBe("duplicate");
+      expect(second.quantityAfter).toBe(scenario.expectedQuantityAfter);
+      expect((await db.collection("inventory").doc(inventoryId).get()).data()).toMatchObject({
+        quantityOnHand: scenario.expectedQuantityAfter,
+      });
+    });
+
+    it(`fails closed when ${scenario.name} reuses operationId with different request`, async () => {
+      const barcode = `${scenario.barcode}-CONFLICT`;
+      const operationId = `${scenario.successData.operationId}-conflict`;
+      await seedInventory(`compat-conflict-${scenario.name.replace(/\s+/g, "-")}`, {
+        barcode,
+        quantityOnHand: 5,
+        available: 5,
+        locationName: "Warehouse A",
+      });
+
+      await invokeCompatibilityScannerCallable(scenario.callable, {
+        ...scenario.successData,
+        operationId,
+        barcode,
+      });
+
+      await expect(
+        invokeCompatibilityScannerCallable(scenario.callable, {
+          ...scenario.successData,
+          ...scenario.conflictData,
+          operationId,
+          barcode,
+        }),
+      ).rejects.toMatchObject({ code: "failed-precondition" });
+    });
+
+    it(`returns not_found for ${scenario.name} without a matching scan`, async () => {
+      const result = await invokeCompatibilityScannerCallable(scenario.callable, {
+        ...scenario.successData,
+        operationId: `${scenario.successData.operationId}-missing`,
+        barcode: `${scenario.barcode}-MISSING`,
+      });
+
+      expect(result).toMatchObject({
+        success: false,
+        status: "not_found",
+      });
+    });
+
+    it(`fails closed for ambiguous ${scenario.name} scans`, async () => {
+      await seedInventory(`compat-ambiguous-${scenario.name.replace(/\s+/g, "-")}-a`, {
+        barcode: `${scenario.barcode}-DUP`,
+        quantityOnHand: 5,
+        available: 5,
+      });
+      await seedInventory(`compat-ambiguous-${scenario.name.replace(/\s+/g, "-")}-b`, {
+        serial: `${scenario.barcode}-DUP`,
+        quantityOnHand: 5,
+        available: 5,
+      });
+
+      await expect(
+        invokeCompatibilityScannerCallable(scenario.callable, {
+          ...scenario.successData,
+          operationId: `${scenario.successData.operationId}-ambiguous`,
+          barcode: `${scenario.barcode}-DUP`,
+        }),
+      ).rejects.toMatchObject({ code: "failed-precondition" });
+    });
+
+    it(`rejects unauthorized ${scenario.name} caller`, async () => {
+      await expect(
+        invokeCompatibilityScannerCallable(
+          scenario.callable,
+          {
+            ...scenario.successData,
+            operationId: `${scenario.successData.operationId}-unauthorized`,
+            barcode: scenario.barcode,
+          },
+          { uid: "scanner-billing-compat", role: "billing" },
+        ),
+      ).rejects.toMatchObject({ code: "permission-denied" });
+    });
+
+    it(`rejects disabled ${scenario.name} caller`, async () => {
+      const uid = `scanner-disabled-${scenario.name.replace(/\s+/g, "-")}`;
+      await db.collection("users").doc(uid).set({
+        uid,
+        email: `${uid}@test.example.com`,
+        role: "staff",
+        active: true,
+        disabled: true,
+      });
+
+      await expect(
+        invokeCompatibilityScannerCallable(
+          scenario.callable,
+          {
+            ...scenario.successData,
+            operationId: `${scenario.successData.operationId}-disabled`,
+            barcode: scenario.barcode,
+          },
+          { uid, role: "staff", email: `${uid}@test.example.com` },
+        ),
+      ).rejects.toMatchObject({ code: "permission-denied" });
+    });
+  }
+
   it("issues inventory through shared scan resolution", async () => {
     await seedInventory("compat-issue", {
       barcode: "COMPAT-ISSUE",

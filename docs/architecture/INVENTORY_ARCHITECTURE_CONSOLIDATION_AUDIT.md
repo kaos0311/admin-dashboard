@@ -143,7 +143,10 @@ inventory-item scan resolution:
   transaction-safe.
 - Distribute / Issue, Transfer Location, and Cycle Count remain routed through the
   compatibility scanner callables backed by the canonical movement service. Their
-  scan lookup now uses the shared resolver and fails closed on ambiguity.
+  scan lookup now uses the shared resolver and fails closed on ambiguity. These
+  public compatibility callable names remain exported, but mutation requests now
+  require explicit caller-supplied operation IDs; retry-unstable compatibility-wrapper
+  fallback IDs are not generated.
 - Rental Check-Out does not invent missing rental or patient context. When scanner-only
   input cannot satisfy the canonical rental checkout requirements, it fails closed and
   directs the user to the rental workflow.
@@ -212,6 +215,8 @@ families:
 - Movement operations use `inventoryOperations/{uid}_{operationId}` with request
   fingerprints, stored results, and conflict rejection for reused IDs with
   different fingerprints.
+- Scanner compatibility mutation callables require explicit stable operation IDs
+  before scan resolution and reuse the movement operation-ID validator.
 - Domain workflows use `domainWorkflowOperations/{uid}_{operationId}` with exact
   JSON fingerprints, stored completion results, and duplicate-result replay.
 - Scanner equipment check-in additionally validates that a reused operation ID
@@ -270,7 +275,7 @@ Current relevant coverage:
 | Scanner equipment check-in | `functions/src/test-utils/scanner-workflows.emulator.test.ts` covers rental return, duplicate operation replay, repeated physical scan already-in-warehouse, patient return, conflict rejection, explicit warehouse custody, orphan rejection, permission denial, and conflicting operation reuse |
 | Scanner retail sale | same emulator test covers normal quantity sale, insufficient stock, rented serialized rejection, serialized sale, repeat serialized sale rejection, duplicate operation replay, and permission denial |
 | Shared backend scan resolver | `functions/src/inventory/inventoryScanResolver.test.ts` covers barcode, serial, lot, SKU, document ID, normalization, no match, ambiguity, deleted filtering, multi-field same-document dedupe, serialized identifier resolution, quantity inventory resolution, and caller-selected manufacturer matching |
-| Compatibility scanner callables | `functions/src/test-utils/scanner-workflows.emulator.test.ts` covers issue, cycle count, transfer, not-found, and ambiguous scan failure through the shared resolver |
+| Compatibility scanner callables | `functions/src/test-utils/scanner-workflows.emulator.test.ts` covers issue, cycle count, transfer, explicit operation ID success, duplicate replay, same-ID/different-request conflict, missing/malformed operation ID rejection, not-found, ambiguous scan failure, unauthorized denial, and disabled-user denial through the shared resolver and canonical movement service |
 | Client retry lifecycle | `src/app/(admin)/inventory/lib/*Lifecycle.test.ts`, `scanMovementRetry.test.ts`, and `scan-intake-retry.test.ts` cover operation ID preservation and duplicate handling for save, scan, archive, discontinue, hard delete, and batch retry paths |
 
 Most recent validation evidence available from this workspace context:
@@ -292,7 +297,8 @@ Remaining source-verified debt:
    identify-product behavior for UI intake.
 2. Compatibility scanner mutation callables still coexist with the newer scanner
    UI and domain workflow paths, although their inventory lookup semantics now
-   route through the shared backend resolver.
+   route through the shared backend resolver and their retry-unstable client-wrapper
+   operation-ID fallbacks have been removed.
 3. `movementService.ts`, `receiveScannedInventoryIntake.ts`, and
    `domainWorkflowFunctions.ts` are large modules. Size alone is not a correctness
    defect, but future changes should avoid increasing branching complexity there
@@ -322,6 +328,9 @@ Resolved or materially improved since the prior audit:
 - Lookup, movement fallback resolution, scanner check-in, scanned-intake
   inventory lookup portions, and compatibility scanner callables now consume the
   shared backend resolver.
+- Issue, transfer, and cycle-count compatibility callables now require stable
+  caller-supplied operation IDs and reject missing or malformed IDs before any
+  business mutation.
 - Tracked source-tree backup artifacts are no longer part of the architecture
   debt described by this document.
 

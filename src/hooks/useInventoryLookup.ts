@@ -3,7 +3,6 @@
 import { useCallback, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "@/lib/firebase";
-import { createInventoryOperationId } from "@/lib/inventory/movements";
 /**
  * Fields the barcode scanner searches across.
  */
@@ -134,6 +133,18 @@ function getMatchedFieldLabel(field: InventoryLookupMatchedField): string {
 
 export { getMatchedFieldLabel };
 
+export function requireInventoryTransactionOperationId(
+  operationId: string | undefined,
+): string {
+  const normalized = operationId?.trim();
+
+  if (!normalized) {
+    throw new Error("Scanner transaction operationId is required.");
+  }
+
+  return normalized;
+}
+
 /**
  * Hook for barcode-based inventory lookup and transactions.
  */
@@ -194,16 +205,16 @@ export function useInventoryLookup() {
         rawScan?: string | null;
       },
     ): Promise<TransactionResult> => {
+      const operationId = requireInventoryTransactionOperationId(
+        params.operationId,
+      );
+
       setLoading(true);
       setError(null);
 
       const functionName = `${transactionType}InventoryByBarcode`;
 
       try {
-        const operationId =
-          params.operationId ??
-          createInventoryOperationId(`legacy-${transactionType}`);
-
         const fn = httpsCallable<Record<string, unknown>, TransactionResult>(
           functions,
           functionName,

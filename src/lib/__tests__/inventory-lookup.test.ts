@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, expect, it } from "vitest";
 
 /**
  * Unit tests for the inventory barcode lookup logic.
@@ -8,13 +8,14 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
  * functions/test for integration tests).
  */
 import {
-  MATCHED_FIELD_LABELS,
-  getMatchedFieldLabel,
-  getInventoryTransactionErrorCode,
-  isRetryableInventoryTransactionError,
   type BarcodeLookupResult,
+  getInventoryTransactionErrorCode,
+  getMatchedFieldLabel,
   type InventoryLookupItem,
   type InventoryLookupMatchedField,
+  isRetryableInventoryTransactionError,
+  MATCHED_FIELD_LABELS,
+  requireInventoryTransactionOperationId,
 } from "@/hooks/useInventoryLookup";
 
 // ---------------------------------------------------------------------------
@@ -352,5 +353,25 @@ describe("inventory transaction retry classification", () => {
     expect(
       isRetryableInventoryTransactionError(error),
     ).toBe(false);
+  });
+});
+
+describe("scanner transaction operation ID contract", () => {
+  it("requires caller-owned operation IDs for compatibility scanner mutations", () => {
+    expect(() =>
+      requireInventoryTransactionOperationId(undefined),
+    ).toThrow("Scanner transaction operationId is required.");
+
+    expect(() =>
+      requireInventoryTransactionOperationId("   "),
+    ).toThrow("Scanner transaction operationId is required.");
+  });
+
+  it("normalizes an explicit scanner transaction operation ID", () => {
+    expect(
+      requireInventoryTransactionOperationId(
+        "  scanner-compatible-op-001  ",
+      ),
+    ).toBe("scanner-compatible-op-001");
   });
 });

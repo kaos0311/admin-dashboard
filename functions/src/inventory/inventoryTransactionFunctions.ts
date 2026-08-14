@@ -9,7 +9,9 @@ import {
 } from "./inventoryTransactionService.js";
 import { normalizeScanValue } from "./inventoryScanResolver.js";
 import {
+  assertOperationId,
   createInventoryMovement,
+  createInventoryMovementInTransaction,
   type InventoryMovementType,
   setInventoryQuantityToCount,
 } from "./movementService.js";
@@ -45,6 +47,7 @@ async function executeTransaction(
   }
 
   const operationId = rawOperationId.trim();
+  assertOperationId(operationId);
 
   const rawBarcode = request.data?.barcode;
   if (typeof rawBarcode !== "string" || !rawBarcode.trim()) {
@@ -125,6 +128,12 @@ async function executeTransaction(
   }
 
 
+  const actorInfo = {
+    uid: actor.uid,
+    email: actor.email,
+    role: actor.role,
+  };
+
   const movement =
     transactionType === "cycle_count"
       ? await setInventoryQuantityToCount(
@@ -142,13 +151,46 @@ async function executeTransaction(
               inputSource: source,
             },
           },
-          {
-            uid: actor.uid,
-            email: actor.email,
-            role: actor.role,
-          },
+          actorInfo,
           db
         )
+      : transactionType === "transfer"
+        ? await db.runTransaction((transaction) =>
+            createInventoryMovementInTransaction({
+              transaction,
+              database: db,
+              input: {
+                operationId,
+                movementType,
+                inventoryItemId: resolved.id,
+                productId: String(resolved.data.productId ?? ""),
+                barcode: normalizedBarcode,
+                quantity: 1,
+                fromLocation: String(
+                  resolved.data.locationName ?? ""
+                ),
+                toLocation: String(request.data?.toLocation ?? ""),
+                reason: `Scanner ${transactionType} operation.`,
+                source: "scanner",
+                metadata: {
+                  legacyCallable: `${transactionType}InventoryByBarcode`,
+                  rawScan,
+                  inputSource: source,
+                },
+              },
+              actor: actorInfo,
+              requestFingerprint: JSON.stringify({
+                actorUid: actor.uid,
+                operationType: transactionType,
+                inventoryItemId: resolved.id,
+                productId: String(resolved.data.productId ?? "").trim(),
+                barcode: normalizedBarcode,
+                toLocation: String(request.data?.toLocation ?? "").trim(),
+                reason: `Scanner ${transactionType} operation.`,
+                source: "scanner",
+              }),
+            })
+          )
       : await createInventoryMovement(
           {
             operationId,
@@ -164,10 +206,6 @@ async function executeTransaction(
             fromLocation: String(
               resolved.data.locationName ?? ""
             ),
-            toLocation:
-              transactionType === "transfer"
-                ? String(request.data?.toLocation ?? "")
-                : undefined,
             reason: `Scanner ${transactionType} operation.`,
             source: "scanner",
             metadata: {
@@ -176,11 +214,7 @@ async function executeTransaction(
               inputSource: source,
             },
           },
-          {
-            uid: actor.uid,
-            email: actor.email,
-            role: actor.role,
-          },
+          actorInfo,
           db
         );
 

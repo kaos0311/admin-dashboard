@@ -148,7 +148,7 @@ function readBoolean(data: InventoryDoc, field: string): boolean {
   return data[field] === true;
 }
 
-function assertOperationId(operationId: string): void {
+export function assertOperationId(operationId: string): void {
   if (!OPERATION_ID_PATTERN.test(operationId)) {
     throw new HttpsError("invalid-argument", "Invalid operationId.");
   }
