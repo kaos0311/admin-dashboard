@@ -140,6 +140,12 @@ export function summarizeBatchMutation(
   );
 }
 
+export function hasResumableBatchMutationWork(
+  summary: BatchMutationSummary,
+): boolean {
+  return summary.pending > 0 || summary.uncertain > 0;
+}
+
 export function getCompletedBatchItemIds(
   ledger: BatchMutationLedger,
 ): string[] {

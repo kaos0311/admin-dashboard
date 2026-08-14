@@ -14,6 +14,7 @@ import {
   createBatchMutationLedger,
   executeBatchMutationLedger,
   getCompletedBatchItemIds,
+  hasResumableBatchMutationWork,
   summarizeBatchMutation,
   type BatchMutationRequest,
 } from "./batchMutationLifecycle";
@@ -31,6 +32,53 @@ function archiveRequest(
 }
 
 describe("inventory batch mutation lifecycle", () => {
+  it("treats pending-only batch work as resumable", () => {
+    expect(
+      hasResumableBatchMutationWork({
+        total: 1,
+        pending: 1,
+        completed: 0,
+        uncertain: 0,
+        failed: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it("treats uncertain-only batch work as resumable", () => {
+    expect(
+      hasResumableBatchMutationWork({
+        total: 1,
+        pending: 0,
+        completed: 0,
+        uncertain: 1,
+        failed: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it("treats pending and uncertain batch work as resumable", () => {
+    expect(
+      hasResumableBatchMutationWork({
+        total: 2,
+        pending: 1,
+        completed: 0,
+        uncertain: 1,
+        failed: 0,
+      }),
+    ).toBe(true);
+  });
+
+  it("does not resume completed or failed-only batch work", () => {
+    expect(
+      hasResumableBatchMutationWork({
+        total: 2,
+        pending: 0,
+        completed: 1,
+        uncertain: 0,
+        failed: 1,
+      }),
+    ).toBe(false);
+  });
   it("creates one stable frozen operation per unique item", () => {
     const ledger = createBatchMutationLedger({
       batchId: " batch-1 ",

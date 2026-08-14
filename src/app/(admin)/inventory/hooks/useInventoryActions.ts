@@ -36,6 +36,7 @@ import {
   createBatchMutationLedger,
   executeBatchMutationLedger,
   getCompletedBatchItemIds,
+  hasResumableBatchMutationWork,
   summarizeBatchMutation,
   type BatchMutationLedger,
   type BatchMutationType,
@@ -1150,7 +1151,7 @@ export function useInventoryActions({
     if (
       ledger &&
       existingSummary &&
-      existingSummary.uncertain > 0
+      hasResumableBatchMutationWork(existingSummary)
     ) {
       const label =
         movementType === "archived"
@@ -1158,9 +1159,11 @@ export function useInventoryActions({
           : "discontinue";
 
       const resume = window.confirm(
-        `A previous batch ${label} has ${existingSummary.uncertain} item(s) with an uncertain outcome.` +
-          "\n\nThe server may already have completed those items." +
-          "\n\nRetry ONLY those uncertain items now using their original operation IDs?",
+        `A previous batch ${label} still has work to resume.` +
+          `\n\nPending: ${existingSummary.pending}` +
+          `\nUncertain: ${existingSummary.uncertain}` +
+          "\n\nPending items have not received a definitive result. Uncertain items may already have completed on the server." +
+          "\n\nResume the remaining batch work using the original operation IDs?",
       );
 
       if (!resume) {
