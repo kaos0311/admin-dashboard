@@ -7,13 +7,16 @@ import {
   CheckCircle2,
   ClipboardList,
   History,
+  PackageCheck,
   PackagePlus,
   PackageX,
+  RotateCcw,
   ScanLine,
   Search,
   ShieldCheck,
-  XCircle,
+  ShoppingCart,
   TriangleAlert,
+  XCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 
@@ -21,34 +24,49 @@ import { BarcodeScannerInput, type BarcodeScannerInputHandle } from "@/component
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 import { hasPermission } from "@/lib/permissions/roles";
 import {
-  useInventoryLookup,
-  getMatchedFieldLabel,
   getInventoryTransactionErrorCode,
-  isRetryableInventoryTransactionError,
+  getMatchedFieldLabel,
   type InventoryLookupItem,
   type InventoryLookupMatchedField,
+  isRetryableInventoryTransactionError,
   type TransactionResult,
+  useInventoryLookup,
 } from "@/hooks/useInventoryLookup";
 import { createInventoryMovement } from "@/lib/inventory/movements";
+import { equipmentCheckInByBarcodeWorkflow } from "@/lib/domainWorkflows";
 import { OperationIdManager } from "@/lib/inventory/receive-inventory";
 import { buttons, glass, tiles, typography } from "@/theme";
 
-type TransactionMode = "lookup" | "receive" | "issue" | "cycle_count" | "transfer";
+type TransactionMode =
+  | "lookup"
+  | "receive"
+  | "issue"
+  | "rental_checkout"
+  | "equipment_check_in"
+  | "retail_sale"
+  | "transfer"
+  | "cycle_count";
 
 const TRANSACTION_LABELS: Record<TransactionMode, string> = {
-  lookup: "Lookup Only",
-  receive: "Receive Inventory",
-  issue: "Remove / Issue Inventory",
-  cycle_count: "Cycle Count",
+  lookup: "Lookup",
+  receive: "Receive Stock",
+  issue: "Distribute / Issue",
+  rental_checkout: "Rental Check-Out",
+  equipment_check_in: "Equipment Check-In",
+  retail_sale: "Retail Sale",
   transfer: "Transfer Location",
+  cycle_count: "Cycle Count",
 };
 
 const TRANSACTION_ICONS: Record<TransactionMode, React.ReactNode> = {
   lookup: <Search className="h-4 w-4" />,
   receive: <PackagePlus className="h-4 w-4" />,
   issue: <PackageX className="h-4 w-4" />,
-  cycle_count: <ClipboardList className="h-4 w-4" />,
+  rental_checkout: <PackageCheck className="h-4 w-4" />,
+  equipment_check_in: <RotateCcw className="h-4 w-4" />,
+  retail_sale: <ShoppingCart className="h-4 w-4" />,
   transfer: <ArrowLeftRight className="h-4 w-4" />,
+  cycle_count: <ClipboardList className="h-4 w-4" />,
 };
 
 interface RecentScan {
@@ -170,7 +188,7 @@ export default function ScannerPage() {
       // Prevent duplicate submission while a lookup is already in-flight
       if (processingRef.current) {
         if (process.env.NODE_ENV === "development") {
-          console.log("[BarcodeScanner] Blocked duplicate scan while processing:", barcode);
+          console.warn("[BarcodeScanner] Blocked duplicate scan while processing:", barcode);
         }
         return;
       }
@@ -180,8 +198,8 @@ export default function ScannerPage() {
 
       // Dev logging
       if (process.env.NODE_ENV === "development") {
-        console.log("[BarcodeScanner] Raw scan received:", barcode);
-        console.log("[BarcodeScanner] Normalized value:", barcode.trim());
+        console.warn("[BarcodeScanner] Raw scan received:", barcode);
+        console.warn("[BarcodeScanner] Normalized value:", barcode.trim());
       }
 
       // Reset any stale operationId when a new scan starts
@@ -326,7 +344,119 @@ export default function ScannerPage() {
 
     setConfirming(true);
 
-    if (transactionMode === "receive") {
+    if (transactionMode === "rental_checkout") {
+      const message = "Rental check-out requires a rental and patient context. Use the Rentals workflow.";
+      setConfirming(false);
+      setShowConfirmation(false);
+      setTransactionResult({
+        success: false,
+        transactionId: "",
+        inventoryItemId: selectedItem.id,
+        productName: selectedItem.name,
+        quantityBefore: null,
+        quantityChange: null,
+        quantityAfter: null,
+        status: "failed",
+        message,
+      });
+      addRecentScan({
+        barcode: lastScannedBarcode,
+        productName: selectedItem.name,
+        transaction: "rental_checkout",
+        status: "failed",
+        timestamp: Date.now(),
+      });
+      operationIdManagerRef.current.reset();
+      pendingOperationIdRef.current = null;
+      toast.error(message);
+    } else if (transactionMode === "equipment_check_in") {
+      let operationId = operationIdManagerRef.current.get();
+      if (!operationId) {
+        operationId = operationIdManagerRef.current.start();
+      }
+      pendingOperationIdRef.current = operationId;
+
+      try {
+        const result = await equipmentCheckInByBarcodeWorkflow({
+          operationId,
+          barcode: lastScannedBarcode,
+          rawScan: lastRawScan,
+          reason: "Scanner equipment check-in.",
+        });
+
+        setConfirming(false);
+        setShowConfirmation(false);
+
+        const success =
+          result.status === "success" ||
+          result.status === "duplicate_operation";
+
+        setTransactionResult({
+          success,
+          transactionId: result.movementIds?.[0] ?? "",
+          inventoryItemId: selectedItem.id,
+          productName: selectedItem.name,
+          quantityBefore: null,
+          quantityChange: null,
+          quantityAfter: null,
+          status: result.status === "duplicate_operation" ? "duplicate" : result.status,
+          message: success ? undefined : result.message,
+        });
+
+        addRecentScan({
+          barcode: lastScannedBarcode,
+          productName: selectedItem.name,
+          transaction: "equipment_check_in",
+          status: success ? "success" : "failed",
+          timestamp: Date.now(),
+        });
+
+        operationIdManagerRef.current.complete();
+        pendingOperationIdRef.current = null;
+
+        if (success) {
+          toast.success(
+            result.status === "duplicate_operation"
+              ? `${selectedItem.name}: Check-in already recorded`
+              : `${selectedItem.name}: Checked in`
+          );
+        } else {
+          toast.error(result.message || "Equipment check-in failed.");
+        }
+      } catch (error: unknown) {
+        const retryable = isRetryableInventoryTransactionError(error);
+        const errorCode = getInventoryTransactionErrorCode(error);
+        const message =
+          error instanceof Error ? error.message : "Equipment check-in failed.";
+
+        setConfirming(false);
+        setTransactionResult({
+          success: false,
+          transactionId: "",
+          inventoryItemId: selectedItem.id,
+          productName: selectedItem.name,
+          quantityBefore: null,
+          quantityChange: null,
+          quantityAfter: null,
+          status: "failed",
+          message,
+          errorCode,
+          retryable,
+        });
+
+        if (retryable) {
+          setShowConfirmation(true);
+          toast.error(`${message} Retry will reuse the same operation.`);
+          return;
+        }
+
+        operationIdManagerRef.current.complete();
+        pendingOperationIdRef.current = null;
+        setShowConfirmation(false);
+        toast.error(message);
+        return;
+      }
+    } else if (transactionMode === "receive" || transactionMode === "retail_sale") {
       // ── NEW DIRECT CALLABLE PATH (PHASE 1) ─────────────
       // Start an operationId if we don't already have one pending.
       // If we're retrying after a network failure, the existing operationId
@@ -337,7 +467,8 @@ export default function ScannerPage() {
       }
       pendingOperationIdRef.current = operationId;
 
-      const receiveQuantity = parseInt(quantity, 10) || 1;
+      const movementQuantity = parseInt(quantity, 10) || 1;
+      const isRetailSale = transactionMode === "retail_sale";
 
       let movement;
 
@@ -345,10 +476,12 @@ export default function ScannerPage() {
         movement = await createInventoryMovement({
           operationId,
           barcode: lastScannedBarcode,
-          quantity: receiveQuantity,
-          movementType: "receive",
+          quantity: movementQuantity,
+          movementType: isRetailSale ? "retail_sale" : "receive",
           source: "scanner",
-          reason: "Inventory scanner receive.",
+          reason: isRetailSale
+            ? "Inventory scanner retail sale."
+            : "Inventory scanner receive.",
           metadata: {
             rawScan: lastRawScan || "",
             scannerSource: "tera_hid_scanner",
@@ -403,7 +536,7 @@ export default function ScannerPage() {
               inventoryItemId: movement.inventoryItemId ?? selectedItem.id,
               productName: selectedItem.name,
               quantityBefore: movement.quantityBefore ?? null,
-              quantityChange: movement.quantityDelta ?? receiveQuantity,
+              quantityChange: movement.quantityDelta ?? (isRetailSale ? -movementQuantity : movementQuantity),
               quantityAfter: movement.quantityAfter ?? null,
               status: movement.status === "success" ? "success" : "duplicate",
             };
@@ -412,15 +545,15 @@ export default function ScannerPage() {
             addRecentScan({
               barcode: lastScannedBarcode,
               productName: selectedItem.name,
-              transaction: "receive",
+              transaction: transactionMode,
               status: "success",
               timestamp: Date.now(),
             });
 
             toast.success(
               movement.status === "success"
-                ? `${selectedItem.name}: Received`
-                : `${selectedItem.name}: Receive already recorded`
+                ? `${selectedItem.name}: ${isRetailSale ? "Retail sale recorded" : "Received"}`
+                : `${selectedItem.name}: ${isRetailSale ? "Retail sale already recorded" : "Receive already recorded"}`
             );
             break;
           }
@@ -440,7 +573,7 @@ export default function ScannerPage() {
             addRecentScan({
               barcode: lastScannedBarcode,
               productName: null,
-              transaction: "receive",
+              transaction: transactionMode,
               status: "not_found",
               timestamp: Date.now(),
             });
@@ -464,7 +597,7 @@ export default function ScannerPage() {
             addRecentScan({
               barcode: lastScannedBarcode,
               productName: null,
-              transaction: "receive",
+              transaction: transactionMode,
               status: "duplicate",
               timestamp: Date.now(),
             });
@@ -492,7 +625,7 @@ export default function ScannerPage() {
             addRecentScan({
               barcode: lastScannedBarcode,
               productName: null,
-              transaction: "receive",
+              transaction: transactionMode,
               status: "failed",
               timestamp: Date.now(),
             });
@@ -632,6 +765,7 @@ export default function ScannerPage() {
   }
 
   const isReceive = transactionMode === "receive";
+  const isRetailSale = transactionMode === "retail_sale";
 
   return (
     <main className={`${glass.page} relative min-h-screen`}>
@@ -715,7 +849,7 @@ export default function ScannerPage() {
           <label className={`${typography.bodyStrong} mb-3 block`}>
             Transaction Type
           </label>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-5">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
             {(Object.entries(TRANSACTION_LABELS) as [TransactionMode, string][]).map(
               ([mode, label]) => (
                 <button
@@ -939,7 +1073,7 @@ export default function ScannerPage() {
                     </div>
                   )}
 
-                  {(isReceive || transactionMode === "issue" || transactionMode === "cycle_count") && (
+                  {(isReceive || isRetailSale || transactionMode === "issue" || transactionMode === "cycle_count") && (
                     <div>
                       <label className={typography.bodyStrong}>
                         {transactionMode === "cycle_count" ? "Actual Count" : "Quantity"}
@@ -1003,7 +1137,7 @@ export default function ScannerPage() {
                       {transactionResult.success ? "Transaction Complete" : "Transaction Failed"}
                     </p>
                   </div>
-                  {transactionResult.success && (
+                  {transactionResult.success && transactionResult.quantityBefore !== null && (
                     <div className={`mt-2 grid grid-cols-3 gap-3 text-sm ${typography.bodyMuted}`}>
                       <div>
                         <span>Before:</span>

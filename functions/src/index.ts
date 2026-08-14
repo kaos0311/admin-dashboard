@@ -69,6 +69,7 @@ export {
   cancelRentalWorkflowCallable,
   reportStaleRentalDraftsCallable,
   patientEquipmentWorkflowCallable,
+  equipmentCheckInByBarcodeCallable,
   patientLifecycleWorkflowCallable,
   cleanupPendingWorkflowUploadsCallable,
 } from "./domainWorkflows/domainWorkflowFunctions";

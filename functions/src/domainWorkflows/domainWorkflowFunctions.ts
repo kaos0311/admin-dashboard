@@ -15,6 +15,7 @@ import {
   reportStaleRentalDrafts,
   returnRentalWorkflow,
 } from "./rentalWorkflowService.js";
+import { equipmentCheckInByBarcodeWorkflow } from "./scannerCheckInWorkflowService.js";
 
 function cleanString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
@@ -408,6 +409,29 @@ export const patientEquipmentWorkflowCallable = onCall(
         barcode: cleanString(data?.barcode),
         serialNumber: cleanString(data?.serialNumber),
         lotNumber: cleanString(data?.lotNumber),
+        quantity: cleanNumber(data?.quantity),
+        reason: cleanString(data?.reason),
+      },
+      actor
+    );
+  }
+);
+
+export const equipmentCheckInByBarcodeCallable = onCall(
+  {
+    region: "us-central1",
+    timeoutSeconds: 60,
+    memory: "256MiB",
+    maxInstances: 10,
+  },
+  async (request) => {
+    const actor = await requireRateLimitedStaffOrAdmin(request);
+    const data = request.data as Record<string, unknown> | undefined;
+    return equipmentCheckInByBarcodeWorkflow(
+      {
+        operationId: cleanString(data?.operationId) ?? "",
+        barcode: cleanString(data?.barcode) ?? "",
+        rawScan: cleanString(data?.rawScan),
         quantity: cleanNumber(data?.quantity),
         reason: cleanString(data?.reason),
       },

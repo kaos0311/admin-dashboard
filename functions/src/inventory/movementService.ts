@@ -19,6 +19,7 @@ export type InventoryMovementType =
   | "delivery_load"
   | "delivery_delivered"
   | "delivery_returned"
+  | "retail_sale"
   | "damaged"
   | "lost"
   | "found"
@@ -223,6 +224,14 @@ function allowsFractionalUnits(inventory: InventoryDoc, product: InventoryDoc | 
   );
 }
 
+function isSerializedInventory(inventory: InventoryDoc): boolean {
+  return (
+    readBoolean(inventory, "isSerialized") ||
+    readBoolean(inventory, "requiresSerialTracking") ||
+    Boolean(text(inventory.serial) || text(inventory.serialNumber))
+  );
+}
+
 function getMovementDeltas(
   movementType: InventoryMovementType,
   quantity: number,
@@ -242,6 +251,7 @@ function getMovementDeltas(
       return { quantityDelta: quantity, onRentDelta: 0, onTruckDelta: 0 };
     case "lost":
     case "damaged":
+    case "retail_sale":
       return { quantityDelta: -quantity, onRentDelta: 0, onTruckDelta: 0 };
     case "patient_assignment":
     case "rental_checkout":
@@ -322,10 +332,7 @@ function assertMovementAllowedForState(params: {
     throw new HttpsError("failed-precondition", "This item is not loaded on a truck.");
   }
 
-  const serialized =
-    readBoolean(inventory, "isSerialized") ||
-    readBoolean(inventory, "requiresSerialTracking") ||
-    Boolean(text(inventory.serial) || text(inventory.serialNumber));
+  const serialized = isSerializedInventory(inventory);
 
   if (
     serialized &&
@@ -333,6 +340,20 @@ function assertMovementAllowedForState(params: {
     (onRentBefore > 0 || ["rental_out", "assigned", "checked_out"].includes(status))
   ) {
     throw new HttpsError("failed-precondition", "Serialized assets cannot be checked out twice.");
+  }
+
+  if (
+    movementType === "retail_sale" &&
+    serialized &&
+    (
+      onRentBefore > 0 ||
+      onTruckBefore > 0 ||
+      committedBefore > 0 ||
+      quantityBefore < quantity ||
+      ["rental_out", "assigned", "checked_out", "inactive", "discontinued"].includes(status)
+    )
+  ) {
+    throw new HttpsError("failed-precondition", "Serialized assets must be available before retail sale.");
   }
 }
 
@@ -601,6 +622,11 @@ export async function prepareInventoryMovementInTransaction(params: {
     inventoryUpdate.restoredAt = FieldValue.serverTimestamp();
   }
 
+  if (input.movementType === "retail_sale" && isSerializedInventory(inventory)) {
+    inventoryUpdate.status = "inactive";
+    inventoryUpdate.lifecycleStatus = "retired";
+  }
+
   if (["patient_assignment", "patient_transfer", "rental_checkout", "delivery_delivered"].includes(input.movementType)) {
     inventoryUpdate.status =
       input.movementType === "rental_checkout" ? "rental_out" : "assigned";
@@ -612,8 +638,10 @@ export async function prepareInventoryMovementInTransaction(params: {
   if (["rental_return", "deceased_patient_equipment_return", "delivery_returned"].includes(input.movementType)) {
     inventoryUpdate.status = "available";
     inventoryUpdate.patientKey = "";
+    inventoryUpdate.patientId = "";
     inventoryUpdate.patientName = "";
     inventoryUpdate.rentalId = "";
+    inventoryUpdate.assignedTo = "";
     inventoryUpdate.lastReturnedAt = FieldValue.serverTimestamp();
   }
 

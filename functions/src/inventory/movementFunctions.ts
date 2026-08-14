@@ -3,8 +3,8 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { enforceCallableRateLimit } from "../security/rateLimit.js";
 import { requireStaffOrAdmin } from "./auth";
 import {
-  type CreateMovementInput,
   createInventoryMovement,
+  type CreateMovementInput,
   type InventoryMovementType,
   type MovementSource,
   reconcileInventory,
@@ -21,6 +21,7 @@ const MOVEMENT_TYPES = new Set<InventoryMovementType>([
   "delivery_load",
   "delivery_delivered",
   "delivery_returned",
+  "retail_sale",
   "damaged",
   "lost",
   "found",

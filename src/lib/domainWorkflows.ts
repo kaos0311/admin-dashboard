@@ -140,6 +140,14 @@ export type PatientEquipmentWorkflowRequest = {
   reason?: string;
 };
 
+export type EquipmentCheckInByBarcodeRequest = {
+  operationId: string;
+  barcode: string;
+  rawScan?: string;
+  quantity?: number;
+  reason?: string;
+};
+
 export type InventoryCleanupAction =
   | "ASSIGN_CATEGORY"
   | "LINK_CANONICAL_PRODUCT"
@@ -216,6 +224,17 @@ export async function returnRentalWorkflow(
   const callable = httpsCallable<RentalWorkflowRequest, DomainWorkflowResult>(
     functions,
     "returnRentalWorkflowCallable"
+  );
+  const result = await callable(request);
+  return result.data;
+}
+
+export async function equipmentCheckInByBarcodeWorkflow(
+  request: EquipmentCheckInByBarcodeRequest
+): Promise<DomainWorkflowResult> {
+  const callable = httpsCallable<EquipmentCheckInByBarcodeRequest, DomainWorkflowResult>(
+    functions,
+    "equipmentCheckInByBarcodeCallable"
   );
   const result = await callable(request);
   return result.data;

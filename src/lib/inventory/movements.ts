@@ -12,6 +12,7 @@ export type InventoryMovementType =
   | "delivery_load"
   | "delivery_delivered"
   | "delivery_returned"
+  | "retail_sale"
   | "damaged"
   | "lost"
   | "found"
