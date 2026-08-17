@@ -229,6 +229,10 @@ families:
   read, request fingerprint check, target resolution, inventory create/merge,
   identity-lock updates, and stored result write execute in one Firestore
   transaction.
+- Existing-record manual metadata edits also use `inventoryOperations`. The
+  operation read, fingerprint check, inventory read, identity conflict checks,
+  identity-lock updates, metadata write, and stored result write execute in one
+  Firestore transaction.
 - Scanner compatibility mutation callables require explicit stable operation IDs
   before scan resolution and reuse the movement operation-ID validator.
 - Domain workflows use `domainWorkflowOperations/{uid}_{operationId}` with exact
@@ -335,9 +339,13 @@ Remaining source-verified debt:
 6. Retail sale is covered as a movement type, but broader sales/order accounting
    integration is outside the inventory movement boundary unless a separate
    business workflow is introduced.
-7. Existing-inventory manual metadata edits still use guarded client repository
-   updates. They are protected-field filtered, but a future backend metadata
-   workflow would further reduce client write surface area.
+7. Existing-inventory manual metadata edits now route through
+   `functions/src/inventory/manualInventoryMetadataUpdate.ts`. The workflow
+   rejects stock, assignment, status, lifecycle, and location/bin fields; updates
+   barcode, serial, lot, SKU, and manufacturer item identity only after
+   transaction-time ambiguity and identity-lock validation; and keeps `productId`
+   as product-link metadata rather than inventory identity. Quantity deltas still
+   flow through `createInventoryMovementCallable`.
 
 Resolved or materially improved since the prior audit:
 
@@ -368,23 +376,26 @@ Resolved or materially improved since the prior audit:
   client repository update is limited to non-stock metadata and derived display
   fields. It no longer rewrites barcode, serial, lot, SKU, or manufacturer item
   identity fields after server target resolution.
+- Existing-record saves no longer call `InventoryRepository.update` for
+  inventory metadata. The client validates obvious form inputs, computes derived
+  display fields, calls the typed backend metadata workflow with a stable
+  operation ID, and then invokes movement service for any quantity delta.
 - Tracked source-tree backup artifacts are no longer part of the architecture
   debt described by this document.
 
 ## 12. Recommended Next Architecture Task
 
-The next architecture task should be manual edit metadata authority reduction:
+The next architecture task should be location/bin transfer UX consolidation:
 
-- Evaluate whether existing-inventory metadata edits in
-  `useInventoryActions.ts` should also move behind a focused authorized backend
-  metadata workflow.
+- Route user-facing location/bin changes through a transfer workflow rather than
+  a metadata edit form.
 - Keep product-catalog suggestions separate from inventory mutation identity.
 - Preserve movementService as the only stock authority and keep manual metadata
   workflows from recomputing quantity or availability fields.
 
-This is now higher-value than another backend resolver refactor because the
-backend mutation boundary is consolidated and covered by focused unit/emulator
-tests.
+This is now higher-value than another backend resolver refactor because manual
+create/merge and existing-record metadata mutation boundaries are consolidated
+and covered by focused unit/emulator tests.
 
 ## 13. Release Readiness Interpretation
 

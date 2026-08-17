@@ -45,6 +45,7 @@ export { lookupInventoryByBarcode } from "./inventory/lookupInventoryByBarcode";
 export { receiveInventoryByBarcode } from "./inventory/receiveInventoryByBarcode";
 export { receiveScannedInventoryIntakeCallable } from "./inventory/receiveScannedInventoryIntake";
 export { manualInventoryUpsertCallable } from "./inventory/manualInventoryUpsert";
+export { manualInventoryMetadataUpdateCallable } from "./inventory/manualInventoryMetadataUpdate";
 export { inventoryCleanupWorkflowCallable } from "./inventory/cleanupWorkflow";
 export {
   issueInventoryByBarcode,

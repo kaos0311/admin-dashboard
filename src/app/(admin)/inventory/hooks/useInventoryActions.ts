@@ -20,6 +20,7 @@ import {
   executeScanIntakeWithRetry,
 } from "@/lib/inventory/scan-intake-retry";
 import { smartMergeInventory } from "@/lib/inventory/smartMergeInventory";
+import { updateManualInventoryMetadata } from "@/lib/inventory/manualInventoryMetadataUpdate";
 import { InventoryRepository } from "@/repositories/firestore/inventory.repository";
 import { identifyInventoryProduct } from "@/services/inventory/inventory-jarvis.service";
 import { resolveInventoryScanForIntake } from "@/services/inventory/inventory-scan-adapter";
@@ -71,6 +72,7 @@ import { isLowStock } from "../lib/inventoryAlerts";
 import { buildSearchText, toSafeNumber } from "../lib/inventoryNormalize";
 import { logInventoryMovement } from "../lib/inventoryMovements";
 import { ensureProductFromInventory } from "../lib/inventoryProductSync";
+import { buildExistingInventoryMetadataUpdateRequest } from "../lib/existingInventoryMetadataUpdate";
 import type { InventoryForm, InventoryItem } from "../lib/inventoryTypes";
 
 type ProductScanMatch = {
@@ -160,6 +162,7 @@ export function useInventoryActions({
   );
 
   const manualUpsertOperationRef = useRef<ManualUpsertOperationState | null>(null);
+  const existingMetadataUpdateOperationRef = useRef<ManualUpsertOperationState | null>(null);
   const hardDeleteInFlightRef = useRef(new Set<string>());
 
   async function executeSaveMovement(state: SaveMovementState): Promise<void> {
@@ -588,21 +591,68 @@ export function useInventoryActions({
           isDeleted: false,
         });
 
-        await InventoryRepository.update(form.id, {
-          ...omitMovementFields(payload),
-          productId: syncedProductId ?? payload.productId,
+        const metadataFingerprint = JSON.stringify([
+          form.id,
+          syncedProductId ?? payload.productId,
+          payload.name,
+          payload.category,
+          payload.manufacturer,
+          payload.manufacturerItemId,
+          payload.sku,
+          payload.hcpc,
+          payload.barcode,
+          payload.serial,
+          payload.lotNumber,
+          payload.reorderLevel,
+          payload.unitCost,
+          payload.modelNumber,
+          payload.warrantyProvider,
+          payload.warrantyStartDate,
+          payload.warrantyEndDate,
+          payload.warrantyNotes,
+          payload.purchaseDate,
+          payload.usefulLifeMonths,
+          payload.nextServiceDate,
+          payload.lifecycleNotes,
+          payload.notes,
           searchText,
-          pendingScanReview: pendingReview,
-          scanSource: pendingReview
-            ? "scan_in_unmatched"
-            : "inventory_review_completed",
-          lowStock: isLowStock({
-            id: form.id,
-            ...payload,
-            searchText,
-            isDeleted: false,
-          }),
+          pendingReview,
+        ]);
+        const metadataOperation = resolveManualUpsertOperation({
+          current: existingMetadataUpdateOperationRef.current,
+          fingerprint: metadataFingerprint,
+          createOperationId: () => createInventoryOperationId("inventory-metadata-update"),
         });
+        existingMetadataUpdateOperationRef.current = metadataOperation;
+
+        const metadataResult = await updateManualInventoryMetadata(
+          buildExistingInventoryMetadataUpdateRequest({
+            operationId: metadataOperation.operationId,
+            inventoryItemId: form.id,
+            payload,
+            productId: syncedProductId ?? payload.productId,
+            searchText,
+            pendingScanReview: pendingReview,
+            scanSource: pendingReview
+              ? "scan_in_unmatched"
+              : "inventory_review_completed",
+            lowStock: isLowStock({
+              id: form.id,
+              ...payload,
+              searchText,
+              isDeleted: false,
+            }),
+          }),
+        );
+
+        if (
+          metadataResult.status !== "success" &&
+          metadataResult.status !== "duplicate_operation"
+        ) {
+          throw new Error("Inventory metadata update was not applied.");
+        }
+
+        existingMetadataUpdateOperationRef.current = null;
 
         if (saveMovementState) {
           await executeSaveMovement(saveMovementState);
@@ -808,6 +858,7 @@ export function useInventoryActions({
 
       if (!isRetryableInventoryTransactionError(error)) {
         manualUpsertOperationRef.current = null;
+        existingMetadataUpdateOperationRef.current = null;
       }
 
       const pendingMovement = saveMovementStateRef.current;
