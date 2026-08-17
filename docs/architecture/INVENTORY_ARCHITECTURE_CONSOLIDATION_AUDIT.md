@@ -1,38 +1,35 @@
 # Inventory Architecture Consolidation Audit
 
-Date: 2026-08-14
+Date: 2026-08-17
 
 ## 1. Executive Summary
 
-This is a source-only refresh of the 2026-08-12 inventory architecture audit. No
-application source, package files, tests, config, Firebase resources, Cloudflare
-configuration, deployment state, or git history were changed as part of this
-refresh.
+This audit documents the consolidated inventory architecture at closure HEAD
+`9fbb37a`. No application source, package files, tests, config, Firebase
+resources, Cloudflare configuration, deployment state, or git history were
+changed as part of this documentation update.
 
-Current source shows the inventory architecture has moved further toward
-server-authoritative mutation workflows:
+Current inventory architecture is server-authoritative for mutation workflows:
 
-- Inventory movements still centralize quantity/status/location changes through
-  `functions/src/inventory/movementService.ts`.
-- Rental, patient-equipment, delivery, cleanup, and scanner equipment check-in
-  mutations are owned by callable domain workflows under
-  `functions/src/domainWorkflows/**`.
-- Retail sale is now a supported movement type through
-  `createInventoryMovementCallable`, with serialized sale guards in the movement
-  service.
-- Equipment check-in now routes through `equipmentCheckInByBarcodeCallable`,
-  classifies rental, patient-equipment, warehouse, conflict, and orphan states,
-  and returns idempotent already-in-warehouse results without incrementing stock.
-- Client retry lifecycles now preserve operation IDs across inventory save,
-  scan intake, scanner movement, archive, discontinue, hard delete, and batch
-  archive/discontinue retry paths.
+- `functions/src/inventory/movementService.ts` is the canonical stock authority.
+- `functions/src/inventory/inventoryScanResolver.ts` owns backend scan
+  normalization, inventory candidate lookup, deleted-record filtering, and
+  fail-closed ambiguity classification.
+- `functions/src/inventory/manualInventoryUpsert.ts` is server-authoritative for
+  inventory create/merge, identity matching, and identity-lock maintenance.
+- `functions/src/inventory/manualInventoryMetadataUpdate.ts` is server-authoritative
+  for existing-record metadata edits and transactional identity-lock updates.
+- `functions/src/inventory/receiveScannedInventoryIntake.ts` and compatibility
+  scanner callables route mutation requests through the canonical movement service
+  or scanned-intake authority with stable operation IDs.
+- `src/services/inventory/inventory-scan-adapter.ts` is client-side presentation
+  only; it is not mutation authority.
+- Identity-lock lifecycle behavior is covered by focused emulator regression tests
+  proving hard-delete reclaimability, archive reclaimability, discontinued-item
+  identity reservation, and concurrent reclaim serialization.
 
-The largest remaining architecture debt is no longer backup artifacts, missing
-scanner auth, or duplicated backend scan-resolution semantics. A shared backend
-resolver contract now owns scan normalization, inventory candidate lookup,
-deleted-record filtering, and ambiguity classification. Remaining debt is mostly
-client-only presentation/merge scan logic, compatibility scanner callable
-surface area, and broad workflow modules that remain correct but dense.
+The largest remaining architecture debt is informational or future schema work.
+No BLOCKER/HIGH findings remain.
 
 ## 2. Current Architecture Map
 
@@ -64,6 +61,19 @@ Client architecture:
 | Repository | `src/repositories/firestore/inventory.repository.ts` | Client reads plus guarded metadata writes |
 | Static validators | `scripts/validate-inventory-writes.cjs`, `scripts/validate-domain-writes.cjs` | Direct protected-write detection |
 | Golden and emulator tests | `functions/src/golden/golden-regression.emulator.test.ts`, `functions/src/test-utils/scanner-workflows.emulator.test.ts`, `tests/golden/GOLDEN_REGRESSION_MANIFEST.md` | Emulator/unit coverage contract for protected inventory paths |
+
+## 2a. Current Authority Model
+
+| Concern | Canonical owner | Invariant |
+| --- | --- | --- |
+| Scan resolution | `functions/src/inventory/inventoryScanResolver.ts` | Backend resolver owns normalization, candidate lookup, deleted-record filtering, and ambiguity classification. Fails closed. |
+| Stock authority | `functions/src/inventory/movementService.ts` | All quantity, status, and location mutations flow through `createInventoryMovementInTransaction`. No direct client stock writes. |
+| Scanner mutations | `createInventoryMovementCallable` / scanned intake | Client supplies stable operation ID; backend resolves canonical `inventoryItemId`. `movement.inventoryItemId` is authoritative after success. |
+| Manual create/merge | `functions/src/inventory/manualInventoryUpsert.ts` | Server-authoritative identity matching, ambiguity handling, and identity-lock writes. New records start at zero stock. |
+| Existing metadata | `functions/src/inventory/manualInventoryMetadataUpdate.ts` | Server-authoritative metadata-only edits. Rejects stock, assignment, status, lifecycle, and location/bin fields. Updates identity locks transactionally. |
+| Location/bin transfer | `warehouse_transfer` movement in `movementService.ts` | Validates source snapshot, updates `locationName`/`binLocation`, preserves stock totals, and atomically releases/reclaims location-scoped identity locks. |
+| Identity locks | `inventoryIdentityLocks` collection | Create/merge, metadata edits, and transfers maintain locks. Hard delete and archive may leave stale lock docs, but missing/archived owners are reclaimable. Discontinue intentionally preserves identity reservation. |
+| Idempotency | `inventoryOperations` / `domainWorkflowOperations` | Caller-owned stable operation IDs with request fingerprints. Duplicate replay is deterministic. Conflicting fingerprint reuse is rejected. |
 
 ## 3. Mutation Entry Points
 
@@ -169,11 +179,22 @@ mutation-time inventory-item scan resolution:
   not mutation authority, and cannot veto canonical movement resolution.
   Product suggestions intentionally do not expose `inventoryItemId`.
 
-Recommended interpretation: backend mutation-time scan resolution is now
-consolidated for existing-inventory scan movements, and manual inventory
-create-or-merge target selection is server-authoritative. The next consolidation
-boundary is broader manual edit metadata authority, not another scan-mutation
-resolver refactor.
+Scanner mode authority map:
+
+| Mode | Canonical server authority | Notes |
+| --- | --- | --- |
+| Lookup | `lookupInventoryByBarcode` / `inventoryScanResolver.ts` | Read-only scan resolution |
+| Receive Stock | `receiveScannedInventoryIntakeCallable` / movement service | Product-match or pending-scan intake with prepared movement writes |
+| Distribute / Issue | `issueInventoryByBarcode` / movement service | Compatibility callable; shared resolver + stable operation ID |
+| Rental Check-Out | `checkoutRentalWorkflowCallable` / rental workflow | Domain workflow; scanner-only input fails closed when rental/patient context is missing |
+| Equipment Check-In | `equipmentCheckInByBarcodeCallable` / scanner check-in workflow | Server-authoritative ownership classification; idempotent already-in-warehouse |
+| Retail Sale | `createInventoryMovementCallable` / movement service | `retail_sale` movement type; serialized sale retires asset |
+| Transfer Location | `transferInventoryByBarcode` / movement service | Compatibility callable; canonical `warehouse_transfer` with source snapshot validation |
+| Cycle Count | `cycleCountInventoryByBarcode` / movement service | Compatibility callable; shared resolver + stable operation ID |
+
+Backend mutation-time scan resolution is consolidated for existing-inventory scan
+movements, and manual inventory create-or-merge target selection is
+server-authoritative.
 
 ## 6. Equipment Check-In and Warehouse Custody
 
@@ -295,6 +316,7 @@ Current relevant coverage:
 | Shared backend scan resolver | `functions/src/inventory/inventoryScanResolver.test.ts` covers barcode, serial, lot, SKU, document ID, normalization, no match, ambiguity, deleted filtering, multi-field same-document dedupe, serialized identifier resolution, quantity inventory resolution, and caller-selected manufacturer matching |
 | Compatibility scanner callables | `functions/src/test-utils/scanner-workflows.emulator.test.ts` covers issue, cycle count, transfer, explicit operation ID success, duplicate replay, same-ID/different-request conflict, missing/malformed operation ID rejection, not-found, ambiguous scan failure, unauthorized denial, and disabled-user denial through the shared resolver and canonical movement service |
 | Client retry lifecycle | `src/app/(admin)/inventory/lib/*Lifecycle.test.ts`, `scanMovementRetry.test.ts`, and `scan-intake-retry.test.ts` cover operation ID preservation and duplicate handling for save, scan, archive, discontinue, hard delete, and batch retry paths |
+| Identity-lock lifecycle | `functions/src/test-utils/inventory-identity-lock-lifecycle.emulator.test.ts` covers hard-delete identity reclaimability, archive identity reclaimability, discontinued-item identity reservation, scanner resolver behavior for deleted/retired inventory, and concurrent reclaim serialization to one active winner |
 
 Most recent validation evidence available from this workspace context:
 
@@ -305,9 +327,40 @@ Most recent validation evidence available from this workspace context:
 - Golden regression emulator test passed with
   `npx firebase emulators:exec --project demo-advanced-home-medical --only firestore,auth "npx vitest run --config vitest.integration.config.ts src/golden/golden-regression.emulator.test.ts"`.
 
-## 11. Remaining Architecture Debt
+## 11. Resolved Findings
 
-Remaining source-verified debt:
+These findings were present in earlier audit passes and are now resolved in the
+current source:
+
+- Duplicated scan resolution authority — consolidated in
+  `functions/src/inventory/inventoryScanResolver.ts` (commit `d2f81f2`).
+- Client-derived scanner inventory target — scanner mutations now send scan
+  context plus stable operation IDs to backend callables; backend resolver
+  selects canonical `inventoryItemId` (commit `6146176`).
+- Retry-unstable scanner operation IDs — compatibility scanner callables now
+  require explicit stable operation IDs; wrapper fallback IDs were removed
+  (commit `96a3133`).
+- Client stock mutation authority — all stock mutations route through
+  `movementService.ts`; direct client writes are blocked by Firestore rules and
+  static validators (commit `6146176`).
+- Manual create/merge client authority — `manualInventoryUpsertCallable` is
+  server-authoritative with identity matching, ambiguity handling, and
+  identity-lock writes in one transaction (commit `5417a33`).
+- Existing metadata direct authority — `manualInventoryMetadataUpdateCallable` is
+  server-authoritative and rejects protected fields (commit `91c1b30`).
+- Location/bin direct mutation authority — location/bin changes route through
+  canonical `warehouse_transfer` movement with source snapshot validation and
+  atomic identity-lock migration (commit `99dfb4a`).
+- Identity-lock lifecycle ambiguity — emulator regression tests prove hard-delete
+  reclaimability, archive reclaimability, discontinued-item identity reservation,
+  and concurrent reclaim serialization (commit `9fbb37a`).
+- Backup artifacts — tracked source-tree backup artifacts were removed from the
+  repository and are no longer part of architecture debt.
+- Duplicated scanner callable auth — consolidated through shared role helpers.
+
+## 12. Remaining Non-Blocking Debt
+
+These items are informational or acceptable trade-offs. None are BLOCKER/HIGH.
 
 1. Client product-intake scan adaptation remains in
    `src/services/inventory/inventory-scan-adapter.ts`. It supports UI intake
@@ -318,98 +371,53 @@ Remaining source-verified debt:
    UI and domain workflow paths, although their inventory lookup semantics now
    route through the shared backend resolver and their retry-unstable client-wrapper
    operation-ID fallbacks have been removed.
-3. Manual new-inventory create-or-merge now uses
-   `functions/src/inventory/manualInventoryUpsert.ts`. The server requires
-   inventory callable authorization, a stable operation ID, exact replay
-   fingerprinting, and fail-closed ambiguity handling. Identity inputs are
-   explicit inventory document ID, serial/serialNumber, barcode, barcode+lot,
-   lot, SKU at the same location/bin, and manufacturer item ID at the same
-   location/bin. `productId` is stored as metadata and is not inventory identity.
-   The workflow writes deterministic server-owned `inventoryIdentityLocks`
-   documents for those canonical identity keys in the same transaction, so
-   overlapping create attempts cannot both observe no match and create duplicate
-   active records. New records are created with zero stock defaults; initial
-   stock still flows through `createInventoryMovementCallable`.
-4. `movementService.ts`, `receiveScannedInventoryIntake.ts`, and
+3. `movementService.ts`, `receiveScannedInventoryIntake.ts`, and
    `domainWorkflowFunctions.ts` are large modules. Size alone is not a correctness
    defect, but future changes should avoid increasing branching complexity there
    without tests.
-5. Batch archive/discontinue retry state is client-lifecycle state, not durable
+4. Batch archive/discontinue retry state is client-lifecycle state, not durable
    batch orchestration.
-6. Retail sale is covered as a movement type, but broader sales/order accounting
+5. Retail sale is covered as a movement type, but broader sales/order accounting
    integration is outside the inventory movement boundary unless a separate
    business workflow is introduced.
-7. Existing-inventory manual metadata edits now route through
-   `functions/src/inventory/manualInventoryMetadataUpdate.ts`. The workflow
-   rejects stock, assignment, status, lifecycle, and location/bin fields; updates
-   barcode, serial, lot, SKU, and manufacturer item identity only after
-   transaction-time ambiguity and identity-lock validation; and keeps `productId`
-   as product-link metadata rather than inventory identity. Quantity deltas still
-   flow through `createInventoryMovementCallable`.
 
-Resolved or materially improved since the prior audit:
+## 13. Future Feature Work
 
-- Scanner equipment check-in now has a server-authoritative workflow and
-  emulator coverage.
-- Warehouse custody is represented explicitly through existing inventory fields
-  and idempotent already-in-warehouse handling.
-- Retail sale is integrated into the canonical movement path.
-- Operation IDs are preserved across multiple uncertain-response retry
-  lifecycles.
-- Batch archive/discontinue actions prevent concurrent runs and resume
-  pending/uncertain entries by preserving per-item operation IDs.
-- Backend scan normalization and inventory-item resolution are consolidated in
-  `functions/src/inventory/inventoryScanResolver.ts`.
-- Lookup, movement fallback resolution, scanner check-in, scanned-intake
-  inventory lookup portions, and compatibility scanner callables now consume the
-  shared backend resolver.
-- Issue, transfer, and cycle-count compatibility callables now require stable
-  caller-supplied operation IDs and reject missing or malformed IDs before any
-  business mutation.
-- Client scan presentation now routes through
-  `src/services/inventory/inventory-scan-adapter.ts`; product suggestions remain
-  distinguishable from inventory identity, and inventory-page scan movements send
-  scan context for server-side movement resolution.
-- `src/lib/inventory/smartMergeInventory.ts` is now a typed client wrapper for
-  `manualInventoryUpsertCallable`; it no longer queries or writes Firestore.
-- After manual upsert returns a resolved inventory target, the inventory page's
-  client repository update is limited to non-stock metadata and derived display
-  fields. It no longer rewrites barcode, serial, lot, SKU, or manufacturer item
-  identity fields after server target resolution.
-- Existing-record saves no longer call `InventoryRepository.update` for
-  inventory metadata. The client validates obvious form inputs, computes derived
-  display fields, calls the typed backend metadata workflow with a stable
-  operation ID, and then invokes movement service for any quantity delta.
-- Existing-record location/bin changes now route through the canonical
-  `warehouse_transfer` movement path instead of metadata writes. The movement
-  transaction validates the caller's source location/bin snapshot when provided,
-  updates `locationName` and `binLocation`, preserves stock totals, records the
-  transfer movement, and releases/reclaims location-scoped SKU/manufacturer item
-  identity locks atomically.
-- Scanner Transfer Location keeps the compatibility callable name
-  `transferInventoryByBarcode`, but the callable now feeds source and target
-  location/bin context into the same movement-service transfer authority.
-- Tracked source-tree backup artifacts are no longer part of the architecture
-  debt described by this document.
+These are schema or domain enhancements, not blockers:
 
-## 12. Recommended Next Architecture Task
-
-The next architecture task should be transfer-location model clarification:
-
-- Decide whether the long-term canonical location model needs stable
-  `locationId`/`warehouseId` records or whether `locationName` remains the
-  authoritative location value.
+- Location model clarification: decide whether the long-term canonical location
+  model needs stable `locationId`/`warehouseId` records or whether
+  `locationName` remains the authoritative location value.
 - Keep product-catalog suggestions separate from inventory mutation identity.
-- Preserve movementService as the only stock authority and keep manual metadata
-  workflows from recomputing quantity or availability fields.
+- Broader sales/order accounting integration is outside the inventory movement
+  boundary unless a separate business workflow is introduced.
 
-This is now higher-value than another backend resolver refactor because manual
-create/merge, existing-record metadata mutation, and location/bin transfer
-boundaries are consolidated and covered by focused unit/emulator tests.
+## 14. Closure
 
-## 13. Release Readiness Interpretation
+Inventory Architecture Consolidation Status: **CLOSED**
 
-This document is an architecture audit refresh only. It is not a production
+Closure HEAD: `9fbb37a`
+
+Closure basis:
+
+- No active protected client mutation authority.
+- `movementService.ts` is the canonical stock authority.
+- `inventoryScanResolver.ts` owns backend scan target resolution.
+- `manualInventoryUpsertCallable` is server-authoritative for create/merge.
+- `manualInventoryMetadataUpdateCallable` is server-authoritative for metadata edits.
+- `warehouse_transfer` is the canonical location/bin authority.
+- Stable operation IDs with deterministic duplicate replay.
+- Identity-lock lifecycle emulator coverage proves reclaimability and reservation semantics.
+- Static validators passing.
+- TypeScript builds passing.
+- No BLOCKER/HIGH inventory architecture findings remain.
+
+Future inventory work should be driven by feature requirements or observed
+defects, not continued authority consolidation.
+
+## 15. Release Readiness Interpretation
+
+This document is an architecture audit closure record. It is not a production
 release approval.
 
 Source-level state is improved for scanner check-in, warehouse custody, retail
@@ -418,7 +426,7 @@ still depends on the normal release gate: repository hygiene, secret preflight,
 dependency audit, lint/typecheck/build/test gates, emulator regression gates, and
 deployment-specific smoke checks when a deployment is intentionally performed.
 
-## 14. Files Updated By This Refresh
+## 16. Files Updated By This Closure
 
 Only this file was updated:
 
