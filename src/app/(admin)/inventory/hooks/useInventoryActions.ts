@@ -163,6 +163,7 @@ export function useInventoryActions({
 
   const manualUpsertOperationRef = useRef<ManualUpsertOperationState | null>(null);
   const existingMetadataUpdateOperationRef = useRef<ManualUpsertOperationState | null>(null);
+  const existingLocationTransferOperationRef = useRef<ManualUpsertOperationState | null>(null);
   const hardDeleteInFlightRef = useRef(new Set<string>());
 
   async function executeSaveMovement(state: SaveMovementState): Promise<void> {
@@ -229,6 +230,8 @@ export function useInventoryActions({
       barcode: _barcode,
       serial: _serial,
       lotNumber: _lotNumber,
+      locationName: _locationName,
+      binLocation: _binLocation,
       ...metadata
     } = omitMovementFields(payload);
 
@@ -569,17 +572,16 @@ export function useInventoryActions({
         }
 
         let quantityDelta = 0;
+        const currentItem =
+          items.find((item) => item.id === form.id) ?? null;
+
+        if (!currentItem) {
+          throw new Error(
+            "The inventory item being edited is no longer available in the current inventory snapshot."
+          );
+        }
 
         if (!saveMovementState) {
-          const currentItem =
-            items.find((item) => item.id === form.id) ?? null;
-
-          if (!currentItem) {
-            throw new Error(
-              "The inventory item being edited is no longer available in the current inventory snapshot."
-            );
-          }
-
           quantityDelta =
             payload.quantityOnHand - currentItem.quantityOnHand;
         }
@@ -653,6 +655,68 @@ export function useInventoryActions({
         }
 
         existingMetadataUpdateOperationRef.current = null;
+
+        const locationChanged =
+          payload.locationName !== (currentItem.locationName || "Main Location") ||
+          payload.binLocation !== (currentItem.binLocation || "");
+
+        if (locationChanged) {
+          const transferFingerprint = JSON.stringify([
+            form.id,
+            currentItem.locationName || "Main Location",
+            currentItem.binLocation || "",
+            payload.locationName,
+            payload.binLocation,
+            syncedProductId ?? payload.productId,
+            payload.barcode,
+            payload.serial,
+            payload.lotNumber,
+          ]);
+          const transferOperation = resolveManualUpsertOperation({
+            current: existingLocationTransferOperationRef.current,
+            fingerprint: transferFingerprint,
+            createOperationId: () => createInventoryOperationId("inventory-location-transfer"),
+          });
+          existingLocationTransferOperationRef.current = transferOperation;
+
+          try {
+            const transfer = await createInventoryMovement({
+              operationId: transferOperation.operationId,
+              movementType: "warehouse_transfer",
+              inventoryItemId: form.id,
+              productId: syncedProductId ?? payload.productId,
+              barcode: payload.barcode,
+              serialNumber: payload.serial,
+              lotNumber: payload.lotNumber,
+              quantity: 1,
+              fromLocation: currentItem.locationName || "Main Location",
+              fromBinLocation: currentItem.binLocation || "",
+              toLocation: payload.locationName,
+              toBinLocation: payload.binLocation,
+              reason: "Manual inventory location transfer.",
+              source: "inventory_page",
+              metadata: {
+                sourceForm: "inventory_edit",
+              },
+            });
+
+            if (
+              transfer.status !== "success" &&
+              transfer.status !== "duplicate_operation"
+            ) {
+              throw new Error(
+                transfer.message || "Inventory location transfer was not applied."
+              );
+            }
+
+            existingLocationTransferOperationRef.current = null;
+          } catch (error: unknown) {
+            if (!isRetryableInventoryTransactionError(error)) {
+              existingLocationTransferOperationRef.current = null;
+            }
+            throw error;
+          }
+        }
 
         if (saveMovementState) {
           await executeSaveMovement(saveMovementState);
@@ -852,6 +916,7 @@ export function useInventoryActions({
       }
 
       saveMovementStateRef.current = null;
+      existingLocationTransferOperationRef.current = null;
       resetForm();
     } catch (error: unknown) {
       console.error("SAVE INVENTORY ERROR:", error);
@@ -859,6 +924,7 @@ export function useInventoryActions({
       if (!isRetryableInventoryTransactionError(error)) {
         manualUpsertOperationRef.current = null;
         existingMetadataUpdateOperationRef.current = null;
+        existingLocationTransferOperationRef.current = null;
       }
 
       const pendingMovement = saveMovementStateRef.current;

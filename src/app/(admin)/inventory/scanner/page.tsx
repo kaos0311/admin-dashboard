@@ -149,6 +149,7 @@ export default function ScannerPage() {
   // Transaction form state
   const [quantity, setQuantity] = useState("1");
   const [toLocation, setToLocation] = useState("");
+  const [toBinLocation, setToBinLocation] = useState("");
   const [confirming, setConfirming] = useState(false);
   const [showConfirmation, setShowConfirmation] = useState(false);
 
@@ -217,6 +218,8 @@ export default function ScannerPage() {
       setShowConfirmation(false);
       setConfirming(false);
       setLookupError(null);
+      setToLocation("");
+      setToBinLocation("");
       resetTx();
 
       const result = await lookupByBarcode(barcode);
@@ -656,6 +659,8 @@ export default function ScannerPage() {
           quantity: parseInt(quantity, 10),
           toLocation:
             transactionMode === "transfer" ? toLocation : undefined,
+          toBinLocation:
+            transactionMode === "transfer" ? toBinLocation : undefined,
           source: "tera_hid_scanner",
           rawScan: lastRawScan,
         },
@@ -718,6 +723,7 @@ export default function ScannerPage() {
     quantity,
     refocusScanner,
     selectedItem,
+    toBinLocation,
     toLocation,
     transactionMode,
   ]);
@@ -733,6 +739,8 @@ export default function ScannerPage() {
     setTransactionResult(null);
     setLookupError(null);
     setDiagnosticData(null);
+    setToLocation("");
+    setToBinLocation("");
     processingRef.current = false;
     operationIdManagerRef.current.reset();
     pendingOperationIdRef.current = null;
@@ -1061,15 +1069,27 @@ export default function ScannerPage() {
                   </p>
 
                   {transactionMode === "transfer" && (
-                    <div>
-                      <label className={typography.bodyStrong}>Destination Location</label>
-                      <input
-                        type="text"
-                        value={toLocation}
-                        onChange={(e) => setToLocation(e.target.value)}
-                        className={`${glass.input} mt-1 w-full`}
-                        placeholder="e.g., Warehouse B, Shelf 4"
-                      />
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div>
+                        <label className={typography.bodyStrong}>Destination Location</label>
+                        <input
+                          type="text"
+                          value={toLocation}
+                          onChange={(e) => setToLocation(e.target.value)}
+                          className={`${glass.input} mt-1 w-full`}
+                          placeholder="e.g., Warehouse B"
+                        />
+                      </div>
+                      <div>
+                        <label className={typography.bodyStrong}>Destination Bin</label>
+                        <input
+                          type="text"
+                          value={toBinLocation}
+                          onChange={(e) => setToBinLocation(e.target.value)}
+                          className={`${glass.input} mt-1 w-full`}
+                          placeholder="e.g., Shelf 4"
+                        />
+                      </div>
                     </div>
                   )}
 

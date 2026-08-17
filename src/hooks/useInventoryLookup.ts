@@ -138,6 +138,7 @@ export function useInventoryLookup() {
         operationId?: string;
         quantity?: number;
         toLocation?: string;
+        toBinLocation?: string;
         source?: "tera_hid_scanner" | "manual_entry";
         rawScan?: string | null;
       },
@@ -161,6 +162,7 @@ export function useInventoryLookup() {
           operationId,
           quantity: params.quantity,
           toLocation: params.toLocation,
+          toBinLocation: params.toBinLocation,
           source: params.source ?? "manual_entry",
           rawScan: params.rawScan ?? null,
         });

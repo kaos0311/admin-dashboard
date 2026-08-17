@@ -43,7 +43,9 @@ export type InventoryMovementRequest = {
   quantity?: number;
   quantityDelta?: number;
   fromLocation?: string;
+  fromBinLocation?: string;
   toLocation?: string;
+  toBinLocation?: string;
   patientId?: string;
   patientName?: string;
   rentalId?: string;

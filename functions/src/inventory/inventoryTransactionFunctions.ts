@@ -169,7 +169,11 @@ async function executeTransaction(
                 fromLocation: String(
                   resolved.data.locationName ?? ""
                 ),
+                fromBinLocation: String(
+                  resolved.data.binLocation ?? ""
+                ),
                 toLocation: String(request.data?.toLocation ?? ""),
+                toBinLocation: String(request.data?.toBinLocation ?? ""),
                 reason: `Scanner ${transactionType} operation.`,
                 source: "scanner",
                 metadata: {
@@ -186,6 +190,7 @@ async function executeTransaction(
                 productId: String(resolved.data.productId ?? "").trim(),
                 barcode: normalizedBarcode,
                 toLocation: String(request.data?.toLocation ?? "").trim(),
+                toBinLocation: String(request.data?.toBinLocation ?? "").trim(),
                 reason: `Scanner ${transactionType} operation.`,
                 source: "scanner",
               }),

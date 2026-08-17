@@ -380,22 +380,32 @@ Resolved or materially improved since the prior audit:
   inventory metadata. The client validates obvious form inputs, computes derived
   display fields, calls the typed backend metadata workflow with a stable
   operation ID, and then invokes movement service for any quantity delta.
+- Existing-record location/bin changes now route through the canonical
+  `warehouse_transfer` movement path instead of metadata writes. The movement
+  transaction validates the caller's source location/bin snapshot when provided,
+  updates `locationName` and `binLocation`, preserves stock totals, records the
+  transfer movement, and releases/reclaims location-scoped SKU/manufacturer item
+  identity locks atomically.
+- Scanner Transfer Location keeps the compatibility callable name
+  `transferInventoryByBarcode`, but the callable now feeds source and target
+  location/bin context into the same movement-service transfer authority.
 - Tracked source-tree backup artifacts are no longer part of the architecture
   debt described by this document.
 
 ## 12. Recommended Next Architecture Task
 
-The next architecture task should be location/bin transfer UX consolidation:
+The next architecture task should be transfer-location model clarification:
 
-- Route user-facing location/bin changes through a transfer workflow rather than
-  a metadata edit form.
+- Decide whether the long-term canonical location model needs stable
+  `locationId`/`warehouseId` records or whether `locationName` remains the
+  authoritative location value.
 - Keep product-catalog suggestions separate from inventory mutation identity.
 - Preserve movementService as the only stock authority and keep manual metadata
   workflows from recomputing quantity or availability fields.
 
 This is now higher-value than another backend resolver refactor because manual
-create/merge and existing-record metadata mutation boundaries are consolidated
-and covered by focused unit/emulator tests.
+create/merge, existing-record metadata mutation, and location/bin transfer
+boundaries are consolidated and covered by focused unit/emulator tests.
 
 ## 13. Release Readiness Interpretation
 

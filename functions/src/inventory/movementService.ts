@@ -65,7 +65,9 @@ export type CreateMovementInput = {
   quantity?: number;
   quantityDelta?: number;
   fromLocation?: string;
+  fromBinLocation?: string;
   toLocation?: string;
+  toBinLocation?: string;
   patientId?: string;
   patientName?: string;
   rentalId?: string;
@@ -125,9 +127,18 @@ const ADMIN_ONLY_MOVEMENTS = new Set<InventoryMovementType>([
   "hard_delete",
   "reversal",
 ]);
+const IDENTITY_LOCK_COLLECTION = "inventoryIdentityLocks";
 
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
+}
+
+function key(value: unknown): string {
+  return text(value).toLowerCase();
+}
+
+function isDeletedInventory(data: InventoryDoc): boolean {
+  return data.isDeleted === true || data.deleted === true;
 }
 
 function readNumber(
@@ -158,6 +169,164 @@ function assertSafeDocId(value: string, label: string): void {
   if (!SAFE_DOC_ID_PATTERN.test(value) || value === "." || value === "..") {
     throw new HttpsError("invalid-argument", `${label} is not a safe document ID.`);
   }
+}
+
+function identityLockDocId(lockKey: string): string {
+  const id = encodeURIComponent(lockKey);
+  if (!id || id.length > 1200 || id.includes("/")) {
+    throw new HttpsError("invalid-argument", "Inventory identity is too long.");
+  }
+  return id;
+}
+
+function locationScopedIdentityLockKeys(identity: {
+  sku: string;
+  manufacturerItemId: string;
+  locationName: string;
+  binLocation: string;
+}): string[] {
+  const location = key(identity.locationName || "Main Location");
+  const bin = key(identity.binLocation);
+  const keys: string[] = [];
+
+  if (identity.sku) keys.push(`sku_location:${key(identity.sku)}:${location}:${bin}`);
+  if (identity.manufacturerItemId) {
+    keys.push(`manufacturerItemId_location:${key(identity.manufacturerItemId)}:${location}:${bin}`);
+  }
+
+  return Array.from(new Set(keys.filter(Boolean))).sort();
+}
+
+async function readLocationScopedLockOwners(params: {
+  transaction: Transaction;
+  database: Firestore;
+  lockKeys: string[];
+}): Promise<Map<string, string>> {
+  const owners = new Map<string, string>();
+  for (const lockKey of params.lockKeys) {
+    const ref = params.database.collection(IDENTITY_LOCK_COLLECTION).doc(identityLockDocId(lockKey));
+    const snap = await params.transaction.get(ref);
+    owners.set(lockKey, text(snap.data()?.inventoryItemId));
+  }
+  return owners;
+}
+
+async function assertNoLocationIdentityConflict(params: {
+  transaction: Transaction;
+  database: Firestore;
+  inventoryItemId: string;
+  sku: string;
+  manufacturerItemId: string;
+  targetLocationName: string;
+  targetBinLocation: string;
+  targetLockKeys: string[];
+  lockOwners: Map<string, string>;
+}): Promise<void> {
+  const conflicts = new Set<string>();
+
+  for (const lockKey of params.targetLockKeys) {
+    const owner = params.lockOwners.get(lockKey) ?? "";
+    if (!owner || owner === params.inventoryItemId) continue;
+    assertSafeDocId(owner, "inventoryItemId");
+    const snap = await params.transaction.get(params.database.collection("inventory").doc(owner));
+    if (snap.exists && !isDeletedInventory(snap.data() as InventoryDoc)) {
+      conflicts.add(owner);
+    }
+  }
+
+  const addMatches = async (field: "sku" | "manufacturerItemId", value: string) => {
+    if (!value) return;
+    const snap = await params.transaction.get(
+      params.database.collection("inventory").where(field, "==", value).limit(10)
+    );
+    for (const docSnap of snap.docs) {
+      if (docSnap.id === params.inventoryItemId) continue;
+      const data = docSnap.data() as InventoryDoc;
+      if (isDeletedInventory(data)) continue;
+      if (
+        key(data.locationName || "Main Location") === key(params.targetLocationName || "Main Location") &&
+        key(data.binLocation) === key(params.targetBinLocation)
+      ) {
+        conflicts.add(docSnap.id);
+      }
+    }
+  };
+
+  await addMatches("sku", params.sku);
+  await addMatches("manufacturerItemId", params.manufacturerItemId);
+
+  if (conflicts.size > 0) {
+    throw new HttpsError(
+      "failed-precondition",
+      `Transfer target location identity conflicts with active inventory records: ${Array.from(conflicts).sort().join(", ")}.`
+    );
+  }
+}
+
+async function prepareWarehouseTransferIdentityLocks(params: {
+  transaction: Transaction;
+  database: Firestore;
+  inventoryItemId: string;
+  inventory: InventoryDoc;
+  targetLocationName: string;
+  targetBinLocation: string;
+  actor: MovementActor;
+}): Promise<() => void> {
+  const sku = text(params.inventory.sku);
+  const manufacturerItemId = text(params.inventory.manufacturerItemId);
+  const oldLockKeys = locationScopedIdentityLockKeys({
+    sku,
+    manufacturerItemId,
+    locationName: text(params.inventory.locationName) || "Main Location",
+    binLocation: text(params.inventory.binLocation),
+  });
+  const newLockKeys = locationScopedIdentityLockKeys({
+    sku,
+    manufacturerItemId,
+    locationName: params.targetLocationName || "Main Location",
+    binLocation: params.targetBinLocation,
+  });
+  const lockOwners = await readLocationScopedLockOwners({
+    transaction: params.transaction,
+    database: params.database,
+    lockKeys: Array.from(new Set([...oldLockKeys, ...newLockKeys])).sort(),
+  });
+
+  await assertNoLocationIdentityConflict({
+    transaction: params.transaction,
+    database: params.database,
+    inventoryItemId: params.inventoryItemId,
+    sku,
+    manufacturerItemId,
+    targetLocationName: params.targetLocationName,
+    targetBinLocation: params.targetBinLocation,
+    targetLockKeys: newLockKeys,
+    lockOwners,
+  });
+
+  return () => {
+    const newKeys = new Set(newLockKeys);
+    for (const oldKey of oldLockKeys) {
+      if (newKeys.has(oldKey)) continue;
+      if (lockOwners.get(oldKey) !== params.inventoryItemId) continue;
+      params.transaction.delete(params.database.collection(IDENTITY_LOCK_COLLECTION).doc(identityLockDocId(oldKey)));
+    }
+
+    for (const newKey of newLockKeys) {
+      params.transaction.set(
+        params.database.collection(IDENTITY_LOCK_COLLECTION).doc(identityLockDocId(newKey)),
+        {
+          inventoryItemId: params.inventoryItemId,
+          identityKey: newKey,
+          lockType: "warehouse_transfer",
+          actorUid: params.actor.uid,
+          updatedAt: FieldValue.serverTimestamp(),
+          createdAt: FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    }
+  };
 }
 
 function defaultFirestore(): Firestore {
@@ -371,7 +540,9 @@ function movementFingerprint(input: CreateMovementInput, actor: MovementActor): 
     quantity: input.quantity ?? null,
     quantityDelta: input.quantityDelta ?? null,
     fromLocation: text(input.fromLocation),
+    fromBinLocation: text(input.fromBinLocation),
     toLocation: text(input.toLocation),
+    toBinLocation: text(input.toBinLocation),
     patientId: text(input.patientId),
     rentalId: text(input.rentalId),
     reason: text(input.reason),
@@ -509,6 +680,32 @@ export async function prepareInventoryMovementInTransaction(params: {
     quantity,
   });
 
+  const targetLocationName = text(input.toLocation);
+  const targetBinLocation = text(input.toBinLocation);
+  let applyWarehouseTransferIdentityLocks = (): void => undefined;
+
+  if (input.movementType === "warehouse_transfer") {
+    if (!targetLocationName) {
+      throw new HttpsError("invalid-argument", "Destination location is required for transfer.");
+    }
+    if (text(input.fromLocation) && key(input.fromLocation) !== key(inventory.locationName || "Main Location")) {
+      throw new HttpsError("failed-precondition", "Inventory source location changed before transfer.");
+    }
+    if (text(input.fromBinLocation) && key(input.fromBinLocation) !== key(inventory.binLocation)) {
+      throw new HttpsError("failed-precondition", "Inventory source bin changed before transfer.");
+    }
+
+    applyWarehouseTransferIdentityLocks = await prepareWarehouseTransferIdentityLocks({
+      transaction,
+      database,
+      inventoryItemId: input.inventoryItemId,
+      inventory,
+      targetLocationName,
+      targetBinLocation,
+      actor,
+    });
+  }
+
   if (input.movementType === "hard_delete") {
     await assertNoDependenciesForHardDelete(transaction, database, input.inventoryItemId, productId);
   }
@@ -542,7 +739,8 @@ export async function prepareInventoryMovementInTransaction(params: {
   };
 
   if (input.movementType === "warehouse_transfer") {
-    inventoryUpdate.locationName = text(input.toLocation);
+    inventoryUpdate.locationName = targetLocationName;
+    inventoryUpdate.binLocation = targetBinLocation;
   }
 
   if (input.movementType === "discontinued") {
@@ -734,6 +932,10 @@ export async function prepareInventoryMovementInTransaction(params: {
 
     if (input.movementType === "hard_delete") {
       transaction.delete(inventoryRef);
+    }
+
+    if (input.movementType === "warehouse_transfer") {
+      applyWarehouseTransferIdentityLocks();
     }
   };
 

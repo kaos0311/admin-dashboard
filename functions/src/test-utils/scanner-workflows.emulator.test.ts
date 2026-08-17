@@ -156,6 +156,19 @@ async function seedInventory(id: string, overrides: Record<string, unknown> = {}
   });
 }
 
+function lockId(lockKey: string): string {
+  return encodeURIComponent(lockKey);
+}
+
+async function seedLocationLock(lockKey: string, inventoryItemId: string) {
+  await db.collection("inventoryIdentityLocks").doc(lockId(lockKey)).set({
+    inventoryItemId,
+    identityKey: lockKey,
+    lockType: "test_seed",
+    createdAt: Timestamp.now(),
+  });
+}
+
 async function seedRentalFixture(prefix: string, options: { includePatientEquipment?: boolean } = {}) {
   const inventoryId = `${prefix}-inventory`;
   const rentalId = `${prefix}-rental`;
@@ -617,6 +630,342 @@ describe("scanner retail sale movement", () => {
   });
 });
 
+describe("warehouse transfer movement authority", () => {
+  it("transfers location and bin without changing stock totals", async () => {
+    await seedInventory("transfer-success", {
+      sku: "TRANSFER-SKU-1",
+      manufacturerItemId: "TRANSFER-MFG-1",
+      locationName: "Warehouse A",
+      binLocation: "A1",
+      quantityOnHand: 6,
+      available: 6,
+    });
+    await seedLocationLock(
+      "sku_location:transfer-sku-1:warehouse a:a1",
+      "transfer-success"
+    );
+    await seedLocationLock(
+      "manufacturerItemId_location:transfer-mfg-1:warehouse a:a1",
+      "transfer-success"
+    );
+
+    const result = await createInventoryMovement(
+      {
+        operationId: "warehouse-transfer-success-001",
+        movementType: "warehouse_transfer",
+        inventoryItemId: "transfer-success",
+        quantity: 1,
+        fromLocation: "Warehouse A",
+        fromBinLocation: "A1",
+        toLocation: "Warehouse B",
+        toBinLocation: "B2",
+        source: "inventory_page",
+      },
+      actor,
+      db
+    );
+
+    expect(result.status).toBe("success");
+    expect((await db.collection("inventory").doc("transfer-success").get()).data()).toMatchObject({
+      locationName: "Warehouse B",
+      binLocation: "B2",
+      quantityOnHand: 6,
+      available: 6,
+      onRent: 0,
+      onTruck: 0,
+    });
+    await expect(db.collection("inventoryIdentityLocks").doc(lockId("sku_location:transfer-sku-1:warehouse a:a1")).get())
+      .resolves.toMatchObject({ exists: false });
+    expect((await db.collection("inventoryIdentityLocks").doc(lockId("sku_location:transfer-sku-1:warehouse b:b2")).get()).data()).toMatchObject({
+      inventoryItemId: "transfer-success",
+      lockType: "warehouse_transfer",
+    });
+    expect((await db.collection("inventoryIdentityLocks").doc(lockId("manufacturerItemId_location:transfer-mfg-1:warehouse b:b2")).get()).data()).toMatchObject({
+      inventoryItemId: "transfer-success",
+    });
+  });
+
+  it("rejects missing, deleted, stale-source, and invalid-target transfers", async () => {
+    await seedInventory("transfer-deleted", {
+      isDeleted: true,
+      locationName: "Warehouse A",
+      quantityOnHand: 1,
+      available: 1,
+    });
+    await seedInventory("transfer-stale", {
+      locationName: "Warehouse Current",
+      binLocation: "C1",
+      quantityOnHand: 1,
+      available: 1,
+    });
+
+    await expect(
+      createInventoryMovement(
+        {
+          operationId: "warehouse-transfer-missing-001",
+          movementType: "warehouse_transfer",
+          inventoryItemId: "missing-transfer",
+          quantity: 1,
+          toLocation: "Warehouse B",
+          source: "inventory_page",
+        },
+        actor,
+        db
+      )
+    ).resolves.toMatchObject({ status: "not_found" });
+
+    await expect(
+      createInventoryMovement(
+        {
+          operationId: "warehouse-transfer-deleted-001",
+          movementType: "warehouse_transfer",
+          inventoryItemId: "transfer-deleted",
+          quantity: 1,
+          toLocation: "Warehouse B",
+          source: "inventory_page",
+        },
+        actor,
+        db
+      )
+    ).rejects.toMatchObject({ code: "failed-precondition" });
+
+    await expect(
+      createInventoryMovement(
+        {
+          operationId: "warehouse-transfer-stale-001",
+          movementType: "warehouse_transfer",
+          inventoryItemId: "transfer-stale",
+          quantity: 1,
+          fromLocation: "Warehouse Old",
+          fromBinLocation: "C1",
+          toLocation: "Warehouse B",
+          source: "inventory_page",
+        },
+        actor,
+        db
+      )
+    ).rejects.toMatchObject({ code: "failed-precondition" });
+
+    await expect(
+      createInventoryMovement(
+        {
+          operationId: "warehouse-transfer-target-001",
+          movementType: "warehouse_transfer",
+          inventoryItemId: "transfer-stale",
+          quantity: 1,
+          source: "inventory_page",
+        },
+        actor,
+        db
+      )
+    ).rejects.toMatchObject({ code: "invalid-argument" });
+  });
+
+  it("replays exact transfer idempotently and rejects changed target reuse", async () => {
+    await seedInventory("transfer-replay", {
+      locationName: "Warehouse A",
+      binLocation: "A1",
+      quantityOnHand: 3,
+      available: 3,
+    });
+    const request = {
+      operationId: "warehouse-transfer-replay-001",
+      movementType: "warehouse_transfer" as const,
+      inventoryItemId: "transfer-replay",
+      quantity: 1,
+      fromLocation: "Warehouse A",
+      fromBinLocation: "A1",
+      toLocation: "Warehouse B",
+      toBinLocation: "B1",
+      source: "inventory_page" as const,
+    };
+
+    const first = await createInventoryMovement(request, actor, db);
+    const retry = await createInventoryMovement(request, actor, db);
+
+    expect(first.status).toBe("success");
+    expect(retry.status).toBe("duplicate_operation");
+    expect(retry.movementId).toBe(first.movementId);
+    await expect(
+      createInventoryMovement(
+        {
+          ...request,
+          toBinLocation: "B2",
+        },
+        actor,
+        db
+      )
+    ).rejects.toMatchObject({ code: "failed-precondition" });
+  });
+
+  it("keeps concurrent transfers deterministic for one item", async () => {
+    await seedInventory("transfer-concurrent-item", {
+      locationName: "Warehouse A",
+      binLocation: "A1",
+      quantityOnHand: 2,
+      available: 2,
+    });
+
+    const [first, second] = await Promise.allSettled([
+      createInventoryMovement(
+        {
+          operationId: "warehouse-transfer-concurrent-001",
+          movementType: "warehouse_transfer",
+          inventoryItemId: "transfer-concurrent-item",
+          quantity: 1,
+          fromLocation: "Warehouse A",
+          fromBinLocation: "A1",
+          toLocation: "Warehouse B",
+          toBinLocation: "B1",
+          source: "inventory_page",
+        },
+        actor,
+        db
+      ),
+      createInventoryMovement(
+        {
+          operationId: "warehouse-transfer-concurrent-002",
+          movementType: "warehouse_transfer",
+          inventoryItemId: "transfer-concurrent-item",
+          quantity: 1,
+          fromLocation: "Warehouse A",
+          fromBinLocation: "A1",
+          toLocation: "Warehouse C",
+          toBinLocation: "C1",
+          source: "inventory_page",
+        },
+        actor,
+        db
+      ),
+    ]);
+
+    expect([first.status, second.status].filter((status) => status === "fulfilled")).toHaveLength(1);
+    expect((await db.collection("inventory").doc("transfer-concurrent-item").get()).data()).toMatchObject({
+      quantityOnHand: 2,
+      available: 2,
+    });
+  });
+
+  it("fails closed when two items attempt to claim the same target-scoped identity lock", async () => {
+    await seedInventory("transfer-lock-a", {
+      sku: "TRANSFER-SAME-SKU",
+      locationName: "Warehouse A",
+      binLocation: "A1",
+      quantityOnHand: 1,
+      available: 1,
+    });
+    await seedInventory("transfer-lock-b", {
+      sku: "TRANSFER-SAME-SKU",
+      locationName: "Warehouse B",
+      binLocation: "B1",
+      quantityOnHand: 1,
+      available: 1,
+    });
+
+    const [first, second] = await Promise.allSettled([
+      createInventoryMovement(
+        {
+          operationId: "warehouse-transfer-lock-001",
+          movementType: "warehouse_transfer",
+          inventoryItemId: "transfer-lock-a",
+          quantity: 1,
+          fromLocation: "Warehouse A",
+          fromBinLocation: "A1",
+          toLocation: "Warehouse Target",
+          toBinLocation: "T1",
+          source: "inventory_page",
+        },
+        actor,
+        db
+      ),
+      createInventoryMovement(
+        {
+          operationId: "warehouse-transfer-lock-002",
+          movementType: "warehouse_transfer",
+          inventoryItemId: "transfer-lock-b",
+          quantity: 1,
+          fromLocation: "Warehouse B",
+          fromBinLocation: "B1",
+          toLocation: "Warehouse Target",
+          toBinLocation: "T1",
+          source: "inventory_page",
+        },
+        actor,
+        db
+      ),
+    ]);
+
+    expect([first.status, second.status].filter((status) => status === "fulfilled")).toHaveLength(1);
+    const targetMatches = await db
+      .collection("inventory")
+      .where("sku", "==", "TRANSFER-SAME-SKU")
+      .get();
+    expect(
+      targetMatches.docs.filter((docSnap) => {
+        const data = docSnap.data();
+        return data.locationName === "Warehouse Target" && data.binLocation === "T1";
+      })
+    ).toHaveLength(1);
+    expect((await db.collection("inventoryIdentityLocks").doc(lockId("sku_location:transfer-same-sku:warehouse target:t1")).get()).data()?.inventoryItemId)
+      .toMatch(/^transfer-lock-/);
+  });
+
+  it("rejects unauthorized, disabled, and unauthenticated transfer callers", async () => {
+    await seedInventory("transfer-auth", {
+      barcode: "TRANSFER-AUTH",
+      locationName: "Warehouse A",
+      quantityOnHand: 1,
+      available: 1,
+    });
+    await db.collection("users").doc("transfer-disabled").set({
+      uid: "transfer-disabled",
+      email: "transfer-disabled@test.example.com",
+      role: "staff",
+      active: true,
+      disabled: true,
+    });
+
+    await expect(
+      invokeCreateMovementCallable({
+        operationId: "warehouse-transfer-unauthenticated-001",
+        movementType: "warehouse_transfer",
+        barcode: "TRANSFER-AUTH",
+        quantity: 1,
+        toLocation: "Warehouse B",
+        source: "scanner",
+      })
+    ).rejects.toMatchObject({ code: "unauthenticated" });
+
+    await expect(
+      invokeCreateMovementCallable(
+        {
+          operationId: "warehouse-transfer-unauthorized-001",
+          movementType: "warehouse_transfer",
+          barcode: "TRANSFER-AUTH",
+          quantity: 1,
+          toLocation: "Warehouse B",
+          source: "scanner",
+        },
+        { uid: "transfer-billing", role: "billing" }
+      )
+    ).rejects.toMatchObject({ code: "permission-denied" });
+
+    await expect(
+      invokeCreateMovementCallable(
+        {
+          operationId: "warehouse-transfer-disabled-001",
+          movementType: "warehouse_transfer",
+          barcode: "TRANSFER-AUTH",
+          quantity: 1,
+          toLocation: "Warehouse B",
+          source: "scanner",
+        },
+        { uid: "transfer-disabled", role: "staff", email: "transfer-disabled@test.example.com" }
+      )
+    ).rejects.toMatchObject({ code: "permission-denied" });
+  });
+});
+
 describe("compatibility scanner inventory transactions", () => {
   for (const scenario of compatibilityCallables) {
     it(`rejects missing operationId for ${scenario.name}`, async () => {
@@ -857,6 +1206,7 @@ describe("compatibility scanner inventory transactions", () => {
     await seedInventory("compat-transfer", {
       lotNumber: "COMPAT-LOT",
       locationName: "Warehouse A",
+      binLocation: "A1",
       quantityOnHand: 2,
       available: 2,
     });
@@ -867,11 +1217,18 @@ describe("compatibility scanner inventory transactions", () => {
         operationId: "compat-transfer-001",
         barcode: "COMPAT-LOT",
         toLocation: "Warehouse B",
+        toBinLocation: "B2",
       },
     );
 
     expect(result.status).toBe("success");
     expect(result.inventoryItemId).toBe("compat-transfer");
+    expect((await db.collection("inventory").doc("compat-transfer").get()).data()).toMatchObject({
+      locationName: "Warehouse B",
+      binLocation: "B2",
+      quantityOnHand: 2,
+      available: 2,
+    });
   });
 
   it("returns not_found for compatibility scans without matches", async () => {
