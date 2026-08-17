@@ -129,7 +129,7 @@ actions and routes write modes through callable workflows instead of direct
 client-side protected-field writes.
 
 Scanner architecture is improved and now uses one backend resolver contract for
-inventory-item scan resolution:
+mutation-time inventory-item scan resolution:
 
 - Equipment check-in is server authoritative through
   `equipmentCheckInByBarcodeCallable` and resolves scanned inventory through
@@ -137,10 +137,14 @@ inventory-item scan resolution:
 - Retail sale uses the canonical movement callable with `movementType:
   "retail_sale"`; movement scan fallback also routes through
   `inventoryScanResolver.ts`.
+- Existing-inventory scan mutations are server-first. The client sends scan
+  context plus a stable operation ID to `createInventoryMovementCallable`; the
+  backend resolver selects the canonical `inventoryItemId`, and
+  `movement.inventoryItemId` is the authoritative identity after success.
 - Receive Stock remains connected to the existing scanned intake and receive movement
-  paths; receive mutation identity resolves through the movement service and
-  scanned-intake inventory lookup portions use the shared resolver where
-  transaction-safe.
+  paths. Definitive movement `not_found` may enter intake assistance; ambiguity,
+  permission, validation, conflict, stock, transport, and internal failures do
+  not become product fallback identity.
 - Distribute / Issue, Transfer Location, and Cycle Count remain routed through the
   compatibility scanner callables backed by the canonical movement service. Their
   scan lookup now uses the shared resolver and fails closed on ambiguity. These
@@ -157,13 +161,17 @@ inventory-item scan resolution:
   identity covers barcode, serial, serialNumber, lotNumber, and SKU; movement
   keeps its broader legacy manufacturerItemId/productId fallback as an explicit
   caller option.
-- Remaining duplicate scan logic is client-side presentation/product intake
-  support in `src/services/inventory/inventory-scan-resolver.ts` and
-  metadata-oriented smart merge logic in `src/lib/inventory/smartMergeInventory.ts`.
+- Remaining client-side scan interpretation is product-intake presentation
+  support in `src/services/inventory/inventory-scan-adapter.ts` and
+  metadata/create-or-merge save support in `src/lib/inventory/smartMergeInventory.ts`.
+  The adapter distinguishes inventory presentation from product suggestions, is
+  not mutation authority, and cannot veto canonical movement resolution.
+  Product suggestions intentionally do not expose `inventoryItemId`.
 
 Recommended interpretation: backend mutation-time scan resolution is now
-consolidated. The next consolidation boundary is client presentation/product
-matching, not inventory mutation authority.
+consolidated for existing-inventory scan movements. The next consolidation
+boundary is `smartMergeInventory` authority reduction, not another scan-mutation
+resolver refactor.
 
 ## 6. Equipment Check-In and Warehouse Custody
 
@@ -291,24 +299,28 @@ Most recent validation evidence available from this workspace context:
 
 Remaining source-verified debt:
 
-1. Client presentation/product scan resolution remains separate in
-   `src/services/inventory/inventory-scan-resolver.ts`. It is not mutation
-   authority and still combines inventory item, product catalog, and
-   identify-product behavior for UI intake.
+1. Client product-intake scan adaptation remains in
+   `src/services/inventory/inventory-scan-adapter.ts`. It supports UI intake
+   presentation and product suggestions only; inventory-page scan movements now
+   send scan context to the server before any client intake lookup and do not use
+   client-selected document IDs or cached availability as mutation authority.
 2. Compatibility scanner mutation callables still coexist with the newer scanner
    UI and domain workflow paths, although their inventory lookup semantics now
    route through the shared backend resolver and their retry-unstable client-wrapper
    operation-ID fallbacks have been removed.
-3. `movementService.ts`, `receiveScannedInventoryIntake.ts`, and
+3. `smartMergeInventory.ts` remains a client metadata/create-or-merge helper for
+   manual inventory save setup. It is not a scanner lookup adapter and should not
+   gain protected mutation authority.
+4. `movementService.ts`, `receiveScannedInventoryIntake.ts`, and
    `domainWorkflowFunctions.ts` are large modules. Size alone is not a correctness
    defect, but future changes should avoid increasing branching complexity there
    without tests.
-4. Batch archive/discontinue retry state is client-lifecycle state, not durable
+5. Batch archive/discontinue retry state is client-lifecycle state, not durable
    batch orchestration.
-5. Retail sale is covered as a movement type, but broader sales/order accounting
+6. Retail sale is covered as a movement type, but broader sales/order accounting
    integration is outside the inventory movement boundary unless a separate
    business workflow is introduced.
-6. `src/lib/inventory/smartMergeInventory.ts` remains metadata-oriented client
+7. `src/lib/inventory/smartMergeInventory.ts` remains metadata-oriented client
    merge logic and still duplicates some scan identity comparisons. It should not
    be treated as mutation authority.
 
@@ -331,17 +343,21 @@ Resolved or materially improved since the prior audit:
 - Issue, transfer, and cycle-count compatibility callables now require stable
   caller-supplied operation IDs and reject missing or malformed IDs before any
   business mutation.
+- Client scan presentation now routes through
+  `src/services/inventory/inventory-scan-adapter.ts`; product suggestions remain
+  distinguishable from inventory identity, and inventory-page scan movements send
+  scan context for server-side movement resolution.
 - Tracked source-tree backup artifacts are no longer part of the architecture
   debt described by this document.
 
 ## 12. Recommended Next Architecture Task
 
-The next architecture task should be client scan adapter consolidation:
+The next architecture task should be smart merge authority reduction:
 
-- Classify `src/services/inventory/inventory-scan-resolver.ts` as a read-only UI
-  adapter and prevent it from becoming mutation authority.
-- Decide whether product-catalog scan matching should remain client-initiated or
-  move behind an authorized backend read adapter.
+- Move manual/new inventory create-or-merge target selection out of
+  `smartMergeInventory.ts` or place it behind an authorized backend intake
+  workflow.
+- Keep product-catalog suggestions separate from inventory mutation identity.
 - Keep `src/lib/inventory/smartMergeInventory.ts` scoped to metadata merge
   behavior unless a separate server-authoritative merge workflow is designed.
 - Preserve the backend resolver as the only mutation-time inventory-item

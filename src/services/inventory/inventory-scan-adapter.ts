@@ -38,28 +38,106 @@ export type InventoryScanIdentifyFn = (
   normalizedScan: string,
 ) => Promise<InventoryScanIdentification>;
 
-export type InventoryScanResolution =
+export type ClientInventoryScanResult =
   | {
-      status: "existing-inventory";
+      kind: "inventory";
       normalizedScan: string;
       matchedBy: InventoryScanField;
       item: InventoryItem;
     }
   | {
-      status: "existing-product";
+      kind: "product_suggestion";
       normalizedScan: string;
       matchedBy: ProductScanField;
       product: ProductDocument;
     }
   | {
-      status: "identified-product";
+      kind: "identified_product";
       normalizedScan: string;
       identification: Extract<InventoryScanIdentification, { ok: true }>;
     }
   | {
-      status: "unresolved";
+      kind: "not_found";
       normalizedScan: string;
     };
+
+export type InventoryLookupMatchedField =
+  | "barcode"
+  | "serial"
+  | "lotNumber"
+  | "sku";
+
+export interface InventoryLookupItem {
+  id: string;
+  name: string;
+  category: string;
+  barcode: string;
+  sku: string;
+  serial: string;
+  lotNumber: string;
+  quantityOnHand: number;
+  available: number;
+  status: string;
+  manufacturer: string;
+  locationName: string;
+  lifecycleStatus: string;
+}
+
+export interface InventoryLookupMatch {
+  item: InventoryLookupItem;
+  matchedFields: InventoryLookupMatchedField[];
+}
+
+export type BarcodeLookupResult =
+  | {
+      status: "found";
+      item: InventoryLookupItem;
+      matchedFields: InventoryLookupMatchedField[];
+    }
+  | {
+      status: "not_found";
+      normalizedBarcode: string;
+    }
+  | {
+      status: "duplicate";
+      normalizedBarcode: string;
+      matches: InventoryLookupMatch[];
+    };
+
+/**
+ * Read-only client scan assistance for intake and presentation.
+ *
+ * This adapter is not authoritative inventory mutation resolution. Existing
+ * inventory scan movements must send scan context to the movement callable and
+ * let the backend resolver choose the canonical inventoryItemId.
+ */
+export const MATCHED_FIELD_LABELS: Record<InventoryLookupMatchedField, string> = {
+  barcode: "Barcode",
+  serial: "Serial Number",
+  lotNumber: "Lot Number",
+  sku: "SKU",
+};
+
+export function getMatchedFieldLabel(field: InventoryLookupMatchedField): string {
+  return MATCHED_FIELD_LABELS[field];
+}
+
+export function adaptInventoryLookupResponse(
+  data: Record<string, unknown> | null | undefined,
+): BarcodeLookupResult | null {
+  if (!data || typeof data.status !== "string") {
+    return null;
+  }
+
+  switch (data.status) {
+    case "found":
+    case "not_found":
+    case "duplicate":
+      return data as BarcodeLookupResult;
+    default:
+      return null;
+  }
+}
 
 function normalizeMatchValue(value: unknown): string {
   return String(value ?? "").trim();
@@ -95,14 +173,14 @@ function inferProductMatchField(
   return "sku";
 }
 
-export async function resolveInventoryScan(params: {
+export async function resolveInventoryScanForIntake(params: {
   rawCode: string;
   identify?: InventoryScanIdentifyFn;
-}): Promise<InventoryScanResolution> {
+}): Promise<ClientInventoryScanResult> {
   const normalizedScan = normalizeBarcode(params.rawCode);
   if (!normalizedScan) {
     return {
-      status: "unresolved",
+      kind: "not_found",
       normalizedScan,
     };
   }
@@ -110,7 +188,7 @@ export async function resolveInventoryScan(params: {
   const inventoryItem = await InventoryRepository.findByScan(params.rawCode);
   if (inventoryItem) {
     return {
-      status: "existing-inventory",
+      kind: "inventory",
       normalizedScan,
       matchedBy: inferInventoryMatchField(inventoryItem, normalizedScan),
       item: inventoryItem,
@@ -120,7 +198,7 @@ export async function resolveInventoryScan(params: {
   const product = await InventoryRepository.findProductByScan(params.rawCode);
   if (product) {
     return {
-      status: "existing-product",
+      kind: "product_suggestion",
       normalizedScan,
       matchedBy: inferProductMatchField(product, normalizedScan),
       product,
@@ -131,7 +209,7 @@ export async function resolveInventoryScan(params: {
     const identification = await params.identify(normalizedScan);
     if (identification.ok && identification.product) {
       return {
-        status: "identified-product",
+        kind: "identified_product",
         normalizedScan,
         identification,
       };
@@ -139,7 +217,7 @@ export async function resolveInventoryScan(params: {
   }
 
   return {
-    status: "unresolved",
+    kind: "not_found",
     normalizedScan,
   };
 }

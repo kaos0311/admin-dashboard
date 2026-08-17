@@ -3,64 +3,24 @@
 import { useCallback, useState } from "react";
 import { httpsCallable } from "firebase/functions";
 import { functions } from "@/lib/firebase";
-/**
- * Fields the barcode scanner searches across.
- */
-export type InventoryLookupMatchedField =
-  | "barcode"
-  | "serial"
-  | "lotNumber"
-  | "sku";
+import {
+  adaptInventoryLookupResponse,
+  type BarcodeLookupResult,
+  getMatchedFieldLabel,
+  type InventoryLookupItem,
+  type InventoryLookupMatch,
+  type InventoryLookupMatchedField,
+  MATCHED_FIELD_LABELS,
+} from "@/services/inventory/inventory-scan-adapter";
 
-/**
- * A single inventory item returned by the lookup function.
- * Only fields required by the scanner page are included.
- */
-export interface InventoryLookupItem {
-  id: string;
-  name: string;
-  category: string;
-  barcode: string;
-  sku: string;
-  serial: string;
-  lotNumber: string;
-  quantityOnHand: number;
-  available: number;
-  status: string;
-  manufacturer: string;
-  locationName: string;
-  lifecycleStatus: string;
-}
-
-/** A single match within a duplicate response. */
-export interface InventoryLookupMatch {
-  item: InventoryLookupItem;
-  matchedFields: InventoryLookupMatchedField[];
-}
-
-/**
- * Discriminated union response from lookupInventoryByBarcode.
- *
- * - found:      exactly one inventory document matched.
- * - not_found:  zero matches across all searched fields.
- * - duplicate:  two or more distinct inventory documents matched.
- */
-export type BarcodeLookupResult =
-  | {
-      status: "found";
-      item: InventoryLookupItem;
-      matchedFields: InventoryLookupMatchedField[];
-    }
-  | {
-      status: "not_found";
-      normalizedBarcode: string;
-    }
-  | {
-      status: "duplicate";
-      normalizedBarcode: string;
-      matches: InventoryLookupMatch[];
-    };
-
+export {
+  getMatchedFieldLabel,
+  MATCHED_FIELD_LABELS,
+  type BarcodeLookupResult,
+  type InventoryLookupItem,
+  type InventoryLookupMatch,
+  type InventoryLookupMatchedField,
+};
 /** Raw Firebase response type (before status parsing). */
 interface RawLookupResponse {
   status: string;
@@ -119,20 +79,6 @@ export function isRetryableInventoryTransactionError(
   );
 }
 
-/** Human-readable labels for matched fields. */
-export const MATCHED_FIELD_LABELS: Record<InventoryLookupMatchedField, string> = {
-  barcode: "Barcode",
-  serial: "Serial Number",
-  lotNumber: "Lot Number",
-  sku: "SKU",
-};
-
-function getMatchedFieldLabel(field: InventoryLookupMatchedField): string {
-  return MATCHED_FIELD_LABELS[field];
-}
-
-export { getMatchedFieldLabel };
-
 export function requireInventoryTransactionOperationId(
   operationId: string | undefined,
 ): string {
@@ -165,22 +111,13 @@ export function useInventoryLookup() {
         const result = await fn({ barcode });
         const data = result.data;
 
-        // Validate the response has an expected status
-        if (!data || typeof data.status !== "string") {
+        const adapted = adaptInventoryLookupResponse(data);
+        if (!adapted) {
           setError("Invalid server response.");
           return null;
         }
 
-        // Cast to the discriminated union based on status field
-        switch (data.status) {
-          case "found":
-          case "not_found":
-          case "duplicate":
-            return data as unknown as BarcodeLookupResult;
-          default:
-            setError(`Unexpected lookup status: ${data.status}`);
-            return null;
-        }
+        return adapted;
       } catch (err: unknown) {
         const message =
           err instanceof Error ? err.message : "Lookup failed.";

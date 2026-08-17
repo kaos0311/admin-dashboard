@@ -331,9 +331,9 @@ export default function ScannerPage() {
   /**
    * Handle confirmation of a transaction.
    *
-   * For "receive" mode: calls the new receiveInventoryByBarcode callable directly
-   * with an operationId for idempotency. Other modes continue using the old
-   * executeTransaction path (they still need Issue, Transfer, CycleCount).
+   * Receive and Retail Sale use the canonical movement callable with a stable
+   * operationId. Issue, Transfer, and Cycle Count continue through the
+   * compatibility transaction callables.
    */
   const handleConfirmTransaction = useCallback(async () => {
     if (!selectedItem || !lastScannedBarcode) return;

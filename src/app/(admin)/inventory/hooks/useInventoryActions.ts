@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, type FormEvent } from "react";
+import { type FormEvent, useRef } from "react";
 import toast from "react-hot-toast";
 
 import { normalizeBarcode } from "@/lib/barcode";
@@ -22,7 +22,7 @@ import {
 import { smartMergeInventory } from "@/lib/inventory/smartMergeInventory";
 import { InventoryRepository } from "@/repositories/firestore/inventory.repository";
 import { identifyInventoryProduct } from "@/services/inventory/inventory-jarvis.service";
-import { resolveInventoryScan } from "@/services/inventory/inventory-scan-resolver";
+import { resolveInventoryScanForIntake } from "@/services/inventory/inventory-scan-adapter";
 
 import {
   armResolvedNewSaveMovementState,
@@ -33,36 +33,36 @@ import {
   type SaveMovementState,
 } from "../lib/saveMovementLifecycle";
 import {
+  type BatchMutationLedger,
+  type BatchMutationType,
   createBatchMutationLedger,
   executeBatchMutationLedger,
   getCompletedBatchItemIds,
   hasResumableBatchMutationWork,
   summarizeBatchMutation,
-  type BatchMutationLedger,
-  type BatchMutationType,
 } from "../lib/batchMutationLifecycle";
 import {
   createDiscontinueRetryState,
+  type DiscontinueRetryState,
   executeDiscontinueWithRetry,
   markDiscontinueOutcomeUncertain,
-  type DiscontinueRetryState,
 } from "../lib/discontinueLifecycle";
 import {
+  type ArchiveRetryState,
   createArchiveRetryState,
   executeArchiveWithRetry,
   markArchiveOutcomeUncertain,
-  type ArchiveRetryState,
 } from "../lib/archiveLifecycle";
 import {
   createHardDeleteRetryState,
   executeHardDeleteWithRetry,
-  markHardDeleteOutcomeUncertain,
   type HardDeleteRetryState,
+  markHardDeleteOutcomeUncertain,
 } from "../lib/hardDeleteLifecycle";
 import {
-  executeScanMovementWithRetry,
-  type ScanMovementRequest,
-} from "../lib/scanMovementRetry";
+  runCanonicalScanMovement,
+  type ScanOutReason,
+} from "../lib/scanMovementAuthority";
 import { isLowStock } from "../lib/inventoryAlerts";
 import { buildSearchText, toSafeNumber } from "../lib/inventoryNormalize";
 import { logInventoryMovement } from "../lib/inventoryMovements";
@@ -300,143 +300,126 @@ export function useInventoryActions({
       return false;
     }
 
-    const scanResolution = await resolveInventoryScan({
-      rawCode,
-    });
+    try {
+      const result = await runCanonicalScanMovement({
+        rawCode,
+        direction,
+        outReason: outReason as ScanOutReason | undefined,
+        operationId: createInventoryOperationId("inventory-scan"),
+        execute: createInventoryMovement,
+        isRetryableError: isRetryableInventoryTransactionError,
+        shouldRetry: (error) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Inventory movement response was lost.";
 
-    if (scanResolution.status === "existing-inventory") {
-      const item = scanResolution.item;
-      if (direction === "out" && item.available <= 0) {
-        toast.error("That item has no available stock to scan out.");
-        return false;
-      }
-
-      const movementRequest: ScanMovementRequest = {
-        movementType:
-          direction === "in"
-            ? "receive"
-            : outReason === "rental"
-              ? "rental_checkout"
-              : "patient_assignment",
-        inventoryItemId: item.id,
-        productId: item.productId,
-        barcode: item.barcode || normalizeBarcode(rawCode),
-        serialNumber: item.serial,
-        lotNumber: item.lotNumber,
-        quantity: 1,
-        reason:
-          direction === "in"
-            ? "Scanned into inventory."
-            : `Scanned out for ${outReason ?? "issue"}.`,
-        source: "scanner",
-        metadata: {
-          rawCode,
-          direction,
-          outReason: outReason ?? "",
+          return window.confirm(
+            `${message}\n\n` +
+              "The server may have applied this scan even though the response was not received.\n\n" +
+              "Retry this SAME scan now using the same operation ID?"
+          );
         },
-      };
+        resolveIntake: (code) =>
+          resolveInventoryScanForIntake({ rawCode: code }),
+        fetchInventoryById: InventoryRepository.getById,
+      });
 
-      const operationId =
-        createInventoryOperationId("inventory-scan");
-
-      try {
-        const execution =
-          await executeScanMovementWithRetry({
-            request: movementRequest,
-            operationId,
-            execute: createInventoryMovement,
-            isRetryableError:
-              isRetryableInventoryTransactionError,
-            shouldRetry: (error) => {
-              const message =
-                error instanceof Error
-                  ? error.message
-                  : "Inventory movement response was lost.";
-
-              return window.confirm(
-                `${message}\n\n` +
-                  "The server may have applied this scan even though the response was not received.\n\n" +
-                  "Retry this SAME scan now using the same operation ID?"
-              );
-            },
-          });
-
-        if (execution.status === "retry_declined") {
-          toast.error(
-            "Scan outcome is uncertain. No retry was attempted."
-          );
-          return false;
-        }
-
-        const movement = execution.movement;
-
-        if (
-          movement.status !== "success" &&
-          movement.status !== "duplicate_operation"
-        ) {
-          toast.error(
-            movement.message ||
-              "Inventory movement was not applied."
-          );
-          return false;
-        }
-      } catch (error: unknown) {
-        console.error("INVENTORY SCAN UPDATE FAILED", {
-          itemId: item.id,
-          direction,
-          error,
-        });
-
+      if (result.status === "retry_declined") {
         toast.error(
-          error instanceof Error
-            ? error.message
-            : "Inventory quantity could not be updated."
+          "Scan outcome is uncertain. No retry was attempted."
         );
-
         return false;
       }
 
-      if (direction === "in") {
-        if (item.pendingScanReview) {
-          await runJarvisInventoryIdentification(item.id, rawCode);
-        } else {
-          void ensureProductFromInventory(item).catch((error) => {
-            console.error("INVENTORY PRODUCT SYNC ERROR:", error);
-            toast.error("Inventory moved, but product catalog sync needs review.");
+      if (result.status === "movement_completed") {
+        const { movement, inventoryItem } = result;
+
+        if (result.enrichmentError) {
+          console.error("INVENTORY SCAN ENRICHMENT FAILED", {
+            inventoryItemId: movement.inventoryItemId,
+            direction,
+            error: result.enrichmentError,
           });
+          toast.error(
+            "Inventory moved, but the updated item details could not be loaded.",
+          );
         }
+
+        if (direction === "in" && movement.inventoryItemId) {
+          if (inventoryItem?.pendingScanReview) {
+            await runJarvisInventoryIdentification(
+              movement.inventoryItemId,
+              rawCode,
+            );
+          } else if (inventoryItem) {
+            void ensureProductFromInventory(inventoryItem).catch((error) => {
+              console.error("INVENTORY PRODUCT SYNC ERROR:", error);
+              toast.error("Inventory moved, but product catalog sync needs review.");
+            });
+          }
+        }
+
+        toast.success(
+          `${inventoryItem?.name ?? "Inventory"} scanned ${direction}.`,
+        );
+        return true;
       }
 
-      toast.success(`${item.name} scanned ${direction}.`);
-      return true;
-    }
+      if (result.status === "intake_fallback") {
+        const scanResolution = result.scanResolution;
 
-    if (scanResolution.status === "existing-product" && direction === "in") {
-      await createInventoryFromProductScan(rawCode, {
-        id: scanResolution.product.id,
-        name: scanResolution.product.name,
-        category: scanResolution.product.category,
-        sku: scanResolution.product.sku,
-        hcpcs: scanResolution.product.hcpcs,
-        upc: scanResolution.product.upc,
-        manufacturer: scanResolution.product.manufacturer || scanResolution.product.brand || "",
-        manufacturerItemId: scanResolution.product.manufacturerItemId,
-        model: scanResolution.product.model,
-        defaultPurchasePrice: scanResolution.product.defaultPurchasePrice,
-        reorderLevel: scanResolution.product.reorderLevel,
-        status: scanResolution.product.status,
-        deleted: scanResolution.product.deleted,
+        if (scanResolution.kind === "product_suggestion") {
+          await createInventoryFromProductScan(rawCode, {
+            id: scanResolution.product.id,
+            name: scanResolution.product.name,
+            category: scanResolution.product.category,
+            sku: scanResolution.product.sku,
+            hcpcs: scanResolution.product.hcpcs,
+            upc: scanResolution.product.upc,
+            manufacturer: scanResolution.product.manufacturer || scanResolution.product.brand || "",
+            manufacturerItemId: scanResolution.product.manufacturerItemId,
+            model: scanResolution.product.model,
+            defaultPurchasePrice: scanResolution.product.defaultPurchasePrice,
+            reorderLevel: scanResolution.product.reorderLevel,
+            status: scanResolution.product.status,
+            deleted: scanResolution.product.deleted,
+          });
+          return true;
+        }
+
+        await createPendingScanIn(rawCode);
+        return true;
+      }
+
+      if (result.movement.status === "ambiguous") {
+        toast.error("Scan matches multiple inventory records. Select the item and try again.");
+        return false;
+      }
+
+      if (result.movement.status === "not_found") {
+        toast.error("No inventory match found for that scan.");
+        return false;
+      }
+
+      toast.error(
+        result.movement.message || "Inventory movement was not applied.",
+      );
+      return false;
+    } catch (error: unknown) {
+      console.error("INVENTORY SCAN UPDATE FAILED", {
+        direction,
+        error,
       });
-      return true;
-    }
 
-    if (direction === "in") {
-      await createPendingScanIn(rawCode);
-      return true;
-    }
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Inventory quantity could not be updated."
+      );
 
-    toast.error("No inventory match found for that scan.");
-    return false;
+      return false;
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
