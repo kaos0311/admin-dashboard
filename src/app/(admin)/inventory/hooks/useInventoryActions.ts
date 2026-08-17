@@ -33,6 +33,10 @@ import {
   type SaveMovementState,
 } from "../lib/saveMovementLifecycle";
 import {
+  type ManualUpsertOperationState,
+  resolveManualUpsertOperation,
+} from "../lib/manualUpsertOperationLifecycle";
+import {
   type BatchMutationLedger,
   type BatchMutationType,
   createBatchMutationLedger,
@@ -154,6 +158,8 @@ export function useInventoryActions({
   const hardDeleteStateRef = useRef(
     new Map<string, HardDeleteRetryState>(),
   );
+
+  const manualUpsertOperationRef = useRef<ManualUpsertOperationState | null>(null);
   const hardDeleteInFlightRef = useRef(new Set<string>());
 
   async function executeSaveMovement(state: SaveMovementState): Promise<void> {
@@ -209,6 +215,21 @@ export function useInventoryActions({
     } = payload;
 
     return rest;
+  }
+
+  function omitPostUpsertAuthorityFields(
+    payload: Omit<InventoryItem, "id" | "searchText" | "isDeleted">
+  ): Partial<Omit<InventoryItem, "id" | "searchText" | "isDeleted">> {
+    const {
+      manufacturerItemId: _manufacturerItemId,
+      sku: _sku,
+      barcode: _barcode,
+      serial: _serial,
+      lotNumber: _lotNumber,
+      ...metadata
+    } = omitMovementFields(payload);
+
+    return metadata;
   }
 
   async function createInventoryFromProductScan(rawCode: string, product: ProductScanMatch) {
@@ -646,7 +667,15 @@ export function useInventoryActions({
           inventoryId = saveMovementState.context.inventoryItemId;
           resultAction = saveMovementState.context.action;
         } else {
+          const upsertOperation = resolveManualUpsertOperation({
+            current: manualUpsertOperationRef.current,
+            fingerprint: saveMovementFingerprint,
+            createOperationId: () => createInventoryOperationId("manual-inventory-upsert"),
+          });
+          manualUpsertOperationRef.current = upsertOperation;
+
           const result = await smartMergeInventory({
+            operationId: upsertOperation.operationId,
             productId: payload.productId,
             name: payload.name,
             category: payload.category,
@@ -660,24 +689,23 @@ export function useInventoryActions({
             expirationDate: "",
             locationName: payload.locationName,
             binLocation: payload.binLocation,
-            quantityOnHand: 0,
-            committed: 0,
-            onRent: 0,
-            onOrder: payload.onOrder,
             reorderLevel: payload.reorderLevel,
             unitCost: payload.unitCost,
-            status:
-              payload.status === "discontinued" ||
-              payload.status === "rental_out"
-                ? "inactive"
-                : payload.status,
             notes: payload.notes,
             source: "inventory",
             sourceId: "manual_entry",
           });
 
+          if (result.status === "ambiguous") {
+            manualUpsertOperationRef.current = null;
+            throw new Error(
+              `Manual inventory save matched ${result.matches.length} existing inventory records. Resolve the duplicate records before saving.`,
+            );
+          }
+
           inventoryId = result.inventoryId;
           resultAction = result.action;
+          manualUpsertOperationRef.current = null;
 
           const resolvedTargetState =
             createResolvedNewSaveMovementState({
@@ -700,7 +728,7 @@ export function useInventoryActions({
         });
 
         await InventoryRepository.update(inventoryId, {
-          ...omitMovementFields(payload),
+          ...omitPostUpsertAuthorityFields(payload),
           productId: syncedProductId ?? payload.productId,
           searchText,
           pendingScanReview: pendingReview,
@@ -777,6 +805,10 @@ export function useInventoryActions({
       resetForm();
     } catch (error: unknown) {
       console.error("SAVE INVENTORY ERROR:", error);
+
+      if (!isRetryableInventoryTransactionError(error)) {
+        manualUpsertOperationRef.current = null;
+      }
 
       const pendingMovement = saveMovementStateRef.current;
       const outcomeIsUncertain =

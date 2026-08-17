@@ -162,15 +162,17 @@ mutation-time inventory-item scan resolution:
   keeps its broader legacy manufacturerItemId/productId fallback as an explicit
   caller option.
 - Remaining client-side scan interpretation is product-intake presentation
-  support in `src/services/inventory/inventory-scan-adapter.ts` and
-  metadata/create-or-merge save support in `src/lib/inventory/smartMergeInventory.ts`.
+  support in `src/services/inventory/inventory-scan-adapter.ts`. Manual
+  inventory create-or-merge target selection now runs through
+  `manualInventoryUpsertCallable`.
   The adapter distinguishes inventory presentation from product suggestions, is
   not mutation authority, and cannot veto canonical movement resolution.
   Product suggestions intentionally do not expose `inventoryItemId`.
 
 Recommended interpretation: backend mutation-time scan resolution is now
-consolidated for existing-inventory scan movements. The next consolidation
-boundary is `smartMergeInventory` authority reduction, not another scan-mutation
+consolidated for existing-inventory scan movements, and manual inventory
+create-or-merge target selection is server-authoritative. The next consolidation
+boundary is broader manual edit metadata authority, not another scan-mutation
 resolver refactor.
 
 ## 6. Equipment Check-In and Warehouse Custody
@@ -223,6 +225,10 @@ families:
 - Movement operations use `inventoryOperations/{uid}_{operationId}` with request
   fingerprints, stored results, and conflict rejection for reused IDs with
   different fingerprints.
+- Manual inventory upsert uses the same operation collection. The operation
+  read, request fingerprint check, target resolution, inventory create/merge,
+  identity-lock updates, and stored result write execute in one Firestore
+  transaction.
 - Scanner compatibility mutation callables require explicit stable operation IDs
   before scan resolution and reuse the movement operation-ID validator.
 - Domain workflows use `domainWorkflowOperations/{uid}_{operationId}` with exact
@@ -308,9 +314,18 @@ Remaining source-verified debt:
    UI and domain workflow paths, although their inventory lookup semantics now
    route through the shared backend resolver and their retry-unstable client-wrapper
    operation-ID fallbacks have been removed.
-3. `smartMergeInventory.ts` remains a client metadata/create-or-merge helper for
-   manual inventory save setup. It is not a scanner lookup adapter and should not
-   gain protected mutation authority.
+3. Manual new-inventory create-or-merge now uses
+   `functions/src/inventory/manualInventoryUpsert.ts`. The server requires
+   inventory callable authorization, a stable operation ID, exact replay
+   fingerprinting, and fail-closed ambiguity handling. Identity inputs are
+   explicit inventory document ID, serial/serialNumber, barcode, barcode+lot,
+   lot, SKU at the same location/bin, and manufacturer item ID at the same
+   location/bin. `productId` is stored as metadata and is not inventory identity.
+   The workflow writes deterministic server-owned `inventoryIdentityLocks`
+   documents for those canonical identity keys in the same transaction, so
+   overlapping create attempts cannot both observe no match and create duplicate
+   active records. New records are created with zero stock defaults; initial
+   stock still flows through `createInventoryMovementCallable`.
 4. `movementService.ts`, `receiveScannedInventoryIntake.ts`, and
    `domainWorkflowFunctions.ts` are large modules. Size alone is not a correctness
    defect, but future changes should avoid increasing branching complexity there
@@ -320,9 +335,9 @@ Remaining source-verified debt:
 6. Retail sale is covered as a movement type, but broader sales/order accounting
    integration is outside the inventory movement boundary unless a separate
    business workflow is introduced.
-7. `src/lib/inventory/smartMergeInventory.ts` remains metadata-oriented client
-   merge logic and still duplicates some scan identity comparisons. It should not
-   be treated as mutation authority.
+7. Existing-inventory manual metadata edits still use guarded client repository
+   updates. They are protected-field filtered, but a future backend metadata
+   workflow would further reduce client write surface area.
 
 Resolved or materially improved since the prior audit:
 
@@ -347,21 +362,25 @@ Resolved or materially improved since the prior audit:
   `src/services/inventory/inventory-scan-adapter.ts`; product suggestions remain
   distinguishable from inventory identity, and inventory-page scan movements send
   scan context for server-side movement resolution.
+- `src/lib/inventory/smartMergeInventory.ts` is now a typed client wrapper for
+  `manualInventoryUpsertCallable`; it no longer queries or writes Firestore.
+- After manual upsert returns a resolved inventory target, the inventory page's
+  client repository update is limited to non-stock metadata and derived display
+  fields. It no longer rewrites barcode, serial, lot, SKU, or manufacturer item
+  identity fields after server target resolution.
 - Tracked source-tree backup artifacts are no longer part of the architecture
   debt described by this document.
 
 ## 12. Recommended Next Architecture Task
 
-The next architecture task should be smart merge authority reduction:
+The next architecture task should be manual edit metadata authority reduction:
 
-- Move manual/new inventory create-or-merge target selection out of
-  `smartMergeInventory.ts` or place it behind an authorized backend intake
-  workflow.
+- Evaluate whether existing-inventory metadata edits in
+  `useInventoryActions.ts` should also move behind a focused authorized backend
+  metadata workflow.
 - Keep product-catalog suggestions separate from inventory mutation identity.
-- Keep `src/lib/inventory/smartMergeInventory.ts` scoped to metadata merge
-  behavior unless a separate server-authoritative merge workflow is designed.
-- Preserve the backend resolver as the only mutation-time inventory-item
-  resolution contract.
+- Preserve movementService as the only stock authority and keep manual metadata
+  workflows from recomputing quantity or availability fields.
 
 This is now higher-value than another backend resolver refactor because the
 backend mutation boundary is consolidated and covered by focused unit/emulator

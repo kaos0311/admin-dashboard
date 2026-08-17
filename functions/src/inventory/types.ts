@@ -140,3 +140,59 @@ export interface ReceiveScannedInventoryIntakeResult {
   createdOrMerged: "created" | "merged";
   mode: ReceiveScannedInventoryIntakeMode;
 }
+
+// ──────────────────────────────────────────────
+// Manual inventory metadata upsert
+// ──────────────────────────────────────────────
+
+export interface ManualInventoryUpsertInput {
+  operationId: string;
+  inventoryItemId?: string;
+  productId?: string;
+  name: string;
+  category: string;
+  manufacturer?: string;
+  manufacturerItemId?: string;
+  sku?: string;
+  hcpc?: string;
+  barcode?: string;
+  serial?: string;
+  lotNumber?: string;
+  expirationDate?: string;
+  locationName?: string;
+  binLocation?: string;
+  reorderLevel?: number;
+  unitCost?: number;
+  notes?: string;
+  source?: string;
+  sourceId?: string;
+}
+
+export interface ManualInventoryUpsertMatch {
+  inventoryItemId: string;
+  matchedBy: string[];
+  name: string;
+  barcode: string;
+  serial: string;
+  lotNumber: string;
+  sku: string;
+}
+
+export type ManualInventoryUpsertResult =
+  | {
+      status: "created";
+      inventoryItemId: string;
+    }
+  | {
+      status: "merged";
+      inventoryItemId: string;
+    }
+  | {
+      status: "duplicate_operation";
+      action: "created" | "merged";
+      inventoryItemId: string;
+    }
+  | {
+      status: "ambiguous";
+      matches: ManualInventoryUpsertMatch[];
+    };
