@@ -75,3 +75,4 @@ export {
   patientLifecycleWorkflowCallable,
   cleanupPendingWorkflowUploadsCallable,
 } from "./domainWorkflows/domainWorkflowFunctions";
+export { orderWorkflowCallable } from "./orders/orderWorkflowFunctions.js";

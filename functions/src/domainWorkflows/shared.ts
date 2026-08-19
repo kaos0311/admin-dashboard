@@ -25,6 +25,12 @@ export type WorkflowResult = {
   rentalId?: string;
   assignmentId?: string;
   metadata?: Record<string, unknown>;
+  orderId?: string;
+  orderStatus?: string;
+  inventoryAllocated?: boolean;
+  inventoryRestored?: boolean;
+  allocations?: Array<{ inventoryItemId: string; quantity: number; movementId?: string }>;
+  restoredQuantity?: number;
 };
 
 export const DELIVERY_LINE_TRANSITIONS: Record<string, Set<string>> = {
@@ -134,13 +140,13 @@ export async function claimWorkflowOperation(params: {
   operationId: string;
   workflowType: string;
   actor: MovementActor;
-  fingerprint: Record<string, unknown>;
+  fingerprint: Record<string, unknown> | string;
 }): Promise<{ duplicate: false } | { duplicate: true; result: WorkflowResult }> {
   const { transaction, database, operationId, workflowType, actor, fingerprint } = params;
   assertOperationId(operationId);
   const ref = database.collection("domainWorkflowOperations").doc(`${actor.uid}_${operationId}`);
   const snap = await transaction.get(ref);
-  const requestFingerprint = JSON.stringify(fingerprint);
+  const requestFingerprint = typeof fingerprint === "string" ? fingerprint : JSON.stringify(fingerprint);
 
   if (snap.exists) {
     const data = snap.data() ?? {};

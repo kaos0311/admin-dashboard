@@ -36,7 +36,9 @@ export type InventoryMovementType =
   | "restored"
   | "deceased_patient_equipment_return"
   | "hard_delete"
-  | "reversal";
+  | "reversal"
+  | "order_allocation"
+  | "order_restoration";
 
 export type MovementSource =
   | "inventory_page"
@@ -46,7 +48,8 @@ export type MovementSource =
   | "delivery_fulfillment"
   | "deceased_pickup"
   | "reconciliation"
-  | "system";
+  | "system"
+  | "orders";
 
 export type MovementActor = {
   uid: string;
@@ -397,6 +400,10 @@ function getMovementDeltas(
     case "archived":
     case "hard_delete":
       return { quantityDelta: 0, onRentDelta: 0, onTruckDelta: 0 };
+    case "order_allocation":
+      return { quantityDelta: -quantity, onRentDelta: 0, onTruckDelta: 0 };
+    case "order_restoration":
+      return { quantityDelta: quantity, onRentDelta: 0, onTruckDelta: 0 };
     case "reversal":
       throw new HttpsError("invalid-argument", "Use reverseInventoryMovement for reversals.");
     default:
@@ -419,13 +426,13 @@ function assertMovementAllowedForState(params: {
   const status = text(inventory.status).toLowerCase();
   const productStatus = text(product?.status).toLowerCase();
 
-  if ((productDeleted || itemDeleted) && movementType !== "restored" && movementType !== "reversal") {
+  if ((productDeleted || itemDeleted) && movementType !== "restored" && movementType !== "order_restoration" && movementType !== "reversal") {
     throw new HttpsError("failed-precondition", "Archived or deleted inventory cannot receive normal movement.");
   }
 
   if (
     (status === "discontinued" || productStatus === "discontinued") &&
-    ["receive", "patient_assignment", "rental_checkout", "delivery_load", "delivery_delivered", "found"].includes(movementType)
+    ["receive", "patient_assignment", "rental_checkout", "delivery_load", "delivery_delivered", "found", "order_allocation"].includes(movementType)
   ) {
     throw new HttpsError("failed-precondition", "Discontinued products may be returned but not newly issued.");
   }
@@ -479,6 +486,23 @@ function assertMovementAllowedForState(params: {
     )
   ) {
     throw new HttpsError("failed-precondition", "Serialized assets must be available before retail sale.");
+  }
+
+  if (
+    movementType === "order_allocation" &&
+    serialized &&
+    (
+      onRentBefore > 0 ||
+      onTruckBefore > 0 ||
+      committedBefore > 0 ||
+      ["rental_out", "assigned", "checked_out", "inactive", "discontinued"].includes(status) ||
+      text(inventory.lifecycleStatus) === "retired" ||
+      text(inventory.patientKey) !== "" ||
+      text(inventory.assignedTo) !== "" ||
+      text(inventory.rentalId) !== ""
+    )
+  ) {
+    throw new HttpsError("failed-precondition", "Serialized inventory is not available for order allocation.");
   }
 }
 

@@ -4,11 +4,8 @@ import toast from "react-hot-toast";
 
 import { auth } from "@/lib/firebase";
 import { OrderRepository } from "@/repositories/firestore/order.repository";
-import {
-  allocateInventoryToOrder,
-  findProductByBarcode,
-  restoreInventoryFromOrder,
-} from "@/lib/inventory";
+import { findProductByBarcode } from "@/lib/inventory";
+import { createOrder as createOrderWorkflow, cancelOrder as cancelOrderWorkflow, restoreOrder as restoreOrderWorkflow, createOrderOperationId } from "@/lib/orders/orderWorkflows";
 import { normalizeBarcode } from "@/lib/barcode";
 
 import { initialFormState } from "../lib/orderConstants";
@@ -28,6 +25,8 @@ function getCurrentUserLabel(): string {
   );
 }
 
+import React from "react";
+
 export function useOrderMutations({
   orders,
   setOrders,
@@ -39,6 +38,7 @@ export function useOrderMutations({
   tab: OrderStatus | "all";
   loadOrders: (mode?: "initial" | "refresh" | "more") => Promise<void>;
 }) {
+  const createOperationIdRef = React.useRef<string | null>(null);
   async function fillProductFromBarcode(
     barcode: string,
     mode: "create" | "edit",
@@ -95,35 +95,66 @@ export function useOrderMutations({
       setCreating(true);
       setCreateError("");
 
+      const operationId =
+        createOperationIdRef.current ?? createOrderOperationId();
+      createOperationIdRef.current = operationId;
+
       const payload = buildSmartOrderPayload(form);
 
-      const orderId = await OrderRepository.create({
-        ...payload,
-        createdBy: getCurrentUserLabel(),
-        createdByUid: auth.currentUser?.uid ?? "",
-        updatedBy: getCurrentUserLabel(),
-        updatedByUid: auth.currentUser?.uid ?? "",
-      });
-
-      await allocateInventoryToOrder({
+      const orderResult = await createOrderWorkflow({
+        operationId,
         productId: form.productId.trim(),
         quantity: Number(form.quantity),
-        sourceId: orderId,
-        notes: `Order for ${form.patientName.trim()}`,
+        patientName: form.patientName.trim(),
+        patientAddress: form.patientAddress.trim(),
+        productType: form.productType.trim(),
+        purchaseCost: Number(form.purchaseCost),
+        barcode: form.barcode.trim(),
+        phone: form.phone.trim(),
+        facilityName: form.facilityName.trim(),
+        notes: form.notes.trim(),
       });
 
-      await OrderRepository.updateAfterCreate(orderId, {
-        inventoryAllocated: true,
-        inventoryAllocationSourceId: orderId,
-        inventoryRestored: false,
-        needsReview: payload.reviewReasons.length > 0,
-      });
+      if (orderResult.status === "success") {
+        createOperationIdRef.current = null;
 
-      onComplete();
-      await loadOrders("refresh");
+        const orderId = orderResult.orderId;
+        if (!orderId) {
+          throw new Error("Order created but no order ID returned.");
+        }
 
-      toast.success("Order created and inventory allocated.");
+        const newOrder = normalizeOrder(orderId, {
+          ...payload,
+          status: orderResult.orderStatus ?? "processing",
+          inventoryAllocated: orderResult.inventoryAllocated ?? true,
+          inventoryRestored: orderResult.inventoryRestored ?? false,
+          inventoryAllocations: orderResult.allocations ?? [],
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        });
+
+        setOrders((prev) => [...prev, newOrder]);
+
+        onComplete();
+        await loadOrders("refresh");
+
+        toast.success("Order created and inventory allocated.");
+      } else if (orderResult.status === "duplicate_operation") {
+        createOperationIdRef.current = null;
+        toast.success("Order already created.");
+        onComplete();
+        await loadOrders("refresh");
+      } else {
+        createOperationIdRef.current = null;
+        throw new Error(orderResult.message || "Failed to create order.");
+      }
     } catch (error: unknown) {
+      if (
+        error instanceof Error &&
+        error.message.includes("already used with different")
+      ) {
+        createOperationIdRef.current = null;
+      }
       console.error("CREATE ORDER ERROR:", error);
       setCreateError(
         error instanceof Error ? error.message : "Failed to create order.",
@@ -164,8 +195,14 @@ export function useOrderMutations({
 
       const payload = buildSmartOrderPayload(editForm);
 
+      const currentOrder = orders.find((order) => order.id === editingOrderId);
+
       await OrderRepository.update(editingOrderId, {
         ...payload,
+        inventoryAllocated: currentOrder?.inventoryAllocated ?? false,
+        inventoryRestored: currentOrder?.inventoryRestored ?? false,
+        inventoryAllocationSourceId: currentOrder?.inventoryAllocationSourceId ?? "",
+        status: currentOrder?.status ?? payload.status,
         updatedBy: getCurrentUserLabel(),
         updatedByUid: auth.currentUser?.uid ?? "",
       });
@@ -176,6 +213,10 @@ export function useOrderMutations({
             ? normalizeOrder(order.id, {
                 ...order,
                 ...payload,
+                inventoryAllocated: order.inventoryAllocated,
+                inventoryRestored: order.inventoryRestored,
+                inventoryAllocationSourceId: order.inventoryAllocationSourceId,
+                status: order.status,
                 updatedAt: new Date(),
               })
             : order,
@@ -215,6 +256,25 @@ export function useOrderMutations({
     const currentOrder = orders.find((order) => order.id === orderId);
 
     try {
+      if (
+        status === "cancelled" &&
+        currentOrder?.productId &&
+        currentOrder.inventoryAllocated === true &&
+        currentOrder.inventoryRestored !== true
+      ) {
+        const cancelResult = await cancelOrderWorkflow({
+          operationId: `cancel-${orderId}`,
+          orderId,
+          productId: currentOrder.productId,
+          quantity: currentOrder.quantity,
+          patientName: currentOrder.patientName,
+        });
+
+        if (cancelResult.status !== "success" && cancelResult.status !== "duplicate_operation") {
+          throw new Error(cancelResult.message || "Failed to cancel order inventory.");
+        }
+      }
+
       applyLocalStatusUpdate(orderId, status);
 
       const nextOrder = currentOrder
@@ -229,25 +289,6 @@ export function useOrderMutations({
         updatedBy: getCurrentUserLabel(),
         updatedByUid: auth.currentUser?.uid ?? "",
       });
-
-      if (
-        currentOrder &&
-        status === "cancelled" &&
-        currentOrder.productId &&
-        currentOrder.inventoryAllocated === true &&
-        currentOrder.inventoryRestored !== true
-      ) {
-        await restoreInventoryFromOrder({
-          productId: currentOrder.productId,
-          quantity: currentOrder.quantity,
-          sourceId: orderId,
-          notes: `Order cancelled for ${currentOrder.patientName}`,
-        });
-
-        await OrderRepository.update(orderId, {
-          inventoryRestored: true,
-        });
-      }
 
       if (tab !== "all" && tab !== status) {
         setOrders((prev) => prev.filter((order) => order.id !== orderId));
@@ -301,13 +342,16 @@ export function useOrderMutations({
     try {
       applyLocalStatusUpdate(orderId, "processing");
 
-      if (currentOrder?.productId && currentOrder.inventoryAllocated !== true) {
-        await allocateInventoryToOrder({
-          productId: currentOrder.productId,
-          quantity: currentOrder.quantity,
-          sourceId: orderId,
-          notes: `Order restored for ${currentOrder.patientName}`,
-        });
+      const restoreResult = await restoreOrderWorkflow({
+        operationId: `restore-${orderId}`,
+        orderId,
+        productId: currentOrder?.productId ?? "",
+        quantity: currentOrder?.quantity ?? 1,
+        patientName: currentOrder?.patientName,
+      });
+
+      if (restoreResult.status !== "success" && restoreResult.status !== "duplicate_operation") {
+        throw new Error(restoreResult.message || "Failed to restore order.");
       }
 
       const nextOrder = currentOrder

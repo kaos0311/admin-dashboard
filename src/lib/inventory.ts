@@ -124,26 +124,6 @@ export async function logStockMovement(args: {
   throw new Error("Stock movements are server-authored. Use createInventoryMovement instead.");
 }
 
-export async function allocateInventoryToOrder(args: {
-  productId: string;
-  quantity?: number;
-  sourceId: string;
-  notes?: string;
-}): Promise<void> {
-  void args;
-  throw new Error("Order inventory allocation must use createInventoryMovement with an inventory item.");
-}
-
-export async function restoreInventoryFromOrder(args: {
-  productId: string;
-  quantity?: number;
-  sourceId: string;
-  notes?: string;
-}): Promise<void> {
-  void args;
-  throw new Error("Order inventory restoration must use createInventoryMovement with an inventory item.");
-}
-
 export async function allocateInventoryToRental(args: {
   productId: string;
   quantity?: number;

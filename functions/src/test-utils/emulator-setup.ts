@@ -8,6 +8,7 @@
 
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import { getFirestore } from "firebase-admin/firestore";
 
 export const DEFAULT_EMULATOR_PROJECT_ID = "demo-advanced-home-medical";
 
@@ -135,8 +136,7 @@ export function validateEmulatorSafety(env: EmulatorEnv = process.env): void {
  * Uses the Firestore emulator REST API to delete all documents.
  */
 export async function clearEmulatorData(): Promise<void> {
-  const host = requireLocalHost(process.env, "FIRESTORE_EMULATOR_HOST");
-  const projectId = getEmulatorProjectId(process.env);
+  const db = getFirestore();
 
   const collections = [
     "auditLogs",
@@ -145,6 +145,7 @@ export async function clearEmulatorData(): Promise<void> {
     "inventoryOperations",
     "inventoryGroupingRiskReviews",
     "inventoryTransactions",
+    "orders",
     "patients",
     "products",
     "rateLimitBuckets",
@@ -153,23 +154,9 @@ export async function clearEmulatorData(): Promise<void> {
   ];
 
   for (const collectionId of collections) {
-    const url = `http://${host}/v1/projects/${projectId}/databases/(default)/documents/${collectionId}`;
-
-    try {
-      const response = await fetch(url);
-      if (!response.ok) continue;
-
-      const body = (await response.json()) as { documents?: Array<{ name: string }> };
-      if (!body.documents) continue;
-
-      for (const doc of body.documents) {
-        const docName = doc.name;
-        const deleteUrl = `http://${host}/v1/${docName}`;
-        await fetch(deleteUrl, { method: "DELETE" });
-      }
-    } catch {
-      // Best-effort cleanup. Test assertions catch any data contamination.
-    }
+    const snapshot = await db.collection(collectionId).get();
+    const deletes = snapshot.docs.map((docSnap) => docSnap.ref.delete());
+    await Promise.all(deletes);
   }
 }
 

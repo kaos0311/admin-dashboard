@@ -30,6 +30,8 @@ const MOVEMENT_TYPES = new Set<InventoryMovementType>([
   "restored",
   "deceased_patient_equipment_return",
   "hard_delete",
+  "order_allocation",
+  "order_restoration",
 ]);
 
 const MOVEMENT_SOURCES = new Set<MovementSource>([
