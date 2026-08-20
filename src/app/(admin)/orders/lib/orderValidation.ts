@@ -1,4 +1,4 @@
-﻿import { normalizeBarcode } from "@/lib/barcode";
+import { normalizeBarcode } from "@/lib/barcode";
 
 import {
   makeOrderKey,
@@ -196,5 +196,3 @@ export function getReviewReasonLabel(reason: SmartReviewReason): string {
 
   return labels[reason];
 }
-
-

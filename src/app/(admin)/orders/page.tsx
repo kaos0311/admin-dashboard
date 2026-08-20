@@ -532,10 +532,3 @@ export default function OrdersPage() {
     </main>
   );
 }
-
-
-
-
-
-
-

@@ -200,8 +200,6 @@ export function OrdersTable({
                           </ActionButton>
                         ) : null}
 
-
-
                         {order.status === "processing" ||
                         order.status === "ready" ? (
                           <ActionButton
@@ -285,4 +283,3 @@ function ActionButton({
     </button>
   );
 }
-
