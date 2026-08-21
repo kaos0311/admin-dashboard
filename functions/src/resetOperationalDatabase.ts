@@ -8,6 +8,16 @@ const db = getFirestore();
 
 const CONFIRM_TEXT = "RESET DATABASE";
 const BATCH_SIZE = 400;
+const RESET_ALLOWED_ENV = "RESET_OPERATIONAL_DATABASE_ALLOWED";
+
+function assertResetAllowed(): void {
+  if (process.env[RESET_ALLOWED_ENV] !== "true") {
+    throw new HttpsError(
+      "failed-precondition",
+      "Operational database reset is not enabled in this environment."
+    );
+  }
+}
 
 const OPERATIONAL_COLLECTIONS = [
   "importJobs",
@@ -78,6 +88,7 @@ export const resetOperationalDatabase = onCall(
   },
   async (request) => {
     await enforceCallableRateLimit(request, "admin");
+    assertResetAllowed();
     await requireCallableAdmin(
       request.auth,
       "Only admins can reset the operational database."

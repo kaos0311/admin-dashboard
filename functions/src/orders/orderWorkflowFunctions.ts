@@ -3,11 +3,14 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 import { enforceCallableRateLimit } from "../security/rateLimit.js";
 import { requireStaffOrAdmin } from "../inventory/auth.js";
-import { orderWorkflow } from "./orderWorkflowService.js";
-import type { OrderWorkflowInput } from "./orderWorkflowService.js";
+import { orderWorkflow, type OrderWorkflowInput } from "./orderWorkflowService.js";
 
 function cleanString(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function cleanStringPreserveEmpty(value: unknown): string | undefined {
+  return typeof value === "string" ? value.trim() : undefined;
 }
 
 function cleanNumber(value: unknown, fallback = 0): number {
@@ -32,8 +35,8 @@ export const orderWorkflowCallable = onCall(
     const data = request.data as Record<string, unknown> | undefined;
     const action = cleanString(data?.action) as OrderWorkflowInput["action"] | undefined;
 
-    if (!action || !["create", "cancel", "restore"].includes(action)) {
-      throw new HttpsError("invalid-argument", "Invalid order action. Must be create, cancel, or restore.");
+    if (!action || !["create", "cancel", "restore", "edit"].includes(action)) {
+      throw new HttpsError("invalid-argument", "Invalid order action. Must be create, cancel, restore, or edit.");
     }
 
     const input: OrderWorkflowInput = {
@@ -51,6 +54,16 @@ export const orderWorkflowCallable = onCall(
       facilityName: cleanString(data?.facilityName),
       notes: cleanString(data?.notes),
     };
+
+    if (action === "edit") {
+      input.patientName = cleanStringPreserveEmpty(data?.patientName);
+      input.patientAddress = cleanStringPreserveEmpty(data?.patientAddress);
+      input.productType = cleanStringPreserveEmpty(data?.productType);
+      input.barcode = cleanStringPreserveEmpty(data?.barcode);
+      input.phone = cleanStringPreserveEmpty(data?.phone);
+      input.facilityName = cleanStringPreserveEmpty(data?.facilityName);
+      input.notes = cleanStringPreserveEmpty(data?.notes);
+    }
 
     if (!input.operationId) {
       throw new HttpsError("invalid-argument", "operationId is required.");

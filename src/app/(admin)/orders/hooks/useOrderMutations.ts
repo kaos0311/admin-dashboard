@@ -5,7 +5,7 @@ import toast from "react-hot-toast";
 import { auth } from "@/lib/firebase";
 import { OrderRepository } from "@/repositories/firestore/order.repository";
 import { findProductByBarcode } from "@/lib/inventory";
-import { createOrder as createOrderWorkflow, cancelOrder as cancelOrderWorkflow, restoreOrder as restoreOrderWorkflow, createOrderOperationId } from "@/lib/orders/orderWorkflows";
+import { createOrder as createOrderWorkflow, cancelOrder as cancelOrderWorkflow, restoreOrder as restoreOrderWorkflow, editOrder as editOrderWorkflow, createOrderOperationId } from "@/lib/orders/orderWorkflows";
 import { normalizeBarcode } from "@/lib/barcode";
 
 import { initialFormState } from "../lib/orderConstants";
@@ -197,15 +197,24 @@ export function useOrderMutations({
 
       const currentOrder = orders.find((order) => order.id === editingOrderId);
 
-      await OrderRepository.update(editingOrderId, {
-        ...payload,
-        inventoryAllocated: currentOrder?.inventoryAllocated ?? false,
-        inventoryRestored: currentOrder?.inventoryRestored ?? false,
-        inventoryAllocationSourceId: currentOrder?.inventoryAllocationSourceId ?? "",
-        status: currentOrder?.status ?? payload.status,
-        updatedBy: getCurrentUserLabel(),
-        updatedByUid: auth.currentUser?.uid ?? "",
+      const editResult = await editOrderWorkflow({
+        operationId: `edit-${editingOrderId}`,
+        orderId: editingOrderId,
+        productId: editForm.productId.trim(),
+        quantity: Number(editForm.quantity),
+        patientName: editForm.patientName.trim(),
+        patientAddress: editForm.patientAddress.trim(),
+        productType: editForm.productType.trim(),
+        purchaseCost: Number(editForm.purchaseCost),
+        barcode: editForm.barcode.trim(),
+        phone: editForm.phone.trim(),
+        facilityName: editForm.facilityName.trim(),
+        notes: editForm.notes.trim(),
       });
+
+      if (editResult.status !== "success" && editResult.status !== "duplicate_operation") {
+        throw new Error(editResult.message || "Failed to edit order.");
+      }
 
       setOrders((prev) =>
         prev.map((order) =>

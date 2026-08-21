@@ -4,11 +4,14 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    fileParallelism: false,
     include: [
       "src/test-utils/**/*.integration.test.ts",
       "src/test-utils/**/*.emulator.test.ts",
       "src/orders/**/*.emulator.test.ts",
       "src/golden/**/*.emulator.test.ts",
+      "src/resetOperationalDatabase.emulator.test.ts",
+      "src/products/**/*.emulator.test.ts",
     ],
     exclude: ["node_modules", "lib"],
     testTimeout: 30000,

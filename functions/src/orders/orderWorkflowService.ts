@@ -22,7 +22,7 @@ const ORDER_TRANSITIONS: Record<string, Set<string>> = {
   archived: new Set([]),
 };
 
-export type OrderWorkflowAction = "create" | "cancel" | "restore";
+export type OrderWorkflowAction = "create" | "cancel" | "restore" | "edit";
 
 export type OrderWorkflowInput = {
   operationId: string;
@@ -231,6 +231,24 @@ export async function orderWorkflow(
       })
     : undefined;
 
+  const editFingerprintHash = input.action === "edit"
+    ? createHash("sha256").update(JSON.stringify({
+        actorUid: actor.uid,
+        action: input.action,
+        orderId: text(input.orderId),
+        productId: text(input.productId),
+        quantity: input.quantity,
+        patientName: text(input.patientName),
+        patientAddress: text(input.patientAddress),
+        productType: text(input.productType),
+        purchaseCost: Number(input.purchaseCost ?? 0),
+        barcode: text(input.barcode),
+        phone: text(input.phone),
+        facilityName: text(input.facilityName),
+        notes: text(input.notes),
+      })).digest("hex")
+    : undefined;
+
   const baseFingerprint = {
     actorUid: actor.uid,
     action: input.action,
@@ -248,7 +266,9 @@ export async function orderWorkflow(
     fingerprint:
       input.action === "create"
         ? createFingerprintHash!
-        : { ...baseFingerprint, orderId: text(input.orderId) },
+        : input.action === "edit"
+          ? editFingerprintHash!
+          : { ...baseFingerprint, orderId: text(input.orderId) },
   });
 
   if (claim.duplicate) {
@@ -270,6 +290,10 @@ export async function orderWorkflow(
 
     if (input.action === "restore") {
       return await restoreOrderWorkflow({ database, transaction, input, actor, operationId, workflowType });
+    }
+
+    if (input.action === "edit") {
+      return await editOrderWorkflow({ database, transaction, input, actor, operationId, workflowType });
     }
 
     throw new HttpsError("invalid-argument", `Unsupported order action: ${input.action}`);
@@ -669,5 +693,136 @@ async function restoreOrderWorkflow(params: {
     workflowType,
     movementIds,
     metadata: { orderId, allocations: allocationSnapshot },
+  };
+}
+
+async function editOrderWorkflow(params: {
+  database: Firestore;
+  transaction: Transaction;
+  input: OrderWorkflowInput;
+  actor: MovementActor;
+  operationId: string;
+  workflowType: string;
+}): Promise<WorkflowResult> {
+  const { database, transaction, input, actor, operationId, workflowType } = params;
+  const orderId = text(input.orderId);
+
+  if (!orderId) {
+    throw new HttpsError("invalid-argument", "orderId is required for edit.");
+  }
+
+  const orderRef = database.collection("orders").doc(orderId);
+  const orderSnap = await transaction.get(orderRef);
+
+  if (!orderSnap.exists) {
+    throw new HttpsError("not-found", "Order not found.");
+  }
+
+  const orderData = orderSnap.data() as Record<string, unknown>;
+
+  if (orderData.inventoryAllocated === true && orderData.inventoryRestored !== true) {
+    const newProductId = text(input.productId);
+    const newQuantity = Number(input.quantity);
+    const currentProductId = text(orderData.productId);
+    const currentQuantity = Number(orderData.quantity ?? 0);
+
+    if (newProductId && newProductId !== currentProductId) {
+      throw new HttpsError("failed-precondition", "Cannot change product on an allocated order.");
+    }
+    if (newQuantity > 0 && newQuantity !== currentQuantity) {
+      throw new HttpsError("failed-precondition", "Cannot change quantity on an allocated order.");
+    }
+  }
+
+  const patientName = text(input.patientName) || text(orderData.patientName) || "";
+  const patientAddress = text(input.patientAddress) || text(orderData.patientAddress) || "";
+  const productId = text(input.productId) || text(orderData.productId) || "";
+  const productType = text(input.productType) || text(orderData.productType) || "";
+  const purchaseCost = input.purchaseCost !== undefined ? Number(input.purchaseCost) : Number(orderData.purchaseCost ?? 0);
+  const quantity = input.quantity > 0 ? Number(input.quantity) : Number(orderData.quantity ?? 1);
+  const barcode = text(input.barcode) ?? text(orderData.barcode) ?? "";
+  const phone = text(input.phone) ?? text(orderData.phone) ?? "";
+  const facilityName = text(input.facilityName) ?? text(orderData.facilityName) ?? "";
+  const notes = text(input.notes) ?? text(orderData.notes) ?? "";
+
+  const patientKey = makePatientKey(patientName, phone, patientAddress);
+  const orderKey = makeOrderKey(patientName, productType);
+  const searchText = normalizeSearchText(
+    [patientName, patientAddress, productType, phone, facilityName, notes, barcode, patientKey, orderKey].join(" ")
+  );
+  const normalizedName = normalizeSearchText(patientName);
+  const normalizedPhone = normalizePhone(phone);
+  const normalizedAddress = normalizeSearchText(patientAddress);
+  const rawDob = text(orderData.dob);
+  const normalizedDob = normalizeSearchText(rawDob);
+
+  const reviewReasons: string[] = [];
+  if (!phone) reviewReasons.push("missingPhone");
+
+  const updatePayload: Record<string, unknown> = {
+    patientName,
+    patientAddress,
+    productId,
+    productType,
+    purchaseCost,
+    quantity,
+    barcode,
+    phone,
+    facilityName,
+    notes,
+    inventoryAllocated: orderData.inventoryAllocated ?? false,
+    inventoryRestored: orderData.inventoryRestored ?? false,
+    inventoryAllocations: orderData.inventoryAllocations ?? [],
+    inventoryAllocationSourceId: orderData.inventoryAllocationSourceId ?? "",
+    patientKey,
+    orderKey,
+    searchText,
+    normalizedName,
+    normalizedDob,
+    normalizedPhone,
+    normalizedAddress,
+    needsReview: reviewReasons.length > 0,
+    reviewReasons,
+    smartRouteTargets: ["orders", "patients", "analytics"],
+    isHospice: orderData.isHospice ?? false,
+    linkedPatientId: orderData.linkedPatientId ?? "",
+    linkedInventoryId: productId,
+    createdBy: orderData.createdBy ?? actor.email ?? actor.uid,
+    createdByUid: orderData.createdByUid ?? actor.uid,
+    updatedBy: actor.email ?? actor.uid,
+    updatedByUid: actor.uid,
+    updatedAt: FieldValue.serverTimestamp(),
+  };
+
+  if (orderData.createdAt) updatePayload.createdAt = orderData.createdAt;
+  if (orderData.restoredAt) updatePayload.restoredAt = orderData.restoredAt;
+  if (orderData.restoredBy) updatePayload.restoredBy = orderData.restoredBy;
+  if (orderData.restoredByUid) updatePayload.restoredByUid = orderData.restoredByUid;
+  if (orderData.archivedAt) updatePayload.archivedAt = orderData.archivedAt;
+  if (orderData.archivedBy) updatePayload.archivedBy = orderData.archivedBy;
+  if (orderData.archivedByUid) updatePayload.archivedByUid = orderData.archivedByUid;
+
+  transaction.update(orderRef, updatePayload);
+
+  completeWorkflowOperation({
+    transaction,
+    database,
+    operationId,
+    workflowType,
+    actor,
+    result: {
+      status: "success",
+      operationId,
+      workflowType,
+      orderId,
+    },
+  });
+
+  return {
+    status: "success",
+    operationId,
+    workflowType,
+    orderId,
+    orderStatus: text(orderData.status),
   };
 }

@@ -2,7 +2,7 @@ import { httpsCallable } from "firebase/functions";
 
 import { functions } from "@/lib/firebase";
 
-export type OrderWorkflowAction = "create" | "cancel" | "restore";
+export type OrderWorkflowAction = "create" | "cancel" | "restore" | "edit";
 
 export type OrderWorkflowRequest = {
   operationId: string;
@@ -125,6 +125,18 @@ export async function restoreOrder(
   return submitOrderWorkflow({
     ...params,
     action: "restore",
+    operationId: params.operationId,
+  });
+}
+
+export async function editOrder(
+  params: Omit<OrderWorkflowRequest, "action"> & {
+    operationId?: string;
+  }
+): Promise<OrderWorkflowResult> {
+  return submitOrderWorkflow({
+    ...params,
+    action: "edit",
     operationId: params.operationId,
   });
 }

@@ -29,6 +29,9 @@ export { rebuildReportsAnalytics } from "./maintenance/rebuildReportsAnalytics";
 export { reprocessImportJob } from "./maintenance/reprocessImportJob";
 export { softResetReports } from "./maintenance/softResetReports";
 
+// Product management
+export { purgeProducts } from "./products/purgeProducts.js";
+
 // Admin / reset tools
 export { bootstrapAdminClaim } from "./bootstrapAdmin";
 export { resetOperationalDatabase } from "./resetOperationalDatabase";
