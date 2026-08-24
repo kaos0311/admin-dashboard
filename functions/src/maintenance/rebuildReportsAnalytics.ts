@@ -13,6 +13,8 @@ import {
   getImportRetentionCutoff,
   getImportRetentionMetadata,
 } from "../importRetention.js";
+import { requireCallableStaffOrAdmin } from "../auth/roles.js";
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 
 const db = getFirestore();
 
@@ -80,21 +82,6 @@ type CallableRequestLike = {
   };
   data?: unknown;
 };
-
-function requireStaffOrAdmin(request: CallableRequestLike): void {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be signed in.");
-  }
-
-  const role = request.auth.token.role;
-
-  if (role !== "admin" && role !== "staff" && role !== "tank") {
-    throw new HttpsError(
-      "permission-denied",
-      "Only staff, admins, or Tank users can rebuild report analytics."
-    );
-  }
-}
 
 function getPayload(data: unknown): RebuildReportsAnalyticsPayload {
   if (!data || typeof data !== "object") return {};
@@ -1333,7 +1320,11 @@ export const rebuildReportsAnalytics = onCall(
     memory: "1GiB",
   },
   async (request) => {
-    requireStaffOrAdmin(request as CallableRequestLike);
+    await enforceCallableRateLimit(request, "import");
+    await requireCallableStaffOrAdmin(
+      request.auth,
+      "Only staff, admins, or Tank users can rebuild report analytics."
+    );
 
     const payload = getPayload(request.data);
     return runReportsAnalyticsRebuild({

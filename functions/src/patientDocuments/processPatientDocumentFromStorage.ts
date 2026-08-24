@@ -372,12 +372,12 @@ export const processPatientDocumentFromStorage = onObjectFinalized(
         }
 
         if (item.serialNumber || item.lotNumber) {
-          const inventoryId = safeFirestoreId(
+          const observationId = safeFirestoreId(
             `${item.itemId || item.hcpc || item.itemName}-${item.serialNumber || item.lotNumber}-${patientKey}`,
-            "inventory"
+            "inventoryObservation"
           );
           batch.set(
-            db.collection("inventory").doc(inventoryId),
+            db.collection("inventoryObservations").doc(observationId),
             clean({
               productId,
               name: item.itemName || item.itemId,
@@ -386,10 +386,8 @@ export const processPatientDocumentFromStorage = onObjectFinalized(
               serial: item.serialNumber,
               serialNumber: item.serialNumber,
               lotNumber: item.lotNumber,
-              quantityOnHand: 0,
-              onRent: item.qty ?? 1,
-              available: 0,
-              status: "available",
+              observedQuantity: item.qty ?? 1,
+              observationStatus: "observed_on_delivery_ticket",
               patientKey,
               patientName: parsed.patientName,
               sourceDocumentId: parsedPath.documentId,

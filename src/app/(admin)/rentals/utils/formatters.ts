@@ -23,11 +23,13 @@ export function formatDate(value: string): string {
 
 export function formatStatus(status: RentalStatus): string {
   const map: Record<RentalStatus, string> = {
+    draft: "Draft",
     available: "Available",
     checked_out: "Checked Out",
     overdue: "Overdue",
     maintenance: "Maintenance",
     retired: "Retired",
+    abandoned: "Abandoned",
   };
 
   return map[status] ?? "Unknown";

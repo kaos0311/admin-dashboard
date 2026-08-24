@@ -78,7 +78,7 @@ export default function ProductsPage() {
     saveProduct,
     softDeleteProduct,
     batchSoftDeleteProducts,
-    purgeLoadedProducts,
+    purgeProducts,
   } = useProducts({
     canRead,
     canWrite,
@@ -540,9 +540,6 @@ export default function ProductsPage() {
             loadingProducts
           }
           purging={purging}
-          productsCount={
-            products.length
-          }
           isAdmin={isAdmin}
           onRefresh={() =>
             void loadProducts(
@@ -550,7 +547,7 @@ export default function ProductsPage() {
             )
           }
           onPurge={() =>
-            void purgeLoadedProducts()
+            void purgeProducts()
           }
         />
 

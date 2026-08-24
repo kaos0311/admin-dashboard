@@ -19,6 +19,8 @@ import {
   cleanText,
   makeSafeDocId,
 } from "../imports/utils/normalize.js";
+import { requireCallableStaffOrAdmin } from "../auth/roles.js";
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 
 const db = getFirestore();
 const storage = getStorage();
@@ -70,31 +72,6 @@ function getAuthEmail(
   return typeof email === "string"
     ? email
     : "";
-}
-
-function requireStaffOrAdmin(
-  request: CallableRequestLike
-): void {
-  if (!request.auth) {
-    throw new HttpsError(
-      "unauthenticated",
-      "You must be signed in."
-    );
-  }
-
-  const role =
-    request.auth.token.role;
-
-  if (
-    role !== "admin" &&
-    role !== "staff" &&
-    role !== "tank"
-  ) {
-    throw new HttpsError(
-      "permission-denied",
-      "Only staff, admins, or Tank users can reprocess import jobs."
-    );
-  }
 }
 
 function getFileNameFromPath(
@@ -198,8 +175,10 @@ export const reprocessImportJob =
     async (
       request
     ): Promise<ReprocessImportJobResult> => {
-      requireStaffOrAdmin(
-        request as CallableRequestLike
+      await enforceCallableRateLimit(request, "import");
+      await requireCallableStaffOrAdmin(
+        request.auth,
+        "Only staff, admins, or Tank users can reprocess import jobs."
       );
 
       const jobId =

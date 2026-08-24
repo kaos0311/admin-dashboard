@@ -1,0 +1,112 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum EquipmentStatus {
+  AVAILABLE
+  IN_USE
+  NEEDS_REPAIR
+  IN_REPAIR
+  RETIRED
+  LOST
+}
+
+enum WorkOrderStatus {
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+}
+
+model Customer {
+  id        Int         @id @default(autoincrement())
+  name      String      @unique
+  phone     String?
+  email     String?
+  address   String?
+  notes     String?
+  equipment Equipment[]
+  createdAt DateTime    @default(now())
+}
+
+model Location {
+  id        Int         @id @default(autoincrement())
+  name      String      @unique
+  address   String?
+  notes     String?
+  equipment Equipment[]
+  createdAt DateTime    @default(now())
+}
+
+model Manufacturer {
+  id        Int              @id @default(autoincrement())
+  name      String           @unique
+  models    EquipmentModel[]
+  createdAt DateTime         @default(now())
+}
+
+model EquipmentModel {
+  id             Int          @id @default(autoincrement())
+  name           String
+  category       String
+  manufacturerId Int
+  manufacturer   Manufacturer @relation(fields: [manufacturerId], references: [id])
+  equipment      Equipment[]
+
+  @@unique([manufacturerId, name])
+}
+
+model Equipment {
+  id                 Int             @id @default(autoincrement())
+  assetTag           String          @unique
+  serialNumber       String?         @unique
+  status             EquipmentStatus @default(AVAILABLE)
+  condition          String?
+  purchaseDate       DateTime?
+  warrantyExpiration DateTime?
+  notes              String?
+
+  modelId Int?
+  model   EquipmentModel? @relation(fields: [modelId], references: [id])
+
+  customerId Int?
+  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  locationId Int?
+  location   Location? @relation(fields: [locationId], references: [id])
+
+  workOrders WorkOrder[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model WorkOrder {
+  id          Int             @id @default(autoincrement())
+  equipmentId Int
+  equipment   Equipment       @relation(fields: [equipmentId], references: [id])
+  status      WorkOrderStatus @default(OPEN)
+  issue       String
+  resolution  String?
+  openedAt    DateTime        @default(now())
+  closedAt    DateTime?
+}
+
+model AuditLog {
+  id         Int      @id @default(autoincrement())
+  userId     String?
+  userEmail  String?
+  userRole   String?
+  action     String
+  entityType String?
+  entityId   String?
+  success    Boolean  @default(true)
+  ipAddress  String?
+  userAgent  String?
+  metadata   Json?
+  createdAt  DateTime @default(now())
+}

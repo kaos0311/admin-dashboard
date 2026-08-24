@@ -1,17 +1,11 @@
 "use client";
 
 import { type RefObject, useRef, useState } from "react";
-import {
-  collection,
-  doc,
-  type DocumentReference,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
 import { ref, uploadBytes } from "firebase/storage";
 import toast from "react-hot-toast";
 
-import { auth, db, storage } from "@/lib/firebase";
+import { auth, storage } from "@/lib/firebase";
+import { OrderRepository } from "@/repositories/firestore/order.repository";
 
 import { makeDuplicateImportKey } from "../lib/orderKeys";
 import {
@@ -19,13 +13,6 @@ import {
   findRecentDuplicateImport,
 } from "../lib/orderImportDetection";
 import type { ImportReportType, SmartDetectionResult } from "../lib/orderTypes";
-
-async function setDocSafe(
-  docRef: DocumentReference,
-  payload: Record<string, unknown>
-): Promise<void> {
-  await setDoc(docRef, payload, { merge: true });
-}
 
 function getCurrentUserLabel(): string {
   return (
@@ -129,14 +116,8 @@ export function useOrderImport(): {
 
       setImportMessage("Creating secure import job.");
 
-      const importJobRef = doc(collection(db, "importJobs"));
-      const importId = importJobRef.id;
-
       const safeFileName = file.name.replace(/[^a-zA-Z0-9._-]+/g, "_");
-      const storagePath = `reports/uploads/${resolvedImportType}/${importId}/${safeFileName}`;
-      const storageRef = ref(storage, storagePath);
-
-      await setDocSafe(importJobRef, {
+      const { id: importId } = await OrderRepository.createImportJob({
         reportType: resolvedImportType,
         detectedReportType: detection.reportType,
         detectionConfidence: detection.confidence,
@@ -145,7 +126,7 @@ export function useOrderImport(): {
         fileName: file.name,
         fileSize: file.size,
         contentType: file.type || "application/octet-stream",
-        storagePath,
+        storagePath: "",
 
         duplicateKey,
         status: "uploaded",
@@ -176,9 +157,10 @@ export function useOrderImport(): {
 
         createdBy: getCurrentUserLabel(),
         createdByUid: auth.currentUser?.uid ?? "",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
       });
+
+      const storagePath = `reports/uploads/${resolvedImportType}/${importId}/${safeFileName}`;
+      const storageRef = ref(storage, storagePath);
 
       setImportMessage("Uploading protected report file.");
 
@@ -227,5 +209,3 @@ export function useOrderImport(): {
     handleImportFile,
   };
 }
-
-

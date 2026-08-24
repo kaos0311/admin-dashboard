@@ -9,10 +9,10 @@ import { auth, db } from "@/lib/firebase";
 import { buttons, glass, typography } from "@/theme";
 
 import {
-  type MaskSelection,
   CPAP_MASK_DATA,
   getMaskByName,
   getUniqueManufacturers,
+  type MaskSelection,
 } from "./cpapMaskData";
 import { addTimelineEntry } from "../patients/lib/patientActions";
 

@@ -2,16 +2,6 @@
 
 import { useEffect, useMemo, useState } from "react";
 import {
-  collection,
-  doc,
-  limit,
-  onSnapshot,
-  query,
-  serverTimestamp,
-  setDoc,
-  where,
-} from "firebase/firestore";
-import {
   AlertTriangle,
   ExternalLink,
   Loader2,
@@ -21,32 +11,17 @@ import {
 import toast from "react-hot-toast";
 
 import { buttons, colors, glass, typography } from "@/theme";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
+import { ProductRepository } from "@/repositories/firestore/product.repository";
+import type {
+  RecallMatchItem,
+  EquipmentRecallItem,
+} from "@/repositories/firestore/product.types";
 
 import type { Product } from "../utils/productTypes";
 
-type RecallMatch = {
-  id: string;
-  productId: string;
-  productName: string;
-  recallTitle: string;
-  manufacturer: string;
-  model: string;
-  severity: string;
-  status: string;
-  actionRequired: string;
-  sourceUrl: string;
-};
-
-type EquipmentRecall = {
-  id: string;
-  recallTitle: string;
-  manufacturer: string;
-  model: string;
-  severity: string;
-  actionRequired: string;
-  sourceUrl: string;
-};
+type RecallMatch = RecallMatchItem;
+type EquipmentRecall = EquipmentRecallItem;
 
 type ProductRecallWatchProps = {
   products: Product[];
@@ -58,60 +33,6 @@ type ProductRecallWatchProps = {
   onShowRecallProducts: () => void;
   onShowDiscontinuedProducts: () => void;
 };
-
-function readString(value: unknown): string {
-  return typeof value === "string" ? value.trim() : "";
-}
-
-function normalizeRecallMatch(
-  id: string,
-  data: Record<string, unknown>
-): RecallMatch {
-  return {
-    id,
-    productId: readString(data.productId) || readString(data.itemId),
-    productName:
-      readString(data.productName) ||
-      readString(data.itemName) ||
-      readString(data.name),
-    recallTitle:
-      readString(data.recallTitle) ||
-      readString(data.title) ||
-      readString(data.recallName),
-    manufacturer: readString(data.manufacturer),
-    model: readString(data.model),
-    severity: readString(data.severity),
-    status: readString(data.status),
-    actionRequired:
-      readString(data.actionRequired) ||
-      readString(data.recommendedAction) ||
-      readString(data.nextSteps) ||
-      readString(data.instructions),
-    sourceUrl: readString(data.sourceUrl) || readString(data.url),
-  };
-}
-
-function normalizeEquipmentRecall(
-  id: string,
-  data: Record<string, unknown>
-): EquipmentRecall {
-  return {
-    id,
-    recallTitle:
-      readString(data.recallTitle) ||
-      readString(data.title) ||
-      readString(data.recallName),
-    manufacturer: readString(data.manufacturer),
-    model: readString(data.model),
-    severity: readString(data.severity),
-    actionRequired:
-      readString(data.actionRequired) ||
-      readString(data.recommendedAction) ||
-      readString(data.nextSteps) ||
-      readString(data.instructions),
-    sourceUrl: readString(data.sourceUrl) || readString(data.url),
-  };
-}
 
 function matchRecallToProduct(match: RecallMatch, product: Product): boolean {
   const productTokens = [
@@ -134,8 +55,8 @@ function matchRecallToProduct(match: RecallMatch, product: Product): boolean {
       (productToken) =>
         productToken === token ||
         productToken.includes(token) ||
-        token.includes(productToken)
-    )
+        token.includes(productToken),
+    ),
   );
 }
 
@@ -151,18 +72,14 @@ export function ProductRecallWatch({
 }: ProductRecallWatchProps) {
   const [internetScanEnabled, setInternetScanEnabled] = useState(false);
   const [scanNewProductsEnabled, setScanNewProductsEnabled] = useState(false);
-  const [
-    discontinuedScanEnabled,
-    setDiscontinuedScanEnabled,
-  ] = useState(false);
-  const [
-    scanNewDiscontinuedProductsEnabled,
-    setScanNewDiscontinuedProductsEnabled,
-  ] = useState(false);
+  const [discontinuedScanEnabled, setDiscontinuedScanEnabled] =
+    useState(false);
+  const [scanNewDiscontinuedProductsEnabled, setScanNewDiscontinuedProductsEnabled] =
+    useState(false);
   const [savingSetting, setSavingSetting] = useState(false);
   const [recallMatches, setRecallMatches] = useState<RecallMatch[]>([]);
   const [equipmentRecalls, setEquipmentRecalls] = useState<EquipmentRecall[]>(
-    []
+    [],
   );
   const [loadingFindings, setLoadingFindings] = useState(false);
   const [imageEnrichmentLoading, setImageEnrichmentLoading] = useState(false);
@@ -170,39 +87,18 @@ export function ProductRecallWatch({
   useEffect(() => {
     if (!canRead) return;
 
-    const unsubscribe = onSnapshot(
-      doc(db, "settings", "app"),
-      (snapshot) => {
-        const inventory =
-          snapshot.data()?.inventory &&
-          typeof snapshot.data()?.inventory === "object"
-            ? (snapshot.data()?.inventory as Record<string, unknown>)
-            : {};
-
-        setInternetScanEnabled(
-          typeof inventory.jarvisRecallInternetScanEnabled === "boolean"
-            ? inventory.jarvisRecallInternetScanEnabled
-            : false
-        );
-        setScanNewProductsEnabled(
-          typeof inventory.jarvisRecallScanNewProductsEnabled === "boolean"
-            ? inventory.jarvisRecallScanNewProductsEnabled
-            : false
-        );
-        setDiscontinuedScanEnabled(
-          typeof inventory.jarvisDiscontinuedInternetScanEnabled === "boolean"
-            ? inventory.jarvisDiscontinuedInternetScanEnabled
-            : false
-        );
+    const unsubscribe = ProductRepository.subscribeToRecallSettings(
+      (settings) => {
+        setInternetScanEnabled(settings.internetScanEnabled);
+        setScanNewProductsEnabled(settings.scanNewProductsEnabled);
+        setDiscontinuedScanEnabled(settings.discontinuedScanEnabled);
         setScanNewDiscontinuedProductsEnabled(
-          typeof inventory.jarvisDiscontinuedScanNewProductsEnabled === "boolean"
-            ? inventory.jarvisDiscontinuedScanNewProductsEnabled
-            : false
+          settings.scanNewDiscontinuedProductsEnabled,
         );
       },
       (error) => {
         console.error("PRODUCT RECALL SETTINGS SNAPSHOT ERROR:", error);
-      }
+      },
     );
 
     return unsubscribe;
@@ -213,13 +109,6 @@ export function ProductRecallWatch({
 
     setLoadingFindings(true);
 
-    const recallMatchesQuery = query(collection(db, "recallMatches"), limit(75));
-    const equipmentRecallsQuery = query(
-      collection(db, "equipmentRecalls"),
-      where("active", "==", true),
-      limit(75)
-    );
-
     let matchesLoaded = false;
     let recallsLoaded = false;
 
@@ -229,46 +118,30 @@ export function ProductRecallWatch({
       }
     }
 
-    const unsubscribeMatches = onSnapshot(
-      recallMatchesQuery,
-      (snapshot) => {
-        setRecallMatches(
-          snapshot.docs.map((matchDoc) =>
-            normalizeRecallMatch(
-              matchDoc.id,
-              matchDoc.data() as Record<string, unknown>
-            )
-          )
-        );
+    const unsubscribeMatches = ProductRepository.subscribeToRecallMatches(
+      (matches) => {
+        setRecallMatches(matches);
         matchesLoaded = true;
         finishLoad();
       },
       (error) => {
-        console.error("PRODUCT RECALL MATCHES SNAPSHOT ERROR:", error);
+        console.error("RECALL MATCHES SNAPSHOT ERROR:", error);
         matchesLoaded = true;
         finishLoad();
-      }
+      },
     );
 
-    const unsubscribeRecalls = onSnapshot(
-      equipmentRecallsQuery,
-      (snapshot) => {
-        setEquipmentRecalls(
-          snapshot.docs.map((recallDoc) =>
-            normalizeEquipmentRecall(
-              recallDoc.id,
-              recallDoc.data() as Record<string, unknown>
-            )
-          )
-        );
+    const unsubscribeRecalls = ProductRepository.subscribeToEquipmentRecalls(
+      (recalls) => {
+        setEquipmentRecalls(recalls);
         recallsLoaded = true;
         finishLoad();
       },
       (error) => {
-        console.error("PRODUCT EQUIPMENT RECALLS SNAPSHOT ERROR:", error);
+        console.error("EQUIPMENT RECALLS SNAPSHOT ERROR:", error);
         recallsLoaded = true;
         finishLoad();
-      }
+      },
     );
 
     return () => {
@@ -279,12 +152,12 @@ export function ProductRecallWatch({
 
   const recallFlaggedProducts = useMemo(
     () => products.filter((product) => product.recallFlagged),
-    [products]
+    [products],
   );
 
   const discontinuedProducts = useMemo(
     () => products.filter((product) => product.status === "discontinued"),
-    [products]
+    [products],
   );
 
   const matchedFindings = useMemo(
@@ -292,10 +165,10 @@ export function ProductRecallWatch({
       recallFlaggedProducts.map((product) => ({
         product,
         matches: recallMatches.filter((match) =>
-          matchRecallToProduct(match, product)
+          matchRecallToProduct(match, product),
         ),
       })),
-    [recallFlaggedProducts, recallMatches]
+    [recallFlaggedProducts, recallMatches],
   );
 
   async function updateRecallSetting(
@@ -304,7 +177,7 @@ export function ProductRecallWatch({
       | "jarvisRecallScanNewProductsEnabled"
       | "jarvisDiscontinuedInternetScanEnabled"
       | "jarvisDiscontinuedScanNewProductsEnabled",
-    value: boolean
+    value: boolean,
   ) {
     if (!canWrite) {
       toast.error("You do not have permission to update product settings.");
@@ -316,16 +189,10 @@ export function ProductRecallWatch({
     try {
       const currentUser = auth.currentUser;
 
-      await setDoc(
-        doc(db, "settings", "app"),
-        {
-          inventory: {
-            [key]: value,
-          },
-          updatedAt: serverTimestamp(),
-          updatedBy: currentUser?.email ?? currentUser?.uid ?? "unknown",
-        },
-        { merge: true }
+      await ProductRepository.updateRecallSetting(
+        key,
+        value,
+        currentUser?.email ?? currentUser?.uid ?? "unknown",
       );
 
       toast.success("Jarvis product watch setting updated.");
@@ -383,12 +250,16 @@ export function ProductRecallWatch({
       }
 
       toast.success(
-        `Jarvis added images to ${(result.updated ?? []).length.toLocaleString()} product record(s).`
+        `Jarvis added images to ${(result.updated ?? []).length.toLocaleString()} product record(s).`,
       );
       onRefreshProducts?.();
     } catch (error) {
       console.error("JARVIS PRODUCT IMAGE ENRICHMENT ERROR:", error);
-      toast.error(error instanceof Error ? error.message : "Jarvis image enrichment failed.");
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Jarvis image enrichment failed.",
+      );
     } finally {
       setImageEnrichmentLoading(false);
     }
@@ -423,7 +294,7 @@ export function ProductRecallWatch({
               onChange={(checked) =>
                 void updateRecallSetting(
                   "jarvisRecallInternetScanEnabled",
-                  checked
+                  checked,
                 )
               }
             />
@@ -436,7 +307,7 @@ export function ProductRecallWatch({
               onChange={(checked) =>
                 void updateRecallSetting(
                   "jarvisRecallScanNewProductsEnabled",
-                  checked
+                  checked,
                 )
               }
             />
@@ -449,7 +320,7 @@ export function ProductRecallWatch({
               onChange={(checked) =>
                 void updateRecallSetting(
                   "jarvisDiscontinuedInternetScanEnabled",
-                  checked
+                  checked,
                 )
               }
             />
@@ -462,7 +333,7 @@ export function ProductRecallWatch({
               onChange={(checked) =>
                 void updateRecallSetting(
                   "jarvisDiscontinuedScanNewProductsEnabled",
-                  checked
+                  checked,
                 )
               }
             />
@@ -579,7 +450,9 @@ export function ProductRecallWatch({
                             {[
                               match.manufacturer,
                               match.model,
-                              match.severity ? `Severity ${match.severity}` : "",
+                              match.severity
+                                ? `Severity ${match.severity}`
+                                : "",
                               match.status,
                             ]
                               .filter(Boolean)
@@ -620,7 +493,9 @@ export function ProductRecallWatch({
 
               {equipmentRecalls.length > 0 ? (
                 <div className={`${glass.inset} p-4`}>
-                  <h3 className={typography.cardTitle}>Active Recall Library</h3>
+                  <h3 className={typography.cardTitle}>
+                    Active Recall Library
+                  </h3>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     {equipmentRecalls.slice(0, 6).map((recall) => (
                       <div

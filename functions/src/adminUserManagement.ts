@@ -3,6 +3,9 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+import { writeAuditEntry } from "./audit/writeAuditEntry.js";
+import { enforceCallableRateLimit } from "./security/rateLimit.js";
+
 if (!getApps().length) {
   initializeApp();
 }
@@ -82,9 +85,11 @@ function requirePassword(value: unknown): string {
 }
 
 export const updateUserRole = onCall<UpdateUserRolePayload>(async (request) => {
+  await enforceCallableRateLimit(request, "admin");
   const actorUid = await assertAdmin(request);
   const uid = requireUid(request.data?.uid);
   const role = requireRole(request.data?.role);
+  const actorEmail = String(request.auth?.token?.email ?? "");
 
   await getAuth().setCustomUserClaims(uid, { role });
 
@@ -101,6 +106,15 @@ export const updateUserRole = onCall<UpdateUserRolePayload>(async (request) => {
       { merge: true }
     );
 
+  await writeAuditEntry({
+    action: "user_role_updated",
+    performedByUid: actorUid,
+    performedByEmail: actorEmail,
+    targetUid: uid,
+    details: { newRole: role },
+    success: true,
+  });
+
   return {
     ok: true,
     uid,
@@ -109,8 +123,10 @@ export const updateUserRole = onCall<UpdateUserRolePayload>(async (request) => {
 });
 
 export const disableDashboardUser = onCall<UserUidPayload>(async (request) => {
+  await enforceCallableRateLimit(request, "admin");
   const actorUid = await assertAdmin(request);
   const uid = requireUid(request.data?.uid);
+  const actorEmail = String(request.auth?.token?.email ?? "");
 
   if (uid === actorUid) {
     throw new HttpsError(
@@ -135,6 +151,15 @@ export const disableDashboardUser = onCall<UserUidPayload>(async (request) => {
       { merge: true }
     );
 
+  await writeAuditEntry({
+    action: "user_status_updated",
+    performedByUid: actorUid,
+    performedByEmail: actorEmail,
+    targetUid: uid,
+    details: { newStatus: "disabled" },
+    success: true,
+  });
+
   return {
     ok: true,
     uid,
@@ -143,8 +168,10 @@ export const disableDashboardUser = onCall<UserUidPayload>(async (request) => {
 });
 
 export const enableDashboardUser = onCall<UserUidPayload>(async (request) => {
+  await enforceCallableRateLimit(request, "admin");
   const actorUid = await assertAdmin(request);
   const uid = requireUid(request.data?.uid);
+  const actorEmail = String(request.auth?.token?.email ?? "");
 
   await getAuth().updateUser(uid, {
     disabled: false,
@@ -162,6 +189,15 @@ export const enableDashboardUser = onCall<UserUidPayload>(async (request) => {
       { merge: true }
     );
 
+  await writeAuditEntry({
+    action: "user_status_updated",
+    performedByUid: actorUid,
+    performedByEmail: actorEmail,
+    targetUid: uid,
+    details: { newStatus: "active" },
+    success: true,
+  });
+
   return {
     ok: true,
     uid,
@@ -170,8 +206,10 @@ export const enableDashboardUser = onCall<UserUidPayload>(async (request) => {
 });
 
 export const deleteUserAccount = onCall<UserUidPayload>(async (request) => {
+  await enforceCallableRateLimit(request, "admin");
   const actorUid = await assertAdmin(request);
   const uid = requireUid(request.data?.uid);
+  const actorEmail = String(request.auth?.token?.email ?? "");
 
   if (uid === actorUid) {
     throw new HttpsError(
@@ -197,6 +235,14 @@ export const deleteUserAccount = onCall<UserUidPayload>(async (request) => {
       { merge: true }
     );
 
+  await writeAuditEntry({
+    action: "user_deleted",
+    performedByUid: actorUid,
+    performedByEmail: actorEmail,
+    targetUid: uid,
+    success: true,
+  });
+
   return {
     ok: true,
     uid,
@@ -206,9 +252,11 @@ export const deleteUserAccount = onCall<UserUidPayload>(async (request) => {
 
 export const resetUserPassword = onCall<ResetUserPasswordPayload>(
   async (request) => {
+    await enforceCallableRateLimit(request, "admin");
     const actorUid = await assertAdmin(request);
     const uid = requireUid(request.data?.uid);
     const newPassword = requirePassword(request.data?.newPassword);
+    const actorEmail = String(request.auth?.token?.email ?? "");
 
     await getAuth().updateUser(uid, {
       password: newPassword,
@@ -226,6 +274,14 @@ export const resetUserPassword = onCall<ResetUserPasswordPayload>(
         },
         { merge: true }
       );
+
+    await writeAuditEntry({
+      action: "user_password_reset",
+      performedByUid: actorUid,
+      performedByEmail: actorEmail,
+      targetUid: uid,
+      success: true,
+    });
 
     return {
       ok: true,

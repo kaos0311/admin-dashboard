@@ -23,11 +23,12 @@ import { ImportJobsTable } from "./components/ImportJobsTable";
 export default function UploadReportsPage() {
   return (
     <UploadAccessGate>
-      {({ user, role, canManageUploads }) => (
+      {({ authRole, user, role, canManageUploads }) => (
         <UploadReportsContent
           user={user ?? null}
           role={role}
           canManageUploads={canManageUploads}
+          canResetReports={Boolean(authRole.canDeleteImports)}
         />
       )}
     </UploadAccessGate>
@@ -42,12 +43,14 @@ type UploadReportsContentProps = {
   } | null;
   role: string | null;
   canManageUploads: boolean;
+  canResetReports: boolean;
 };
 
 function UploadReportsContent({
   user,
   role,
   canManageUploads,
+  canResetReports,
 }: UploadReportsContentProps) {
   const [reportType, setReportType] = useState<ReportType>("auto");
   const [importMode, setImportMode] = useState<ImportMode>("append");
@@ -151,7 +154,7 @@ function UploadReportsContent({
             />
 
             <ResetReportsPanel
-              canResetReports={role === "admin" || role === "tank"}
+              canResetReports={canResetReports}
             />
 
             <UploadRulesPanel />

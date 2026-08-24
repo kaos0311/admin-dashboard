@@ -9,15 +9,8 @@ import type {
   FacilityAutofillOption,
   PatientAutofillOption,
   ProductAutofillOption,
-} from "../hooks/useOrderAutofill";
-import type { OrderFormState, OrderStatus } from "../lib/orderTypes";
-
-const statusOptions: Array<{ value: OrderStatus; label: string }> = [
-  { value: "processing", label: "Processing" },
-  { value: "ready", label: "Ready" },
-  { value: "delivered", label: "Delivered" },
-  { value: "cancelled", label: "Cancelled" },
-];
+} from "@/repositories/firestore/order.types";
+import type { OrderFormState, OrderRow } from "../lib/orderTypes";
 
 export function OrderModal({
   title,
@@ -34,6 +27,7 @@ export function OrderModal({
   onSave,
   onScan,
   onLoadBarcode,
+  order,
 }: {
   title: string;
   description: string;
@@ -49,11 +43,15 @@ export function OrderModal({
   onSave: () => void;
   onScan?: () => void;
   onLoadBarcode: () => void;
+  order?: OrderRow;
 }) {
   const patientListId = `${mode}-patient-options`;
   const productListId = `${mode}-product-options`;
   const productIdListId = `${mode}-product-id-options`;
   const facilityListId = `${mode}-facility-options`;
+
+  const hasActiveInventoryAllocation =
+    order?.inventoryAllocated === true && order?.inventoryRestored !== true;
 
   function applyPatientAutofill(value: string) {
     const clean = value.trim().toLowerCase();
@@ -184,24 +182,13 @@ export function OrderModal({
             </datalist>
 
             <div>
-              <label htmlFor={`${mode}-status`} className={typography.formLabel}>
+              <label className={typography.formLabel}>
                 Status
               </label>
 
-              <select
-                id={`${mode}-status`}
-                value={form.status}
-                onChange={(event) =>
-                  onChange("status", event.target.value as OrderStatus)
-                }
-                className={`${glass.select} mt-2`}
-              >
-                {statusOptions.map((status) => (
-                  <option key={status.value} value={status.value}>
-                    {status.label}
-                  </option>
-                ))}
-              </select>
+              <p className={`${glass.input} mt-2 px-4 py-3`}>
+                {form.status}
+              </p>
             </div>
 
             <div>
@@ -252,6 +239,7 @@ export function OrderModal({
               onBlur={() => applyProductAutofill(form.productId)}
               list={productIdListId}
               required
+              disabled={hasActiveInventoryAllocation}
             />
 
             <TextField
@@ -299,6 +287,7 @@ export function OrderModal({
               onChange={(value) => onChange("quantity", value)}
               inputMode="numeric"
               required
+              disabled={hasActiveInventoryAllocation}
             />
 
             <div className="md:col-span-2">
@@ -355,6 +344,7 @@ function TextField({
   inputMode,
   list,
   onBlur,
+  disabled,
 }: {
   id: string;
   label: string;
@@ -364,6 +354,7 @@ function TextField({
   inputMode?: HTMLAttributes<HTMLInputElement>["inputMode"];
   list?: string;
   onBlur?: () => void;
+  disabled?: boolean;
 }) {
   return (
     <div>
@@ -380,10 +371,8 @@ function TextField({
         className={`${glass.input} mt-2 px-4 py-3`}
         inputMode={inputMode}
         list={list}
+        disabled={disabled}
       />
     </div>
   );
 }
-
-
-

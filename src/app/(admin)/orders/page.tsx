@@ -485,6 +485,7 @@ export default function OrdersPage() {
             patientOptions={autofill.patients}
             productOptions={autofill.products}
             facilityOptions={autofill.facilities}
+            order={orders.find((item) => item.id === editingOrderId)}
             onSave={() =>
               void saveEditOrder({
                 editingOrderId,
@@ -531,10 +532,3 @@ export default function OrdersPage() {
     </main>
   );
 }
-
-
-
-
-
-
-

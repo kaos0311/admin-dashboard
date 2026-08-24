@@ -1,5 +1,8 @@
+"use client";
+
 import { doc, onSnapshot, serverTimestamp, setDoc } from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
+
 import { db, storage } from "@/lib/firebase";
 import type { ReportType } from "@/lib/reportTypes";
 
@@ -7,8 +10,11 @@ export type ImportJobSnapshot = {
   id: string;
   status?: "uploaded" | "processing" | "completed" | "failed" | string;
   fileName?: string;
+  safeFileName?: string;
   fileType?: "csv" | string;
   reportType?: string;
+  storagePath?: string;
+  downloadURL?: string;
   processedRows?: number;
   totalRows?: number;
   skippedHospiceRows?: number;
@@ -77,17 +83,36 @@ export function watchImportJob(
   jobId: string,
   callback: (snapshot: ImportJobSnapshot | null) => void
 ) {
-  return onSnapshot(doc(db, "importJobs", jobId), (snapshot) => {
-    if (!snapshot.exists()) {
-      callback(null);
-      return;
-    }
+  if (!jobId) {
+    console.error("IMPORT JOB LISTENER FAILED: missing jobId");
+    callback(null);
+    return () => {};
+  }
 
-    callback({
-      id: snapshot.id,
-      ...(snapshot.data() as Omit<ImportJobSnapshot, "id">),
-    });
-  });
+  return onSnapshot(
+    doc(db, "importJobs", jobId),
+    (snapshot) => {
+      if (!snapshot.exists()) {
+        callback(null);
+        return;
+      }
+
+      callback({
+        id: snapshot.id,
+        ...(snapshot.data() as Omit<ImportJobSnapshot, "id">),
+      });
+    },
+    (error) => {
+      console.error("IMPORT JOB LISTENER FAILED:", {
+        jobId,
+        code: error.code,
+        message: error.message,
+        name: error.name,
+      });
+
+      callback(null);
+    }
+  );
 }
 
 /**

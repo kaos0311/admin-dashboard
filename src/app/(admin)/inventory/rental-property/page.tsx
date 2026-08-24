@@ -8,6 +8,7 @@ import { ArrowLeft, Building2, RefreshCcw } from "lucide-react";
 import { buttons, colors, glass, tiles, typography } from "@/theme";
 
 import { useAuthRole } from "@/app/hooks/useAuthRole";
+import { hasPermission } from "@/lib/permissions/roles";
 
 import { InventoryEmptyState } from "../components/InventoryEmptyState";
 import { InventoryFacilityRentalTiles } from "../components/InventoryFacilityRentalTiles";
@@ -18,10 +19,13 @@ import { buildRentalFacilityTiles } from "../lib/rentalProperty";
 export default function InventoryRentalPropertyPage() {
   const {
     loading: authLoading,
-    isAdminOrStaff,
+    role,
+    canAccessCommandCenter,
   } = useAuthRole();
 
-  const canRead = isAdminOrStaff;
+  const canRead =
+    canAccessCommandCenter &&
+    hasPermission(role, "inventory:read");
 
   const [refreshKey, setRefreshKey] = useState(0);
   const [selectedFacilityTileId, setSelectedFacilityTileId] = useState("");

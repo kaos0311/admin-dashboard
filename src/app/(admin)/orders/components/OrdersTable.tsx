@@ -186,8 +186,7 @@ export function OrdersTable({
                           Edit
                         </ActionButton>
 
-                        {order.status !== "ready" &&
-                        order.status !== "archived" ? (
+                        {order.status === "processing" ? (
                           <ActionButton
                             label="Mark ready"
                             disabled={isSaving}
@@ -201,25 +200,8 @@ export function OrdersTable({
                           </ActionButton>
                         ) : null}
 
-                        {order.status !== "delivered" &&
-                        order.status !== "archived" ? (
-                          <ActionButton
-                            label="Mark delivered"
-                            disabled={isSaving}
-                            onClick={() =>
-                              onUpdateStatus(order.id, "delivered")
-                            }
-                          >
-                            <CheckCircle2
-                              className="h-4 w-4"
-                              aria-hidden={true}
-                            />
-                            Delivered
-                          </ActionButton>
-                        ) : null}
-
-                        {order.status !== "cancelled" &&
-                        order.status !== "archived" ? (
+                        {order.status === "processing" ||
+                        order.status === "ready" ? (
                           <ActionButton
                             label="Cancel order"
                             disabled={isSaving}
@@ -301,4 +283,3 @@ function ActionButton({
     </button>
   );
 }
-

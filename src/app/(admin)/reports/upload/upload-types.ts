@@ -240,6 +240,9 @@ export type AuthRoleState = {
   isAdmin?: boolean;
   isStaff?: boolean;
   isTank?: boolean;
+  canUploadReports?: boolean;
+  canRefreshImports?: boolean;
+  canDeleteImports?: boolean;
   error?: string | Error | null;
 };
 

@@ -13,7 +13,7 @@ export function WipHero({ onRefresh }: WipHeroProps) {
   return (
     <section className={glass.panel}>
       <div className={spacing.card}>
-        <div className="flex min-w-0 flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex min-w-0 flex-col gap-5">
           <div className="min-w-0">
             <div className={glass.chip}>
               <Wrench className="h-3.5 w-3.5" aria-hidden="true" />
@@ -47,4 +47,3 @@ export function WipHero({ onRefresh }: WipHeroProps) {
     </section>
   );
 }
-

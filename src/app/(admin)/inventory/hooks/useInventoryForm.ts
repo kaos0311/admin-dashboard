@@ -65,13 +65,48 @@ export function useInventoryForm() {
     }
   }, []);
 
+  /**
+   * Update only server-controlled stock fields without overwriting
+   * unsaved user edits in name, category, manufacturer, or other fields.
+   */
+  const syncStockFields = useCallback(function syncStockFields(
+    item: InventoryItem
+  ) {
+    setForm((previous) => {
+      if (!previous.id || previous.id !== item.id) {
+        return previous;
+      }
+
+      const nextQuantityOnHand = String(item.quantityOnHand);
+      const nextCommitted = String(item.committed);
+      const nextOnRent = String(item.onRent);
+      const nextOnOrder = String(item.onOrder);
+
+      if (
+        previous.quantityOnHand === nextQuantityOnHand &&
+        previous.committed === nextCommitted &&
+        previous.onRent === nextOnRent &&
+        previous.onOrder === nextOnOrder
+      ) {
+        return previous;
+      }
+
+      return {
+        ...previous,
+        quantityOnHand: nextQuantityOnHand,
+        committed: nextCommitted,
+        onRent: nextOnRent,
+        onOrder: nextOnOrder,
+      };
+    });
+  }, []);
+
   return {
     form,
     setForm,
     updateForm,
     resetForm,
     editItem,
+    syncStockFields,
   };
 }
-
-

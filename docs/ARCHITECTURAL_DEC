@@ -1,0 +1,255 @@
+# Architectural Decisions — Advanced Home Medical Admin Dashboard
+
+> **Purpose:** Record key architectural decisions, their context, and
+> consequences. Use this to understand *why* the codebase is structured the
+> way it is.
+
+---
+
+## Decision Record Format
+
+Each decision follows:
+
+- **Decision** — what was decided
+- **Context** — why it was needed
+- **Consequences** — what trade-offs it introduces
+
+---
+
+## ADR-001: Layered Architecture
+
+**Status:** Active
+
+**Decision:** The application follows a strict layered architecture:
+`UI -> Hooks -> Services -> Repositories -> Database`.
+
+**Context:** The codebase grew organically with business logic in pages and
+direct Firestore writes from client code. This made the code hard to test and
+maintain. The v2 architecture (`docs/v2-architecture.md`) formalized the
+layers.
+
+**Consequences:**
+- Clear separation of concerns
+- Testable business logic (services have no React dependency)
+- Enforced dependency direction prevents circular imports
+- Requires discipline — client-side Firestore writes still exist in legacy code
+
+---
+
+## ADR-002: Dual-Database Architecture (Firestore + PostgreSQL)
+
+**Status:** Active
+
+**Decision:** Use Cloud Firestore for operational/realtime data and PostgreSQL
+(via Prisma) for structured/relational data.
+
+**Context:** The application needs both realtime operational data (patients,
+inventory, orders) and structured relational data (equipment, customers,
+manufacturers, work orders). Firestore excels at realtime sync but lacks
+relational integrity. PostgreSQL provides relational integrity but requires
+more setup for realtime.
+
+**Consequences:**
+- Realtime data syncs via Firestore `onSnapshot`
+- Relational integrity enforced via Prisma foreign keys
+- Dual audit log systems (Firestore `auditLogs` + Postgres `AuditLog`) — known
+  tech debt, see `PRODUCTION_READINESS.md`
+- Data synchronization between stores is a manual concern
+
+---
+
+## ADR-003: Firebase Cloud Functions for High-Risk Operations
+
+**Status:** Active
+
+**Decision:** All high-risk operations (inventory movements, domain workflows,
+audit logging, user management) are implemented as Firebase Cloud Functions
+(`onCall`), not client-side writes.
+
+**Context:** Client-side Firestore writes bypass server-side validation,
+authorization, and audit logging. Moving high-risk operations to Cloud
+Functions ensures they are enforced server-side.
+
+**Consequences:**
+- Server-side authorization via `requireStaffOrAdmin(request)`
+- Immutable audit logs (`auditLogs` collection, Cloud Functions only)
+- Immutable inventory transactions (`inventoryTransactions`, Cloud Functions only)
+- Protected fields in Firestore rules prevent client-side modification
+- Legacy client-side writes (`firestoreSafeActions.ts`, `inventory.ts`) are
+  known tech debt
+
+---
+
+## ADR-004: RBAC with Custom Claims
+
+**Status:** Active
+
+**Decision:** Use Firebase Auth custom claims (`request.auth.token.role`) as
+the primary role source, with Firestore profile (`users/{uid}.role`) as
+fallback.
+
+**Context:** Firestore security rules need to resolve the user's role
+synchronously. Custom claims are available in `request.auth.token` without
+additional reads. The profile fallback handles cases where claims are not yet
+set.
+
+**Consequences:**
+- Role resolution: `claimRole() -> profileRole() -> ""`
+- Firestore rules recognize `admin`, `tank`, `staff` only
+- App-level roles (`manager`, `technician`, `billing`, `read-only`) are
+  defined in `src/lib/permissions/roles.ts` but not in Firestore rules
+- Claim propagation delay after role change (requires token refresh)
+
+---
+
+## ADR-005: Protected Fields in Firestore Rules
+
+**Status:** Active
+
+**Decision:** Firestore security rules define protected field lists for
+inventory, delivery workflows, rental workflows, patient equipment, and
+patient lifecycle. Client-side updates cannot modify these fields.
+
+**Context:** Stock fields (`quantityOnHand`, `available`, etc.) and workflow
+fields (`status`, `completedAt`, etc.) must only be modified by Cloud
+Functions to prevent race conditions and unauthorized state changes.
+
+**Consequences:**
+- Client-side creates must have safe stock defaults (all zeros)
+- Client-side updates cannot change protected fields
+- Cloud Functions (`movementService.ts`) are the only path to modify stock
+- Rules are complex (723 lines) and require careful maintenance
+
+---
+
+## ADR-006: Next.js App Router
+
+**Status:** Active
+
+**Decision:** Use the Next.js 16 App Router (not Pages Router).
+
+**Context:** The App Router provides nested layouts, server components, streaming,
+and colocated API routes. It is the recommended approach for new Next.js
+applications.
+
+**Consequences:**
+- Route groups: `(admin)/` for authenticated pages, `(auth)/` for login
+- Server components for data fetching, client components for interactivity
+- `"use client"` directive required for interactive components
+- `error.tsx` boundaries for error handling per route segment
+
+---
+
+## ADR-007: Prisma for PostgreSQL Access
+
+**Status:** Active
+
+**Decision:** Use Prisma 7 as the ORM for PostgreSQL, with the
+`@prisma/adapter-pg` adapter.
+
+**Context:** Prisma provides type-safe database access, migrations, and a
+generated client. The `adapter-pg` allows using the `pg` driver directly.
+
+**Consequences:**
+- Type-safe queries with auto-generated types
+- Schema defined in `prisma/schema.prisma`
+- Generated client in `src/generated/prisma/`
+- Global singleton in `src/lib/prisma.ts`
+- Known issue: Pool created at import time (not lazy) — see
+  `PRODUCTION_READINESS.md`
+
+---
+
+## ADR-008: Custom Theme System
+
+**Status:** Active
+
+**Decision:** Use a custom design token system in `src/theme/` instead of
+relying solely on Tailwind utilities.
+
+**Context:** The application needs consistent semantic tokens (colors,
+typography, surfaces) that map to business concepts (order status, alert
+levels). A custom theme system provides this abstraction.
+
+**Consequences:**
+- Theme tokens in `src/theme/` (colors, typography, spacing, surfaces, etc.)
+- `ThemeProvider.tsx` for context
+- `ThemeToggle.tsx` for light/dark mode
+- Tailwind v4 for utility classes, theme system for semantic tokens
+- Known issue: potential CSS conflicts between Tailwind and theme tokens
+
+---
+
+## ADR-009: Vitest for Testing
+
+**Status:** Active
+
+**Decision:** Use Vitest 4 as the test runner for both the application and
+Cloud Functions.
+
+**Context:** Vitest is fast, has native ESM support, and integrates with
+Vite/Next.js. It supports globals, watch mode, and coverage.
+
+**Consequences:**
+- Globals enabled (no imports for `describe`, `it`, `expect`)
+- Environment: `node` (not jsdom)
+- Path alias: `@` -> `src/`
+- Coverage: V8 provider, currently scoped to `src/lib/permissions/roles.ts`
+- Separate configs for application, functions unit, and functions integration
+
+---
+
+## ADR-010: PowerShell 7 for Engineering Automation
+
+**Status:** Active
+
+**Decision:** Use PowerShell 7 (`pwsh`) for all engineering automation scripts.
+
+**Context:** PowerShell 7 is cross-platform, has strict mode, and provides
+reliable exit code handling. The team uses Windows 11 with VS Code.
+
+**Consequences:**
+- All scripts require `#Requires -Version 7.0`
+- `Set-StrictMode -Version Latest`
+- `$ErrorActionPreference = 'Stop'`
+- Shared helpers in `scripts/toolkit/toolkit-common.ps1`
+- Scripts are read-only — no modifications to application code
+
+---
+
+## ADR-011: Immutable Audit and Transaction Logs
+
+**Status:** Active
+
+**Decision:** `auditLogs` and `inventoryTransactions` collections are
+immutable — only Cloud Functions may create entries, and no updates or
+deletes are allowed.
+
+**Context:** HIPAA requires non-repudiable audit trails. Inventory
+transactions must be an immutable ledger for financial accuracy.
+
+**Consequences:**
+- Firestore rules: `allow create: if false; allow update, delete: if false;`
+  for these collections (Cloud Functions use Admin SDK, bypassing rules)
+- Corrections are made via compensating entries, not edits
+- Audit log reads are admin-only
+
+---
+
+## ADR-012: Import Pipeline Architecture
+
+**Status:** Active
+
+**Decision:** The import pipeline uses a queue-based architecture with
+Cloud Functions triggers and workers.
+
+**Context:** Large CSV/PDF imports need to be processed asynchronously
+with progress tracking, retry logic, and cleanup.
+
+**Consequences:**
+- `importFileFromStorage` — Storage trigger, creates import job
+- `processImportWorkerQueue` — Worker processes queued rows
+- `scheduledImportCleanup` — Scheduled cleanup of old jobs
+- `reprocessImportJobFromFirestore` — Manual reprocessing
+- Import jobs have `rows` subcollections for row-level data
+- Collection group queries on `rows` require composite indexes

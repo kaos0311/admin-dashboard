@@ -129,6 +129,215 @@ service cloud.firestore {
         && optionalTimestamp(data, "updatedAt");
     }
 
+    function protectedInventoryFields() {
+      return [
+        "quantityOnHand",
+        "available",
+        "onRent",
+        "onTruck",
+        "committed",
+        "allocated",
+        "reserved",
+        "patientId",
+        "patientKey",
+        "patientName",
+        "rentalId",
+        "locationId",
+        "warehouseId",
+        "status",
+        "inventoryStatus",
+        "rentalStatus",
+        "assignmentStatus",
+        "lifecycleStatus",
+        "isDeleted",
+        "deleted",
+        "deletedAt",
+        "archived",
+        "discontinued"
+      ];
+    }
+
+    function inventoryCreateHasSafeStockDefaults(data) {
+      return (!("quantityOnHand" in data) || data.quantityOnHand == 0)
+        && (!("available" in data) || data.available == 0)
+        && (!("onRent" in data) || data.onRent == 0)
+        && (!("onTruck" in data) || data.onTruck == 0)
+        && (!("committed" in data) || data.committed == 0)
+        && (!("allocated" in data) || data.allocated == 0)
+        && (!("reserved" in data) || data.reserved == 0)
+        && (!("patientId" in data) || data.patientId == "")
+        && (!("patientKey" in data) || data.patientKey == "")
+        && (!("patientName" in data) || data.patientName == "")
+        && (!("rentalId" in data) || data.rentalId == "")
+        && (!("locationId" in data) || data.locationId == "")
+        && (!("warehouseId" in data) || data.warehouseId == "")
+        && (!("status" in data) || data.status == "available")
+        && (!("inventoryStatus" in data) || data.inventoryStatus == "")
+        && (!("rentalStatus" in data) || data.rentalStatus == "")
+        && (!("assignmentStatus" in data) || data.assignmentStatus == "")
+        && (!("lifecycleStatus" in data) || data.lifecycleStatus == "active")
+        && (!("isDeleted" in data) || data.isDeleted == false)
+        && (!("deleted" in data) || data.deleted == false)
+        && (!("deletedAt" in data) || data.deletedAt == null)
+        && (!("archived" in data) || data.archived == false)
+        && (!("discontinued" in data) || data.discontinued == false);
+    }
+
+    function inventoryUpdateDoesNotChangeProtectedFields() {
+      return !request.resource.data.diff(resource.data).affectedKeys()
+        .hasAny(protectedInventoryFields());
+    }
+
+    function protectedDeliveryWorkflowFields() {
+      return [
+        "loadedScanCount",
+        "deliveredScanCount",
+        "returnedScanCount",
+        "damagePhotoCount",
+        "lastDamagePhotoUploadedAt",
+        "fulfillmentStatus",
+        "fulfillmentLines",
+        "completedAt",
+        "completedByUid",
+        "completedByEmail",
+        "signatureStatus",
+        "signatureId",
+        "signatureStoragePath",
+        "signatureDownloadURL",
+        "signedByName",
+        "signedByRole",
+        "signerRelationship",
+        "witnessName",
+        "refusalReason",
+        "signedAt",
+        "signedByCapturedUser",
+        "signedByCapturedEmail",
+        "lastTechLatitude",
+        "lastTechLongitude",
+        "lastTechAccuracy",
+        "lastTechName",
+        "lastTechLocationAt",
+        "etaMinutes",
+        "routeSequence",
+        "routeStatus",
+        "routeNotes",
+        "routeUpdatedBy",
+        "routeUpdatedByEmail",
+        "routeUpdatedAt",
+        "workflowStatus",
+        "workflowCompletedAt"
+      ];
+    }
+
+    function protectedRentalWorkflowFields() {
+      return [
+        "status",
+        "patientId",
+        "patientName",
+        "inventoryItemId",
+        "itemId",
+        "checkedOutAt",
+        "checkedOutByUid",
+        "checkedOutByEmail",
+        "returnedDate",
+        "returnedAt",
+        "returnedByUid",
+        "returnedByEmail",
+        "returnMovementId",
+        "movementId",
+        "cancelledAt",
+        "cancelledByUid",
+        "cancelledByEmail",
+        "previousInventoryItemId",
+        "exchangedAt",
+        "exchangedByUid",
+        "exchangedByEmail",
+        "exchangeReturnMovementId",
+        "exchangeCheckoutMovementId"
+      ];
+    }
+
+    function protectedRentalCreateFields() {
+      return [
+        "patientId",
+        "patientName",
+        "inventoryItemId",
+        "itemId",
+        "checkedOutAt",
+        "checkedOutByUid",
+        "checkedOutByEmail",
+        "returnedDate",
+        "returnedAt",
+        "returnedByUid",
+        "returnedByEmail",
+        "returnMovementId",
+        "movementId",
+        "cancelledAt",
+        "cancelledByUid",
+        "cancelledByEmail",
+        "previousInventoryItemId",
+        "exchangedAt",
+        "exchangedByUid",
+        "exchangedByEmail",
+        "exchangeReturnMovementId",
+        "exchangeCheckoutMovementId"
+      ];
+    }
+
+    function protectedPatientEquipmentFields() {
+      return [
+        "inventoryId",
+        "productId",
+        "status",
+        "assignedAt",
+        "assignedByUid",
+        "assignedByEmail",
+        "closedAt",
+        "closedByUid",
+        "closedByEmail",
+        "movementId",
+        "deliveryTicketId",
+        "deliveryTicketNumber",
+        "deliveredAt",
+        "returnedAt",
+        "returnMovementId",
+        "transferredAt",
+        "transferredByUid",
+        "transferredByEmail",
+        "transferredFromPatientId",
+        "replacementInventoryItemId",
+        "replacesInventoryItemId",
+        "closeReason",
+        "systemGenerated"
+      ];
+    }
+
+    function protectedPatientLifecycleFields() {
+      return [
+        "status",
+        "archivedAt",
+        "restoredAt",
+        "destroyedAt",
+        "tombstoned",
+        "lifecycleUpdatedByUid",
+        "lifecycleUpdatedByEmail",
+        "lifecycleReason"
+      ];
+    }
+
+    function workflowFieldsUnchanged(fields) {
+      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(fields);
+    }
+
+    function validDraftRentalCreate(data) {
+      return data.status == "draft"
+        && !data.keys().hasAny(protectedRentalCreateFields());
+    }
+
+    function notSystemGeneratedTimeline(data) {
+      return !("systemGenerated" in data) || data.systemGenerated == false;
+    }
+
     function isSelf(userId) {
       return isSignedIn() && request.auth.uid == userId;
     }
@@ -187,7 +396,11 @@ service cloud.firestore {
 
     match /products/{docId} {
       allow read: if isStaffOrAdmin();
-      allow write: if isStaffOrAdmin();
+      allow create: if isStaffOrAdmin();
+      allow update: if isStaffOrAdmin()
+        && !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(["quantityOnHand", "available", "onRent", "committed", "reserved", "allocated"]);
+      allow delete: if isAdmin();
     }
 
     match /hcpcsCodes/{docId} {
@@ -202,13 +415,22 @@ service cloud.firestore {
 
     match /inventory/{docId} {
       allow read: if isStaffOrAdmin();
-      allow write: if isStaffOrAdmin();
+      allow create: if isStaffOrAdmin()
+        && inventoryCreateHasSafeStockDefaults(request.resource.data);
+      allow update: if isStaffOrAdmin()
+        && inventoryUpdateDoesNotChangeProtectedFields();
+      allow delete: if false;
     }
 
     match /stockMovements/{docId} {
       allow read: if isStaffOrAdmin();
-      allow create: if isStaffOrAdmin();
-      allow update, delete: if isAdmin();
+      allow create: if false; // Only Cloud Functions may author movement history
+      allow update, delete: if false;
+    }
+
+    match /inventoryOperations/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow write: if false; // Only Cloud Functions may create idempotency records
     }
 
     match /cpapSetupAppointments/{docId} {
@@ -235,7 +457,11 @@ service cloud.firestore {
 
     match /rentals/{docId} {
       allow read: if isStaffOrAdmin();
-      allow write: if isStaffOrAdmin();
+      allow create: if isStaffOrAdmin()
+        && validDraftRentalCreate(request.resource.data);
+      allow update: if isStaffOrAdmin()
+        && workflowFieldsUnchanged(protectedRentalWorkflowFields());
+      allow delete: if false;
     }
 
     match /rolodexContacts/{docId} {
@@ -318,7 +544,10 @@ service cloud.firestore {
 
     match /patients/{docId} {
       allow read: if isStaffOrAdmin();
-      allow write: if isStaffOrAdmin();
+      allow create: if isStaffOrAdmin();
+      allow update: if isStaffOrAdmin()
+        && workflowFieldsUnchanged(protectedPatientLifecycleFields());
+      allow delete: if false;
 
       match /documents/{documentId} {
         allow read: if isStaffOrAdmin();
@@ -328,13 +557,18 @@ service cloud.firestore {
 
       match /equipment/{equipmentId} {
         allow read: if isStaffOrAdmin();
-        allow create, update: if isStaffOrAdmin();
+        allow create: if isStaffOrAdmin()
+          && !request.resource.data.keys().hasAny(protectedPatientEquipmentFields());
+        allow update: if isStaffOrAdmin()
+          && workflowFieldsUnchanged(protectedPatientEquipmentFields())
+          && notSystemGeneratedTimeline(request.resource.data);
         allow delete: if isAdmin();
       }
 
       match /timeline/{timelineId} {
         allow read: if isStaffOrAdmin();
-        allow create: if isStaffOrAdmin();
+        allow create: if isStaffOrAdmin()
+          && notSystemGeneratedTimeline(request.resource.data);
         allow update, delete: if isAdmin();
       }
     }
@@ -376,30 +610,33 @@ service cloud.firestore {
 
     match /patientDeliveryTickets/{docId} {
       allow read: if isStaffOrAdmin();
-      allow write: if isStaffOrAdmin();
+      allow create: if isStaffOrAdmin();
+      allow update: if isStaffOrAdmin()
+        && workflowFieldsUnchanged(protectedDeliveryWorkflowFields());
+      allow delete: if isAdmin();
     }
 
     match /deliveryFulfillmentScans/{docId} {
       allow read: if isStaffOrAdmin();
-      allow create: if isStaffOrAdmin();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /deliverySignatures/{docId} {
       allow read: if isStaffOrAdmin();
-      allow create: if isStaffOrAdmin();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /deliveryDamagePhotos/{docId} {
       allow read: if isStaffOrAdmin();
-      allow create: if isStaffOrAdmin();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
     match /deliveryTechLocations/{docId} {
       allow read: if isAdmin();
-      allow create: if isStaffOrAdmin();
+      allow create: if false;
       allow update, delete: if isAdmin();
     }
 
@@ -503,10 +740,18 @@ service cloud.firestore {
       allow write: if isStaffOrAdmin();
     }
 
+    match /inventoryTransactions/{docId} {
+      allow read: if isStaffOrAdmin();
+      allow create: if false; // Only Cloud Functions may create entries
+      allow update: if false; // Transaction records are immutable
+      allow delete: if false; // Transaction records are immutable
+    }
+
     match /auditLogs/{docId} {
       allow read: if isAdmin();
-      allow create: if isStaffOrAdmin() || isTank();
-      allow update, delete: if false;
+      allow create: if false; // Only Cloud Functions may create entries
+      allow update: if false; // Audit records are immutable
+      allow delete: if false; // Audit records are immutable
     }
 
     match /phiAlerts/{docId} {

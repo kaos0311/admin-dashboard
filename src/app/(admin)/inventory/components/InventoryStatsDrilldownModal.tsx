@@ -15,6 +15,7 @@ import { useInventoryActions } from "../hooks/useInventoryActions";
 import { useInventoryForm } from "../hooks/useInventoryForm";
 import type { InventoryItem, ScanTarget } from "../lib/inventoryTypes";
 import { auth } from "@/lib/firebase";
+import { identifyInventoryProduct } from "@/services/inventory/inventory-jarvis.service";
 
 import { InventoryForm } from "./InventoryForm";
 import { JarvisNoticeModal } from "./JarvisNoticeModal";
@@ -67,6 +68,7 @@ export function InventoryStatsDrilldownModal({
     updateForm,
     resetForm,
     editItem,
+    syncStockFields,
   } = useInventoryForm();
 
   const selectedItem = useMemo(
@@ -79,6 +81,7 @@ export function InventoryStatsDrilldownModal({
     handleScanMovement,
   } = useInventoryActions({
     form,
+    items,
     canWrite,
     isAdmin,
     selectedIds: [],
@@ -99,9 +102,22 @@ export function InventoryStatsDrilldownModal({
       return;
     }
 
+    if (selectedItemId && nextItem.id === selectedItemId) {
+      return;
+    }
+
     setSelectedItemId(nextItem.id);
     editItem(nextItem, { scroll: false });
   }, [editItem, items, open, resetForm, selectedItemId]);
+
+  useEffect(() => {
+    if (!open || !form.id) return;
+
+    const liveItem = items.find((item) => item.id === form.id);
+    if (!liveItem) return;
+
+    syncStockFields(liveItem);
+  }, [items, form.id, open, syncStockFields]);
 
   if (!open) return null;
 
@@ -113,6 +129,45 @@ export function InventoryStatsDrilldownModal({
   function openScanner(target: ScanTarget) {
     setScanTarget(target);
     setScannerOpen(true);
+  }
+
+  async function handleInventoryMovementScan(
+    clean: string,
+    direction: "in" | "out",
+  ) {
+    try {
+      const success =
+        await handleScanMovement(clean, direction);
+
+      if (!success) {
+        return;
+      }
+
+      setScanSuccess({
+        title:
+          direction === "in"
+            ? "Scan In Complete"
+            : "Scan Out Complete",
+        message:
+          direction === "in"
+            ? `${clean} was saved to inventory successfully.`
+            : `${clean} was removed from available inventory successfully.`,
+      });
+    } catch (error: unknown) {
+      console.error(
+        "INVENTORY DRILLDOWN SCAN ERROR:",
+        {
+          direction,
+          error,
+        },
+      );
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Inventory scan could not be completed.",
+      );
+    }
   }
 
   function handleScanDetected(code: string) {
@@ -128,25 +183,17 @@ export function InventoryStatsDrilldownModal({
         break;
 
       case "scanIn":
-        void handleScanMovement(clean, "in").then((success) => {
-          if (!success) return;
-
-          setScanSuccess({
-            title: "Scan In Complete",
-            message: `${clean} was saved to inventory successfully.`,
-          });
-        });
+        void handleInventoryMovementScan(
+          clean,
+          "in",
+        );
         return;
 
       case "scanOut":
-        void handleScanMovement(clean, "out").then((success) => {
-          if (!success) return;
-
-          setScanSuccess({
-            title: "Scan Out Complete",
-            message: `${clean} was removed from available inventory successfully.`,
-          });
-        });
+        void handleInventoryMovementScan(
+          clean,
+          "out",
+        );
         return;
 
       default:
@@ -172,32 +219,13 @@ export function InventoryStatsDrilldownModal({
     setJarvisIdentifying(true);
 
     try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch("/api/jarvis/product-enrichment", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          mode: "identifyInventory",
-          inventoryId: form.id,
-          code: form.barcode || form.sku || form.serial,
-        }),
+      const result = await identifyInventoryProduct({
+        currentUser,
+        inventoryId: form.id,
+        code: form.barcode || form.sku || form.serial,
       });
-      const result = (await response.json()) as {
-        error?: string;
-        product?: {
-          name?: string;
-          category?: string;
-          sku?: string;
-          barcode?: string;
-          manufacturer?: string;
-          modelNumber?: string;
-        };
-      };
 
-      if (!response.ok) {
+      if (!result.ok) {
         setJarvisNotice({
           title: "No Matching Product Found",
           message:

@@ -6,7 +6,6 @@ import { Loader2, Package2, RefreshCcw, Trash2 } from "lucide-react";
 type ProductHeroProps = {
   loadingProducts: boolean;
   purging: boolean;
-  productsCount: number;
   isAdmin: boolean;
   onRefresh: () => void;
   onPurge: () => void;
@@ -15,7 +14,6 @@ type ProductHeroProps = {
 export function ProductHero({
   loadingProducts,
   purging,
-  productsCount,
   isAdmin,
   onRefresh,
   onPurge,
@@ -61,8 +59,8 @@ export function ProductHero({
           <button
             type="button"
             onClick={onPurge}
-            disabled={!isAdmin || purging || productsCount === 0}
-            aria-label="Purge loaded products"
+            disabled={!isAdmin || purging}
+            aria-label="Purge products"
             className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-red-400/20 bg-red-400/10 px-5 py-3 text-sm font-semibold text-red-200 shadow-lg shadow-black/20 transition hover:bg-red-400/20 focus:outline-none focus:ring-2 focus:ring-red-300/30 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {purging ? (
@@ -71,7 +69,7 @@ export function ProductHero({
               <Trash2 className="h-4 w-4 shrink-0" />
             )}
 
-            <span>Purge Loaded</span>
+            <span>Purge Products</span>
           </button>
         </div>
       </div>

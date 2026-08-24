@@ -1,30 +1,78 @@
 "use client";
 
-import type { FormEvent } from "react";
-import {
-  collection,
-  deleteDoc,
-  doc,
-  getDoc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-  writeBatch,
-} from "firebase/firestore";
+import { type FormEvent, useRef } from "react";
 import toast from "react-hot-toast";
 
 import { normalizeBarcode } from "@/lib/barcode";
-import { auth, db } from "@/lib/firebase";
+import { auth } from "@/lib/firebase";
+import {
+  createInventoryMovement,
+  createInventoryOperationId,
+} from "@/lib/inventory/movements";
+import { isRetryableInventoryTransactionError } from "@/hooks/useInventoryLookup";
+import { receiveScannedInventoryIntake as receiveScannedInventoryIntakeOnce } from "@/lib/inventory/receive-scanned-inventory-intake";
+import type {
+  ReceiveScannedInventoryIntakeRequest,
+  ReceiveScannedInventoryIntakeResponse,
+} from "@/lib/inventory/receive-scanned-inventory-intake.types";
+import {
+  buildFrozenScanIntakeRequest,
+  executeScanIntakeWithRetry,
+} from "@/lib/inventory/scan-intake-retry";
 import { smartMergeInventory } from "@/lib/inventory/smartMergeInventory";
+import { updateManualInventoryMetadata } from "@/lib/inventory/manualInventoryMetadataUpdate";
+import { InventoryRepository } from "@/repositories/firestore/inventory.repository";
+import { identifyInventoryProduct } from "@/services/inventory/inventory-jarvis.service";
+import { resolveInventoryScanForIntake } from "@/services/inventory/inventory-scan-adapter";
 
-import { FIRESTORE_BATCH_LIMIT } from "../lib/inventoryConstants";
+import {
+  armResolvedNewSaveMovementState,
+  buildSaveMovementFingerprint,
+  completeSaveMovementState,
+  createResolvedNewSaveMovementState,
+  reconcileSaveMovementState,
+  type SaveMovementState,
+} from "../lib/saveMovementLifecycle";
+import {
+  type ManualUpsertOperationState,
+  resolveManualUpsertOperation,
+} from "../lib/manualUpsertOperationLifecycle";
+import {
+  type BatchMutationLedger,
+  type BatchMutationType,
+  createBatchMutationLedger,
+  executeBatchMutationLedger,
+  getCompletedBatchItemIds,
+  hasResumableBatchMutationWork,
+  summarizeBatchMutation,
+} from "../lib/batchMutationLifecycle";
+import {
+  createDiscontinueRetryState,
+  type DiscontinueRetryState,
+  executeDiscontinueWithRetry,
+  markDiscontinueOutcomeUncertain,
+} from "../lib/discontinueLifecycle";
+import {
+  type ArchiveRetryState,
+  createArchiveRetryState,
+  executeArchiveWithRetry,
+  markArchiveOutcomeUncertain,
+} from "../lib/archiveLifecycle";
+import {
+  createHardDeleteRetryState,
+  executeHardDeleteWithRetry,
+  type HardDeleteRetryState,
+  markHardDeleteOutcomeUncertain,
+} from "../lib/hardDeleteLifecycle";
+import {
+  runCanonicalScanMovement,
+  type ScanOutReason,
+} from "../lib/scanMovementAuthority";
 import { isLowStock } from "../lib/inventoryAlerts";
-import { buildSearchText, chunkArray, toSafeNumber } from "../lib/inventoryNormalize";
+import { buildSearchText, toSafeNumber } from "../lib/inventoryNormalize";
 import { logInventoryMovement } from "../lib/inventoryMovements";
 import { ensureProductFromInventory } from "../lib/inventoryProductSync";
+import { buildExistingInventoryMetadataUpdateRequest } from "../lib/existingInventoryMetadataUpdate";
 import type { InventoryForm, InventoryItem } from "../lib/inventoryTypes";
 
 type ProductScanMatch = {
@@ -45,6 +93,7 @@ type ProductScanMatch = {
 
 type UseInventoryActionsArgs = {
   form: InventoryForm;
+  items: InventoryItem[];
   canWrite: boolean;
   isAdmin: boolean;
   selectedIds: string[];
@@ -57,6 +106,7 @@ type UseInventoryActionsArgs = {
 
 export function useInventoryActions({
   form,
+  items,
   canWrite,
   isAdmin,
   selectedIds,
@@ -65,234 +115,148 @@ export function useInventoryActions({
   clearSelected,
   setSaving,
 }: UseInventoryActionsArgs) {
-  async function findInventoryByScan(rawCode: string): Promise<InventoryItem | null> {
-    const clean = normalizeBarcode(rawCode);
-    const upper = clean.toUpperCase();
-    const fields: Array<[keyof InventoryItem, string]> = [
-      ["barcode", clean],
-      ["serial", clean],
-      ["lotNumber", clean],
-      ["sku", clean],
-      ["hcpc", upper],
-    ];
 
-    for (const [field, value] of fields) {
-      if (!value) continue;
+  async function receiveScannedInventoryIntake(
+    request: ReceiveScannedInventoryIntakeRequest,
+  ): Promise<ReceiveScannedInventoryIntakeResponse> {
+    const frozenRequest = buildFrozenScanIntakeRequest(
+      request,
+      request.operationId ??
+        createInventoryOperationId("scan-intake"),
+    );
 
-      const snap = await getDocs(
-        query(collection(db, "inventory"), where(field, "==", value), limit(5))
-      );
-      const match = snap.docs.find((item) => item.data().isDeleted !== true);
-
-      if (match) {
-        const data = match.data() as Record<string, unknown>;
-        return {
-          id: match.id,
-          productId: String(data.productId ?? ""),
-          name: String(data.name ?? ""),
-          category: String(data.category ?? ""),
-          sku: String(data.sku ?? ""),
-          hcpc: String(data.hcpc ?? data.hcpcs ?? ""),
-          barcode: String(data.barcode ?? ""),
-          serial: String(data.serial ?? ""),
-          lotNumber: String(data.lotNumber ?? ""),
-          locationName: String(data.locationName ?? "Main Location"),
-          binLocation: String(data.binLocation ?? ""),
-          quantityOnHand: Number(data.quantityOnHand ?? 0),
-          committed: Number(data.committed ?? 0),
-          onRent: Number(data.onRent ?? 0),
-          onOrder: Number(data.onOrder ?? 0),
-          available: Number(data.available ?? 0),
-          reorderLevel: Number(data.reorderLevel ?? 0),
-          unitCost: Number(data.unitCost ?? 0),
-          totalValue: Number(data.totalValue ?? 0),
-          status: data.status === "inactive" ||
-            data.status === "damaged" ||
-            data.status === "lost" ||
-            data.status === "discontinued"
-            ? data.status
-            : "available",
-          manufacturer: String(data.manufacturer ?? ""),
-          manufacturerItemId: String(data.manufacturerItemId ?? ""),
-          modelNumber: String(data.modelNumber ?? ""),
-          warrantyProvider: String(data.warrantyProvider ?? ""),
-          warrantyStartDate: String(data.warrantyStartDate ?? ""),
-          warrantyEndDate: String(data.warrantyEndDate ?? ""),
-          warrantyNotes: String(data.warrantyNotes ?? ""),
-          purchaseDate: String(data.purchaseDate ?? ""),
-          usefulLifeMonths: Number(data.usefulLifeMonths ?? 0),
-          lifecycleStatus: data.lifecycleStatus === "new" ||
-            data.lifecycleStatus === "needs_service" ||
-            data.lifecycleStatus === "end_of_life" ||
-            data.lifecycleStatus === "retired"
-            ? data.lifecycleStatus
-            : "active",
-          nextServiceDate: String(data.nextServiceDate ?? ""),
-          lifecycleNotes: String(data.lifecycleNotes ?? ""),
-          notes: String(data.notes ?? ""),
-          pendingScanReview: data.pendingScanReview === true,
-          scanSource: String(data.scanSource ?? ""),
-          searchText: String(data.searchText ?? ""),
-          isDeleted: data.isDeleted === true,
-        };
-      }
-    }
-
-    return null;
+    return executeScanIntakeWithRetry({
+      request: frozenRequest,
+      execute: receiveScannedInventoryIntakeOnce,
+      shouldRetry: (failure) => {
+        return window.confirm(
+          `${failure.message}\n\n` +
+            "The server may have completed this Scan In even though the response was not received.\n\n" +
+            "Retry this SAME Scan In now using the same operation ID?"
+        );
+      },
+    });
   }
 
-  async function findProductByScan(rawCode: string): Promise<ProductScanMatch | null> {
-    const clean = normalizeBarcode(rawCode);
-    const upper = clean.toUpperCase();
-    const checks: Array<[string, string]> = [
-      ["upc", clean],
-      ["sku", clean],
-      ["hcpcs", upper],
-      ["manufacturerItemId", clean],
-    ];
+  const saveMovementStateRef = useRef<SaveMovementState | null>(null);
 
-    const directSnap = await getDoc(doc(db, "products", clean.toLowerCase()));
-    if (directSnap.exists() && directSnap.data().deleted !== true) {
-      const data = directSnap.data() as Record<string, unknown>;
+  const batchMutationLedgerRef = useRef(
+    new Map<BatchMutationType, BatchMutationLedger>(),
+  );
+  const batchMutationInFlightRef = useRef(
+    new Set<BatchMutationType>(),
+  );
 
-      return {
-        id: directSnap.id,
-        name: String(data.name ?? ""),
-        category: String(data.category ?? ""),
-        sku: String(data.sku ?? ""),
-        hcpcs: String(data.hcpcs ?? ""),
-        upc: String(data.upc ?? ""),
-        manufacturer: String(data.manufacturer ?? data.brand ?? ""),
-        manufacturerItemId: String(data.manufacturerItemId ?? ""),
-        model: String(data.model ?? ""),
-        defaultPurchasePrice: Number(data.defaultPurchasePrice ?? 0),
-        reorderLevel: Number(data.reorderLevel ?? 0),
-        status: String(data.status ?? "active"),
-        deleted: data.deleted === true,
-      };
+  const discontinueStateRef = useRef(
+    new Map<string, DiscontinueRetryState>(),
+  );
+  const discontinueInFlightRef = useRef(new Set<string>());
+
+  const archiveStateRef = useRef(
+    new Map<string, ArchiveRetryState>(),
+  );
+  const archiveInFlightRef = useRef(new Set<string>());
+
+  const hardDeleteStateRef = useRef(
+    new Map<string, HardDeleteRetryState>(),
+  );
+
+  const manualUpsertOperationRef = useRef<ManualUpsertOperationState | null>(null);
+  const existingMetadataUpdateOperationRef = useRef<ManualUpsertOperationState | null>(null);
+  const existingLocationTransferOperationRef = useRef<ManualUpsertOperationState | null>(null);
+  const hardDeleteInFlightRef = useRef(new Set<string>());
+
+  async function executeSaveMovement(state: SaveMovementState): Promise<void> {
+    if (state.stage === "complete") {
+      return;
     }
 
-    for (const [field, value] of checks) {
-      if (!value) continue;
+    const request = state.request;
+    const operationId = state.operationId;
 
-      const snap = await getDocs(
-        query(collection(db, "products"), where(field, "==", value), limit(1))
-      );
-      const match = snap.docs.find((product) => product.data().deleted !== true);
+    if (state.stage !== "pending" || !operationId || !request) {
+      throw new Error("Inventory save movement is not ready to execute.");
+    }
 
-      if (match) {
-        const data = match.data() as Record<string, unknown>;
+    try {
+      const movement = await createInventoryMovement({
+        ...request,
+        operationId,
+      });
 
-        return {
-          id: match.id,
-          name: String(data.name ?? ""),
-          category: String(data.category ?? ""),
-          sku: String(data.sku ?? ""),
-          hcpcs: String(data.hcpcs ?? ""),
-          upc: String(data.upc ?? ""),
-          manufacturer: String(data.manufacturer ?? data.brand ?? ""),
-          manufacturerItemId: String(data.manufacturerItemId ?? ""),
-          model: String(data.model ?? ""),
-          defaultPurchasePrice: Number(data.defaultPurchasePrice ?? 0),
-          reorderLevel: Number(data.reorderLevel ?? 0),
-          status: String(data.status ?? "active"),
-          deleted: data.deleted === true,
-        };
+      if (
+        movement.status === "success" ||
+        movement.status === "duplicate_operation"
+      ) {
+        saveMovementStateRef.current =
+          completeSaveMovementState(state);
+        return;
       }
-    }
 
-    return null;
+      saveMovementStateRef.current = null;
+      throw new Error(movement.message || "Inventory movement was not applied.");
+    } catch (error: unknown) {
+      if (!isRetryableInventoryTransactionError(error)) {
+        saveMovementStateRef.current = null;
+      }
+
+      throw error;
+    }
+  }
+  function omitMovementFields(
+    payload: Omit<InventoryItem, "id" | "searchText" | "isDeleted">
+  ): Partial<Omit<InventoryItem, "id" | "searchText" | "isDeleted">> {
+    const {
+      quantityOnHand: _quantityOnHand,
+      available: _available,
+      committed: _committed,
+      onRent: _onRent,
+      onOrder: _onOrder,
+      totalValue: _totalValue,
+      status: _status,
+      lifecycleStatus: _lifecycleStatus,
+      ...rest
+    } = payload;
+
+    return rest;
+  }
+
+  function omitPostUpsertAuthorityFields(
+    payload: Omit<InventoryItem, "id" | "searchText" | "isDeleted">
+  ): Partial<Omit<InventoryItem, "id" | "searchText" | "isDeleted">> {
+    const {
+      manufacturerItemId: _manufacturerItemId,
+      sku: _sku,
+      barcode: _barcode,
+      serial: _serial,
+      lotNumber: _lotNumber,
+      locationName: _locationName,
+      binLocation: _binLocation,
+      ...metadata
+    } = omitMovementFields(payload);
+
+    return metadata;
   }
 
   async function createInventoryFromProductScan(rawCode: string, product: ProductScanMatch) {
     const clean = normalizeBarcode(rawCode);
-    const barcode = product.upc ? normalizeBarcode(product.upc) : clean;
-    const payload: Omit<InventoryItem, "id" | "searchText" | "isDeleted"> = {
-      productId: product.id,
-      name: product.name || `Scanned product ${clean}`,
-      category: product.category || "Uncategorized",
-      sku: product.sku || clean,
-      hcpc: product.hcpcs.toUpperCase(),
-      barcode,
-      serial: "",
-      lotNumber: "",
-      locationName: "Main Location",
-      binLocation: "",
-      quantityOnHand: 1,
-      committed: 0,
-      onRent: 0,
-      onOrder: 0,
-      available: 1,
-      reorderLevel: product.reorderLevel,
-      unitCost: product.defaultPurchasePrice,
-      totalValue: product.defaultPurchasePrice,
-      status: product.status === "discontinued" ? "discontinued" : "available",
-      manufacturer: product.manufacturer,
-      manufacturerItemId: product.manufacturerItemId,
-      modelNumber: product.model,
-      warrantyProvider: "",
-      warrantyStartDate: "",
-      warrantyEndDate: "",
-      warrantyNotes: "",
-      purchaseDate: "",
-      usefulLifeMonths: 0,
-      lifecycleStatus: "active",
-      nextServiceDate: "",
-      lifecycleNotes: "",
-      notes: `Created automatically from product catalog scan ${clean}.`,
-    };
-    const searchText = buildSearchText(payload);
 
-    const result = await smartMergeInventory({
-      productId: product.id,
-      name: payload.name,
-      category: payload.category,
-      manufacturer: payload.manufacturer,
-      manufacturerItemId: payload.manufacturerItemId,
-      sku: payload.sku,
-      hcpc: payload.hcpc,
-      barcode: payload.barcode,
-      serial: "",
-      lotNumber: "",
-      expirationDate: "",
-      locationName: payload.locationName,
-      binLocation: "",
-      quantityOnHand: 1,
-      committed: 0,
-      onRent: 0,
-      onOrder: 0,
-      reorderLevel: payload.reorderLevel,
-      unitCost: payload.unitCost,
-      status: payload.status === "discontinued" ? "inactive" : "available",
-      notes: payload.notes,
-      source: "inventory_product_scan",
-      sourceId: product.id,
-    });
-
-    await updateDoc(doc(db, "inventory", result.inventoryId), {
-      ...payload,
-      searchText,
-      isDeleted: false,
-      pendingScanReview: false,
-      scanSource: "product_catalog_scan",
-      lastScannedAt: serverTimestamp(),
-      lastScanDirection: "in",
-      updatedAt: serverTimestamp(),
-    });
-
-    await logInventoryMovement({
-      productId: product.id,
-      productName: payload.name,
-      barcode: payload.barcode,
-      serial: "",
-      lotNumber: "",
-      type: result.action === "created" ? "scan_in_product_created" : "scan_in",
+    const result = await receiveScannedInventoryIntake({
+      mode: "product-match",
+      rawScan: rawCode,
+      normalizedScan: clean,
       quantity: 1,
-      sourceId: result.inventoryId,
-      notes: "Scanned in from matching product catalog record.",
+      locationId: "Main Location",
+      productId: product.id,
     });
 
-    toast.success(`${payload.name} scanned in from product catalog.`);
+    if (!result.ok) {
+      throw new Error(result.message || "Scanned product receive failed.");
+    }
+
+    toast.success(
+      `${product.name || `Scanned product ${clean}`} scanned in from product catalog.`,
+    );
   }
 
   async function runJarvisInventoryIdentification(inventoryId: string, rawCode: string) {
@@ -303,28 +267,15 @@ export function useInventoryActions({
     }
 
     try {
-      const token = await currentUser.getIdToken();
-      const response = await fetch("/api/jarvis/product-enrichment", {
-        method: "POST",
-        headers: {
-          "content-type": "application/json",
-          authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          mode: "identifyInventory",
-          inventoryId,
-          code: normalizeBarcode(rawCode),
-        }),
+      const result = await identifyInventoryProduct({
+        currentUser,
+        inventoryId,
+        code: normalizeBarcode(rawCode),
       });
-      const result = (await response.json()) as {
-        error?: string;
-        product?: {
-          name?: string;
-        };
-      };
 
-      if (!response.ok) {
-        throw new Error(result.error || "Jarvis could not identify the scanned product.");
+      if (!result.ok) {
+        toast("Scan saved for review. Jarvis could not identify the product.");
+        return false;
       }
 
       toast.success(
@@ -334,111 +285,34 @@ export function useInventoryActions({
       );
       return true;
     } catch (error) {
-      toast.error(
-        error instanceof Error
-          ? `Scan saved for review. ${error.message}`
-          : "Scan saved for review. Jarvis could not identify the product."
-      );
+      console.error("INVENTORY JARVIS IDENTIFY ERROR:", error);
+      toast("Scan saved for review. Jarvis identify is unavailable.");
       return false;
     }
   }
 
   async function createPendingScanIn(rawCode: string) {
     const clean = normalizeBarcode(rawCode);
-    const name = `Pending scanned item ${clean}`;
-    const payload: Omit<InventoryItem, "id" | "searchText" | "isDeleted"> = {
-      productId: "",
-      name,
-      category: "Pending Scan Review",
-      sku: "",
-      hcpc: "",
-      barcode: "",
-      serial: clean,
-      lotNumber: "",
-      locationName: "Main Location",
-      binLocation: "",
-      quantityOnHand: 1,
-      committed: 0,
-      onRent: 0,
-      onOrder: 0,
-      available: 1,
-      reorderLevel: 0,
-      unitCost: 0,
-      totalValue: 0,
-      status: "available",
-      manufacturer: "",
-      manufacturerItemId: "",
-      modelNumber: "",
-      warrantyProvider: "",
-      warrantyStartDate: "",
-      warrantyEndDate: "",
-      warrantyNotes: "",
-      purchaseDate: "",
-      usefulLifeMonths: 0,
-      lifecycleStatus: "active",
-      nextServiceDate: "",
-      lifecycleNotes: "",
-      notes: "Created automatically from an unmatched Scan In. Review and complete item details.",
-    };
-    const searchText = buildSearchText(payload);
 
-    const result = await smartMergeInventory({
-      productId: "",
-      name,
-      category: payload.category,
-      manufacturer: "",
-      manufacturerItemId: "",
-      sku: "",
-      hcpc: "",
-      barcode: "",
-      serial: clean,
-      lotNumber: "",
-      expirationDate: "",
-      locationName: payload.locationName,
-      binLocation: "",
-      quantityOnHand: 1,
-      committed: 0,
-      onRent: 0,
-      onOrder: 0,
-      reorderLevel: 0,
-      unitCost: 0,
-      status: "available",
-      notes: payload.notes,
-      source: "inventory_scan",
-      sourceId: clean,
-    });
-
-    await updateDoc(doc(db, "inventory", result.inventoryId), {
-      ...payload,
-      productId: "",
-      searchText,
-      isDeleted: false,
-      pendingScanReview: true,
-      scanSource: "scan_in_unmatched",
-      lastScannedAt: serverTimestamp(),
-      lastScanDirection: "in",
-      updatedAt: serverTimestamp(),
-    });
-
-    await logInventoryMovement({
-      productId: "",
-      productName: name,
-      barcode: "",
-      serial: clean,
-      lotNumber: "",
-      type: "scan_in_pending_created",
+    const result = await receiveScannedInventoryIntake({
+      mode: "pending-scan",
+      rawScan: rawCode,
+      normalizedScan: clean,
       quantity: 1,
-      sourceId: result.inventoryId,
-      notes: "Created pending inventory record from unmatched Scan In.",
+      locationId: "Main Location",
     });
 
-    const identified = await runJarvisInventoryIdentification(result.inventoryId, clean);
+    if (!result.ok) {
+      throw new Error(result.message || "Pending scan receive failed.");
+    }
+
+    const identified = await runJarvisInventoryIdentification(result.data.inventoryItemId, clean);
 
     if (!identified) {
       toast.success(
-        result.action === "created"
+        result.data.createdOrMerged === "created"
           ? "Scan intake record created for review."
-          : "Existing scanned product quantity updated for review."
+          : "Existing scanned product quantity updated for review.",
       );
     }
   }
@@ -453,14 +327,91 @@ export function useInventoryActions({
       return false;
     }
 
-    const item = await findInventoryByScan(rawCode);
+    try {
+      const result = await runCanonicalScanMovement({
+        rawCode,
+        direction,
+        outReason: outReason as ScanOutReason | undefined,
+        operationId: createInventoryOperationId("inventory-scan"),
+        execute: createInventoryMovement,
+        isRetryableError: isRetryableInventoryTransactionError,
+        shouldRetry: (error) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "Inventory movement response was lost.";
 
-    if (!item) {
-      if (direction === "in") {
-        const product = await findProductByScan(rawCode);
+          return window.confirm(
+            `${message}\n\n` +
+              "The server may have applied this scan even though the response was not received.\n\n" +
+              "Retry this SAME scan now using the same operation ID?"
+          );
+        },
+        resolveIntake: (code) =>
+          resolveInventoryScanForIntake({ rawCode: code }),
+        fetchInventoryById: InventoryRepository.getById,
+      });
 
-        if (product) {
-          await createInventoryFromProductScan(rawCode, product);
+      if (result.status === "retry_declined") {
+        toast.error(
+          "Scan outcome is uncertain. No retry was attempted."
+        );
+        return false;
+      }
+
+      if (result.status === "movement_completed") {
+        const { movement, inventoryItem } = result;
+
+        if (result.enrichmentError) {
+          console.error("INVENTORY SCAN ENRICHMENT FAILED", {
+            inventoryItemId: movement.inventoryItemId,
+            direction,
+            error: result.enrichmentError,
+          });
+          toast.error(
+            "Inventory moved, but the updated item details could not be loaded.",
+          );
+        }
+
+        if (direction === "in" && movement.inventoryItemId) {
+          if (inventoryItem?.pendingScanReview) {
+            await runJarvisInventoryIdentification(
+              movement.inventoryItemId,
+              rawCode,
+            );
+          } else if (inventoryItem) {
+            void ensureProductFromInventory(inventoryItem).catch((error) => {
+              console.error("INVENTORY PRODUCT SYNC ERROR:", error);
+              toast.error("Inventory moved, but product catalog sync needs review.");
+            });
+          }
+        }
+
+        toast.success(
+          `${inventoryItem?.name ?? "Inventory"} scanned ${direction}.`,
+        );
+        return true;
+      }
+
+      if (result.status === "intake_fallback") {
+        const scanResolution = result.scanResolution;
+
+        if (scanResolution.kind === "product_suggestion") {
+          await createInventoryFromProductScan(rawCode, {
+            id: scanResolution.product.id,
+            name: scanResolution.product.name,
+            category: scanResolution.product.category,
+            sku: scanResolution.product.sku,
+            hcpcs: scanResolution.product.hcpcs,
+            upc: scanResolution.product.upc,
+            manufacturer: scanResolution.product.manufacturer || scanResolution.product.brand || "",
+            manufacturerItemId: scanResolution.product.manufacturerItemId,
+            model: scanResolution.product.model,
+            defaultPurchasePrice: scanResolution.product.defaultPurchasePrice,
+            reorderLevel: scanResolution.product.reorderLevel,
+            status: scanResolution.product.status,
+            deleted: scanResolution.product.deleted,
+          });
           return true;
         }
 
@@ -468,66 +419,34 @@ export function useInventoryActions({
         return true;
       }
 
-      toast.error("No inventory match found for that scan.");
-      return false;
-    }
-
-    if (direction === "out" && item.available <= 0) {
-      toast.error("That item has no available stock to scan out.");
-      return false;
-    }
-
-    const quantityOnHand =
-      direction === "in" ? item.quantityOnHand + 1 : item.quantityOnHand - 1;
-    const available =
-      direction === "in" ? item.available + 1 : item.available - 1;
-
-    const outType = outReason
-      ? `scan_out_${outReason}`
-      : direction === "in"
-        ? "scan_in"
-        : "scan_out";
-    const outNotes = outReason
-      ? `Scanned out for ${outReason.replace(/_/g, " ")} by barcode/manual lookup.`
-      : `${direction === "in" ? "Scanned in" : "Scanned out"} by barcode/manual lookup.`;
-
-    await updateDoc(doc(db, "inventory", item.id), {
-      quantityOnHand,
-      available,
-      updatedAt: serverTimestamp(),
-      lastScannedAt: serverTimestamp(),
-      lastScanDirection: direction,
-    });
-
-    await logInventoryMovement({
-      productId: item.productId,
-      productName: item.name,
-      barcode: item.barcode,
-      serial: item.serial,
-      lotNumber: item.lotNumber,
-      type: outType,
-      quantity: 1,
-      sourceId: item.id,
-      notes: outNotes,
-    });
-
-    if (direction === "in") {
-      if (item.pendingScanReview) {
-        await runJarvisInventoryIdentification(item.id, rawCode);
-      } else {
-        void ensureProductFromInventory({
-          ...item,
-          quantityOnHand,
-          available,
-        }).catch((error) => {
-          console.error("INVENTORY PRODUCT SYNC ERROR:", error);
-          toast.error("Inventory moved, but product catalog sync needs review.");
-        });
+      if (result.movement.status === "ambiguous") {
+        toast.error("Scan matches multiple inventory records. Select the item and try again.");
+        return false;
       }
-    }
 
-    toast.success(`${item.name} scanned ${direction}.`);
-    return true;
+      if (result.movement.status === "not_found") {
+        toast.error("No inventory match found for that scan.");
+        return false;
+      }
+
+      toast.error(
+        result.movement.message || "Inventory movement was not applied.",
+      );
+      return false;
+    } catch (error: unknown) {
+      console.error("INVENTORY SCAN UPDATE FAILED", {
+        direction,
+        error,
+      });
+
+      toast.error(
+        error instanceof Error
+          ? error.message
+          : "Inventory quantity could not be updated."
+      );
+
+      return false;
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -623,10 +542,50 @@ export function useInventoryActions({
       payload.name.toLowerCase().startsWith("pending scanned item") ||
       payload.category === "Pending Scan Review";
 
+    const saveMovementFingerprint = buildSaveMovementFingerprint({
+      kind: form.id ? "existing_adjustment" : "new_receive",
+      inventoryItemId: form.id || undefined,
+      targetQuantityOnHand: payload.quantityOnHand,
+      productId: payload.productId,
+      barcode: payload.barcode,
+      serialNumber: payload.serial,
+      lotNumber: payload.lotNumber,
+    });
+
+    let saveMovementState = reconcileSaveMovementState(
+      saveMovementStateRef.current,
+      saveMovementFingerprint,
+    );
+
+    saveMovementStateRef.current = saveMovementState;
+
     setSaving(true);
 
     try {
       if (form.id) {
+        if (
+          saveMovementState &&
+          saveMovementState.context.kind !== "existing"
+        ) {
+          saveMovementStateRef.current = null;
+          saveMovementState = null;
+        }
+
+        let quantityDelta = 0;
+        const currentItem =
+          items.find((item) => item.id === form.id) ?? null;
+
+        if (!currentItem) {
+          throw new Error(
+            "The inventory item being edited is no longer available in the current inventory snapshot."
+          );
+        }
+
+        if (!saveMovementState) {
+          quantityDelta =
+            payload.quantityOnHand - currentItem.quantityOnHand;
+        }
+
         const syncedProductId = await ensureProductFromInventory({
           id: form.id,
           ...payload,
@@ -634,21 +593,161 @@ export function useInventoryActions({
           isDeleted: false,
         });
 
-        await updateDoc(doc(db, "inventory", form.id), {
-          ...payload,
-          productId: syncedProductId ?? payload.productId,
+        const metadataFingerprint = JSON.stringify([
+          form.id,
+          syncedProductId ?? payload.productId,
+          payload.name,
+          payload.category,
+          payload.manufacturer,
+          payload.manufacturerItemId,
+          payload.sku,
+          payload.hcpc,
+          payload.barcode,
+          payload.serial,
+          payload.lotNumber,
+          payload.reorderLevel,
+          payload.unitCost,
+          payload.modelNumber,
+          payload.warrantyProvider,
+          payload.warrantyStartDate,
+          payload.warrantyEndDate,
+          payload.warrantyNotes,
+          payload.purchaseDate,
+          payload.usefulLifeMonths,
+          payload.nextServiceDate,
+          payload.lifecycleNotes,
+          payload.notes,
           searchText,
-          isDeleted: false,
-          pendingScanReview: pendingReview,
-          scanSource: pendingReview ? "scan_in_unmatched" : "inventory_review_completed",
-          lowStock: isLowStock({
-            id: form.id,
-            ...payload,
-            searchText,
-            isDeleted: false,
-          }),
-          updatedAt: serverTimestamp(),
+          pendingReview,
+        ]);
+        const metadataOperation = resolveManualUpsertOperation({
+          current: existingMetadataUpdateOperationRef.current,
+          fingerprint: metadataFingerprint,
+          createOperationId: () => createInventoryOperationId("inventory-metadata-update"),
         });
+        existingMetadataUpdateOperationRef.current = metadataOperation;
+
+        const metadataResult = await updateManualInventoryMetadata(
+          buildExistingInventoryMetadataUpdateRequest({
+            operationId: metadataOperation.operationId,
+            inventoryItemId: form.id,
+            payload,
+            productId: syncedProductId ?? payload.productId,
+            searchText,
+            pendingScanReview: pendingReview,
+            scanSource: pendingReview
+              ? "scan_in_unmatched"
+              : "inventory_review_completed",
+            lowStock: isLowStock({
+              id: form.id,
+              ...payload,
+              searchText,
+              isDeleted: false,
+            }),
+          }),
+        );
+
+        if (
+          metadataResult.status !== "success" &&
+          metadataResult.status !== "duplicate_operation"
+        ) {
+          throw new Error("Inventory metadata update was not applied.");
+        }
+
+        existingMetadataUpdateOperationRef.current = null;
+
+        const locationChanged =
+          payload.locationName !== (currentItem.locationName || "Main Location") ||
+          payload.binLocation !== (currentItem.binLocation || "");
+
+        if (locationChanged) {
+          const transferFingerprint = JSON.stringify([
+            form.id,
+            currentItem.locationName || "Main Location",
+            currentItem.binLocation || "",
+            payload.locationName,
+            payload.binLocation,
+            syncedProductId ?? payload.productId,
+            payload.barcode,
+            payload.serial,
+            payload.lotNumber,
+          ]);
+          const transferOperation = resolveManualUpsertOperation({
+            current: existingLocationTransferOperationRef.current,
+            fingerprint: transferFingerprint,
+            createOperationId: () => createInventoryOperationId("inventory-location-transfer"),
+          });
+          existingLocationTransferOperationRef.current = transferOperation;
+
+          try {
+            const transfer = await createInventoryMovement({
+              operationId: transferOperation.operationId,
+              movementType: "warehouse_transfer",
+              inventoryItemId: form.id,
+              productId: syncedProductId ?? payload.productId,
+              barcode: payload.barcode,
+              serialNumber: payload.serial,
+              lotNumber: payload.lotNumber,
+              quantity: 1,
+              fromLocation: currentItem.locationName || "Main Location",
+              fromBinLocation: currentItem.binLocation || "",
+              toLocation: payload.locationName,
+              toBinLocation: payload.binLocation,
+              reason: "Manual inventory location transfer.",
+              source: "inventory_page",
+              metadata: {
+                sourceForm: "inventory_edit",
+              },
+            });
+
+            if (
+              transfer.status !== "success" &&
+              transfer.status !== "duplicate_operation"
+            ) {
+              throw new Error(
+                transfer.message || "Inventory location transfer was not applied."
+              );
+            }
+
+            existingLocationTransferOperationRef.current = null;
+          } catch (error: unknown) {
+            if (!isRetryableInventoryTransactionError(error)) {
+              existingLocationTransferOperationRef.current = null;
+            }
+            throw error;
+          }
+        }
+
+        if (saveMovementState) {
+          await executeSaveMovement(saveMovementState);
+        } else if (quantityDelta !== 0) {
+          const nextState: SaveMovementState = {
+            fingerprint: saveMovementFingerprint,
+            stage: "pending",
+            operationId: createInventoryOperationId("inventory-save"),
+            request: {
+              movementType: "manual_adjustment",
+              inventoryItemId: form.id,
+              productId: syncedProductId ?? payload.productId,
+              barcode: payload.barcode,
+              serialNumber: payload.serial,
+              lotNumber: payload.lotNumber,
+              quantity: Math.abs(quantityDelta),
+              quantityDelta,
+              reason: "Manual inventory quantity adjustment.",
+              source: "inventory_page",
+            },
+            context: {
+              kind: "existing",
+              inventoryItemId: form.id,
+            },
+          };
+
+          saveMovementStateRef.current = nextState;
+          saveMovementState = nextState;
+
+          await executeSaveMovement(nextState);
+        }
 
         await logInventoryMovement({
           productId: syncedProductId ?? payload.productId,
@@ -664,57 +763,132 @@ export function useInventoryActions({
 
         toast.success("Inventory updated.");
       } else {
-        const result = await smartMergeInventory({
-          productId: payload.productId,
-          name: payload.name,
-          category: payload.category,
-          manufacturer: payload.manufacturer,
-          manufacturerItemId: payload.manufacturerItemId,
-          sku: payload.sku,
-          hcpc: payload.hcpc,
-          barcode: payload.barcode,
-          serial: payload.serial,
-          lotNumber: payload.lotNumber,
-          expirationDate: "",
-          locationName: payload.locationName,
-          binLocation: payload.binLocation,
-          quantityOnHand: payload.quantityOnHand,
-          committed: payload.committed,
-          onRent: payload.onRent,
-          onOrder: payload.onOrder,
-          reorderLevel: payload.reorderLevel,
-          unitCost: payload.unitCost,
-          status:
-            payload.status === "discontinued" || payload.status === "rental_out"
-              ? "inactive"
-              : payload.status,
-          notes: payload.notes,
-          source: "inventory",
-          sourceId: "manual_entry",
-        });
+        const initialQuantity = payload.quantityOnHand;
+        const initialAvailable = payload.available;
+
+        if (
+          saveMovementState &&
+          saveMovementState.context.kind !== "new"
+        ) {
+          saveMovementStateRef.current = null;
+          saveMovementState = null;
+        }
+
+        let inventoryId: string;
+        let resultAction: "created" | "merged";
+
+        if (saveMovementState?.context.kind === "new") {
+          inventoryId = saveMovementState.context.inventoryItemId;
+          resultAction = saveMovementState.context.action;
+        } else {
+          const upsertOperation = resolveManualUpsertOperation({
+            current: manualUpsertOperationRef.current,
+            fingerprint: saveMovementFingerprint,
+            createOperationId: () => createInventoryOperationId("manual-inventory-upsert"),
+          });
+          manualUpsertOperationRef.current = upsertOperation;
+
+          const result = await smartMergeInventory({
+            operationId: upsertOperation.operationId,
+            productId: payload.productId,
+            name: payload.name,
+            category: payload.category,
+            manufacturer: payload.manufacturer,
+            manufacturerItemId: payload.manufacturerItemId,
+            sku: payload.sku,
+            hcpc: payload.hcpc,
+            barcode: payload.barcode,
+            serial: payload.serial,
+            lotNumber: payload.lotNumber,
+            expirationDate: "",
+            locationName: payload.locationName,
+            binLocation: payload.binLocation,
+            reorderLevel: payload.reorderLevel,
+            unitCost: payload.unitCost,
+            notes: payload.notes,
+            source: "inventory",
+            sourceId: "manual_entry",
+          });
+
+          if (result.status === "ambiguous") {
+            manualUpsertOperationRef.current = null;
+            throw new Error(
+              `Manual inventory save matched ${result.matches.length} existing inventory records. Resolve the duplicate records before saving.`,
+            );
+          }
+
+          inventoryId = result.inventoryId;
+          resultAction = result.action;
+          manualUpsertOperationRef.current = null;
+
+          const resolvedTargetState =
+            createResolvedNewSaveMovementState({
+              fingerprint: saveMovementFingerprint,
+              inventoryItemId: inventoryId,
+              action: resultAction,
+            });
+
+          saveMovementStateRef.current = resolvedTargetState;
+          saveMovementState = resolvedTargetState;
+        }
 
         const syncedProductId = await ensureProductFromInventory({
-          id: result.inventoryId,
+          id: inventoryId,
           ...payload,
+          quantityOnHand: 0,
+          available: 0,
           searchText,
           isDeleted: false,
         });
 
-        await updateDoc(doc(db, "inventory", result.inventoryId), {
-          ...payload,
+        await InventoryRepository.update(inventoryId, {
+          ...omitPostUpsertAuthorityFields(payload),
           productId: syncedProductId ?? payload.productId,
           searchText,
-          isDeleted: false,
           pendingScanReview: pendingReview,
-          scanSource: pendingReview ? "scan_in_unmatched" : "inventory_review_completed",
+          scanSource: pendingReview
+            ? "scan_in_unmatched"
+            : "inventory_review_completed",
           lowStock: isLowStock({
-            id: result.inventoryId,
+            id: inventoryId,
             ...payload,
             searchText,
             isDeleted: false,
           }),
-          updatedAt: serverTimestamp(),
         });
+
+        if (initialQuantity > 0) {
+          if (!saveMovementState || saveMovementState.context.kind !== "new") {
+            throw new Error("Resolved inventory target is missing for initial receive.");
+          }
+
+          if (saveMovementState.stage === "target_resolved") {
+            const armedState = armResolvedNewSaveMovementState({
+              state: saveMovementState,
+              operationId: createInventoryOperationId("inventory-save"),
+              request: {
+                movementType: "receive",
+                inventoryItemId: inventoryId,
+                productId: syncedProductId ?? payload.productId,
+                barcode: payload.barcode,
+                serialNumber: payload.serial,
+                lotNumber: payload.lotNumber,
+                quantity: initialQuantity,
+                reason:
+                  "Initial inventory quantity received from manual entry.",
+                source: "inventory_page",
+                metadata: {
+                  initialAvailable,
+                },
+              },
+            });
+
+            saveMovementStateRef.current = armedState;
+            saveMovementState = armedState;
+          }
+
+          await executeSaveMovement(saveMovementState);
+        }
 
         await logInventoryMovement({
           productId: syncedProductId ?? payload.productId,
@@ -723,28 +897,46 @@ export function useInventoryActions({
           serial: payload.serial,
           lotNumber: payload.lotNumber,
           type:
-            result.action === "created"
+            resultAction === "created"
               ? "inventory_created"
               : "inventory_merged",
           quantity: payload.quantityOnHand,
-          sourceId: result.inventoryId,
+          sourceId: inventoryId,
           notes:
-            result.action === "created"
+            resultAction === "created"
               ? "Inventory record created."
               : "Inventory merged with existing stock.",
         });
 
         toast.success(
-          result.action === "created"
+          resultAction === "created"
             ? "Inventory added."
             : "Inventory merged with existing stock."
         );
       }
 
+      saveMovementStateRef.current = null;
+      existingLocationTransferOperationRef.current = null;
       resetForm();
     } catch (error: unknown) {
       console.error("SAVE INVENTORY ERROR:", error);
-      toast.error("Inventory could not be saved.");
+
+      if (!isRetryableInventoryTransactionError(error)) {
+        manualUpsertOperationRef.current = null;
+        existingMetadataUpdateOperationRef.current = null;
+        existingLocationTransferOperationRef.current = null;
+      }
+
+      const pendingMovement = saveMovementStateRef.current;
+      const outcomeIsUncertain =
+        pendingMovement?.stage === "pending" &&
+        isRetryableInventoryTransactionError(error);
+
+      toast.error(
+        outcomeIsUncertain
+          ? "Inventory save outcome is uncertain. Retry Save to safely reuse the same operation."
+          : "Inventory could not be saved."
+      );
     } finally {
       setSaving(false);
     }
@@ -756,38 +948,103 @@ export function useInventoryActions({
       return;
     }
 
-    if (
-      !window.confirm(
-        `Archive "${item.name}"? This keeps history but removes it from active inventory.`
-      )
-    ) {
+    if (archiveInFlightRef.current.has(item.id)) {
       return;
     }
 
+    let state = archiveStateRef.current.get(item.id);
+
+    if (state?.outcomeUncertain) {
+      const retryUncertain = window.confirm(
+        `The previous archive attempt for "${item.name}" has an uncertain outcome.` +
+          "\n\nThe server may already have archived this inventory record." +
+          "\n\nRetry the SAME archive using the same operation ID?",
+      );
+
+      if (!retryUncertain) {
+        return;
+      }
+    } else if (!state) {
+      if (
+        !window.confirm(
+          `Archive "${item.name}"? This keeps history but removes it from active inventory.`,
+        )
+      ) {
+        return;
+      }
+
+      state = createArchiveRetryState(
+        {
+          movementType: "archived",
+          inventoryItemId: item.id,
+          productId: item.productId,
+          barcode: item.barcode,
+          serialNumber: item.serial,
+          lotNumber: item.lotNumber,
+          quantity: 1,
+          reason: "Inventory record archived.",
+          source: "inventory_page",
+        },
+        createInventoryOperationId("inventory-archive"),
+      );
+
+      archiveStateRef.current.set(item.id, state);
+    }
+
+    archiveInFlightRef.current.add(item.id);
+
     try {
-      await updateDoc(doc(db, "inventory", item.id), {
-        isDeleted: true,
-        deletedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const execution = await executeArchiveWithRetry({
+        state,
+        execute: createInventoryMovement,
+        isRetryableError: isRetryableInventoryTransactionError,
+        shouldRetry: (error) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "The archive response was not received.";
+
+          return window.confirm(
+            `${message}\n\n` +
+              "The server may already have archived this inventory record.\n\n" +
+              "Retry this SAME archive now using the same operation ID?",
+          );
+        },
       });
 
-      await logInventoryMovement({
-        productId: item.productId,
-        productName: item.name,
-        barcode: item.barcode,
-        serial: item.serial,
-        lotNumber: item.lotNumber,
-        type: "inventory_soft_delete",
-        quantity: item.quantityOnHand,
-        sourceId: item.id,
-        notes: "Inventory record archived.",
-      });
+      if (execution.status === "retry_declined") {
+        archiveStateRef.current.set(
+          item.id,
+          markArchiveOutcomeUncertain(state),
+        );
 
+        toast.error(
+          "Archive outcome is uncertain. Retry this same item to safely reuse the same operation.",
+        );
+        return;
+      }
+
+      const movement = execution.movement;
+
+      if (
+        movement.status !== "success" &&
+        movement.status !== "duplicate_operation"
+      ) {
+        archiveStateRef.current.delete(item.id);
+        toast.error(movement.message || "Archive failed.");
+        return;
+      }
+
+      archiveStateRef.current.delete(item.id);
       removeSelectedId(item.id);
       toast.success("Inventory archived.");
     } catch (error: unknown) {
+      archiveStateRef.current.delete(item.id);
+
       console.error("ARCHIVE INVENTORY ERROR:", error);
       toast.error("Archive failed.");
+    } finally {
+      archiveInFlightRef.current.delete(item.id);
     }
   }
 
@@ -797,169 +1054,421 @@ export function useInventoryActions({
       return;
     }
 
-    if (
-      !window.confirm(
-        `Permanently delete "${item.name}"? This is not reversible.`
-      )
-    ) {
+    if (hardDeleteInFlightRef.current.has(item.id)) {
+      toast.error("Permanent delete is already in progress for this item.");
       return;
     }
 
-    try {
-      await deleteDoc(doc(db, "inventory", item.id));
+    const existingState = hardDeleteStateRef.current.get(item.id);
 
-      await logInventoryMovement({
-        productId: item.productId,
-        productName: item.name,
-        barcode: item.barcode,
-        serial: item.serial,
-        lotNumber: item.lotNumber,
-        type: "inventory_hard_delete",
-        quantity: item.quantityOnHand,
-        sourceId: item.id,
-        notes: "Inventory record permanently deleted.",
+    const confirmed = existingState?.outcomeUncertain
+      ? window.confirm(
+          `The previous permanent delete for "${item.name}" has an uncertain outcome.\n\n` +
+            "The server may already have completed it.\n\n" +
+            "Retry this SAME permanent delete now using the same operation ID?",
+        )
+      : window.confirm(
+          `Permanently delete "${item.name}"? This is not reversible.`,
+        );
+
+    if (!confirmed) {
+      return;
+    }
+
+    const state =
+      existingState ??
+      createHardDeleteRetryState(
+        {
+          movementType: "hard_delete",
+          inventoryItemId: item.id,
+          productId: item.productId,
+          barcode: item.barcode,
+          serialNumber: item.serial,
+          lotNumber: item.lotNumber,
+          quantity: 1,
+          reason: "Inventory record permanently deleted.",
+          source: "inventory_page",
+        },
+        createInventoryOperationId("inventory-hard-delete"),
+      );
+
+    hardDeleteStateRef.current.set(item.id, state);
+    hardDeleteInFlightRef.current.add(item.id);
+
+    try {
+      const execution = await executeHardDeleteWithRetry({
+        state,
+        execute: createInventoryMovement,
+        isRetryableError: isRetryableInventoryTransactionError,
+        shouldRetry: (error) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "The permanent-delete response was not received.";
+
+          return window.confirm(
+            `${message}\n\n` +
+              "The server may already have completed this permanent delete.\n\n" +
+              "Retry this SAME permanent delete now using the same operation ID?",
+          );
+        },
       });
 
+      if (execution.status === "retry_declined") {
+        hardDeleteStateRef.current.set(
+          item.id,
+          markHardDeleteOutcomeUncertain(state),
+        );
+
+        toast.error(
+          "Permanent delete outcome is uncertain. Retry this same item to safely reuse the same operation.",
+        );
+        return;
+      }
+
+      const movement = execution.movement;
+
+      if (
+        movement.status !== "success" &&
+        movement.status !== "duplicate_operation"
+      ) {
+        hardDeleteStateRef.current.delete(item.id);
+        toast.error(movement.message || "Permanent delete failed.");
+        return;
+      }
+
+      hardDeleteStateRef.current.delete(item.id);
       removeSelectedId(item.id);
       toast.success("Inventory permanently deleted.");
     } catch (error: unknown) {
+      hardDeleteStateRef.current.delete(item.id);
       console.error("HARD DELETE INVENTORY ERROR:", error);
       toast.error("Permanent delete failed.");
+    } finally {
+      hardDeleteInFlightRef.current.delete(item.id);
     }
   }
-
   async function handleDiscontinue(item: InventoryItem) {
     if (!canWrite) {
       toast.error("You do not have permission.");
       return;
     }
 
+    if (discontinueInFlightRef.current.has(item.id)) {
+      return;
+    }
+
+    let state = discontinueStateRef.current.get(item.id);
+
+    if (state?.outcomeUncertain) {
+      const retryUncertain = window.confirm(
+        `The previous discontinue attempt for "${item.name}" has an uncertain outcome.` +
+          "\n\nThe server may already have discontinued this inventory item." +
+          "\n\nRetry the SAME discontinue using the same operation ID?",
+      );
+
+      if (!retryUncertain) {
+        return;
+      }
+    } else if (!state) {
+      state = createDiscontinueRetryState(
+        {
+          movementType: "discontinued",
+          inventoryItemId: item.id,
+          productId: item.productId,
+          barcode: item.barcode,
+          serialNumber: item.serial,
+          lotNumber: item.lotNumber,
+          quantity: 1,
+          reason: "Inventory item discontinued.",
+          source: "inventory_page",
+        },
+        createInventoryOperationId("inventory-discontinue"),
+      );
+
+      discontinueStateRef.current.set(item.id, state);
+    }
+
+    discontinueInFlightRef.current.add(item.id);
+
     try {
-      await updateDoc(doc(db, "inventory", item.id), {
-        status: "discontinued",
-        lifecycleStatus: "retired",
-        updatedAt: serverTimestamp(),
+      const execution = await executeDiscontinueWithRetry({
+        state,
+        execute: createInventoryMovement,
+        isRetryableError: isRetryableInventoryTransactionError,
+        shouldRetry: (error) => {
+          const message =
+            error instanceof Error
+              ? error.message
+              : "The discontinue response was not received.";
+
+          return window.confirm(
+            `${message}\n\n` +
+              "The server may already have discontinued this inventory item.\n\n" +
+              "Retry this SAME discontinue now using the same operation ID?",
+          );
+        },
       });
 
-      await logInventoryMovement({
-        productId: item.productId,
-        productName: item.name,
-        barcode: item.barcode,
-        serial: item.serial,
-        lotNumber: item.lotNumber,
-        type: "inventory_discontinued",
-        quantity: item.quantityOnHand,
-        sourceId: item.id,
-        notes: "Inventory item discontinued.",
-      });
+      if (execution.status === "retry_declined") {
+        discontinueStateRef.current.set(
+          item.id,
+          markDiscontinueOutcomeUncertain(state),
+        );
 
+        toast.error(
+          "Discontinue outcome is uncertain. Retry this same item to safely reuse the same operation.",
+        );
+        return;
+      }
+
+      const movement = execution.movement;
+
+      if (
+        movement.status !== "success" &&
+        movement.status !== "duplicate_operation"
+      ) {
+        discontinueStateRef.current.delete(item.id);
+        toast.error(
+          movement.message || "Could not discontinue item.",
+        );
+        return;
+      }
+
+      discontinueStateRef.current.delete(item.id);
+      removeSelectedId(item.id);
       toast.success("Item discontinued.");
     } catch (error: unknown) {
+      discontinueStateRef.current.delete(item.id);
+
       console.error("DISCONTINUE INVENTORY ERROR:", error);
       toast.error("Could not discontinue item.");
+    } finally {
+      discontinueInFlightRef.current.delete(item.id);
+    }
+  }
+
+  async function executeInventoryBatchMutation(
+    movementType: BatchMutationType,
+  ) {
+    if (!canWrite) {
+      toast.error("You do not have permission.");
+      return;
+    }
+
+    if (
+      batchMutationInFlightRef.current.has(
+        movementType,
+      )
+    ) {
+      return;
+    }
+
+    if (batchMutationInFlightRef.current.size > 0) {
+      toast.error(
+        "Another batch inventory action is already running.",
+      );
+      return;
+    }
+
+    let ledger =
+      batchMutationLedgerRef.current.get(
+        movementType,
+      );
+
+    const existingSummary = ledger
+      ? summarizeBatchMutation(ledger)
+      : null;
+
+    if (
+      ledger &&
+      existingSummary &&
+      hasResumableBatchMutationWork(existingSummary)
+    ) {
+      const label =
+        movementType === "archived"
+          ? "archive"
+          : "discontinue";
+
+      const resume = window.confirm(
+        `A previous batch ${label} still has work to resume.` +
+          `\n\nPending: ${existingSummary.pending}` +
+          `\nUncertain: ${existingSummary.uncertain}` +
+          "\n\nPending items have not received a definitive result. Uncertain items may already have completed on the server." +
+          "\n\nResume the remaining batch work using the original operation IDs?",
+      );
+
+      if (!resume) {
+        return;
+      }
+    } else {
+      if (!selectedIds.length) {
+        toast.error("Select items first.");
+        return;
+      }
+
+      if (
+        movementType === "archived" &&
+        !window.confirm(
+          `Archive ${selectedIds.length} selected item(s)?`,
+        )
+      ) {
+        return;
+      }
+
+      const batchId =
+        createInventoryOperationId(
+          movementType === "archived"
+            ? "inventory-batch-archive"
+            : "inventory-batch-discontinue",
+        );
+
+      ledger = createBatchMutationLedger({
+        batchId,
+        movementType,
+        requests: selectedIds.map((id) => ({
+          movementType,
+          inventoryItemId: id,
+          quantity: 1,
+          reason:
+            movementType === "archived"
+              ? "Batch inventory archive."
+              : "Batch inventory discontinue.",
+          source: "inventory_page",
+        })),
+        operationIdForItem: (
+          _itemId,
+          index,
+        ) =>
+          createInventoryOperationId(
+            movementType === "archived"
+              ? `inventory-batch-archive-${index + 1}`
+              : `inventory-batch-discontinue-${index + 1}`,
+          ),
+      });
+
+      batchMutationLedgerRef.current.set(
+        movementType,
+        ledger,
+      );
+    }
+
+    batchMutationInFlightRef.current.add(
+      movementType,
+    );
+
+    try {
+      while (true) {
+        ledger =
+          await executeBatchMutationLedger({
+            ledger,
+            execute:
+              createInventoryMovement,
+            isRetryableError:
+              isRetryableInventoryTransactionError,
+          });
+
+        batchMutationLedgerRef.current.set(
+          movementType,
+          ledger,
+        );
+
+        const completedItemIds =
+          getCompletedBatchItemIds(ledger);
+
+        for (
+          const itemId of completedItemIds
+        ) {
+          removeSelectedId(itemId);
+        }
+
+        const summary =
+          summarizeBatchMutation(ledger);
+
+        if (summary.uncertain > 0) {
+          const label =
+            movementType === "archived"
+              ? "Archive"
+              : "Discontinue";
+
+          const retry = window.confirm(
+            `${label} batch results:` +
+              `\n\nCompleted: ${summary.completed}` +
+              `\nFailed: ${summary.failed}` +
+              `\nUncertain: ${summary.uncertain}` +
+              "\n\nRetry ONLY the uncertain items now using the same operation IDs?",
+          );
+
+          if (retry) {
+            continue;
+          }
+
+          toast.error(
+            `${summary.uncertain} batch item(s) have an uncertain outcome. Retry this same batch action to safely resume them.`,
+          );
+
+          return;
+        }
+
+        batchMutationLedgerRef.current.delete(
+          movementType,
+        );
+
+        const actionPastTense =
+          movementType === "archived"
+            ? "Archived"
+            : "Discontinued";
+
+        if (summary.failed > 0) {
+          toast.error(
+            `${actionPastTense} ${summary.completed} of ${summary.total} selected items. ${summary.failed} item(s) failed and remain selected.`,
+          );
+          return;
+        }
+
+        clearSelected();
+
+        toast.success(
+          movementType === "archived"
+            ? "Selected items archived."
+            : "Selected items discontinued.",
+        );
+
+        return;
+      }
+    } catch (error: unknown) {
+      console.error(
+        movementType === "archived"
+          ? "BATCH ARCHIVE INVENTORY ERROR:"
+          : "BATCH DISCONTINUE INVENTORY ERROR:",
+        error,
+      );
+
+      /*
+       * Do not discard the ledger here. An unexpected
+       * orchestration error after requests began must not
+       * cause fresh operation IDs on the next attempt.
+       */
+      toast.error(
+        "Batch processing stopped unexpectedly. Retry the same batch action before starting a new one.",
+      );
+    } finally {
+      batchMutationInFlightRef.current.delete(
+        movementType,
+      );
     }
   }
 
   async function handleBatchArchive() {
-    if (!canWrite) {
-      toast.error("You do not have permission.");
-      return;
-    }
-
-    if (!selectedIds.length) {
-      toast.error("Select items first.");
-      return;
-    }
-
-    if (!window.confirm(`Archive ${selectedIds.length} selected item(s)?`)) {
-      return;
-    }
-
-    try {
-      const chunks = chunkArray(selectedIds, FIRESTORE_BATCH_LIMIT);
-
-      for (const chunk of chunks) {
-        const batch = writeBatch(db);
-
-        chunk.forEach((id) => {
-          batch.update(doc(db, "inventory", id), {
-            isDeleted: true,
-            deletedAt: serverTimestamp(),
-            updatedAt: serverTimestamp(),
-          });
-        });
-
-        await batch.commit();
-      }
-
-      await logInventoryMovement({
-        productId: "",
-        productName: "Batch inventory archive",
-        barcode: "",
-        serial: "",
-        lotNumber: "",
-        type: "inventory_batch_archive",
-        quantity: selectedIds.length,
-        sourceId: "batch",
-        affectedIds: selectedIds,
-        notes: `${selectedIds.length} inventory records archived.`,
-      });
-
-      clearSelected();
-      toast.success("Selected items archived.");
-    } catch (error: unknown) {
-      console.error("BATCH ARCHIVE INVENTORY ERROR:", error);
-      toast.error("Batch archive failed.");
-    }
+    await executeInventoryBatchMutation(
+      "archived",
+    );
   }
 
   async function handleBatchDiscontinue() {
-    if (!canWrite) {
-      toast.error("You do not have permission.");
-      return;
-    }
-
-    if (!selectedIds.length) {
-      toast.error("Select items first.");
-      return;
-    }
-
-    try {
-      const chunks = chunkArray(selectedIds, FIRESTORE_BATCH_LIMIT);
-
-      for (const chunk of chunks) {
-        const batch = writeBatch(db);
-
-        chunk.forEach((id) => {
-          batch.update(doc(db, "inventory", id), {
-            status: "discontinued",
-            lifecycleStatus: "retired",
-            updatedAt: serverTimestamp(),
-          });
-        });
-
-        await batch.commit();
-      }
-
-      await logInventoryMovement({
-        productId: "",
-        productName: "Batch inventory discontinue",
-        barcode: "",
-        serial: "",
-        lotNumber: "",
-        type: "inventory_batch_discontinue",
-        quantity: selectedIds.length,
-        sourceId: "batch",
-        affectedIds: selectedIds,
-        notes: `${selectedIds.length} inventory records discontinued.`,
-      });
-
-      clearSelected();
-      toast.success("Selected items discontinued.");
-    } catch (error: unknown) {
-      console.error("BATCH DISCONTINUE INVENTORY ERROR:", error);
-      toast.error("Batch discontinue failed.");
-    }
+    await executeInventoryBatchMutation(
+      "discontinued",
+    );
   }
 
   return {
@@ -972,5 +1481,4 @@ export function useInventoryActions({
     handleBatchDiscontinue,
   };
 }
-
 

@@ -1,9 +1,11 @@
 ﻿export type RentalStatus =
+  | "draft"
   | "available"
   | "checked_out"
   | "overdue"
   | "maintenance"
-  | "retired";
+  | "retired"
+  | "abandoned";
 
 export type RentalCondition =
   | "new"

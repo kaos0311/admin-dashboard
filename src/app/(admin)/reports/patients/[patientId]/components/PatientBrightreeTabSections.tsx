@@ -35,6 +35,7 @@ import {
 } from "../patient-detail-utils";
 
 import { EquipmentTable } from "./EquipmentTable";
+import { PatientEquipmentWorkflowPanel } from "./PatientEquipmentWorkflowPanel";
 import {
   EmptyState,
   Info,
@@ -439,6 +440,9 @@ export function ItemsTab({ patient }: { patient: PatientRecord }) {
   return (
     <>
       <Section title="Default Price Option Name" icon={<PackageCheck className="h-5 w-5" />}>
+        <div className="md:col-span-3">
+          <PatientEquipmentWorkflowPanel patient={patient} />
+        </div>
         <div className="md:col-span-3">
           <EquipmentTable items={patient.currentEquipment ?? []} />
         </div>
