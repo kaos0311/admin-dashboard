@@ -4,8 +4,7 @@ export type ProductAuditAction =
   | "create"
   | "update"
   | "soft-delete"
-  | "bulk-soft-delete"
-  | "purge";
+  | "bulk-soft-delete";
 
 export async function writeProductAuditLog(args: {
   action: ProductAuditAction;

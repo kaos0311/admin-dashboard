@@ -245,22 +245,6 @@ export const ProductRepository = {
     }
   },
 
-  /**
-   * Permanently delete product documents using Firestore batches.
-   */
-  async purge(ids: string[], batchSize: number): Promise<void> {
-    for (let i = 0; i < ids.length; i += batchSize) {
-      const batch = writeBatch(db);
-      const chunk = ids.slice(i, i + batchSize);
-
-      chunk.forEach((id) => {
-        batch.delete(doc(db, COLLECTION_PRODUCTS, id));
-      });
-
-      await batch.commit();
-    }
-  },
-
   // ---- WRITE: HCPCS code (upsert) ----------------------------------------
 
   /**

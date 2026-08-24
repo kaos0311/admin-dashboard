@@ -2,9 +2,11 @@
 
 import { useCallback, useRef, useState } from "react";
 import type { DocumentData, QueryDocumentSnapshot } from "firebase/firestore";
+import { getFunctions, httpsCallable } from "firebase/functions";
 import toast from "react-hot-toast";
 
 import { normalizeBarcode } from "@/lib/barcode";
+import { app } from "@/lib/firebase";
 import { ProductRepository } from "@/repositories/firestore/product.repository";
 
 import {
@@ -19,6 +21,12 @@ import {
   toSafeNumber,
 } from "../utils/productNormalize";
 import { writeProductAuditLog } from "../utils/productAudit";
+import {
+  executePurgeProducts,
+  PURGE_PRODUCTS_CONFIRM_TEXT,
+  type PurgeProductsRequest,
+  type PurgeProductsResult,
+} from "../lib/purgeProductsClient";
 
 type UserLike = {
   uid?: string | null;
@@ -367,21 +375,23 @@ export function useProducts(args: {
     }
   }, [canWrite, selectedIds, user]);
 
-  const purgeLoadedProducts = useCallback(async () => {
+  const purgeProducts = useCallback(async () => {
     if (!isAdmin) {
       toast.error("Only admins can purge products.");
       return false;
     }
 
     const confirmed = window.confirm(
-      "Danger zone: permanently delete the currently loaded product records? Use this only for test resets.",
+      "Danger zone: permanently delete the ENTIRE product catalog? This cannot be undone.",
     );
 
     if (!confirmed) return false;
 
-    const typed = window.prompt('Type "PURGE PRODUCTS" to confirm.');
+    const typed = window.prompt(
+      `Type "${PURGE_PRODUCTS_CONFIRM_TEXT}" to confirm.`,
+    );
 
-    if (typed !== "PURGE PRODUCTS") {
+    if (typed !== PURGE_PRODUCTS_CONFIRM_TEXT) {
       toast.error("Purge cancelled.");
       return false;
     }
@@ -389,20 +399,26 @@ export function useProducts(args: {
     setPurging(true);
 
     try {
-      const ids = products.map((product) => product.id);
+      const functions = getFunctions(app, "us-central1");
+      const callable = httpsCallable<
+        PurgeProductsRequest,
+        PurgeProductsResult
+      >(functions, "purgeProducts");
 
-      await ProductRepository.purge(ids, BATCH_SIZE);
-
-      await writeProductAuditLog({
-        action: "purge",
-        count: ids.length,
-        user,
-      });
+      const result = await executePurgeProducts(
+        callable,
+        typed,
+      );
 
       setProducts([]);
       setSelectedIds([]);
 
-      toast.success(`Purged ${ids.length} loaded product(s).`);
+      await loadProducts("reset");
+
+      toast.success(
+        `Purged ${result.deletedCount.toLocaleString()} product(s).`,
+      );
+
       return true;
     } catch (error) {
       console.error("PURGE PRODUCTS ERROR:", error);
@@ -411,7 +427,7 @@ export function useProducts(args: {
     } finally {
       setPurging(false);
     }
-  }, [isAdmin, products, user]);
+  }, [isAdmin, loadProducts]);
 
   function toggleSelected(id: string) {
     setSelectedIds((current) =>
@@ -450,6 +466,6 @@ export function useProducts(args: {
     saveProduct,
     softDeleteProduct,
     batchSoftDeleteProducts,
-    purgeLoadedProducts,
+    purgeProducts,
   };
 }
