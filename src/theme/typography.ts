@@ -1,15 +1,18 @@
 ﻿export const typography = {
-  hero:
-    "break-words text-4xl font-black leading-[1.12] tracking-tight text-[#ececec] sm:text-5xl",
+  eyebrow:
+    "text-xs font-semibold uppercase tracking-[0.18em] text-[#888888]",
 
   pageTitle:
-    "break-words text-3xl font-black leading-[1.15] tracking-tight text-[#ececec] sm:text-4xl",
+    "break-words text-3xl font-black leading-[1.15] tracking-tight text-[#e6e6e6] sm:text-4xl",
 
   sectionTitle:
-    "break-words text-xl font-bold leading-tight tracking-tight text-[#ececec] sm:text-2xl",
+    "break-words text-xl font-bold leading-tight tracking-tight text-[#e6e6e6] sm:text-2xl",
 
   cardTitle:
-    "text-base font-bold leading-tight tracking-tight text-[#ececec] sm:text-lg",
+    "text-base font-bold leading-tight tracking-tight text-[#e6e6e6] sm:text-lg",
+
+  hero:
+    "break-words text-4xl font-black leading-[1.12] tracking-tight text-[#e6e6e6] sm:text-5xl",
 
   subTitle:
     "text-sm font-semibold tracking-tight text-[#b8b8b8]",
@@ -18,7 +21,7 @@
     "text-sm leading-6 text-[#b8b8b8]",
 
   bodyStrong:
-    "text-sm font-semibold leading-6 text-[#ececec]",
+    "text-sm font-semibold leading-6 text-[#e6e6e6]",
 
   warningStrong:
     "text-sm font-semibold leading-6 text-[#d4b86a]",
@@ -44,9 +47,6 @@
   caption:
     "text-xs font-semibold uppercase tracking-[0.18em] text-[#606060]",
 
-  eyebrow:
-    "text-xs font-semibold uppercase tracking-[0.18em] text-[#888888]",
-
   label:
     "text-xs font-semibold uppercase tracking-[0.16em] text-[#888888]",
 
@@ -57,22 +57,22 @@
     "text-xs leading-5 text-[#606060]",
 
   metric:
-    "text-3xl font-black tracking-tight text-[#ececec]",
+    "text-3xl font-black tracking-tight text-[#e6e6e6]",
 
   metricCompact:
-    "text-2xl font-black tracking-tight text-[#ececec]",
+    "text-2xl font-black tracking-tight text-[#e6e6e6]",
 
   metricSmall:
-    "text-xl font-black tracking-tight text-[#ececec]",
+    "text-xl font-black tracking-tight text-[#e6e6e6]",
 
   mono:
-    "font-mono text-sm tracking-tight",
+    "font-mono text-sm tracking-tight text-[#b8b8b8]",
 
   monoMuted:
     "font-mono text-xs tracking-tight text-[#888888]",
 
   code:
-    "rounded-lg bg-[#222222] px-1.5 py-0.5 font-mono text-[0.82rem] text-[#9aba7e]",
+    "rounded-lg bg-[#1c1c1c] px-1.5 py-0.5 font-mono text-[0.82rem] text-[#9aba7e]",
 } as const;
 
 export type TypographyKey = keyof typeof typography;

@@ -16,12 +16,12 @@ export const badges = {
   success: colors.successBadge,
   warning: colors.warningBadge,
   danger: colors.dangerBadge,
-  info: `inline-flex items-center gap-2 rounded-full px-3 py-1 ${colors.infoBadge} shadow-inner whitespace-nowrap`,
+  info: `inline-flex items-center gap-2 rounded-full px-3 py-1 ${colors.infoBadge} shadow-inner shadow-black/15 whitespace-nowrap`,
   neutral: colors.neutral,
   active: colors.activeBadge,
 
   kpiCard: {
-    neutral: "border-[#3a3a3a] bg-[#1c1c1c] text-[#ececec]",
+    neutral: "border-[#3a3a3a] bg-[#1c1c1c] text-[#e6e6e6]",
     cyan: surfaces.alertInfo,
     red: surfaces.alertDanger,
     emerald: surfaces.alertSuccess,

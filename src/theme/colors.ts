@@ -1,18 +1,18 @@
 export const colors = {
   /* ---- Background ---- */
   app:
-    "bg-[#141414] text-[#ececec]",
+    "bg-[#121212] text-[#e6e6e6]",
 
   adminShell:
-    "bg-[#141414] text-[#ececec]",
+    "bg-[#121212] text-[#e6e6e6]",
 
   /* ---- Text ---- */
-  textPrimary: "text-[#ececec]",
+  textPrimary: "text-[#e6e6e6]",
   textSecondary: "text-[#b8b8b8]",
   textMuted: "text-[#888888]",
   textFaint: "text-[#606060]",
-  textInverse: "text-[#141414]",
-  textDisabled: "text-[#ececec]/40",
+  textInverse: "text-[#121212]",
+  textDisabled: "text-[#e6e6e6]/40",
   textInfo: "text-[#7a9a5e]",
   textSuccess: "text-[#6a9a6a]",
   textWarning: "text-[#c49a4a]",
@@ -25,18 +25,18 @@ export const colors = {
 
   /* ---- Surfaces ---- */
   surface:
-    "bg-[#222222]",
+    "bg-[#1c1c1c]",
   surfaceHover:
-    "hover:bg-[#2a2a2a]",
+    "hover:bg-[#242424]",
   surfaceStrong:
-    "bg-[#2e2e2e]",
+    "bg-[#2a2a2a]",
   surfaceInset:
-    "bg-[#181818] shadow-inner shadow-black/40",
+    "bg-[#161616] shadow-inner shadow-black/20",
 
   surfaceInput:
-    "bg-[#181818]",
+    "bg-[#1a1a1a]",
   surfaceInputFocus:
-    "focus:bg-[#1e1e1e]",
+    "focus:bg-[#202020]",
 
   /* ---- Overlay ---- */
   overlay:
@@ -44,16 +44,16 @@ export const colors = {
 
   /* ---- Decorative backgrounds ---- */
   grid:
-    "pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(to_right,rgba(255,255,255,0.04)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.04)_1px,transparent_1px)] bg-[size:48px_48px] opacity-20",
+    "pointer-events-none fixed inset-0 -z-20 bg-[linear-gradient(to_right,rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(to_bottom,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:48px_48px] opacity-15",
 
   vignette:
-    "pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.25)_70%,rgba(0,0,0,0.5)_100%)]",
+    "pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(circle_at_center,transparent_0%,rgba(0,0,0,0.18)_70%,rgba(0,0,0,0.3)_100%)]",
 
   /* ---- Shadows ---- */
   shadow:
-    "shadow-lg shadow-black/30",
+    "shadow-xl shadow-black/15",
   shadowStrong:
-    "shadow-2xl shadow-black/50",
+    "shadow-2xl shadow-black/25",
 
   /* ---- Semantic colors ---- */
   success:
@@ -67,7 +67,7 @@ export const colors = {
   info:
     "border-[#7a9a5e]/30 bg-[#7a9a5e]/10 text-[#9aba7e]",
   neutral:
-    "border-[#3a3a3a] bg-[#222222] text-[#b8b8b8]",
+    "border-[#3a3a3a] bg-[#1c1c1c] text-[#b8b8b8]",
 
   /* ---- Badges ---- */
   successBadge:
@@ -79,17 +79,17 @@ export const colors = {
   infoBadge:
     "border-[#7a9a5e]/30 bg-[#7a9a5e]/10 text-[#9aba7e]",
   neutralBadge:
-    "border-[#3a3a3a] bg-[#222222] text-[#b8b8b8]",
+    "border-[#3a3a3a] bg-[#1c1c1c] text-[#b8b8b8]",
   activeBadge:
     "border-[#8aaa6e]/30 bg-[#8aaa6e]/10 text-[#9aba7e]",
 
   /* ---- Pulse dots ---- */
   pulse:
-    "bg-[#7a9a5e] shadow-[0_0_8px_rgba(122,154,94,0.6)]",
+    "bg-[#7a9a5e]",
   dangerPulse:
-    "bg-[#b84a4a] shadow-[0_0_8px_rgba(184,74,74,0.6)]",
+    "bg-[#b84a4a]",
   successPulse:
-    "bg-[#6a9a6a] shadow-[0_0_8px_rgba(106,154,106,0.6)]",
+    "bg-[#6a9a6a]",
 } as const;
 
 export type ColorKey = keyof typeof colors;

@@ -37,8 +37,7 @@ export const forms = {
     ].join(" "),
 
   fileInput:
-    "block w-full rounded-xl border border-[#3a3a3a] bg-[#181818] px-4 py-3 text-sm text-[#b8b8b8] file:mr-4 file:rounded-lg file:border-0 file:bg-[#ececec] file:px-4 file:py-2 file:text-sm file:font-medium file:text-[#141414] disabled:opacity-60",
-
+    "block w-full rounded-xl border border-[#3a3a3a] bg-[#1a1a1a] px-4 py-3 text-sm text-[#b8b8b8] file:mr-4 file:rounded-lg file:border-0 file:bg-[#e6e6e6] file:px-4 file:py-2 file:text-sm file:font-medium file:text-[#121212] disabled:opacity-60",
 } as const;
 
 export type FormKey = keyof typeof forms;
