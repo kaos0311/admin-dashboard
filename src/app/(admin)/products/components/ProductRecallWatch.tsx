@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-import { buttons, colors, glass, typography } from "@/theme";
+import { badges, buttons, colors, glass, surfaces, typography } from "@/theme";
 import { auth } from "@/lib/firebase";
 import { ProductRepository } from "@/repositories/firestore/product.repository";
 import type {
@@ -344,7 +344,7 @@ export function ProductRecallWatch({
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div>
               <div className="flex items-center gap-2">
-                <ShieldAlert className="h-5 w-5 text-amber-200" />
+                <ShieldAlert className={`h-5 w-5 ${colors.textWarning}`} />
                 <h2 className={typography.sectionTitle}>Recall Findings</h2>
               </div>
 
@@ -431,9 +431,9 @@ export function ProductRecallWatch({
                       </p>
                     </div>
 
-                    <span className="rounded-full border border-amber-300/30 bg-amber-300/10 px-3 py-1 text-xs font-semibold text-amber-100">
-                      Recall flagged
-                    </span>
+                      <span className={`rounded-full border px-3 py-1 text-xs font-semibold ${badges.warning}`}>
+                        Recall flagged
+                      </span>
                   </div>
 
                   {matches.length > 0 ? (
@@ -441,9 +441,9 @@ export function ProductRecallWatch({
                       {matches.map((match) => (
                         <div
                           key={match.id}
-                          className="rounded-2xl border border-white/10 bg-black/20 p-3"
+                           className={glass.insetPadded}
                         >
-                          <p className="font-semibold text-white">
+                          <p className={`font-semibold ${colors.textPrimary}`}>
                             {match.recallTitle || "Jarvis recall match"}
                           </p>
                           <p className={`mt-1 ${typography.smallMuted}`}>
@@ -467,7 +467,7 @@ export function ProductRecallWatch({
                               href={match.sourceUrl}
                               target="_blank"
                               rel="noreferrer"
-                              className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-cyan-100 hover:text-white"
+                               className={`mt-3 inline-flex items-center gap-2 text-sm font-semibold hover:text-[#e6e6e6] ${colors.textInfo}`}
                             >
                               Source
                               <ExternalLink className="h-3.5 w-3.5" />
@@ -479,7 +479,7 @@ export function ProductRecallWatch({
                   ) : (
                     <div className={`mt-4 ${glass.insetPadded}`}>
                       <div className="flex gap-2">
-                        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-200" />
+                        <AlertTriangle className={`mt-0.5 h-4 w-4 shrink-0 ${colors.textWarning}`} />
                         <p className={typography.bodyMuted}>
                           This product is flagged, but no specific Jarvis recall
                           match is stored yet. Review active recall records and
@@ -497,13 +497,13 @@ export function ProductRecallWatch({
                     Active Recall Library
                   </h3>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    {equipmentRecalls.slice(0, 6).map((recall) => (
-                      <div
-                        key={recall.id}
-                        className="rounded-2xl border border-white/10 bg-black/20 p-3"
-                      >
-                        <p className="font-semibold text-white">
-                          {recall.recallTitle || "Active recall"}
+                     {equipmentRecalls.slice(0, 6).map((recall) => (
+                       <div
+                         key={recall.id}
+                         className={surfaces.listItem}
+                       >
+                        <p className={`font-semibold ${colors.textPrimary}`}>
+                           {recall.recallTitle || "Active recall"}
                         </p>
                         <p className={`mt-1 ${typography.smallMuted}`}>
                           {[recall.manufacturer, recall.model, recall.severity]
@@ -541,7 +541,7 @@ function RecallSwitch({
   onChange: (checked: boolean) => void;
 }) {
   return (
-    <div className="flex items-start justify-between gap-4 rounded-2xl border border-white/10 bg-black/20 p-4">
+     <div className={surfaces.insetPadded}>
       <div>
         <p className={typography.cardTitle}>{title}</p>
         <p className={`mt-1 text-sm leading-6 ${typography.bodyMuted}`}>
@@ -556,12 +556,12 @@ function RecallSwitch({
         aria-checked={checked}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={[
-          "relative mt-1 h-6 w-11 shrink-0 rounded-full border transition",
-          checked
-            ? "border-cyan-300/40 bg-cyan-300/70"
-            : "border-white/10 bg-slate-800",
-        ].join(" ")}
+         className={[
+           "relative mt-1 h-6 w-11 shrink-0 rounded-full border transition",
+           checked
+             ? `${colors.borderStrong} bg-[#7a9a5e]`
+             : `${colors.borderMuted} bg-[#2a2a2a]`,
+         ].join(" ")}
       >
         <span
           aria-hidden="true"

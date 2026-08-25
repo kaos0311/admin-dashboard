@@ -1,6 +1,6 @@
 "use client";
 
-import { buttons, glass, tables, typography } from "@/theme";
+import { buttons, colors, glass, surfaces, tables, typography } from "@/theme";
 
 import { ChevronDown, Loader2 } from "lucide-react";
 
@@ -59,10 +59,10 @@ export function ProductCatalog({
   return (
     <section className="min-w-0 space-y-5">
       <div className={`${tables.wrapper} hidden xl:block`}>
-        <div className="max-h-[72vh] min-w-0 overflow-x-auto overflow-y-auto rounded-3xl">
+        <div className={`max-h-[72vh] min-w-0 overflow-x-auto overflow-y-auto ${surfaces.table}`}>
           <table className="w-full min-w-[1580px] table-fixed border-separate border-spacing-0 text-left text-sm">
             <thead className={`${tables.head} sticky top-0 z-20`}>
-              <tr className="border-b border-white/10">
+              <tr className={`border-b ${colors.borderMuted}`}>
                 <th className="w-[90px] px-4 py-3 font-semibold">Select</th>
                 <th className="w-[340px] px-4 py-3 font-semibold">Product</th>
                 <th className="w-[150px] px-4 py-3 font-semibold">SKU</th>
@@ -76,13 +76,13 @@ export function ProductCatalog({
                 <th className="w-[140px] px-4 py-3 font-semibold">Risk</th>
                 <th className="w-[140px] px-4 py-3 font-semibold">Status</th>
 
-                <th className="sticky right-0 z-30 w-[130px] bg-slate-950/95 px-4 py-3 text-right font-semibold shadow-[-14px_0_20px_rgba(0,0,0,0.45)]">
+                <th className={`sticky right-0 z-30 w-[130px] ${colors.surfaceStrong} px-4 py-3 text-right font-semibold`}>
                   Actions
                 </th>
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-white/10">
+            <tbody className={`divide-y ${colors.borderMuted}`}>
               {products.map((product) => (
                 <ProductTableRow
                   key={product.id}

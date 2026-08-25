@@ -1,6 +1,6 @@
 "use client";
 
-import { typography } from "@/theme";
+import { surfaces, typography } from "@/theme";
 import { useState } from "react";
 import { ImageIcon } from "lucide-react";
 
@@ -14,8 +14,8 @@ export function ProductThumb({ product }: { product: Product }) {
 
   if (!src || failed) {
     return (
-      <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.06] ${typography.caption} shadow-inner shadow-black/20`}>
-        <ImageIcon className="h-5 w-5" aria-hidden="true" />
+      <div className={`flex h-12 w-12 shrink-0 items-center justify-center ${surfaces.iconBoxSm}`}>
+        <ImageIcon className={`h-5 w-5 ${typography.caption}`} aria-hidden="true" />
         <span className="sr-only">No image available for {productName}</span>
       </div>
     );
@@ -29,10 +29,7 @@ export function ProductThumb({ product }: { product: Product }) {
       loading="lazy"
       decoding="async"
       onError={() => setFailed(true)}
-      className="h-12 w-12 shrink-0 rounded-2xl border border-white/10 object-cover shadow-lg shadow-black/30"
+      className="h-12 w-12 shrink-0 rounded-2xl border border-[#3a3a3a] object-cover shadow-lg shadow-black/30"
     />
   );
 }
-
-
-
