@@ -1,4 +1,4 @@
-import { typography } from "@/theme";
+import { forms, typography } from "@/theme";
 ﻿export function SelectField({
   id,
   label,
@@ -26,10 +26,10 @@ import { typography } from "@/theme";
         title={label}
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="w-full rounded-2xl border border-white/50 bg-white/70 px-4 py-3 text-sm outline-none backdrop-blur-xl transition focus:border-blue-400/60 focus:ring-4 focus:ring-blue-500/10 dark:border-white/10 dark:bg-black/20"
+        className={forms.select}
       >
         {options.map((option) => (
-          <option key={option.value} value={option.value} className="bg-white text-slate-950 dark:bg-slate-950 dark:text-white">
+          <option key={option.value} value={option.value}>
             {option.label}
           </option>
         ))}

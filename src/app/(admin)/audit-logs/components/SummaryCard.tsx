@@ -1,4 +1,4 @@
-import { colors, metricActionButtonClass, tiles, typography } from "@/theme";
+import { colors, metricActionButtonClass, surfaces, tiles, typography } from "@/theme";
 
 export function SummaryCard({
   label,
@@ -29,7 +29,7 @@ export function SummaryCard({
       <button
         type="button"
         onClick={onClick}
-        className={`${tiles.base} ${tiles.compact} ${tiles.hover} min-h-[10.75rem] min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a9a5e]/40`}
+        className={`${tiles.base} ${tiles.compact} ${tiles.hover} ${surfaces.focus} min-h-[10.75rem] min-w-0 text-left`}
       >
         {content}
       </button>

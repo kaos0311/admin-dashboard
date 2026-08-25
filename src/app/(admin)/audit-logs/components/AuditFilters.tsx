@@ -1,4 +1,4 @@
-import { typography } from "@/theme";
+import { buttons, forms, glass, typography } from "@/theme";
 ﻿import { Search, X } from "lucide-react";
 
 import { humanAction } from "../utils/auditFormat";
@@ -33,7 +33,7 @@ export function AuditFilters({
   resetFilters: () => void;
 }) {
   return (
-    <section className="rounded-3xl border border-white/50 bg-white/60 p-4 shadow-sm backdrop-blur-2xl dark:border-white/10 dark:bg-white/[0.06]">
+    <section className={`${glass.panel} p-4`}>
       <div className="flex flex-col gap-3 xl:flex-row xl:items-end">
         <div className="flex-1">
           <label
@@ -53,7 +53,7 @@ export function AuditFilters({
               placeholder="Search actor, target, action, UID, IP, category, or details..."
               autoComplete="off"
               spellCheck={false}
-              className="w-full rounded-2xl border border-white/50 bg-white/70 py-3 pl-11 pr-4 text-sm outline-none backdrop-blur-xl transition focus:border-blue-400/60 focus:ring-4 focus:ring-blue-500/10 dark:border-white/10 dark:bg-black/20"
+              className={`${forms.input} pl-11`}
             />
           </div>
         </div>
@@ -118,7 +118,7 @@ export function AuditFilters({
         <button
           type="button"
           onClick={resetFilters}
-          className="inline-flex items-center justify-center gap-2 rounded-2xl border border-white/50 bg-white/70 px-4 py-3 text-sm font-medium backdrop-blur-xl transition hover:bg-white/90 dark:border-white/10 dark:bg-black/20 dark:hover:bg-white/[0.08]"
+          className={buttons.secondary}
         >
           <X className="h-4 w-4" />
           Reset
