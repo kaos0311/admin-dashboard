@@ -57,6 +57,112 @@ describe("domain workflow write validation", () => {
     ).toThrow();
   });
 
+  it("allows the legitimate Order workflow service", () => {
+    const root = mkdtempSync(join(tmpdir(), "domain-write-validation-"));
+    mkdirSync(join(root, "functions", "src", "orders"), { recursive: true });
+    writeFileSync(
+      join(root, "functions", "src", "orders", "orderWorkflowService.ts"),
+      `
+        const updatePayload = {
+          smartRouteTargets: ["orders", "patients", "analytics"],
+        };
+        if (orderData.restoredAt) updatePayload.restoredAt = orderData.restoredAt;
+        if (orderData.archivedAt) updatePayload.archivedAt = orderData.archivedAt;
+        transaction.update(orderRef, updatePayload);
+      `
+    );
+
+    expect(() =>
+      execFileSync("node", [join(process.cwd(), "scripts/validate-domain-writes.cjs")], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          DOMAIN_WRITE_VALIDATION_ROOT: root,
+        },
+      })
+    ).not.toThrow();
+  });
+
+  it("rejects the same Order workflow write outside the allowlist", () => {
+    for (const relPath of [
+      join("functions", "src", "orders", "notAWorkflowService.ts"),
+      join("functions", "src", "foo.ts"),
+    ]) {
+      const root = mkdtempSync(join(tmpdir(), "domain-write-validation-"));
+      mkdirSync(join(root, relPath, ".."), { recursive: true });
+      writeFileSync(
+        join(root, relPath),
+        `
+          const updatePayload = {
+            smartRouteTargets: ["orders", "patients", "analytics"],
+          };
+          if (orderData.restoredAt) updatePayload.restoredAt = orderData.restoredAt;
+          if (orderData.archivedAt) updatePayload.archivedAt = orderData.archivedAt;
+          transaction.update(orderRef, updatePayload);
+        `
+      );
+
+      expect(() =>
+        execFileSync("node", [join(process.cwd(), "scripts/validate-domain-writes.cjs")], {
+          cwd: process.cwd(),
+          env: {
+            ...process.env,
+            DOMAIN_WRITE_VALIDATION_ROOT: root,
+          },
+        })
+      ).toThrow();
+    }
+  });
+
+  it("still allows an existing domainWorkflows service pattern", () => {
+    const root = mkdtempSync(join(tmpdir(), "domain-write-validation-"));
+    mkdirSync(join(root, "functions", "src", "domainWorkflows"), { recursive: true });
+    writeFileSync(
+      join(root, "functions", "src", "domainWorkflows", "deliveryWorkflowService.ts"),
+      `
+        transaction.set(doc(db, "patientDeliveryTickets", "ticket-1"), {
+          deliveredScanCount: 1,
+          fulfillmentStatus: "delivered",
+        });
+      `
+    );
+
+    expect(() =>
+      execFileSync("node", [join(process.cwd(), "scripts/validate-domain-writes.cjs")], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          DOMAIN_WRITE_VALIDATION_ROOT: root,
+        },
+      })
+    ).not.toThrow();
+  });
+
+  it("still rejects protected domain writes outside any workflow service", () => {
+    const root = mkdtempSync(join(tmpdir(), "domain-write-validation-"));
+    mkdirSync(join(root, "functions", "src", "orders"), { recursive: true });
+    writeFileSync(
+      join(root, "functions", "src", "orders", "outsideWorkflow.ts"),
+      `
+        transaction.update(doc(db, "patientDeliveryTickets", "ticket-1"), {
+          deliveredScanCount: 1,
+          fulfillmentStatus: "delivered",
+          archivedAt: serverTimestamp(),
+        });
+      `
+    );
+
+    expect(() =>
+      execFileSync("node", [join(process.cwd(), "scripts/validate-domain-writes.cjs")], {
+        cwd: process.cwd(),
+        env: {
+          ...process.env,
+          DOMAIN_WRITE_VALIDATION_ROOT: root,
+        },
+      })
+    ).toThrow();
+  });
+
   it("catches direct protected rental writes", () => {
     const root = mkdtempSync(join(tmpdir(), "domain-write-validation-"));
     mkdirSync(join(root, "src"), { recursive: true });

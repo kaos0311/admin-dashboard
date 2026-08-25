@@ -130,6 +130,7 @@ const ALLOWLIST = new Set([
   "functions/src/domainWorkflows/patientLifecycleWorkflowService.ts",
   "functions/src/domainWorkflows/domainWorkflowFunctions.ts",
   "functions/src/inventory/movementService.ts",
+  "functions/src/orders/orderWorkflowService.ts",
   "functions/src/patientDocuments/processPatientDocumentFromStorage.ts",
   "src/lib/__tests__/domain-write-validation.test.ts",
   "src/lib/domainWorkflows.ts",
