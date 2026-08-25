@@ -9,7 +9,7 @@ import {
 } from "lucide-react";
 import toast from "react-hot-toast";
 
-import { buttons, glass, typography } from "@/theme";
+import { buttons, colors, forms, glass, typography } from "@/theme";
 import {
   type InventoryCleanupAction,
   type InventoryCleanupResult,
@@ -314,8 +314,8 @@ export function InventoryDataQualityPanel({
       </div>
 
       {filteredRisks.length === 0 ? (
-        <div className={`${glass.inset} rounded-lg px-4 py-8 text-center`}>
-          <ShieldAlert className="mx-auto mb-3 h-8 w-8 text-white/40" />
+        <div className={`${glass.emptyState} ${typography.bodyMuted}`}>
+          <ShieldAlert className={`mx-auto mb-3 h-8 w-8 ${typography.caption}`} />
           <p className={typography.bodyStrong}>No grouping risks match these filters.</p>
           <p className={typography.smallMuted}>Adjust the diagnostics filters to broaden the report.</p>
         </div>
@@ -326,20 +326,20 @@ export function InventoryDataQualityPanel({
 
             return (
               <section key={type} className={`${glass.inset} overflow-hidden rounded-lg`}>
-                <button
-                  type="button"
-                  onClick={() => toggleType(type)}
-                  className="flex w-full items-start justify-between gap-3 border-b border-white/10 bg-white/5 px-4 py-4 text-left transition hover:bg-white/10"
-                  aria-expanded={expanded}
-                >
-                  <div className="flex min-w-0 items-start gap-3">
-                    <span className="mt-0.5 rounded-md border border-white/10 bg-black/20 p-2">
-                      {expanded ? (
-                        <ChevronDown className="h-4 w-4" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4" />
-                      )}
-                    </span>
+              <button
+              type="button"
+              onClick={() => toggleType(type)}
+              className={`flex w-full items-start justify-between gap-3 border-b ${colors.borderMuted} bg-[#222222]/40 px-4 py-4 text-left transition hover:bg-[#222222] ${typography.bodyMuted}`}
+              aria-expanded={expanded}
+            >
+              <div className="flex min-w-0 items-start gap-3">
+                <span className="rounded-md border border-[#3a3a3a] bg-black/20 p-2">
+                  {expanded ? (
+                    <ChevronDown className="h-4 w-4" />
+                  ) : (
+                    <ChevronRight className="h-4 w-4" />
+                  )}
+                </span>
                     <div className="min-w-0">
                       <h4 className={`${typography.bodyStrong} break-words`}>
                         {formatRiskType(type)}
@@ -353,7 +353,7 @@ export function InventoryDataQualityPanel({
                 </button>
 
                 {expanded ? (
-                  <div className="divide-y divide-white/10">
+                  <div className="divide-y divide-[#2a2a2a]">
                     {risks.map((risk) => (
                       <RiskRow
                         key={risk.riskId}
@@ -398,14 +398,14 @@ function SummaryCard({
   tone: "critical" | "high" | "medium";
 }) {
   const toneClass = {
-    critical: "border-red-400/30 bg-red-500/10 text-red-100",
-    high: "border-orange-400/30 bg-orange-500/10 text-orange-100",
-    medium: "border-yellow-400/30 bg-yellow-500/10 text-yellow-100",
+    critical: `${colors.danger}`,
+    high: `${colors.warning}`,
+    medium: `${colors.warning}`,
   }[tone];
 
   return (
-    <div className={`rounded-lg border px-4 py-3 ${toneClass}`}>
-      <div className="text-xs uppercase tracking-wide text-white/60">{label}</div>
+    <div className={`rounded-xl border px-4 py-3 ${toneClass}`}>
+      <div className={typography.caption}>{label}</div>
       <div className="mt-1 text-2xl font-semibold">{value.toLocaleString()}</div>
     </div>
   );
@@ -427,10 +427,10 @@ function RiskRow({
       <div className="min-w-0 space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           <SeverityBadge severity={risk.severity} />
-          <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/70">
+          <span className={`rounded-md border ${colors.borderMuted} bg-[#222222]/30 px-2 py-1 text-xs ${typography.bodyMuted}`}>
             {risk.confidence} confidence
           </span>
-          <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/70">
+          <span className={`rounded-md border ${colors.borderMuted} bg-[#222222]/30 px-2 py-1 text-xs ${typography.bodyMuted}`}>
             {risk.isSerialized ? "Serialized" : "Quantity"}
           </span>
         </div>
@@ -483,7 +483,7 @@ function CleanupModal({
   const preview = state.preview;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4">
+    <div className={`fixed inset-0 z-50 flex items-center justify-center ${colors.overlay} p-4`}>
       <div className={`${glass.panel} max-h-[90vh] w-full max-w-3xl overflow-y-auto p-5`}>
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
@@ -503,7 +503,7 @@ function CleanupModal({
             <select
               value={state.inventoryItemId}
               onChange={(event) => onChange({ ...state, inventoryItemId: event.target.value, preview: null })}
-              className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-white"
+              className={forms.select}
             >
               {state.risk.inventoryItemIds.map((id) => (
                 <option key={id} value={id}>{id}</option>
@@ -516,7 +516,7 @@ function CleanupModal({
             <select
               value={state.action}
               onChange={(event) => onChange({ ...state, action: event.target.value as InventoryCleanupAction, preview: null })}
-              className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-white"
+              className={forms.select}
             >
               {cleanupActionOptions(state.risk.type).map((action) => (
                 <option key={action} value={action}>{formatRiskType(action)}</option>
@@ -530,7 +530,7 @@ function CleanupModal({
               <input
                 value={state.targetProductId}
                 onChange={(event) => onChange({ ...state, targetProductId: event.target.value, preview: null })}
-                className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-white"
+                className={forms.input}
               />
             </label>
           ) : state.action !== "MARK_AS_REVIEWED" && state.action !== "DISMISS_FALSE_POSITIVE" ? (
@@ -539,7 +539,7 @@ function CleanupModal({
               <input
                 value={state.newValue}
                 onChange={(event) => onChange({ ...state, newValue: event.target.value, preview: null })}
-                className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-white"
+                className={forms.input}
               />
             </label>
           ) : null}
@@ -554,10 +554,10 @@ function CleanupModal({
               ) : (
                 <div className="mt-3 space-y-2">
                   {preview.diff.map((change) => (
-                    <div key={change.field} className="grid gap-2 rounded-md border border-white/10 bg-black/20 p-3 md:grid-cols-[140px_1fr_1fr]">
+                    <div key={change.field} className={`grid gap-2 rounded-md border ${colors.borderMuted} bg-[#222222]/30 p-3 md:grid-cols-[140px_1fr_1fr]`}>
                       <div className={typography.smallMuted}>{change.field}</div>
-                      <div className="break-words text-red-100">{change.before || "-"}</div>
-                      <div className="break-words text-green-100">{change.after || "-"}</div>
+                      <div className={`break-words ${colors.textDanger}`}>{change.before || "-"}</div>
+                      <div className={`break-words ${colors.textSuccess}`}>{change.after || "-"}</div>
                     </div>
                   ))}
                 </div>
@@ -565,7 +565,7 @@ function CleanupModal({
             </div>
 
             {preview.warnings.length > 0 ? (
-              <div className="rounded-lg border border-yellow-400/30 bg-yellow-500/10 p-4 text-yellow-100">
+              <div className={`rounded-lg border ${colors.border} ${colors.warning} p-4 ${colors.textWarning}`}>
                 {preview.warnings.map((warning) => (
                   <p key={warning}>{warning}</p>
                 ))}
@@ -587,10 +587,10 @@ function CleanupModal({
           <span className={typography.smallMuted}>
             Reason {preview?.requiresReason ? "(required)" : "(optional)"}
           </span>
-          <textarea
+            <textarea
             value={state.reason}
             onChange={(event) => onChange({ ...state, reason: event.target.value })}
-            className="min-h-24 w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-white"
+            className={forms.textareaCompact}
           />
         </label>
 
@@ -600,10 +600,10 @@ function CleanupModal({
               Type: I understand this changes serialized asset identity.
             </span>
             <input
-              value={state.acknowledgement}
-              onChange={(event) => onChange({ ...state, acknowledgement: event.target.value })}
-              className="w-full rounded-md border border-white/10 bg-black/30 px-3 py-2 text-white"
-            />
+            value={state.acknowledgement}
+            onChange={(event) => onChange({ ...state, acknowledgement: event.target.value })}
+            className={forms.input}
+          />
           </label>
         ) : null}
 
@@ -623,14 +623,14 @@ function CleanupModal({
 
 function SeverityBadge({ severity }: { severity: InventoryGroupingRiskSeverity }) {
   const className = {
-    CRITICAL: "border-red-400/30 bg-red-500/15 text-red-100",
-    HIGH: "border-orange-400/30 bg-orange-500/15 text-orange-100",
-    MEDIUM: "border-yellow-400/30 bg-yellow-500/15 text-yellow-100",
-    LOW: "border-white/10 bg-white/5 text-white/70",
+    CRITICAL: `${colors.dangerBadge}`,
+    HIGH: `${colors.warningBadge}`,
+    MEDIUM: `${colors.warningBadge}`,
+    LOW: `${colors.neutralBadge}`,
   }[severity];
 
   return (
-    <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${className}`}>
+    <span className={`rounded-full px-2 py-1 text-xs font-semibold ${className}`}>
       {severity}
     </span>
   );

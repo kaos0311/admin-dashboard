@@ -2,7 +2,7 @@
 
 import { ScanLine, ShieldCheck } from "lucide-react";
 
-import { buttons, glass, colors, tiles, typography } from "@/theme";
+import { buttons, colors, glass, tiles, typography } from "@/theme";
 
 import type { ScanTarget } from "../lib/inventoryTypes";
 
@@ -13,42 +13,29 @@ type InventoryHeroProps = {
 
 export function InventoryHero({ canWrite, onOpenScanner }: InventoryHeroProps) {
   return (
-    <section className={`${glass.panel} p-5 sm:p-6`}>
+    <section className={`${glass.panelPadded} p-5 sm:p-6`}>
       <div className={colors.grid} />
 
-      <div className="relative flex flex-col gap-6 xl:flex-row xl:items-center xl:justify-between">
-        <div className="space-y-4">
+      <div className="relative flex flex-col gap-5 xl:flex-row xl:items-center xl:justify-between">
+        <div className="min-w-0 space-y-3">
           <div className={tiles.label}>
             <ShieldCheck className="h-3.5 w-3.5" />
 
             Inventory Intelligence
           </div>
 
-          <div>
-            <h1 className={typography.pageTitle}>
-              Inventory Command
-              Center
-            </h1>
+          <h1 className={typography.pageTitle}>
+            Inventory Command Center
+          </h1>
 
-            <p className={`mt-3 max-w-3xl ${typography.body}`}>
-              Operational inventory
-              management for
-              lifecycle tracking,
-              warranty monitoring,
-              service due alerts,
-              batch actions,
-              barcode intake,
-              discontinuation, and
-              stock oversight.
-              Because eventually
-              someone loses a serial
-              number and pretends it
-              was never there.
-            </p>
-          </div>
+          <p className={`${typography.bodyMuted} mt-2 max-w-2xl`}>
+            Operational inventory management for lifecycle tracking, warranty
+            monitoring, service alerts, batch actions, barcode intake,
+            discontinuation, and stock oversight.
+          </p>
         </div>
 
-        <div className={`${glass.card} max-w-sm p-4 sm:p-5`}>
+        <div className={`${glass.insetPadded} max-w-sm`}>
           <div className="flex items-center gap-4">
             <div className={tiles.compact}>
               <ScanLine className="h-6 w-6" />
@@ -61,7 +48,7 @@ export function InventoryHero({ canWrite, onOpenScanner }: InventoryHeroProps) {
                 </p>
 
                 <span className={tiles.label}>
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-sky-200 shadow-[0_0_10px_rgba(186,230,253,0.9)]" />
+                  <span className={`h-2 w-2 animate-pulse rounded-full ${colors.pulse}`} />
 
                   Online
                 </span>

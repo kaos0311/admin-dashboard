@@ -253,7 +253,7 @@ export function InventoryStatsDrilldownModal({
 
   return (
     <>
-      <div className="fixed inset-0 z-50 overflow-y-auto bg-slate-950/80 p-3 backdrop-blur-xl sm:p-6">
+      <div className={`fixed inset-0 z-50 overflow-y-auto ${colors.overlay} p-3 sm:p-6`}>
         <div className="mx-auto flex min-h-full w-full max-w-7xl items-start justify-center">
           <section className={`${glass.panel} w-full overflow-hidden`}>
             <div className={colors.grid} />

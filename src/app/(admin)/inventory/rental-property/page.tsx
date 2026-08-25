@@ -84,9 +84,9 @@ export default function InventoryRentalPropertyPage() {
 
                 <div className="min-w-0">
                   <p className={tiles.label}>Inventory rental property</p>
-                  <h1 className="mt-2 break-words text-3xl font-bold tracking-tight">
-                    Insurance Rental Property
-                  </h1>
+              <h1 className={`mt-2 break-words ${typography.pageTitle}`}>
+                Insurance Rental Property
+              </h1>
                   <p className={`${typography.bodyMuted} mt-2 max-w-3xl`}>
                     Hospice and insurance rental property grouped by payer, with
                     callable patient lists connected to the inventory pipeline.

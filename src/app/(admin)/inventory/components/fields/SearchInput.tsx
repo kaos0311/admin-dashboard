@@ -1,6 +1,6 @@
 "use client";
 
-import { colors, forms, typography } from "@/theme";
+import { forms, typography } from "@/theme";
 import { Search } from "lucide-react";
 
 type SearchInputProps = {
@@ -11,7 +11,7 @@ type SearchInputProps = {
 export function SearchInput({ value, onChange }: SearchInputProps) {
   return (
     <div className="relative min-w-0">
-      <Search className={`pointer-events-none absolute left-3 top-3.5 h-4 w-4 ${typography.caption}`} />
+      <Search className={`pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 ${typography.caption}`} />
 
       <input
         value={value}
@@ -19,11 +19,8 @@ export function SearchInput({ value, onChange }: SearchInputProps) {
         aria-label="Search inventory"
         placeholder="Name, barcode, lot, serial, SKU, or HCPCS..."
         onChange={(event) => onChange(event.target.value)}
-        className={`${forms.input} min-w-0 w-full bg-[#181818]/90 py-3 pl-10 pr-4 ${colors.textPrimary} placeholder:text-[#606060] shadow-inner shadow-black/20 backdrop-blur-xl focus:border-[#5a5a5a] focus:bg-[#1e1e1e]`}
+        className={`${forms.inputIconLeft} min-w-0 w-full`}
       />
     </div>
   );
 }
-
-
-

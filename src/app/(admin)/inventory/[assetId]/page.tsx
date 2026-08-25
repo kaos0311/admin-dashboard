@@ -132,7 +132,7 @@ export default function InventoryAssetChartPage() {
           <button
             type="button"
             onClick={() => router.back()}
-            className={`mb-4 inline-flex items-center gap-2 text-sm ${typography.bodyMuted} transition hover:${colors.textPrimary}`}
+            className={`mb-4 inline-flex items-center gap-2 text-sm ${typography.bodyMuted} transition hover:text-[#e6e6e6]`}
           >
             <ArrowLeft className="h-4 w-4" />
             Back
@@ -210,10 +210,10 @@ export default function InventoryAssetChartPage() {
 
 function AssetHeader({ asset }: { asset: InventoryItem }) {
   return (
-    <header className={`${glass.panelPadded} rounded-[2rem] bg-gradient-to-br from-white/[0.12] via-white/[0.055] to-black/40 shadow-2xl shadow-black/30 backdrop-blur-2xl`}>
+    <header className={glass.panelPadded}>
       <Link
         href="/inventory"
-        className={`mb-5 inline-flex items-center gap-2 text-sm ${typography.bodyMuted} transition hover:${colors.textPrimary}`}
+        className={`mb-5 inline-flex items-center gap-2 text-sm ${typography.bodyMuted} transition hover:text-[#e6e6e6]`}
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Inventory
@@ -226,7 +226,7 @@ function AssetHeader({ asset }: { asset: InventoryItem }) {
             Inventory asset chart
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="mt-3 flex flex-wrap items-center gap-3">
             <h1 className={typography.pageTitle}>
               {asset.name || "Unnamed asset"}
             </h1>
@@ -235,7 +235,7 @@ function AssetHeader({ asset }: { asset: InventoryItem }) {
             {asset.patientName ? <Badge label="Patient assigned" /> : null}
           </div>
 
-          <p className={`mt-2 text-sm ${typography.bodyMuted}`}>
+          <p className={`mt-2 ${typography.bodyMuted}`}>
             Serial: {asset.serial || "-"} | Asset:{" "}
             {asset.assetTag || asset.assetNumber || "-"}
           </p>

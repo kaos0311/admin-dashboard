@@ -98,7 +98,7 @@ export function PickupReturnArchivePanel({
 
                   <div className={`${glass.insetPadded} mt-4`}>
                     <div className="flex min-w-0 items-start gap-3">
-                      <PackageCheck className="mt-0.5 h-4 w-4 shrink-0 text-cyan-200" />
+                      <PackageCheck className={`mt-0.5 h-4 w-4 shrink-0 ${colors.textInfo}`} />
                       <div className="min-w-0">
                         <p className={`${typography.bodyStrong} break-words`}>
                           {item.name || "Unnamed equipment"}

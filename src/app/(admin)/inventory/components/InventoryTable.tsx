@@ -14,7 +14,9 @@ import {
 
 import {
   buttons,
+  colors,
   glass,
+  tables,
   typography,
 } from "@/theme";
 import {
@@ -84,8 +86,8 @@ export function InventoryTable({
 
   if (inventoryIndex.categories.length === 0) {
     return (
-      <div className={`${glass.inset} rounded-lg px-4 py-8 text-center`}>
-        <Package className="mx-auto mb-3 h-8 w-8 text-white/40" />
+      <div className={`${glass.emptyState} ${typography.bodyMuted}`}>
+        <Package className="mx-auto mb-3 h-8 w-8 text-[#606060]" />
         <p className={typography.bodyStrong}>No inventory matches the current view.</p>
         <p className={typography.smallMuted}>Adjust search or filters to broaden the results.</p>
       </div>
@@ -105,11 +107,11 @@ export function InventoryTable({
             <button
               type="button"
               onClick={() => toggleCategory(category.id)}
-              className="flex w-full flex-col gap-3 border-b border-white/10 bg-white/5 px-4 py-4 text-left transition hover:bg-white/10 lg:flex-row lg:items-center lg:justify-between"
+              className="flex w-full flex-col gap-3 border-b border-[#2a2a2a] bg-[#222222]/40 px-4 py-4 text-left transition hover:bg-[#222222] lg:flex-row lg:items-center lg:justify-between"
               aria-expanded={categoryExpanded}
             >
               <div className="flex min-w-0 items-start gap-3">
-                <span className="mt-0.5 rounded-md border border-white/10 bg-black/20 p-2">
+                <span className={`rounded-md border ${colors.borderMuted} bg-black/20 p-2`}>
                   {categoryExpanded ? (
                     <ChevronDown className="h-4 w-4" />
                   ) : (
@@ -186,7 +188,7 @@ function CategoryMetrics({ category }: { category: InventoryCategoryNode }) {
 
 function Metric({ label, value }: { label: string; value: number }) {
   return (
-    <div className="rounded-md border border-white/10 bg-black/20 px-3 py-2">
+    <div className={`rounded-md border ${colors.borderMuted} bg-[#222222]/30 px-3 py-2`}>
       <div className={typography.smallMuted}>{label}</div>
       <div className={typography.bodyStrong}>{value.toLocaleString()}</div>
     </div>
@@ -216,11 +218,11 @@ function ProductSection({
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full flex-col gap-3 px-4 py-4 text-left transition hover:bg-white/[0.04] lg:flex-row lg:items-start lg:justify-between"
+        className={`flex w-full flex-col gap-3 px-4 py-4 text-left transition hover:bg-[#222222]/40 lg:flex-row lg:items-start lg:justify-between`}
         aria-expanded={expanded}
       >
         <div className="flex min-w-0 items-start gap-3">
-          <span className="mt-0.5 rounded-md border border-white/10 bg-black/20 p-2">
+          <span className={`mt-0.5 rounded-md border ${colors.borderMuted} bg-black/20 p-2`}>
             {expanded ? (
               <ChevronDown className="h-4 w-4" />
             ) : (
@@ -232,7 +234,7 @@ function ProductSection({
               <h4 className={`${typography.bodyStrong} break-words`}>
                 {product.productName}
               </h4>
-              <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/70">
+              <span className={`rounded-md border ${colors.borderMuted} bg-[#222222]/30 px-2 py-1 text-xs text-[#888888]`}>
                 {product.isSerialized ? "Serialized" : "Quantity"}
               </span>
             </div>
@@ -250,7 +252,7 @@ function ProductSection({
       </button>
 
       {expanded ? (
-        <div className="border-t border-white/10 px-4 pb-4">
+        <div className={`border-t ${colors.borderMuted} px-4 pb-4`}>
           {product.units.length > 0 ? (
             <SerializedUnitsTable
               units={product.units}
@@ -295,9 +297,9 @@ function SerializedUnitsTable({
 } & InventoryActions) {
   return (
     <div className="mt-4 overflow-x-auto">
-      <table className="w-full min-w-[980px] text-left text-sm">
-        <thead className={typography.bodyMuted}>
-          <tr className="border-y border-white/10">
+      <table className={`w-full min-w-[980px] text-left text-sm`}>
+        <thead className={tables.head}>
+          <tr className={`${tables.headRow}`}>
             {canWrite ? <th className="px-3 py-2">Select</th> : null}
             <th className="px-3 py-2">Serial Number</th>
             <th className="px-3 py-2">On Hand</th>
@@ -343,11 +345,11 @@ function QuantityTable({
       {quantities.map((quantity) => (
         <div
           key={quantity.key}
-          className="rounded-md border border-white/10 bg-black/10"
+          className={`rounded-md border ${colors.borderMuted} bg-[#222222]/30`}
         >
-          <div className="flex flex-col gap-2 border-b border-white/10 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className={`flex flex-col gap-2 border-b ${colors.borderMuted} px-3 py-3 sm:flex-row sm:items-center sm:justify-between`}>
             <div className="flex min-w-0 items-center gap-2">
-              <Layers className="h-4 w-4 text-white/50" />
+              <Layers className={`h-4 w-4 ${typography.caption}`} />
               <div className="min-w-0">
                 <div className={typography.bodyStrong}>{quantity.locationName}</div>
                 <div className={typography.smallMuted}>
@@ -362,9 +364,9 @@ function QuantityTable({
           </div>
 
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[980px] text-left text-sm">
-              <thead className={typography.bodyMuted}>
-                <tr className="border-b border-white/10">
+            <table className={`w-full min-w-[980px] text-left text-sm`}>
+              <thead className={tables.head}>
+                <tr className={`${tables.headRow}`}>
                   {canWrite ? <th className="px-3 py-2">Select</th> : null}
                   <th className="px-3 py-2">Inventory Record</th>
                   <th className="px-3 py-2">On Hand</th>
@@ -421,7 +423,7 @@ function InventoryRecordRow({
   const effectiveReorderLevel = getEffectiveReorderLevel(item, thresholds);
 
   return (
-    <tr className="border-t border-white/10 align-top hover:bg-white/[0.04]">
+    <tr className={`border-t ${colors.borderMuted} align-top hover:bg-[#222222]/30`}>
       {canWrite ? (
         <td className="px-3 py-3">
           <input

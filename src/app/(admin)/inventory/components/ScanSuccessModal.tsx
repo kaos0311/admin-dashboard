@@ -2,7 +2,7 @@
 
 import { CheckCircle2, X } from "lucide-react";
 
-import { buttons, glass, tiles, typography } from "@/theme";
+import { buttons, colors, glass, tiles, typography } from "@/theme";
 
 type ScanSuccessModalProps = {
   open: boolean;
@@ -21,7 +21,7 @@ export function ScanSuccessModal({
 
   return (
     <div
-      className="fixed inset-0 z-[110] flex items-center justify-center bg-slate-950/70 p-4 backdrop-blur-xl"
+      className={`fixed inset-0 z-[110] flex items-center justify-center ${colors.overlay} p-4`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="scan-success-title"
@@ -30,7 +30,7 @@ export function ScanSuccessModal({
         <div className="flex items-start justify-between gap-4">
           <div className="flex min-w-0 items-start gap-3">
             <span className={tiles.icon}>
-              <CheckCircle2 className="h-6 w-6 text-emerald-200" />
+              <CheckCircle2 className={`h-6 w-6 ${colors.textSuccess}`} />
             </span>
 
             <div className="min-w-0">

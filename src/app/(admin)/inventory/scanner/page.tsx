@@ -35,7 +35,7 @@ import {
 import { createInventoryMovement } from "@/lib/inventory/movements";
 import { equipmentCheckInByBarcodeWorkflow } from "@/lib/domainWorkflows";
 import { OperationIdManager } from "@/lib/inventory/receive-inventory";
-import { buttons, glass, tiles, typography } from "@/theme";
+import { buttons, colors, glass, tiles, typography } from "@/theme";
 
 type TransactionMode =
   | "lookup"
@@ -83,7 +83,7 @@ function MatchedFieldBadge({ field }: { field: InventoryLookupMatchedField }) {
     barcode: "bg-blue-500/20 text-blue-300 border-blue-500/30",
     serial: "bg-purple-500/20 text-purple-300 border-purple-500/30",
     lotNumber: "bg-orange-500/20 text-orange-300 border-orange-500/30",
-    sku: "bg-green-500/20 text-green-300 border-green-500/30",
+    sku: "bg-[#6a9a6a]/20 text-[#8aba8a] border-[#6a9a6a]/30",
   };
 
   return (
@@ -812,40 +812,40 @@ export default function ScannerPage() {
 
         {/* Diagnostic panel — development only */}
         {showDiagnostics && diagnosticData && process.env.NODE_ENV === "development" && (
-          <section className={`${glass.panel} border border-yellow-500/30 p-4`}>
+          <section className={`${glass.panel} border border-[#c49a4a]/30 p-4`}>
             <div className="mb-2 flex items-center gap-2">
-              <Bug className="h-4 w-4 text-yellow-400" />
-              <h2 className={`${typography.sectionTitle} text-yellow-300`}>
+              <Bug className="h-4 w-4 text-[#c49a4a]" />
+              <h2 className={typography.sectionTitle}>
                 Scan Diagnostics
               </h2>
             </div>
             <div className="grid grid-cols-2 gap-3 text-sm font-mono">
               <div>
-                <span className="text-gray-500">Raw scan:</span>
+                <span className="text-[#888888]">Raw scan:</span>
                 <span className="ml-2 text-white">{diagnosticData.rawScan}</span>
               </div>
               <div>
-                <span className="text-gray-500">Normalized:</span>
+                <span className="text-[#888888]">Normalized:</span>
                 <span className="ml-2 text-white">{diagnosticData.normalizedScan}</span>
               </div>
               <div>
-                <span className="text-gray-500">Response time:</span>
+                <span className="text-[#888888]">Response time:</span>
                 <span className="ml-2 text-white">{diagnosticData.responseTimeMs}ms</span>
               </div>
               <div>
-                <span className="text-gray-500">Status:</span>
+                <span className="text-[#888888]">Status:</span>
                 <span className="ml-2 text-white">{diagnosticData.lookupStatus}</span>
               </div>
               <div>
-                <span className="text-gray-500">Matched field:</span>
+                <span className="text-[#888888]">Matched field:</span>
                 <span className="ml-2 text-white">{diagnosticData.matchedField ?? "-"}</span>
               </div>
               <div>
-                <span className="text-gray-500">Doc ID:</span>
+                <span className="text-[#888888]">Doc ID:</span>
                 <span className="ml-2 text-white">{diagnosticData.matchedDocId ?? "-"}</span>
               </div>
               <div>
-                <span className="text-gray-500">Auth UID:</span>
+                <span className="text-[#888888]">Auth UID:</span>
                 <span className="ml-2 text-white">{diagnosticData.authUid ?? "-"}</span>
               </div>
             </div>
@@ -893,7 +893,7 @@ export default function ScannerPage() {
         <section className={`${glass.panel} min-h-[200px] p-4 sm:p-5`}>
           {lookupState === "idle" && (
             <div className="flex flex-col items-center justify-center py-10 text-center">
-              <ScanLine className="mb-3 h-12 w-12 text-gray-500" />
+              <ScanLine className="mb-3 h-12 w-12 text-[#888888]" />
               <p className={typography.bodyMuted}>
                 Scan a barcode to begin
               </p>
@@ -913,20 +913,20 @@ export default function ScannerPage() {
 
           {unknownBarcode && lookupState === "not_found" && (
             <div className="flex flex-col items-center justify-center py-8 text-center">
-              <XCircle className="mb-3 h-12 w-12 text-red-400" />
-              <p className={`${typography.bodyStrong} text-red-400`}>
+              <XCircle className="mb-3 h-12 w-12 text-[#b84a4a]" />
+              <p className={`${typography.bodyStrong} ${colors.textDanger}`}>
                 Barcode Not Found
               </p>
               <p className={`mt-2 ${typography.bodyMuted} max-w-md`}>
                 No inventory item matches{" "}
-                <code className="rounded bg-gray-800 px-2 py-0.5 font-mono text-sm">
+                <code className="rounded bg-[#1c1c1c] px-2 py-0.5 font-mono text-sm">
                   {lastScannedBarcode}
                 </code>
                 . The barcode was recorded in scan history but no inventory
                 changes were made.
               </p>
               {lookupError && (
-                <p className="mt-3 rounded bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                <p className="mt-3 rounded bg-[#b84a4a]/10 px-3 py-2 text-sm text-[#d47a7a]">
                   {lookupError}
                 </p>
               )}
@@ -935,15 +935,15 @@ export default function ScannerPage() {
 
           {lookupState === "duplicate" && (
             <div className="space-y-4">
-              <div className="flex items-start gap-3 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-4">
-                <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-yellow-400" />
+              <div className="flex items-start gap-3 rounded-lg border border-[#c49a4a]/30 bg-[#c49a4a]/10 p-4">
+                <XCircle className="mt-0.5 h-5 w-5 shrink-0 text-[#c49a4a]" />
                 <div>
-                  <p className="font-semibold text-yellow-300">
+                  <p className={typography.warningStrong}>
                     Multiple items match this barcode
                   </p>
                   <p className={`mt-1 ${typography.bodyMuted}`}>
                     The barcode{" "}
-                    <code className="rounded bg-gray-800 px-1.5 py-0.5 font-mono text-sm">
+                    <code className="rounded bg-[#1c1c1c] px-1.5 py-0.5 font-mono text-sm">
                       {lastScannedBarcode}
                     </code>{" "}
                     matched {duplicateMatches.length} inventory items. Select the
@@ -966,7 +966,7 @@ export default function ScannerPage() {
                         setShowConfirmation(true);
                       }
                     }}
-                    className={`${glass.panel} w-full p-4 text-left transition hover:bg-gray-800/50`}
+                    className={`${glass.panel} w-full p-4 text-left transition hover:bg-[#222222]/30`}
                   >
                     <div className="mb-2 flex items-center justify-between">
                       <p className="font-semibold">{match.item.name || "Unnamed item"}</p>
@@ -987,10 +987,10 @@ export default function ScannerPage() {
           {selectedItem && lookupState === "found" && (
             <div className="space-y-4">
               {/* Product match card */}
-              <div className="rounded-lg border border-green-500/30 bg-green-500/5 p-4">
+              <div className="rounded-lg border border-[#6a9a6a]/30 bg-[#6a9a6a]/5 p-4">
                 <div className="mb-3 flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-green-400" />
-                  <p className="font-semibold text-green-300">
+                  <CheckCircle2 className="h-5 w-5 text-[#6a9a6a]" />
+                  <p className={typography.warningStrong}>
                     Product Found
                   </p>
                 </div>
@@ -1048,10 +1048,10 @@ export default function ScannerPage() {
 
               {/* Receive warning banner */}
               {isReceive && selectedItem && lookupState === "found" && !showConfirmation && (
-                <div className="flex items-start gap-3 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4">
-                  <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+                <div className="flex items-start gap-3 rounded-lg border border-[#c49a4a]/30 bg-[#c49a4a]/10 p-4">
+                  <TriangleAlert className="mt-0.5 h-5 w-5 shrink-0 text-[#c49a4a]" />
                   <div>
-                    <p className="font-semibold text-amber-300">
+                    <p className={typography.warningStrong}>
                       Receiving inventory will increase on-hand quantity.
                     </p>
                     <p className={`mt-1 text-sm ${typography.bodyMuted}`}>
@@ -1139,19 +1139,19 @@ export default function ScannerPage() {
                 <div
                   className={`rounded-lg border p-4 ${
                     transactionResult.success
-                      ? "border-green-500/30 bg-green-500/5"
-                      : "border-red-500/30 bg-red-500/5"
+                      ? `border-[#6a9a6a]/30 bg-[#6a9a6a]/5`
+                      : `border-[#b84a4a]/30 bg-[#b84a4a]/5`
                   }`}
                 >
                   <div className="flex items-center gap-2">
                     {transactionResult.success ? (
-                      <CheckCircle2 className="h-5 w-5 text-green-400" />
+                      <CheckCircle2 className="h-5 w-5 text-[#6a9a6a]" />
                     ) : (
-                      <XCircle className="h-5 w-5 text-red-400" />
+                      <XCircle className="h-5 w-5 text-[#b84a4a]" />
                     )}
                     <p
                       className={`font-semibold ${
-                        transactionResult.success ? "text-green-300" : "text-red-300"
+                        transactionResult.success ? "text-[#d4b86a]" : "text-[#d47a7a]"
                       }`}
                     >
                       {transactionResult.success ? "Transaction Complete" : "Transaction Failed"}
@@ -1200,8 +1200,8 @@ export default function ScannerPage() {
           )}
 
           {txError && (
-            <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 p-3">
-              <p className="text-sm text-red-300">{txError}</p>
+            <div className="mt-3 rounded-lg border border-[#b84a4a]/30 bg-[#b84a4a]/10 p-3">
+              <p className="text-sm text-[#d47a7a]">{txError}</p>
             </div>
           )}
         </section>
@@ -1217,16 +1217,16 @@ export default function ScannerPage() {
               {recentScans.map((scan, index) => (
                 <div
                   key={`${scan.barcode}-${scan.timestamp}-${index}`}
-                  className="flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-gray-800/30"
+                  className="flex items-center gap-3 rounded px-3 py-2 text-sm hover:bg-[#222222]/30"
                 >
                   {scan.status === "success" ? (
-                    <CheckCircle2 className="h-4 w-4 shrink-0 text-green-500" />
+                    <CheckCircle2 className="h-4 w-4 shrink-0 text-[#6a9a6a]" />
                   ) : scan.status === "not_found" ? (
-                    <XCircle className="h-4 w-4 shrink-0 text-gray-500" />
+                    <XCircle className="h-4 w-4 shrink-0 text-[#888888]" />
                   ) : scan.status === "duplicate" ? (
-                    <XCircle className="h-4 w-4 shrink-0 text-yellow-500" />
+                    <XCircle className="h-4 w-4 shrink-0 text-[#c49a4a]" />
                   ) : (
-                    <XCircle className="h-4 w-4 shrink-0 text-red-500" />
+                    <XCircle className="h-4 w-4 shrink-0 text-[#b84a4a]" />
                   )}
                   <code className="font-mono text-xs">{scan.barcode}</code>
                   <span className={`${typography.bodyMuted} truncate`}>
