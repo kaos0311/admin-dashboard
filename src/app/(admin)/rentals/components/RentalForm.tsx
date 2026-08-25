@@ -1,4 +1,4 @@
-import { typography } from "@/theme";
+import { buttons, forms, glass, typography } from "@/theme";
 ﻿import type { Dispatch, SetStateAction } from "react";
 import { Loader2, Plus, Save, X } from "lucide-react";
 import {
@@ -63,8 +63,8 @@ export function RentalForm({
       <SectionHeader
         eyebrow="Rental control"
         title={editingId ? "Edit Rental Asset" : "Add Rental Asset"}
-        description="Create or update rental assets with enough detail to keep accountability tight. Back in my day, this was a clipboard and somebody yelling across the warehouse. This is slightly less cursed."
-      />
+        description="Create or update rental assets with enough detail to keep accountability tight."
+       />
 
       <div className="mt-6 grid gap-4 lg:grid-cols-4">
         <label className="block lg:col-span-2" htmlFor="rental-product">
@@ -77,9 +77,9 @@ export function RentalForm({
             value={form.productId}
             onChange={(event) => handleProductSelect(event.target.value)}
             aria-label="Rental product"
-            className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none transition focus:border-cyan-300/60 focus:bg-black/40 focus:ring-4 focus:ring-cyan-400/10"
+            className={`mt-2 ${forms.select}`}
           >
-            <option value="" className="bg-slate-950">
+            <option value="">
               {productsLoading ? "Loading products..." : "Select product"}
             </option>
 
@@ -87,7 +87,6 @@ export function RentalForm({
               <option
                 key={product.id}
                 value={product.id}
-                className="bg-slate-950"
               >
                 {product.name}
                 {product.hcpcs ? ` â€¢ ${product.hcpcs}` : ""}
@@ -212,7 +211,7 @@ export function RentalForm({
           <button
             type="button"
             onClick={onCancel}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-5 text-sm font-semibold text-slate-200 transition hover:bg-white/[0.08]"
+            className={buttons.secondary}
           >
             <X className="h-4 w-4" />
             Cancel
@@ -223,7 +222,7 @@ export function RentalForm({
           type="button"
           onClick={onSave}
           disabled={saving}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-cyan-300 px-5 text-sm font-bold text-slate-950 shadow-lg shadow-cyan-950/30 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:opacity-60"
+          className={buttons.primary}
         >
           {saving ? (
             <Loader2 className="h-4 w-4 animate-spin" />

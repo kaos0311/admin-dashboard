@@ -22,7 +22,7 @@ export function OrdersHeader({
   return (
     <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
       <div className="min-w-0">
-        <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold shadow-lg shadow-cyan-950/20 backdrop-blur-xl ${badges.info}`}>
+        <div className={`inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold ${badges.info}`}>
           <Sparkles className="h-3.5 w-3.5" aria-hidden={true} />
           Smart Intake Enabled
         </div>
@@ -33,8 +33,7 @@ export function OrdersHeader({
 
         <p className={`${typography.bodyMuted} mt-1 max-w-3xl`}>
           Track patient orders, imported report orders, inventory allocation,
-          review flags, and delivery progress without turning production into a
-          clipboard hostage situation.
+          review flags, and delivery progress.
         </p>
 
         <p className={`mt-1 ${typography.caption}`}>

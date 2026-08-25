@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 import { useAuthRole } from "@/app/hooks/useAuthRole";
-import { alerts, badges, buttons, colors, glass, spacing, tables, typography } from "@/theme";
+import { alerts, badges, buttons, colors, forms, glass, spacing, tables, typography } from "@/theme";
 
 import { PAR_SYNC_WINDOW_DAYS, syncRentalParsToPatientRecords } from "@/services/rentals/rental-par.service";
 
@@ -242,12 +242,10 @@ export default function RentalsPage() {
                   Rentals Command Center
                 </h1>
 
-                <p className={`mt-3 max-w-3xl ${typography.body}`}>
-                  Operational rental tracking for active equipment,
-                  returns, patient-linked rental records, product
-                  availability, billing visibility, and overdue rental
-                  oversight. Because rented equipment has a funny habit
-                  of wandering off like it joined witness protection.
+                <p className={`mt-1 max-w-2xl ${typography.bodyMuted}`}>
+                  Operational rental tracking for active equipment, returns,
+                  patient-linked records, product availability, billing
+                  visibility, and overdue oversight.
                 </p>
               </div>
             </div>
@@ -577,7 +575,7 @@ function ReportTable({
       </div>
 
       {mode === "pars" && parSyncMessage ? (
-        <div className={`${glass.inset} mb-4 text-sm text-cyan-100`}>
+        <div className={`${glass.inset} mb-4 text-sm ${colors.textInfo}`}>
           {parSyncMessage}
         </div>
       ) : null}
@@ -645,7 +643,7 @@ function ReportTable({
                           {record.patientId ? (
                             <Link
                               href={`/reports/patients/${encodeURIComponent(record.patientId)}?tab=insurance`}
-                              className={`text-sm font-semibold ${colors.textSecondary} hover:${colors.textPrimary}`}
+                              className={`text-sm font-semibold ${colors.textSecondary} hover:text-[#e6e6e6]`}
                             >
                               {record.parNumber}
                             </Link>
@@ -733,11 +731,16 @@ function ExchangeRentalModal({
   const canSubmit = Boolean(replacementInventoryItemId.trim() && reason.trim()) && !saving;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4 backdrop-blur-sm">
-      <div className={`${glass.panelPadded} w-full max-w-2xl shadow-2xl shadow-black/40`}>
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="exchange-modal-title"
+      className={`fixed inset-0 z-50 flex items-center justify-center ${colors.overlay} p-4`}
+    >
+      <div className={`${glass.panelPadded} w-full max-w-2xl`}>
         <div className="flex items-start justify-between gap-4">
           <div>
-            <h2 className={typography.sectionTitle}>Exchange Rental Asset</h2>
+             <h2 id="exchange-modal-title" className={typography.sectionTitle}>Exchange Rental Asset</h2>
             <p className={`${typography.bodyMuted} mt-2`}>
               Current: {record.productName || "Unnamed rental"} · {record.itemId || "No inventory ID"} · SN {record.serialNumber || "—"}
             </p>
@@ -748,12 +751,12 @@ function ExchangeRentalModal({
         </div>
 
         <div className="mt-5 grid gap-4 sm:grid-cols-2">
-          <label className="block">
+            <label className="block">
             <span className={typography.smallMuted}>Replacement inventory ID</span>
             <input
               value={replacementInventoryItemId}
               onChange={(event) => setReplacementInventoryItemId(event.target.value)}
-              className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none"
+              className={`mt-2 ${forms.input}`}
               placeholder="inventory/{id}"
             />
           </label>
@@ -762,7 +765,7 @@ function ExchangeRentalModal({
             <input
               value={replacementSerialNumber}
               onChange={(event) => setReplacementSerialNumber(event.target.value)}
-              className="mt-2 h-11 w-full rounded-2xl border border-white/10 bg-black/30 px-4 text-sm text-white outline-none"
+              className={`mt-2 ${forms.input}`}
               placeholder="Optional serial"
             />
           </label>
@@ -771,7 +774,7 @@ function ExchangeRentalModal({
             <textarea
               value={reason}
               onChange={(event) => setReason(event.target.value)}
-              className="mt-2 min-h-24 w-full rounded-2xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white outline-none"
+              className={`mt-2 min-h-24 ${forms.textareaCompact}`}
               placeholder="Required reason for exchange"
             />
           </label>

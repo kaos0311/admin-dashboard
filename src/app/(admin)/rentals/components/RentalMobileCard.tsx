@@ -1,4 +1,4 @@
-import { glass, typography } from "@/theme";
+import { badges, colors, glass, surfaces, typography } from "@/theme";
 
 import type { RentalRecord } from "../rentals-types";
 import {
@@ -26,7 +26,7 @@ export function RentalMobileCard({
     <article className={glass.cardPadded}>
       <div className="flex min-w-0 items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <h3 className="break-words font-semibold leading-5 text-white">
+          <h3 className={`break-words ${typography.bodyStrong} leading-5`}>
             {record.productName || "Unnamed rental asset"}
           </h3>
 
@@ -40,7 +40,7 @@ export function RentalMobileCard({
           </p>
         </div>
 
-        <span className="shrink-0 rounded-full border border-cyan-300/20 bg-cyan-300/10 px-2.5 py-1 text-xs font-semibold text-cyan-100">
+        <span className={`shrink-0 rounded-full border px-2.5 py-1 text-xs font-semibold ${badges.info}`}>
           {formatStatus(record.status)}
         </span>
       </div>
@@ -93,7 +93,7 @@ export function RentalMobileCard({
       </div>
 
       {record.notes ? (
-        <p className="mt-4 min-w-0 break-words rounded-2xl border border-white/10 bg-white/[0.04] p-3 text-sm leading-6 text-slate-300">
+        <p className={`mt-4 min-w-0 break-words ${surfaces.insetPadded} text-sm leading-6`}>
           {record.notes}
         </p>
       ) : null}
@@ -130,7 +130,7 @@ function RentalInfoBlock({
       <p
         className={[
           "mt-1 min-w-0 break-words",
-          strong ? "font-semibold text-white" : "text-slate-200",
+          strong ? colors.textPrimary : colors.textSecondary,
         ].join(" ")}
       >
         {primary}

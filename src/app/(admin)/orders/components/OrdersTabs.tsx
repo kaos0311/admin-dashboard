@@ -1,7 +1,7 @@
 "use client";
 
 import type { FilterTab } from "../lib/orderTypes";
-import { colors } from "@/theme";
+import { colors, tiles } from "@/theme";
 
 export function OrdersTabs({
   tab,
@@ -27,7 +27,7 @@ export function OrdersTabs({
             type="button"
             aria-pressed={active}
             onClick={() => onTabChange(item.key)}
-            className={`rounded-2xl px-4 py-2 text-sm font-semibold shadow-inner shadow-black/20 backdrop-blur-xl transition border ${active ? "border-[#7a9a5e]/40 bg-[#7a9a5e]/10 text-[#9aba7e]" : colors.neutral}`}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold transition border ${active ? "border-[#7a9a5e]/40 bg-[#7a9a5e]/10 text-[#9aba7e]" : colors.neutral}`}
           >
             {item.label} ({item.count ?? 0})
           </button>

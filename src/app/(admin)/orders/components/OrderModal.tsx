@@ -88,7 +88,7 @@ export function OrderModal({
       role="dialog"
       aria-modal="true"
       aria-labelledby="order-modal-title"
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4 py-6 backdrop-blur-xl"
+      className={`fixed inset-0 z-50 flex items-center justify-center ${colors.overlay} px-4 py-6`}
     >
       <div
         className={`${glass.panel} max-h-[92vh] w-full max-w-5xl overflow-hidden`}
@@ -360,7 +360,7 @@ function TextField({
     <div>
       <label htmlFor={id} className={typography.formLabel}>
         {label}
-        {required ? <span className="text-rose-300"> *</span> : null}
+        {required ? <span className={colors.textDanger}> *</span> : null}
       </label>
 
       <input

@@ -16,6 +16,7 @@ import {
   badges,
   buttons,
   glass,
+  tables,
   typography,
 } from "@/theme";
 
@@ -257,7 +258,7 @@ export function OrdersTable({
 }
 
 function TableHead({ children }: { children: React.ReactNode }) {
-  return <th className="px-4 py-3 font-semibold">{children}</th>;
+  return <th className={tables.headCell}>{children}</th>;
 }
 
 function ActionButton({

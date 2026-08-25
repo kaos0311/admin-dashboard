@@ -101,7 +101,7 @@ export function RentalEquipmentTiles({
               glass.cardPadded,
               glass.cardHover,
               "min-h-[210px] text-left",
-              selectedKey === summary.key ? "ring-2 ring-cyan-300/45" : "",
+              selectedKey === summary.key ? "ring-2 ring-[#7a9a5e]/45" : "",
             ].join(" ")}
           >
             <div className="flex min-w-0 items-start justify-between gap-3">

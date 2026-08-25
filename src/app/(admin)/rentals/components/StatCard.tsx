@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 
-import { colors, metricActionButtonClass, tiles, typography } from "@/theme";
+import { metricActionButtonClass, surfaces, tiles, typography } from "@/theme";
 
 type StatCardProps = {
   label: string;
@@ -41,7 +41,7 @@ export function StatCard({
           </p>
         </div>
 
-        <div className={["flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl", colors.neutral].join(" ")}>
+        <div className={["flex h-11 w-11 shrink-0 items-center justify-center", tiles.icon].join(" ")}>
           {icon}
         </div>
       </div>
@@ -63,7 +63,8 @@ export function StatCard({
           tiles.base,
           tiles.compact,
           tiles.hover,
-          "min-h-[10.75rem] min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a9a5e]/40",
+          "min-h-[10.75rem] min-w-0 text-left",
+          surfaces.focus,
           active ? "ring-2 ring-[#7a9a5e]/45" : "",
         ].join(" ")}
       >

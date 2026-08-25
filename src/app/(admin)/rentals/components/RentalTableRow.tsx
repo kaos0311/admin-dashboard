@@ -23,7 +23,7 @@ export function RentalTableRow({
   onMarkReturned,
 }: RentalTableRowProps) {
   return (
-    <tr className="transition hover:bg-white/[0.035]">
+    <tr className="transition hover:bg-[#222222]">
       <td className="w-[260px] px-4 py-4 align-top">
         <div className="min-w-0">
           <p className={`${typography.cardTitle} line-clamp-2 leading-5`}>

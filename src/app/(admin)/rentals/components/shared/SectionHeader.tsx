@@ -1,5 +1,5 @@
-import { typography } from "@/theme";
-﻿import type { ReactNode } from "react";
+import { colors, typography } from "@/theme";
+import type { ReactNode } from "react";
 
 type SectionHeaderProps = {
   eyebrow?: string;
@@ -18,17 +18,17 @@ export function SectionHeader({
     <div className="flex min-w-0 flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
       <div className="min-w-0 flex-1">
         {eyebrow ? (
-          <p className="truncate text-xs font-semibold uppercase tracking-[0.22em] text-cyan-200/80">
+          <p className={`truncate text-xs font-semibold uppercase tracking-[0.22em] ${colors.textInfo}`}>
             {eyebrow}
           </p>
         ) : null}
 
-        <h2 className="mt-1 break-words text-xl font-semibold tracking-tight text-white">
+        <h2 className={`mt-1 break-words ${typography.sectionTitle}`}>
           {title}
         </h2>
 
         {description ? (
-          <p className={`mt-2 max-w-3xl break-words text-sm leading-6 ${typography.bodyMuted}`}>
+          <p className={`mt-2 max-w-3xl break-words ${typography.bodyMuted}`}>
             {description}
           </p>
         ) : null}
@@ -42,6 +42,3 @@ export function SectionHeader({
     </div>
   );
 }
-
-
-
