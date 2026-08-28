@@ -2,9 +2,10 @@ import { getStorage } from "firebase-admin/storage";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 import { enforceCallableRateLimit } from "../security/rateLimit.js";
-import { requireStaffOrAdmin } from "../inventory/auth.js";
+import { requireStaffOrAdmin, requireTank } from "../inventory/auth.js";
 import * as deliveryWorkflowService from "./deliveryWorkflowService.js";
-import { assertAdmin } from "./shared.js";
+import { assertAdmin, assertOperationId } from "./shared.js";
+import { type EmployeeEvaluationAction, employeeEvaluationWorkflow, type EmployeeEvaluationWorkflowInput } from "./employeeEvaluationWorkflowService.js";
 import { type PatientEquipmentAction, patientEquipmentWorkflow } from "./patientEquipmentWorkflowService.js";
 import { type PatientLifecycleAction, patientLifecycleWorkflow } from "./patientLifecycleWorkflowService.js";
 import {
@@ -510,5 +511,61 @@ export const cleanupPendingWorkflowUploadsCallable = onCall(
       count: stale.length,
       stale,
     };
+  }
+);
+
+export const employeeEvaluationWorkflowCallable = onCall(
+  {
+    region: "us-central1",
+    timeoutSeconds: 60,
+    memory: "256MiB",
+    maxInstances: 10,
+  },
+  async (request) => {
+    const actor = await requireTank(request);
+    const data = request.data as Record<string, unknown> | undefined;
+    const action = cleanString(data?.action) as EmployeeEvaluationAction | undefined;
+    if (!action || !["save", "snapshot", "comment"].includes(action)) {
+      throw new HttpsError("invalid-argument", "Invalid employee evaluation action.");
+    }
+
+    const operationId = cleanString(data?.operationId) ?? "";
+    assertOperationId(operationId);
+
+    // The workflow service performs server-authoritative validation. Do NOT
+    // coerce malformed numeric values to 0 here - raw payload values must
+    // reach the service so invalid input is rejected at runtime.
+    return employeeEvaluationWorkflow(
+      {
+        operationId,
+        action,
+        employeeId: cleanString(data?.employeeId) ?? "",
+        employeeName: cleanString(data?.employeeName) ?? "",
+        role: ["front_office", "tech"].includes(cleanString(data?.role) ?? "")
+          ? (cleanString(data?.role) as "front_office" | "tech")
+          : "front_office",
+        titles: Array.isArray(data?.titles)
+          ? data.titles.filter((item): item is string => typeof item === "string")
+          : [],
+        // Pass raw evaluationYear through WITHOUT coercion so the
+        // server-authoritative validation in employeeEvaluationWorkflow
+        // rejects invalid years instead of silently defaulting to the
+        // current year.
+        evaluationYear: data?.evaluationYear as number,
+        recordAccuracy: data?.recordAccuracy as number,
+        highDollarSales: data?.highDollarSales as number,
+        deliveryTimeScore: data?.deliveryTimeScore as number,
+        productivityScore: data?.productivityScore as number,
+        deliveryAccuracy: data?.deliveryAccuracy as number,
+        commentsQrUrl: cleanString(data?.commentsQrUrl) ?? "",
+        reviewNotes: cleanString(data?.reviewNotes) ?? "",
+        // Pass raw tone through WITHOUT coercion so the server-authoritative
+        // validation in employeeEvaluationWorkflow rejects invalid values.
+        // This prevents a malformed tone from being silently accepted.
+        tone: data?.tone as "positive" | "corrective" | "neutral" | undefined,
+        comment: cleanString(data?.comment) ?? "",
+      } as EmployeeEvaluationWorkflowInput,
+      actor
+    );
   }
 );

@@ -490,15 +490,18 @@ service cloud.firestore {
     }
 
     match /employeeEvaluations/{docId} {
-      allow read, write: if isTank();
+      allow read: if isTank();
+      allow write: if false;
     }
 
     match /employeeEvaluationComments/{docId} {
-      allow read, create, update, delete: if isTank();
+      allow read: if isTank();
+      allow write: if false;
     }
 
     match /employeeEvaluationSnapshots/{docId} {
-      allow read, create, update, delete: if isTank();
+      allow read: if isTank();
+      allow write: if false;
     }
 
     match /retailCustomerContacts/{docId} {

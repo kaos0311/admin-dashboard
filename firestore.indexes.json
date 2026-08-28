@@ -490,6 +490,14 @@
         { "fieldPath": "patientKey", "order": "ASCENDING" },
         { "fieldPath": "fulfillmentStatus", "order": "ASCENDING" }
       ]
+    },
+    {
+      "collectionGroup": "employeeEvaluationComments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "employeeId", "order": "ASCENDING" },
+        { "fieldPath": "createdAt", "order": "DESCENDING" }
+      ]
     }
   ],
   "fieldOverrides": [

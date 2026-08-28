@@ -12,6 +12,7 @@ export default defineConfig({
       "src/golden/**/*.emulator.test.ts",
       "src/resetOperationalDatabase.emulator.test.ts",
       "src/products/**/*.emulator.test.ts",
+      "src/domainWorkflows/**/*.emulator.test.ts",
     ],
     exclude: ["node_modules", "lib"],
     testTimeout: 30000,

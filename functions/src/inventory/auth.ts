@@ -67,3 +67,33 @@ export async function requireStaffOrAdmin(
 
   return { uid, email, role };
 }
+
+export async function requireTank(
+  request: CallableRequest,
+): Promise<{ uid: string; email: string; role: string }> {
+  if (!request.auth) {
+    throw new HttpsError(
+      "unauthenticated",
+      "You must be signed in to access employee evaluations.",
+    );
+  }
+
+  const uid = request.auth.uid;
+  const email = String(
+    (request.auth.token as Record<string, unknown>)?.email ?? uid,
+  );
+
+  const role = await resolveCallableRole({
+    uid,
+    token: request.auth.token as Record<string, unknown>,
+  });
+
+  if (role !== "tank") {
+    throw new HttpsError(
+      "permission-denied",
+      "Employee evaluations require tank access.",
+    );
+  }
+
+  return { uid, email, role };
+}

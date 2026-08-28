@@ -1,21 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import {
-  addDoc,
-  collection,
-  doc,
-  serverTimestamp,
-  setDoc,
-} from "firebase/firestore";
 import toast from "react-hot-toast";
 
-import { auth, db } from "@/lib/firebase";
+import { employeeEvaluationWorkflow } from "@/lib/domainWorkflows";
 
 import {
   EMPLOYEE_TITLE_OPTIONS,
-  gradeLetter,
-  gradeScore,
   numberValue,
   roleFromTitles,
 } from "../lib/evaluationUtils";
@@ -155,32 +146,21 @@ export function useEmployeeEvaluationMutations(isAdmin: boolean) {
     setSavingId(employeeId);
 
     try {
-      await setDoc(
-        doc(db, "employeeEvaluations", employeeId),
-        {
-          ...draft,
-          currentGradeScore: gradeScore(draft),
-          currentGradeLetter: gradeLetter(gradeScore(draft)),
-          updatedByUid: auth.currentUser?.uid ?? null,
-          updatedByEmail: auth.currentUser?.email ?? null,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      await addDoc(collection(db, "auditLogs"), {
-        action: "employee_evaluation_updated",
-        actorUid: auth.currentUser?.uid ?? null,
-        actorEmail: auth.currentUser?.email ?? null,
-        targetId: employeeId,
-        targetName: draft.employeeName,
-        targetCollection: "employeeEvaluations",
-        details: {
-          evaluationYear: draft.evaluationYear,
-          gradeScore: gradeScore(draft),
-          gradeLetter: gradeLetter(gradeScore(draft)),
-        },
-        createdAt: serverTimestamp(),
+      await employeeEvaluationWorkflow({
+        operationId: `save-${employeeId}-${Date.now()}`,
+        action: "save",
+        employeeId,
+        employeeName: draft.employeeName,
+        role: draft.role,
+        titles: draft.titles,
+        evaluationYear: draft.evaluationYear,
+        recordAccuracy: draft.recordAccuracy,
+        highDollarSales: draft.highDollarSales,
+        deliveryTimeScore: draft.deliveryTimeScore,
+        productivityScore: draft.productivityScore,
+        deliveryAccuracy: draft.deliveryAccuracy,
+        commentsQrUrl: draft.commentsQrUrl,
+        reviewNotes: draft.reviewNotes,
       });
 
       toast.success(`${draft.employeeName} evaluation saved.`);
@@ -195,62 +175,18 @@ export function useEmployeeEvaluationMutations(isAdmin: boolean) {
   async function createSnapshot(
     employeeId: string,
     drafts: DraftMap,
-    commentsByEmployee: Record<string, EmployeeEvaluationComment[]>
+    _commentsByEmployee: Record<string, EmployeeEvaluationComment[]>
   ) {
     const draft = drafts[employeeId];
     if (!draft || !isAdmin) return;
-    const employeeComments = commentsByEmployee[employeeId] ?? [];
 
     setSnapshotId(employeeId);
 
     try {
-      await addDoc(collection(db, "employeeEvaluationSnapshots"), {
-        ...draft,
+      await employeeEvaluationWorkflow({
+        operationId: `snapshot-${employeeId}-${Date.now()}`,
+        action: "snapshot",
         employeeId,
-        gradeScore: gradeScore(draft),
-        gradeLetter: gradeLetter(gradeScore(draft)),
-        managerCommentCount: employeeComments.length,
-        positiveCommentCount: employeeComments.filter(
-          (comment) => comment.tone === "positive"
-        ).length,
-        correctiveCommentCount: employeeComments.filter(
-          (comment) => comment.tone === "corrective"
-        ).length,
-        recentManagerComments: employeeComments.slice(0, 12).map((comment) => ({
-          tone: comment.tone,
-          comment: comment.comment,
-          createdAtLabel: comment.createdAtLabel,
-          createdByEmail: comment.createdByEmail,
-        })),
-        snapshotType: "yearly_evaluation",
-        createdByUid: auth.currentUser?.uid ?? null,
-        createdByEmail: auth.currentUser?.email ?? null,
-        createdAt: serverTimestamp(),
-      });
-
-      await setDoc(
-        doc(db, "employeeEvaluations", employeeId),
-        {
-          lastSnapshotAt: serverTimestamp(),
-          lastSnapshotYear: draft.evaluationYear,
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      await addDoc(collection(db, "auditLogs"), {
-        action: "employee_yearly_snapshot_created",
-        actorUid: auth.currentUser?.uid ?? null,
-        actorEmail: auth.currentUser?.email ?? null,
-        targetId: employeeId,
-        targetName: draft.employeeName,
-        targetCollection: "employeeEvaluationSnapshots",
-        details: {
-          evaluationYear: draft.evaluationYear,
-          gradeScore: gradeScore(draft),
-          gradeLetter: gradeLetter(gradeScore(draft)),
-        },
-        createdAt: serverTimestamp(),
       });
 
       toast.success(`${draft.employeeName} yearly evaluation snapshot saved.`);
@@ -302,40 +238,12 @@ export function useEmployeeEvaluationMutations(isAdmin: boolean) {
     setCommentSavingId(employee.id);
 
     try {
-      await addDoc(collection(db, "employeeEvaluationComments"), {
+      await employeeEvaluationWorkflow({
+        operationId: `comment-${employee.id}-${Date.now()}`,
+        action: "comment",
         employeeId: employee.id,
-        employeeName: employee.employeeName,
         tone: draft.tone,
         comment,
-        source: "manager_manual_entry",
-        createdByUid: auth.currentUser?.uid ?? null,
-        createdByEmail: auth.currentUser?.email ?? null,
-        createdAt: serverTimestamp(),
-      });
-
-      await setDoc(
-        doc(db, "employeeEvaluations", employee.id),
-        {
-          latestManagerComment: comment,
-          latestManagerCommentTone: draft.tone,
-          latestManagerCommentAt: serverTimestamp(),
-          updatedAt: serverTimestamp(),
-        },
-        { merge: true }
-      );
-
-      await addDoc(collection(db, "auditLogs"), {
-        action: "employee_evaluation_comment_added",
-        actorUid: auth.currentUser?.uid ?? null,
-        actorEmail: auth.currentUser?.email ?? null,
-        targetId: employee.id,
-        targetName: employee.employeeName,
-        targetCollection: "employeeEvaluationComments",
-        details: {
-          tone: draft.tone,
-          evaluationYear: employee.evaluationYear,
-        },
-        createdAt: serverTimestamp(),
       });
 
       setCommentDrafts((current) => ({

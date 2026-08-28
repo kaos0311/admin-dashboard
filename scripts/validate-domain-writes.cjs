@@ -3,6 +3,11 @@ const path = require("path");
 
 const ROOT = path.resolve(process.env.DOMAIN_WRITE_VALIDATION_ROOT || process.cwd());
 
+/**
+ * Fields that are protected across ALL domain-scoped collections.
+ * These are domain-specific workflow fields, not generic audit fields.
+ * Generic audit fields are handled by scoped rules below.
+ */
 const PROTECTED_FIELDS = [
   "loadedScanCount",
   "deliveredScanCount",
@@ -58,6 +63,34 @@ const PROTECTED_FIELDS = [
   "tombstoned",
   "lifecycleUpdatedByUid",
   "lifecycleUpdatedByEmail",
+  "currentGradeScore",
+  "currentGradeLetter",
+  "lastSnapshotAt",
+  "lastSnapshotYear",
+  "latestManagerComment",
+  "latestManagerCommentTone",
+  "latestManagerCommentAt",
+];
+
+/**
+ * Generic audit fields that are NOT domain-specific. These must only be
+ * protected when the write is scoped to Employee Evaluation collections,
+ * otherwise legitimate browser writes (e.g. an `updatedAt` on an order)
+ * would be falsely flagged.
+ */
+const GENERIC_AUDIT_FIELDS = [
+  "updatedByUid",
+  "updatedByEmail",
+  "updatedAt",
+  "createdByUid",
+  "createdByEmail",
+  "createdAt",
+];
+
+const EMPLOYEE_EVALUATION_SCOPES = [
+  "employeeEvaluations",
+  "employeeEvaluationComments",
+  "employeeEvaluationSnapshots",
 ];
 
 const PROTECTED_RENTAL_FIELDS = [
@@ -120,6 +153,9 @@ const DOMAIN_SCOPES = [
   "deliverySignatures",
   "deliveryDamagePhotos",
   "domainWorkflowOperations",
+  "employeeEvaluations",
+  "employeeEvaluationComments",
+  "employeeEvaluationSnapshots",
 ];
 
 const ALLOWLIST = new Set([
@@ -128,6 +164,7 @@ const ALLOWLIST = new Set([
   "functions/src/domainWorkflows/rentalWorkflowService.ts",
   "functions/src/domainWorkflows/patientEquipmentWorkflowService.ts",
   "functions/src/domainWorkflows/patientLifecycleWorkflowService.ts",
+  "functions/src/domainWorkflows/employeeEvaluationWorkflowService.ts",
   "functions/src/domainWorkflows/domainWorkflowFunctions.ts",
   "functions/src/inventory/movementService.ts",
   "functions/src/orders/orderWorkflowService.ts",
@@ -209,6 +246,12 @@ function looksDomainScoped(text) {
   return DOMAIN_SCOPES.some((scope) => new RegExp(`\\b${scope}\\b`).test(text));
 }
 
+function looksEmployeeEvaluationScoped(text) {
+  return EMPLOYEE_EVALUATION_SCOPES.some((scope) =>
+    new RegExp(`\\b${scope}\\b`).test(text)
+  );
+}
+
 function containsFinalWorkflowStoragePath(text) {
   return /patient-documents[\s\S]{0,120}(signatures|damage-photos)/.test(text) ||
     /patientDocuments[\s\S]{0,120}(signatures|damage-photos)/.test(text);
@@ -241,7 +284,25 @@ function containsDirectProtectedDomainWrite(text) {
     return true;
   }
 
-  return containsProtectedField(text) && looksDomainScoped(text);
+  // Employee Evaluation writes are protected only when the write is scoped to
+  // one of the EE collections. Generic audit fields (updatedAt/createdAt/etc.)
+  // are NOT protected globally - they must be scoped to EE collections so
+  // legitimate browser writes in other domains are not falsely flagged.
+  if (
+    looksEmployeeEvaluationScoped(text) &&
+    (containsAnyField(text, PROTECTED_FIELDS) ||
+      containsAnyField(text, GENERIC_AUDIT_FIELDS))
+  ) {
+    return true;
+  }
+
+  // For other domain-scoped writes, only protect truly domain-specific fields.
+  // Generic audit fields are excluded here to avoid false positives on
+  // legitimate browser writes (e.g. updating `updatedAt` on an order).
+  const domainSpecificFields = PROTECTED_FIELDS.filter(
+    (field) => !GENERIC_AUDIT_FIELDS.includes(field)
+  );
+  return containsAnyField(text, domainSpecificFields) && looksDomainScoped(text);
 }
 
 const violations = [];

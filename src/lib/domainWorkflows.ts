@@ -365,3 +365,33 @@ export async function inventoryCleanupWorkflow(
   const result = await callable(request);
   return result.data;
 }
+
+export type EmployeeEvaluationWorkflowRequest = {
+  operationId: string;
+  action: "save" | "snapshot" | "comment";
+  employeeId: string;
+  employeeName?: string;
+  role?: "front_office" | "tech";
+  titles?: string[];
+  evaluationYear?: number;
+  recordAccuracy?: number;
+  highDollarSales?: number;
+  deliveryTimeScore?: number;
+  productivityScore?: number;
+  deliveryAccuracy?: number;
+  commentsQrUrl?: string;
+  reviewNotes?: string;
+  tone?: "positive" | "corrective" | "neutral";
+  comment?: string;
+};
+
+export async function employeeEvaluationWorkflow(
+  request: EmployeeEvaluationWorkflowRequest
+): Promise<DomainWorkflowResult> {
+  const callable = httpsCallable<EmployeeEvaluationWorkflowRequest, DomainWorkflowResult>(
+    functions,
+    "employeeEvaluationWorkflowCallable"
+  );
+  const result = await callable(request);
+  return result.data;
+}

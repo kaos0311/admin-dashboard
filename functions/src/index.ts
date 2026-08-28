@@ -77,5 +77,6 @@ export {
   equipmentCheckInByBarcodeCallable,
   patientLifecycleWorkflowCallable,
   cleanupPendingWorkflowUploadsCallable,
+  employeeEvaluationWorkflowCallable,
 } from "./domainWorkflows/domainWorkflowFunctions";
 export { orderWorkflowCallable } from "./orders/orderWorkflowFunctions.js";
