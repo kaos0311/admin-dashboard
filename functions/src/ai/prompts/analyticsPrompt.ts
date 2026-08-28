@@ -8,12 +8,13 @@ import type {
   CollectionSampleSummary,
   CountContradiction,
   JoinVerification,
+  ValueJoinVerification,
 } from "../types/reporting";
 
 export const ANALYTICS_PROMPT_SECTION = `
 Analytics & reporting guidance:
 - Counts: always report sampledCount separately from actualCount; say "unknown" for actualCount when no aggregate count ran.
-- Every reported figure carries a classification: VERIFIED, INFERRED, UNKNOWN, or NOT TESTED.
+- Every reported figure carries a classification: VERIFIED, SAMPLED, INFERRED, UNKNOWN, or NOT TESTED.
 - Join claims require join-verification numbers (records tested, exact matches, unmatched, missing keys, ambiguous matches).
 - Claim strength: absolute terms require aggregate-grade evidence; otherwise use "suggests", "likely", "sample indicates".
 - Recommendation gating: migrations, restores, re-imports, new linkage keys, and data repair require a VERIFIED defect first.
@@ -22,7 +23,7 @@ Analytics & reporting guidance:
 export interface AnalyticsPromptContext {
   summaries: CollectionSampleSummary[];
   contradictions: CountContradiction[];
-  joins: JoinVerification[];
+  joins: Array<JoinVerification | ValueJoinVerification>;
 }
 
 function classificationLine(name: string, classification: Classification): string {
@@ -53,12 +54,18 @@ export function buildAnalyticsContextSection(
 
   const joinLines =
     context.joins.length > 0
-      ? context.joins.map((join) =>
-          classificationLine(
+      ? context.joins.map((join) => {
+          if ("sourceCollection" in join) {
+            return classificationLine(
+              `join ${join.sourceCollection}.${join.sourceKey} -> ${join.targetCollection}.${join.targetKey}: sourceTested=${join.sourceTestedCount}, targetTested=${join.targetTestedCount}, sourceWithKey=${join.sourceRecordsWithKey}, sourceMissingKeys=${join.sourceMissingKeyCount}, exactUniqueMatches=${join.exactUniqueMatches}, ambiguousMatches=${join.ambiguousMatches}, unmatched=${join.unmatched}, duplicateTargetKeys=${join.duplicateTargetKeys}, targetDuplicateKeyCount=${join.targetDuplicateKeyCount}, coverage=${join.coveragePercentage}%, outcome=${join.outcome}, sampleStatus=${join.sampleStatus}, joinMethod=${join.joinMethod}, joinComplete=${join.joinComplete}, sourceCountMethod=${join.sourceCountMethod}, targetCountMethod=${join.targetCountMethod}, evidenceRef=${join.evidenceRef}`,
+              join.classification
+            );
+          }
+          return classificationLine(
             `join ${join.leftCollection}.${join.leftField} -> ${join.rightCollection}.${join.rightField}: tested=${join.recordsTestedLeft}/${join.recordsTestedRight}, matches=${join.exactMatches}, unmatched=${join.unmatchedLeft}/${join.unmatchedRight}, missingKeys=${join.missingKeysLeft}/${join.missingKeysRight}, ambiguous=${join.ambiguousMatches}`,
             join.classification
-          )
-        )
+          );
+        })
       : ["- No cross-collection joins were tested; any relationship claim is NOT TESTED."];
 
   return [

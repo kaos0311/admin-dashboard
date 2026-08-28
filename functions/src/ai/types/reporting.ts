@@ -24,9 +24,15 @@ export type EvidenceKind =
   | "schema_inspection"
   | "audit_logs"
   | "code_inspection"
-  | "import_metadata";
+  | "import_metadata"
+  | "value_join";
 
-export type Classification = "VERIFIED" | "INFERRED" | "UNKNOWN" | "NOT_TESTED";
+export type Classification =
+  | "VERIFIED"
+  | "SAMPLED"
+  | "INFERRED"
+  | "UNKNOWN"
+  | "NOT_TESTED";
 
 export interface Evidence {
   kind: EvidenceKind;
@@ -192,14 +198,10 @@ export interface JoinPair {
   rightField: string;
 }
 
-export const KEY_NORMALIZE_RULE =
-  "trim -> lowercase -> collapse internal whitespace";
+export const KEY_NORMALIZE_RULE = "trim";
 
 export function normalizeKeyValue(value: unknown): string {
-  return String(value ?? "")
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");
+  return String(value ?? "").trim();
 }
 
 export interface JoinSide {
@@ -229,6 +231,56 @@ export interface JoinVerification {
   unmatchedRight: number;
   classification: Classification;
   evidence: Evidence[];
+}
+
+export type JoinCountMethod = "aggregate_count" | "limited_query" | "unavailable";
+export type JoinScanMethod = "complete_value_scan" | "limited_value_scan";
+export type JoinOutcome = "CLEAN" | "DEFECTS_FOUND" | "AMBIGUOUS" | "UNKNOWN";
+
+export interface ValueJoinVerification {
+  sourceCollection: string;
+  targetCollection: string;
+  sourceKey: string;
+  targetKey: string;
+  sourceActualCount: number | null;
+  targetActualCount: number | null;
+  sourceCountMethod: JoinCountMethod;
+  targetCountMethod: JoinCountMethod;
+  sourceTestedCount: number;
+  targetTestedCount: number;
+  sourceRecordsWithKey: number;
+  sourceMissingKeyCount: number;
+  targetRecordsWithKey: number;
+  targetMissingKeyCount: number;
+  uniqueTargetKeys: number;
+  duplicateTargetKeys: number;
+  targetDuplicateKeyCount: number;
+  ambiguityCount: number;
+  exactUniqueMatches: number;
+  ambiguousMatches: number;
+  unmatched: number;
+  coveragePercentage: number;
+  sampleStatus: "complete" | "sampled" | "not_tested";
+  joinMethod: JoinScanMethod;
+  joinComplete: boolean;
+  outcome: JoinOutcome;
+  normalization: typeof KEY_NORMALIZE_RULE;
+  classification: Classification;
+  evidenceRef: string;
+  evidence: Evidence[];
+  leftCollection: string;
+  rightCollection: string;
+  leftField: string;
+  rightField: string;
+  normalizeRule: string;
+  recordsTestedLeft: number;
+  recordsTestedRight: number;
+  missingKeysLeft: number;
+  missingKeysRight: number;
+  duplicateRightKeys: number;
+  exactMatches: number;
+  unmatchedLeft: number;
+  unmatchedRight: number;
 }
 
 function isMissingKey(value: string | number | null | undefined): boolean {
@@ -366,6 +418,163 @@ export function notTestedJoin(
   };
 }
 
+export interface ValueJoinSideInput {
+  collection: string;
+  key: string;
+  values: unknown[];
+  actualCount: number | null;
+  countMethod: JoinCountMethod;
+  complete: boolean;
+}
+
+function percent(part: number, total: number): number {
+  if (total <= 0) return 0;
+  return Math.round((part / total) * 10000) / 100;
+}
+
+export function verifyValueJoin(
+  source: ValueJoinSideInput,
+  target: ValueJoinSideInput
+): ValueJoinVerification {
+  const targetFreq = new Map<string, number>();
+  let targetMissingKeyCount = 0;
+  let targetRecordsWithKey = 0;
+
+  for (const value of target.values) {
+    if (isMissingKey(value as string | number | null | undefined)) {
+      targetMissingKeyCount += 1;
+      continue;
+    }
+    targetRecordsWithKey += 1;
+    const key = normalizeKeyValue(value);
+    targetFreq.set(key, (targetFreq.get(key) ?? 0) + 1);
+  }
+
+  let sourceMissingKeyCount = 0;
+  let sourceRecordsWithKey = 0;
+  let exactUniqueMatches = 0;
+  let ambiguousMatches = 0;
+  let unmatched = 0;
+
+  for (const value of source.values) {
+    if (isMissingKey(value as string | number | null | undefined)) {
+      sourceMissingKeyCount += 1;
+      continue;
+    }
+    sourceRecordsWithKey += 1;
+    const targetMatches = targetFreq.get(normalizeKeyValue(value)) ?? 0;
+    if (targetMatches === 1) {
+      exactUniqueMatches += 1;
+    } else if (targetMatches > 1) {
+      ambiguousMatches += 1;
+    } else {
+      unmatched += 1;
+    }
+  }
+
+  const duplicateTargetKeys = Array.from(targetFreq.values()).filter(
+    (count) => count > 1
+  ).length;
+  const targetDuplicateKeyCount = Array.from(targetFreq.values()).reduce(
+    (sum, count) => sum + (count > 1 ? count : 0),
+    0
+  );
+  const joinComplete = source.complete && target.complete;
+  const sampleStatus =
+    source.values.length === 0 && target.values.length === 0
+      ? "not_tested"
+      : joinComplete
+        ? "complete"
+        : "sampled";
+  const joinMethod: JoinScanMethod = joinComplete
+    ? "complete_value_scan"
+    : "limited_value_scan";
+  let outcome: JoinOutcome;
+  if (sampleStatus === "not_tested") {
+    outcome = "UNKNOWN";
+  } else if (ambiguousMatches > 0 || duplicateTargetKeys > 0) {
+    outcome = "AMBIGUOUS";
+  } else if (
+    sourceMissingKeyCount > 0 ||
+    targetMissingKeyCount > 0 ||
+    unmatched > 0
+  ) {
+    outcome = "DEFECTS_FOUND";
+  } else if (
+    sourceRecordsWithKey > 0 &&
+    exactUniqueMatches === sourceRecordsWithKey
+  ) {
+    outcome = "CLEAN";
+  } else {
+    outcome = "UNKNOWN";
+  }
+
+  let classification: Classification;
+  if (sampleStatus === "not_tested") {
+    classification = "NOT_TESTED";
+  } else if (!joinComplete) {
+    classification = "SAMPLED";
+  } else if (outcome !== "UNKNOWN") {
+    classification = "VERIFIED";
+  } else {
+    classification = "UNKNOWN";
+  }
+
+  const evidenceRef = `value-join:${source.collection}.${source.key}->${target.collection}.${target.key}:${joinMethod}`;
+  const evidence: Evidence[] = [
+    {
+      kind: "value_join",
+      reference: evidenceRef,
+    },
+  ];
+
+  return {
+    sourceCollection: source.collection,
+    targetCollection: target.collection,
+    sourceKey: source.key,
+    targetKey: target.key,
+    sourceActualCount: source.actualCount,
+    targetActualCount: target.actualCount,
+    sourceCountMethod: source.countMethod,
+    targetCountMethod: target.countMethod,
+    sourceTestedCount: source.values.length,
+    targetTestedCount: target.values.length,
+    sourceRecordsWithKey,
+    sourceMissingKeyCount,
+    targetRecordsWithKey,
+    targetMissingKeyCount,
+    uniqueTargetKeys: targetFreq.size,
+    duplicateTargetKeys,
+    targetDuplicateKeyCount,
+    ambiguityCount: ambiguousMatches,
+    exactUniqueMatches,
+    ambiguousMatches,
+    unmatched,
+    coveragePercentage: percent(exactUniqueMatches, sourceRecordsWithKey),
+    sampleStatus,
+    joinMethod,
+    joinComplete,
+    outcome,
+    normalization: KEY_NORMALIZE_RULE,
+    classification,
+    evidenceRef,
+    evidence,
+    leftCollection: source.collection,
+    rightCollection: target.collection,
+    leftField: source.key,
+    rightField: target.key,
+    normalizeRule: KEY_NORMALIZE_RULE,
+    recordsTestedLeft: source.values.length,
+    recordsTestedRight: target.values.length,
+    missingKeysLeft: sourceMissingKeyCount,
+    missingKeysRight: targetMissingKeyCount,
+    duplicateRightKeys: duplicateTargetKeys,
+    exactMatches: exactUniqueMatches,
+    unmatchedLeft: unmatched,
+    unmatchedRight: 0,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // 4. Contradiction detection
 // ---------------------------------------------------------------------------
@@ -472,7 +681,7 @@ const REQUIRED_EVIDENCE_KINDS: Record<HighImpactAction, EvidenceKind[]> = {
   restore: ["audit_logs"],
   re_import: ["import_metadata"],
   new_linkage_key: ["sampled_documents"],
-  data_repair: ["aggregate_count"],
+  data_repair: ["aggregate_count", "value_join"],
 };
 
 export interface DefectClaim {

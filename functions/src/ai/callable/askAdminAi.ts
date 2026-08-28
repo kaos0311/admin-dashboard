@@ -16,8 +16,11 @@ import {
 import {
   buildOperationsContext,
   type CollectionFetchResult,
-  type JoinPair,
 } from "../services/contextBuilder";
+import {
+  selectValueJoinDefinitions,
+  verifyDefaultValueJoins,
+} from "../services/joinVerifier";
 import { buildJarvisResponsesParams, createOpenAiClient } from "../services/openaiClient";
 import {
   buildAiAuditLogPayload,
@@ -370,13 +373,9 @@ async function getCollectionAggregateCount(collectionName: string): Promise<numb
   }
 }
 
-const DEFAULT_JOIN_PAIRS: JoinPair[] = [
-  { leftCollection: "patients", leftField: "patientName", rightCollection: "orders", rightField: "patientName" },
-  { leftCollection: "patients", leftField: "patientName", rightCollection: "rentals", rightField: "patientName" },
-  { leftCollection: "patients", leftField: "patientName", rightCollection: "wipRecords", rightField: "patientName" },
-];
-
-async function buildJarvisOperationsContext() {
+async function buildJarvisOperationsContext(options: {
+  valueJoinDefinitions: import("../services/joinVerifier").ValueJoinDefinition[];
+}) {
   const results: CollectionFetchResult[] = [];
   const samples: Record<string, Array<Record<string, unknown>>> = {};
 
@@ -396,7 +395,15 @@ async function buildJarvisOperationsContext() {
     })
   );
 
-  const operationsContext = buildOperationsContext(results, REQUIRED_FIELDS, DEFAULT_JOIN_PAIRS);
+  const valueJoins = options.valueJoinDefinitions.length > 0
+    ? await verifyDefaultValueJoins(db, options.valueJoinDefinitions)
+    : [];
+  const operationsContext = buildOperationsContext(
+    results,
+    REQUIRED_FIELDS,
+    [],
+    valueJoins
+  );
 
   const dataQualityAlerts = operationsContext.summaries.flatMap((summary) =>
     Object.entries(summary.missingKeyCounts)
@@ -430,7 +437,10 @@ async function buildJarvisOperationsContext() {
     totalSampledRecords: number;
     summaries: import("../types/reporting").CollectionSampleSummary[];
     contradictions: import("../types/reporting").CountContradiction[];
-    joins: import("../types/reporting").JoinVerification[];
+    joins: Array<
+      | import("../types/reporting").JoinVerification
+      | import("../types/reporting").ValueJoinVerification
+    >;
     evidence: import("../types/reporting").Evidence[];
     samples: Record<string, Array<Record<string, unknown>>>;
     dataQualityAlerts: Array<{ collection: string; field: string; missing: number; loaded: number }>;
@@ -481,7 +491,7 @@ async function buildRetailFinancialContext() {
   };
 }
 
-async function buildAiContext(intent: string) {
+async function buildAiContext(intent: string, prompt: string) {
   const [dashboardSnap, auditLogsSnap, importJobsSnap] = await Promise.all([
     db.collection("analytics").doc("dashboard").get(),
     db.collection("auditLogs").orderBy("createdAt", "desc").limit(25).get(),
@@ -525,7 +535,9 @@ async function buildAiContext(intent: string) {
     limitApplied: 25,
   });
 
-  const operations = await buildJarvisOperationsContext();
+  const operations = await buildJarvisOperationsContext({
+    valueJoinDefinitions: selectValueJoinDefinitions(prompt),
+  });
 
   const context: Record<string, unknown> = {
     dashboard,
@@ -545,12 +557,16 @@ async function buildAiContext(intent: string) {
   ];
 
   if (intent === "orders" || intent === "general") {
-    context.recentOrders = await getRecentCollectionDocs("orders", RECENT_DOC_LIMIT);
+    context.recentOrders = (
+      await getRecentCollectionDocs("orders", RECENT_DOC_LIMIT)
+    ).map(redactContextDoc);
     collectionsUsed.push("orders");
   }
 
   if (intent === "rentals" || intent === "general") {
-    context.recentRentals = await getRecentCollectionDocs("rentals", RECENT_DOC_LIMIT);
+    context.recentRentals = (
+      await getRecentCollectionDocs("rentals", RECENT_DOC_LIMIT)
+    ).map(redactContextDoc);
     collectionsUsed.push("rentals");
   }
 
@@ -571,18 +587,18 @@ async function buildAiContext(intent: string) {
   }
 
   if (intent === "hospice") {
-    context.recentHospicePatients = await getRecentCollectionDocs(
+    context.recentHospicePatients = (await getRecentCollectionDocs(
       "hospicePatients",
       15
-    );
+    )).map(redactContextDoc);
     collectionsUsed.push("hospicePatients");
   }
 
   if (intent === "insurance") {
-    context.recentInsuranceRecords = await getRecentCollectionDocs(
+    context.recentInsuranceRecords = (await getRecentCollectionDocs(
       "insuranceRecords",
       15
-    );
+    )).map(redactContextDoc);
     collectionsUsed.push("insuranceRecords");
   }
 
@@ -616,7 +632,10 @@ async function buildAiContext(intent: string) {
     collectionsUsed: string[];
     operationsEvidence: import("../types/reporting").Evidence[];
     contradictions: import("../types/reporting").CountContradiction[];
-    joins: import("../types/reporting").JoinVerification[];
+    joins: Array<
+      | import("../types/reporting").JoinVerification
+      | import("../types/reporting").ValueJoinVerification
+    >;
   };
 }
 
@@ -677,7 +696,7 @@ export const askAdminAi = onCall(
       operationsEvidence,
       contradictions,
       joins,
-    } = await buildAiContext(intent);
+    } = await buildAiContext(intent, safePrompt);
 
     const reportArtifact =
       intent === "analysis-reporting" || /export|csv|report|graph|chart|summary/i.test(safePrompt)
@@ -830,6 +849,9 @@ export const askAdminAi = onCall(
       (context.operationsOverview as { summaries?: CollectionSampleSummary[] })
         ?.summaries?.map((s) => [s.collection, s.count.method]) ?? []
     );
+    const joinEvidenceRefs = joins
+      .map((join) => ("evidenceRef" in join ? join.evidenceRef : null))
+      .filter((ref): ref is string => Boolean(ref));
 
     const auditPayload = buildAiAuditLogPayload(
       {
@@ -845,7 +867,11 @@ export const askAdminAi = onCall(
         phiAlertIds,
         reportArtifactCreated: Boolean(reportArtifact),
         countMethods,
-        evidenceRefs: operationsEvidence.map((e) => e.reference),
+        evidenceRefs: [
+          ...operationsEvidence.map((e) => e.reference),
+          ...joinEvidenceRefs,
+        ],
+        joinEvidenceRefs,
         recommendationGatedCount: gateResult.recommendations.length,
         recommendationBlockedCount: gateResult.recommendations.filter((r) => !r.allowed).length,
       },

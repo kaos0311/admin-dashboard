@@ -13,7 +13,7 @@
  *   - generated CSV/report uses the same classifications/count semantics
  */
 
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("firebase-admin/app", () => ({
   getApps: vi.fn(() => []),
@@ -50,6 +50,20 @@ const mockCollection = (
       ),
     ),
   }));
+  self.select = vi.fn(() => ({
+    limit: vi.fn(() => ({
+      get: vi.fn(() =>
+        Promise.resolve(
+          mockSnapshot(
+            records.map((data, index) => ({
+              id: `doc-${index}`,
+              data: () => data,
+            }))
+          )
+        )
+      ),
+    })),
+  }));
   self.orderBy = vi.fn(() => ({
     limit: vi.fn(() => ({
       get: vi.fn(() => Promise.resolve(mockSnapshot([]))),
@@ -74,9 +88,9 @@ const mockCollection = (
 vi.mock("firebase-admin/firestore", () => {
   const collections: Record<string, Array<Record<string, unknown>>> = {
     patients: [
-      { patientName: "Alice Smith", dob: "1980-01-01", phone: "555-1111", insurance: "Acme" },
-      { patientName: "Bob Jones", dob: "1975-05-05", phone: "555-2222", insurance: "Beta" },
-      { patientName: "Carol White", dob: "1990-09-09", phone: "555-3333", insurance: "Gamma" },
+      { patientId: "PAT-JOIN-001", patientName: "Alice Smith", dob: "1980-01-01", phone: "555-1111", insurance: "Acme" },
+      { patientId: "PAT-JOIN-002", patientName: "Bob Jones", dob: "1975-05-05", phone: "555-2222", insurance: "Beta" },
+      { patientId: "PAT-JOIN-003", patientName: "Carol White", dob: "1990-09-09", phone: "555-3333", insurance: "Gamma" },
     ],
     orders: [
       { patientName: "alice smith", status: "active", productType: "DME" },
@@ -84,7 +98,7 @@ vi.mock("firebase-admin/firestore", () => {
       { patientName: "Dan Brown", status: "active", productType: "DME" },
     ],
     rentals: [
-      { patientName: "Alice Smith", status: "active" },
+      { patientId: "PAT-JOIN-001", patientName: "Alice Smith", status: "active" },
     ],
     wipRecords: [
       { patientName: "Unknown", status: "open" },
@@ -98,7 +112,10 @@ vi.mock("firebase-admin/firestore", () => {
     insuranceRecords: [],
     insurancePatients: [],
     patientDeliveryTickets: [],
-    patientAuthorizations: [],
+    patientAuthorizations: [
+      { patientId: "PAT-JOIN-002", status: "active" },
+      { patientId: "PAT-JOIN-MISSING", status: "active" },
+    ],
     shopItems: [],
     shopCostOfGoodsSold: [],
     shopInventoryLots: [],
@@ -108,6 +125,8 @@ vi.mock("firebase-admin/firestore", () => {
   const aggregateCounts: Record<string, number | null> = {
     patients: 3,
     orders: 3,
+    rentals: 1,
+    patientAuthorizations: 2,
   };
 
   const db = {
@@ -136,7 +155,7 @@ vi.mock("firebase-functions/v2/https", () => ({
 }));
 
 vi.mock("firebase-functions/params", () => ({
-  defineSecret: vi.fn((name: string) => ({ value: () => "test-key" })),
+  defineSecret: vi.fn((_name: string) => ({ value: () => "test-key" })),
 }));
 
 const mockResponsesCreate = vi.fn(() =>
@@ -207,7 +226,6 @@ import { buildJarvisSystemPrompt } from "../prompts/adminSystemPrompt";
 import { buildReportCsv } from "../tools/reportInsights";
 import {
   canRecommendAction,
-  evaluateClaimLanguage,
   findCountContradictions,
   summarizeSample,
   verifyJoin,
@@ -279,8 +297,8 @@ describe("askAdminAi reporting contract integration", () => {
   });
 
   it("produces verified join counts with real matching keys", () => {
-    const left = { collection: "patients", field: "patientName", values: ["Alice Smith", "Bob Jones"] };
-    const right = { collection: "orders", field: "patientName", values: ["alice smith", "bob jones"] };
+    const left = { collection: "rentals", field: "patientId", values: ["PAT-001", "PAT-002"] };
+    const right = { collection: "patients", field: "patientId", values: ["PAT-001", "PAT-002"] };
 
     const result = verifyJoin(left, right);
 
@@ -456,5 +474,70 @@ describe("askAdminAi reporting contract integration", () => {
 
     const { buildAiAuditLogPayload } = await import("../services/aiLogger.js");
     expect(buildAiAuditLogPayload).toHaveBeenCalled();
+  });
+
+  it("does not send raw patientIds in model context", async () => {
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: { prompt: "Verify patient joins" },
+    };
+
+    await (askAdminAi as unknown as (req: unknown) => Promise<void>)(request);
+
+    const responseCalls = mockResponsesCreate.mock.calls as unknown as Array<
+      [unknown]
+    >;
+    const serializedParams = JSON.stringify(responseCalls[0]?.[0]);
+    expect(serializedParams).toContain("patientAuthorizations");
+    expect(serializedParams).toContain("exactUniqueMatches");
+    expect(serializedParams).not.toContain("PAT-JOIN-001");
+    expect(serializedParams).not.toContain("PAT-JOIN-002");
+    expect(serializedParams).not.toContain("PAT-JOIN-MISSING");
+  });
+
+  it("does not run value-join evidence for ordinary count questions", async () => {
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: { prompt: "How many products are active?" },
+    };
+
+    await (askAdminAi as unknown as (req: unknown) => Promise<void>)(request);
+
+    const responseCalls = mockResponsesCreate.mock.calls as unknown as Array<
+      [unknown]
+    >;
+    const serializedParams = JSON.stringify(responseCalls[0]?.[0]);
+    expect(serializedParams).not.toContain("exactUniqueMatches");
+    expect(serializedParams).not.toContain(
+      "value-join:rentals.patientId->patients.patientId"
+    );
+  });
+
+  it("does not write raw patientIds in AI audit payload", async () => {
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: { prompt: "Verify patient joins" },
+    };
+
+    await (askAdminAi as unknown as (req: unknown) => Promise<void>)(request);
+
+    const { buildAiAuditLogPayload } = await import("../services/aiLogger.js");
+    const serializedPayload = JSON.stringify(
+      vi.mocked(buildAiAuditLogPayload).mock.calls.at(-1)?.[0]
+    );
+
+    expect(serializedPayload).toContain("joinEvidenceRefs");
+    expect(serializedPayload).not.toContain("PAT-JOIN-001");
+    expect(serializedPayload).not.toContain("PAT-JOIN-002");
+    expect(serializedPayload).not.toContain("PAT-JOIN-MISSING");
   });
 });

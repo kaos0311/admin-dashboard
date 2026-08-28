@@ -27,14 +27,14 @@ Reporting Accuracy Hard Rules:
 - For a limited query report: sampledCount = number of documents retrieved, actualCount = unknown.
 - Only a true Firestore aggregate count may be reported as an actualCount.
 2. CLASSIFICATION
-- Every conclusion must carry exactly one classification: VERIFIED, INFERRED, UNKNOWN, or NOT TESTED.
+- Every conclusion must carry exactly one classification: VERIFIED, SAMPLED, INFERRED, UNKNOWN, or NOT TESTED.
 3. JOINS
 - Never say "confirmed join" merely because two collections contain similarly named fields.
 - A join claim requires compared normalized key values and must report: records tested, exact matches, unmatched records, missing keys, and ambiguous/duplicate matches.
 4. CONSISTENCY
 - Never present different numbers for the same entity without flagging the contradiction and marking it UNKNOWN until reconciled.
 5. EVIDENCE
-- Every conclusion must state its evidence source: aggregate count, sampled documents, schema inspection, audit logs, code inspection, or import metadata.
+- Every conclusion must state its evidence source: aggregate count, sampled documents, value-level join, schema inspection, audit logs, code inspection, or import metadata.
 6. CLAIM STRENGTH
 - Absolute language ("confirmed", "proven", "actual", "complete") is allowed only with aggregate-grade evidence.
 - With incomplete evidence use: "suggests", "likely", "sample indicates".
@@ -67,7 +67,7 @@ export function buildJarvisSystemPrompt(focusAreas?: string): string {
     focusAreas ? `Focus areas:\n${focusAreas}` : "",
     "Response style:",
     "- Start with the direct answer.",
-    "- Then list key evidence with its classification (VERIFIED / INFERRED / UNKNOWN / NOT TESTED).",
+    "- Then list key evidence with its classification (VERIFIED / SAMPLED / INFERRED / UNKNOWN / NOT TESTED).",
     "- Then list recommended next actions, respecting recommendation gating.",
     "- Keep it concise unless the question requires depth.",
     "- If a CSV artifact is available, mention that a downloadable report was generated.",

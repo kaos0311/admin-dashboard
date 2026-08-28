@@ -13,15 +13,18 @@ import {
   type RecommendationGateInput,
 } from "./recommendationGate";
 import {
+  canRecommendAction,
+  type CollectionSampleSummary,
   countFromAggregate,
   countFromLimitedQuery,
-  type CollectionSampleSummary,
   type Evidence,
+  type JoinOutcome,
+  type ValueJoinVerification,
 } from "../types/reporting";
 
 function makeSummary(
   collection: string,
-  classification: "VERIFIED" | "INFERRED" | "UNKNOWN" | "NOT_TESTED",
+  classification: "VERIFIED" | "SAMPLED" | "INFERRED" | "UNKNOWN" | "NOT_TESTED",
   aggregateCount?: number | null,
   missingFields: Record<string, number> = {},
   evidence?: Evidence[]
@@ -45,6 +48,63 @@ function makeSummary(
         reference: `${collection}: ${classification}`,
       },
     ],
+  };
+}
+
+function makeValueJoin(
+  overrides: Partial<ValueJoinVerification> = {}
+): ValueJoinVerification {
+  const outcome: JoinOutcome = overrides.outcome ?? "DEFECTS_FOUND";
+  return {
+    sourceCollection: "rentals",
+    targetCollection: "patients",
+    sourceKey: "patientId",
+    targetKey: "patientId",
+    sourceActualCount: 10,
+    targetActualCount: 10,
+    sourceCountMethod: "aggregate_count",
+    targetCountMethod: "aggregate_count",
+    sourceTestedCount: 10,
+    targetTestedCount: 10,
+    sourceRecordsWithKey: 10,
+    sourceMissingKeyCount: outcome === "DEFECTS_FOUND" ? 1 : 0,
+    targetRecordsWithKey: 10,
+    targetMissingKeyCount: 0,
+    uniqueTargetKeys: 10,
+    duplicateTargetKeys: outcome === "AMBIGUOUS" ? 1 : 0,
+    targetDuplicateKeyCount: outcome === "AMBIGUOUS" ? 2 : 0,
+    ambiguityCount: outcome === "AMBIGUOUS" ? 1 : 0,
+    exactUniqueMatches: outcome === "CLEAN" ? 10 : 9,
+    ambiguousMatches: outcome === "AMBIGUOUS" ? 1 : 0,
+    unmatched: outcome === "DEFECTS_FOUND" ? 1 : 0,
+    coveragePercentage: outcome === "CLEAN" ? 100 : 90,
+    sampleStatus: "complete",
+    joinMethod: "complete_value_scan",
+    joinComplete: true,
+    outcome,
+    normalization: "trim",
+    classification: "VERIFIED",
+    evidenceRef: "value-join:rentals.patientId->patients.patientId:complete_value_scan",
+    evidence: [
+      {
+        kind: "value_join",
+        reference: "value-join:rentals.patientId->patients.patientId:complete_value_scan",
+      },
+    ],
+    leftCollection: "rentals",
+    rightCollection: "patients",
+    leftField: "patientId",
+    rightField: "patientId",
+    normalizeRule: "trim",
+    recordsTestedLeft: 10,
+    recordsTestedRight: 10,
+    missingKeysLeft: outcome === "DEFECTS_FOUND" ? 1 : 0,
+    missingKeysRight: 0,
+    duplicateRightKeys: outcome === "AMBIGUOUS" ? 1 : 0,
+    exactMatches: outcome === "CLEAN" ? 10 : 9,
+    unmatchedLeft: outcome === "DEFECTS_FOUND" ? 1 : 0,
+    unmatchedRight: 0,
+    ...overrides,
   };
 }
 
@@ -407,5 +467,87 @@ describe("recommendation gate", () => {
 
     expect(result.recommendations).toHaveLength(0);
     expect(result.gatedAnswer).toBe("Investigate the rentals linkage. Verify the orders data.");
+  });
+
+  it("does not let unrelated join evidence authorize remediation", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Repair the payer records.",
+      summaries: [makeSummary("payerRecords", "UNKNOWN")],
+      joins: [makeValueJoin()],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("UNKNOWN");
+  });
+
+  it("allows relevant remediation with a complete verified value-join defect", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Repair the rentals patient linkage.",
+      summaries: [],
+      joins: [makeValueJoin()],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].allowed).toBe(true);
+    expect(result.gatedAnswer).toBe("Repair the rentals patient linkage.");
+  });
+
+  it("blocks remediation for sampled value-join defects", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Repair the rentals patient linkage.",
+      summaries: [],
+      joins: [
+        makeValueJoin({
+          classification: "SAMPLED",
+          sampleStatus: "sampled",
+          joinMethod: "limited_value_scan",
+          joinComplete: false,
+        }),
+      ],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("SAMPLED");
+  });
+
+  it("does not fabricate a defect from a complete clean join", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Repair the rentals patient linkage.",
+      summaries: [],
+      joins: [makeValueJoin({ outcome: "CLEAN" })],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("UNKNOWN");
+  });
+
+  it("canRecommendAction allows VERIFIED value_join evidence for data repair", () => {
+    const decision = canRecommendAction("data_repair", {
+      summary: "rentals.patientId has unmatched patient references",
+      classification: "VERIFIED",
+      evidence: [
+        {
+          kind: "value_join",
+          reference: "value-join:rentals.patientId->patients.patientId:complete_value_scan",
+        },
+      ],
+    });
+
+    expect(decision.allowed).toBe(true);
   });
 });

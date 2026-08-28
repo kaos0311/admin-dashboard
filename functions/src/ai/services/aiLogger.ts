@@ -9,8 +9,6 @@
 
 import type { FieldValue } from "firebase-admin/firestore";
 
-import type { Evidence } from "../types/reporting";
-
 export interface AiAuditLogPayload {
   actorUid: string;
   actorEmail: string | null;
@@ -27,6 +25,8 @@ export interface AiAuditLogPayload {
   countMethods?: Record<string, string>;
   /** New: evidence references backing the answer context. */
   evidenceRefs?: string[];
+  /** New: bounded join-verifier evidence references without raw key values. */
+  joinEvidenceRefs?: string[];
   /** Number of high-impact recommendations processed by the recommendation gate. */
   recommendationGatedCount?: number;
   /** Number of high-impact recommendations blocked by the recommendation gate. */

@@ -8,15 +8,15 @@
  */
 
 import {
-  countFromLimitedQuery,
-  findCountContradictions,
-  summarizeSample,
   type CollectionSampleSummary,
   type CountClaim,
   type CountContradiction,
   type Evidence,
+  findCountContradictions,
   type JoinPair,
   type JoinVerification,
+  summarizeSample,
+  type ValueJoinVerification,
   verifyJoin,
 } from "../types/reporting";
 
@@ -92,14 +92,15 @@ export interface ContextBuildOutput {
   totalSampledRecords: number;
   summaries: CollectionSampleSummary[];
   contradictions: CountContradiction[];
-  joins: JoinVerification[];
+  joins: Array<JoinVerification | ValueJoinVerification>;
   evidence: Evidence[];
 }
 
 export function buildOperationsContext(
   results: CollectionFetchResult[],
   requiredFieldsByCollection: Record<string, string[]> = {},
-  joinPairs: JoinPair[] = []
+  joinPairs: JoinPair[] = [],
+  valueJoins: ValueJoinVerification[] = []
 ): ContextBuildOutput {
   const summaries = buildCollectionSummaries(
     results,
@@ -115,9 +116,12 @@ export function buildOperationsContext(
     {}
   );
 
-  const joins = buildJoinVerifications(samples, joinPairs);
+  const joins = [...buildJoinVerifications(samples, joinPairs), ...valueJoins];
 
-  const evidence: Evidence[] = summaries.flatMap((summary) => summary.evidence);
+  const evidence: Evidence[] = [
+    ...summaries.flatMap((summary) => summary.evidence),
+    ...valueJoins.flatMap((join) => join.evidence),
+  ];
 
   return {
     totalSampledRecords: summaries.reduce(

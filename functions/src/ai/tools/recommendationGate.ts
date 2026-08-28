@@ -19,6 +19,7 @@ import {
   type Evidence,
   type HighImpactAction,
   type JoinVerification,
+  type ValueJoinVerification,
 } from "../types/reporting";
 
 const HIGH_IMPACT_RULES: Array<{ regex: RegExp; action: HighImpactAction }> = [
@@ -60,7 +61,7 @@ export interface RecommendationGateInput {
   answer: string;
   summaries: CollectionSampleSummary[];
   contradictions: CountContradiction[];
-  joins: JoinVerification[];
+  joins: Array<JoinVerification | ValueJoinVerification>;
   evidence: Evidence[];
 }
 
@@ -129,11 +130,61 @@ function findRelevantSummary(
   return bestScore > 0 ? best : undefined;
 }
 
+function isValueJoin(
+  join: JoinVerification | ValueJoinVerification
+): join is ValueJoinVerification {
+  return "sourceCollection" in join;
+}
+
+function joinHasDefect(join: ValueJoinVerification): boolean {
+  return join.outcome === "DEFECTS_FOUND" || join.outcome === "AMBIGUOUS";
+}
+
+function findRelevantJoinDefect(
+  text: string,
+  joins: Array<JoinVerification | ValueJoinVerification>
+): ValueJoinVerification | undefined {
+  const lower = text.toLowerCase();
+  let best: ValueJoinVerification | undefined;
+  let bestScore = 0;
+
+  for (const join of joins) {
+    if (!isValueJoin(join) || !joinHasDefect(join)) continue;
+    const words = [
+      ...splitCollectionName(join.sourceCollection),
+      ...splitCollectionName(join.targetCollection),
+      ...splitCollectionName(join.sourceKey),
+      ...splitCollectionName(join.targetKey),
+      "join",
+      "linkage",
+    ];
+    const score = words.reduce(
+      (acc, word) => acc + (lower.includes(word) ? 1 : 0),
+      0
+    );
+    if (score > bestScore) {
+      bestScore = score;
+      best = join;
+    }
+  }
+
+  return bestScore > 0 ? best : undefined;
+}
+
 function buildDefectClaim(
   action: HighImpactAction,
   text: string,
   input: RecommendationGateInput
 ): DefectClaim {
+  const relevantJoin = findRelevantJoinDefect(text, input.joins);
+  if (relevantJoin) {
+    return {
+      summary: `${relevantJoin.sourceCollection}.${relevantJoin.sourceKey} -> ${relevantJoin.targetCollection}.${relevantJoin.targetKey}: ${relevantJoin.outcome}`,
+      classification: relevantJoin.classification,
+      evidence: relevantJoin.evidence,
+    };
+  }
+
   const relevant = findRelevantSummary(text, input.summaries);
 
   if (!relevant) {
