@@ -4,6 +4,17 @@
  * Proves that high-impact remediation recommendations are blocked when the
  * underlying defect is not VERIFIED with sufficient evidence, while diagnostic
  * recommendations and ordinary prose pass through unchanged.
+ *
+ * ALSO proves the live-test regressions:
+ * - "Consider restoring insurancePatients" is blocked on UNKNOWN evidence
+ * - "Consider importing missing insurancePatients" is blocked on UNKNOWN
+ * - an empty collection (actualCount=0) alone cannot authorize restore/import
+ * - restore/restored/importing/reimport/backfill variants are detected
+ * - unrelated VERIFIED evidence cannot authorize remediation
+ * - SAMPLED evidence cannot authorize remediation
+ * - relevant VERIFIED defect may authorize appropriate remediation
+ * - diagnostic verbs investigate/audit/verify remain allowed
+ * - the unsafe recommendation itself is removed/downgraded, not just warned
  */
 
 import { describe, expect, it } from "vitest";
@@ -244,7 +255,7 @@ describe("recommendation gate", () => {
         makeSummary("patientRecords", "VERIFIED", 5000, undefined, [
           { kind: "import_metadata", reference: "job-1" },
         ]),
-        makeSummary("orders", "VERIFIED", 100, undefined, [
+        makeSummary("orders", "VERIFIED", 100, { patientName: 3 }, [
           { kind: "aggregate_count", reference: "orders.count()=100" },
         ]),
       ],
@@ -296,7 +307,11 @@ describe("recommendation gate", () => {
     const input: RecommendationGateInput = {
       ...baseInput,
       answer: "Repair the orders with missing patient names.",
-      summaries: [makeSummary("orders", "VERIFIED", 100)],
+      summaries: [
+        makeSummary("orders", "VERIFIED", 100, { patientName: 3 }, [
+          { kind: "aggregate_count", reference: "orders.count()=100" },
+        ]),
+      ],
     };
 
     const result = applyRecommendationGate(input);
@@ -558,5 +573,345 @@ describe("recommendation gate", () => {
     });
 
     expect(decision.allowed).toBe(true);
+  });
+
+  it("blocks 'Consider restoring insurancePatients' on UNKNOWN evidence", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Consider restoring insurancePatients data if expected but currently empty.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN", undefined)],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("restore");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("UNKNOWN");
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+    expect(result.gatedAnswer).not.toContain("restoring insurancePatients");
+  });
+
+  it("blocks 'Consider importing missing insurancePatients' on UNKNOWN evidence", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Consider importing missing insurancePatients data.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN", undefined)],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("re_import");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("UNKNOWN");
+    expect(result.gatedAnswer).toContain("Re-importing is not recommended yet");
+    expect(result.gatedAnswer).not.toContain("importing missing insurancePatients");
+  });
+
+  it("does not let empty collection actualCount=0 authorize restore/import", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Restore the insurancePatients records.",
+      summaries: [
+        makeSummary("insurancePatients", "VERIFIED", 0, undefined, [
+          { kind: "aggregate_count", reference: "insurancePatients.count()=0" },
+        ]),
+      ],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("restore");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("UNKNOWN");
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+  });
+
+  it("detects natural-language restore variants", () => {
+    const variants = [
+      "Restoring the records.",
+      "We are restoring the records.",
+      "Restored the records.",
+      "Restore the records.",
+    ];
+    for (const variant of variants) {
+      const input: RecommendationGateInput = {
+        ...baseInput,
+        answer: variant,
+        summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+      };
+      const result = applyRecommendationGate(input);
+      expect(result.recommendations).toHaveLength(1);
+      expect(result.recommendations[0].action).toBe("restore");
+      expect(result.recommendations[0].allowed).toBe(false);
+    }
+  });
+
+  it("detects natural-language import variants", () => {
+    const variants = [
+      "Importing the records.",
+      "Re-import the records.",
+      "Reimport the records.",
+      "Re-importing the records.",
+      "We should backfill the records.",
+      "Rebuild the linkage.",
+      "Repair the data.",
+      "Migrating the schema.",
+      "Add a new linkage key.",
+    ];
+    for (const variant of variants) {
+      const input: RecommendationGateInput = {
+        ...baseInput,
+        answer: variant,
+        summaries: [],
+      };
+      const result = applyRecommendationGate(input);
+      expect(result.recommendations.length).toBeGreaterThan(0);
+      expect(result.recommendations[0].allowed).toBe(false);
+    }
+  });
+
+  it("does not let unrelated VERIFIED evidence authorize remediation", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Import the insurancePatients records.",
+      summaries: [
+        makeSummary("rentals", "VERIFIED", 1000, undefined, [
+          { kind: "aggregate_count", reference: "rentals.count()=1000" },
+        ]),
+      ],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("re_import");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("UNKNOWN");
+    expect(result.gatedAnswer).toContain("Re-importing is not recommended yet");
+  });
+
+  it("does not let SAMPLED evidence authorize remediation", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Import the insurancePatients records.",
+      summaries: [
+        makeSummary("insurancePatients", "SAMPLED", undefined, { insuranceName: 1 }, [
+          { kind: "sampled_documents", reference: "insurancePatients: sampled" },
+        ]),
+      ],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("re_import");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("SAMPLED");
+  });
+
+  it("allows relevant VERIFIED defect to authorize appropriate remediation", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Repair the insurancePatients records with missing insurance names.",
+      summaries: [
+        makeSummary("insurancePatients", "VERIFIED", 100, { insuranceName: 4 }, [
+          { kind: "aggregate_count", reference: "insurancePatients.count()=100" },
+        ]),
+      ],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("data_repair");
+    expect(result.recommendations[0].allowed).toBe(true);
+    expect(result.gatedAnswer).toContain("Repair the insurancePatients records with missing insurance names.");
+  });
+
+  it("leaves diagnostic verbs investigate/audit/verify allowed", () => {
+    const variants = [
+      "Investigate the insurancePatients linkage.",
+      "Audit the insurancePatients data.",
+      "Verify the insurancePatients joins.",
+    ];
+    for (const variant of variants) {
+      const input: RecommendationGateInput = {
+        ...baseInput,
+        answer: variant,
+        summaries: [],
+      };
+      const result = applyRecommendationGate(input);
+      expect(result.recommendations).toHaveLength(0);
+      expect(result.gatedAnswer).toBe(variant);
+    }
+  });
+
+  it("replaces the unsafe affirmative recommendation with a single negative-safety downgrade", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Consider importing or restoring insurancePatients data if expected but currently empty.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    // The affirmative recommendation verbatim is gone (only the negative-safety
+    // downgrade remains).
+    expect(result.gatedAnswer).not.toContain(
+      "Consider importing or restoring insurancePatients data if expected but currently empty."
+    );
+    expect(result.gatedAnswer).not.toContain("if expected but currently empty.");
+    // Exactly one consistent negative-safety sentence is emitted (no duplicate
+    // generic gate warning). The downgrade intentionally names the action verb
+    // (e.g. "Re-importing is not recommended yet"), so we must NOT assert that
+    // the substring "import"/"restoring" is absent — that would be misleading.
+    expect(result.gatedAnswer).toContain(
+      "is not recommended yet because the underlying defect has not been verified."
+    );
+    expect(result.gatedAnswer).toContain(
+      "Audit the source data and verify the defect before proceeding with remediation."
+    );
+    expect((result.gatedAnswer.match(/is not recommended yet/g) ?? []).length).toBe(
+      1
+    );
+  });
+
+  it("allows restore when VERIFIED audit_logs evidence is present", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Restore the insurancePatients records.",
+      summaries: [
+        makeSummary("insurancePatients", "VERIFIED", 5000, undefined, [
+          { kind: "audit_logs", reference: "audit: insurancePatients deletion" },
+        ]),
+      ],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("restore");
+    expect(result.recommendations[0].allowed).toBe(true);
+    expect(result.gatedAnswer).toContain("Restore the insurancePatients records.");
+  });
+
+  it("blocks re-import when VERIFIED evidence is audit_logs (wrong action binding)", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Re-import the insurancePatients records.",
+      summaries: [
+        makeSummary("insurancePatients", "VERIFIED", 5000, undefined, [
+          { kind: "audit_logs", reference: "audit: insurancePatients deletion" },
+        ]),
+      ],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("re_import");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("import_metadata");
+    expect(result.gatedAnswer).toContain("Re-importing is not recommended yet");
+  });
+
+  it("blocks schema migration when VERIFIED evidence is audit_logs (wrong action binding)", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Migrate the insurancePatients schema.",
+      summaries: [
+        makeSummary("insurancePatients", "VERIFIED", 5000, undefined, [
+          { kind: "audit_logs", reference: "audit: insurancePatients deletion" },
+        ]),
+      ],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("schema_migration");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("schema_inspection");
+    expect(result.gatedAnswer).toContain("Migrating the schema is not recommended yet");
+  });
+
+  it("blocks restore when VERIFIED evidence is import_metadata (wrong action binding)", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Restore the insurancePatients records.",
+      summaries: [
+        makeSummary("insurancePatients", "VERIFIED", 5000, undefined, [
+          { kind: "import_metadata", reference: "job-1 destinationSummary" },
+        ]),
+      ],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("restore");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("audit_logs");
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+    expect(result.gatedAnswer).not.toContain("Restore the insurancePatients records.");
+  });
+
+  it("blocks restore when VERIFIED missing-field summary lacks audit_logs evidence", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Restore the insurancePatients records.",
+      summaries: [
+        makeSummary("insurancePatients", "VERIFIED", 100, { insuranceName: 4 }, [
+          { kind: "aggregate_count", reference: "insurancePatients.count()=100" },
+        ]),
+      ],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("restore");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("audit_logs");
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+  });
+
+  it("blocks restore when the only VERIFIED defect is a value-join/linkage defect", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Restore the rentals patient linkage.",
+      summaries: [],
+      joins: [makeValueJoin()],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("restore");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("audit_logs");
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+  });
+
+  it("allows re-import when VERIFIED import_metadata evidence is present", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Re-import the insurancePatients records.",
+      summaries: [
+        makeSummary("insurancePatients", "VERIFIED", 5000, undefined, [
+          { kind: "import_metadata", reference: "job-1 destinationSummary" },
+        ]),
+      ],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("re_import");
+    expect(result.recommendations[0].allowed).toBe(true);
+    expect(result.gatedAnswer).toContain("Re-import the insurancePatients records.");
   });
 });

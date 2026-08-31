@@ -518,7 +518,7 @@ export function verifyValueJoin(
     ? verifiedDuplicateCounts.reduce((sum, count) => sum + count, 0)
     : Array.from(targetFreq.values()).reduce(
       (sum, count) => sum + (count > 1 ? count : 0),
-    0
+      0
     );
   const sourceScanComplete = source.complete;
   const targetVerificationComplete =
@@ -760,7 +760,7 @@ export function canRecommendAction(
   if (defect.classification !== "VERIFIED") {
     return {
       allowed: false,
-      reason: `Defect is classified ${defect.classification}; recommending "${action}" requires VERIFIED.`,
+      reason: `Defect is classified ${defect.classification}; recommending this action requires VERIFIED.`,
     };
   }
   const requiredKinds = REQUIRED_EVIDENCE_KINDS[action];
@@ -771,6 +771,6 @@ export function canRecommendAction(
     ? { allowed: true, reason: "VERIFIED defect with sufficient evidence." }
     : {
         allowed: false,
-        reason: `VERIFIED defect lacks required evidence kinds (${requiredKinds.join(" | ")}) for "${action}".`,
+        reason: `VERIFIED defect lacks required evidence kinds (${requiredKinds.join(" | ")}) for this action.`,
       };
 }

@@ -65,14 +65,16 @@ export function collectCountClaims(
 ): CountClaim[] {
   const claims: CountClaim[] = [];
   for (const summary of summaries) {
+    // sampledCount (docs observed) and actualCount (true collection size) are
+    // DIFFERENT semantic quantities. Never compare them as the same claim.
     claims.push({
-      entity: `${summary.collection}:total`,
+      entity: `${summary.collection}:sampled`,
       value: summary.count.sampledCount,
       section: `summary:${summary.collection}`,
     });
     if (summary.count.actualCount !== null) {
       claims.push({
-        entity: `${summary.collection}:total`,
+        entity: `${summary.collection}:actual`,
         value: summary.count.actualCount,
         section: `aggregate:${summary.collection}`,
       });

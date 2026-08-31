@@ -1,14 +1,21 @@
 /**
- * Deterministic recommendation gate for Jarvis AI responses.
+ * Recommendation gate for Jarvis AI responses.
  *
- * After the model produces output, this module scans for high-impact
- * remediation recommendations and enforces the canRecommendAction() policy
- * using the strongest available defect evidence from the operations context.
+ * This protects against unsafe recommendations such as "restore", "re-import",
+ * "repair", "schema migration", or "new linkage key" when the underlying
+ * evidence does not actually support the remediation.
  *
- * Diagnostic recommendations (investigate, inspect, audit, verify, monitor,
- * review) are never blocked.
- *
- * Pure logic only: no Firebase imports, fully unit-testable.
+ * Gate rules:
+ * - High-impact actions are only recommended when a VERIFIED defect has been
+ *   detected AND the defect carries evidence appropriate to the proposed
+ *   action (see canRecommendAction()) — a bare classification is never enough.
+ * - Empty or low collection counts are NOT verified defects.
+ * - SAMPLED / INFERRED / UNKNOWN evidence blocks the recommendation.
+ * - When an unsafe recommendation is blocked, the offending sentence is
+ *   REPLACED with a single, consistent negative-safety downgrade (the raw
+ *   affirmative recommendation is not left in the response).
+ * - Diagnostic verbs (investigate / audit / verify) are never blocked, unless
+ *   the same sentence also proposes a high-impact action.
  */
 
 import {
@@ -23,30 +30,33 @@ import {
 } from "../types/reporting";
 
 const HIGH_IMPACT_RULES: Array<{ regex: RegExp; action: HighImpactAction }> = [
-  { regex: /\brestore(s|d)?\b/i, action: "restore" },
-  { regex: /\bre-?import(s|ed)?\b/i, action: "re_import" },
-  { regex: /\breimport(s|ed)?\b/i, action: "re_import" },
-  { regex: /\bdelete(s|d)?\b/i, action: "data_repair" },
-  { regex: /\brepair(s|ed)?\b/i, action: "data_repair" },
-  { regex: /\bmigrate(s|d)?\b/i, action: "schema_migration" },
-  { regex: /\bschema\s+change\b/i, action: "schema_migration" },
-  { regex: /\badd(ing)?\s+(a\s+)?(new\s+)?linkage\b/i, action: "new_linkage_key" },
+  { regex: /\brestor(?:e|es|ed|ing)?\b/i, action: "restore" },
+  { regex: /\b(?:re-?)?import(?:s|ed|ing)?\b/i, action: "re_import" },
+  { regex: /\bdelet(?:e|es|ed|ing)\b/i, action: "data_repair" },
+  { regex: /\brepair(?:s|ed|ing)?\b/i, action: "data_repair" },
+  { regex: /\bmigrat(?:e|es|ed|ing|ion|ions)\b/i, action: "schema_migration" },
+  { regex: /\bschema\s+chang(?:e|es|ed|ing)?\b/i, action: "schema_migration" },
+  { regex: /\bnew\s+linkage\s+keys?\b/i, action: "new_linkage_key" },
+  {
+    regex:
+      /\b(add|adding|create|creating)\s+(a\s+)?(new\s+)?linkage\s+keys?\b/i,
+    action: "new_linkage_key",
+  },
   { regex: /\bchange\s+linkage\b/i, action: "new_linkage_key" },
-  { regex: /\bnormalize(s|d)?\b/i, action: "data_repair" },
-  { regex: /\brewrite(s|d)?\b/i, action: "data_repair" },
-  { regex: /\bmass\s+update(s|d)?\b/i, action: "data_repair" },
-  { regex: /\bbackfill(s|ed)?\b/i, action: "data_repair" },
-  { regex: /\boverwrite(s|d)?\b/i, action: "data_repair" },
-  { regex: /\brebuild(s|d)?\b/i, action: "data_repair" },
+  { regex: /\bnormaliz(?:e|es|ed|ing)\b/i, action: "data_repair" },
+  { regex: /\brewrit(?:e|es|ing|ten)\b/i, action: "data_repair" },
+  { regex: /\bmass\s+updat(?:e|es|ed|ing)\b/i, action: "data_repair" },
+  { regex: /\bbackfill(?:s|ed|ing)?\b/i, action: "data_repair" },
+  { regex: /\boverwrit(?:e|es|ing|ten)\b/i, action: "data_repair" },
+  { regex: /\brebuild(?:s|ed|ing)?\b/i, action: "data_repair" },
+  { regex: /\bdata\s+repair\b/i, action: "data_repair" },
+  { regex: /\brepair\s+data\b/i, action: "data_repair" },
 ];
 
 const DIAGNOSTIC_RULES = [
-  /\binvestigate\b/i,
-  /\binspect\b/i,
-  /\baudit\b/i,
-  /\bverify\b/i,
-  /\bmonitor\b/i,
-  /\breview\b/i,
+  /\binvestigat(?:e|es|ed|ing)\b/i,
+  /\baudit(?:s|ed|ing)?\b/i,
+  /\bverif(?:y|ies|ied|ying)\b/i,
 ];
 
 const ACTION_VERBS: Record<HighImpactAction, string> = {
@@ -65,41 +75,20 @@ export interface RecommendationGateInput {
   evidence: Evidence[];
 }
 
-export interface GatedRecommendation {
-  original: string;
-  action: HighImpactAction | null;
-  allowed: boolean;
-  reason: string;
-}
-
-export interface RecommendationGateResult {
+export interface GateResult {
   gatedAnswer: string;
-  recommendations: GatedRecommendation[];
+  recommendations: Array<{
+    action: HighImpactAction;
+    allowed: boolean;
+    reason: string;
+  }>;
 }
 
-function splitUnits(text: string): string[] {
-  const raw = text.split(/(?<=[.!?])\s+/);
-  const units: string[] = [];
-  for (const unit of raw) {
-    const trimmed = unit.trim();
-    if (trimmed.length > 0) units.push(trimmed);
-  }
-  return units;
-}
-
-function isDiagnosticOnly(text: string): boolean {
-  const hasDiagnostic = DIAGNOSTIC_RULES.some((r) => r.test(text));
-  const hasHighImpact = HIGH_IMPACT_RULES.some((r) => r.regex.test(text));
-  return hasDiagnostic && !hasHighImpact;
-}
-
-function detectHighImpactAction(text: string): HighImpactAction | null {
+function findProposedAction(text: string): HighImpactAction | undefined {
   for (const rule of HIGH_IMPACT_RULES) {
-    if (rule.regex.test(text)) {
-      return rule.action;
-    }
+    if (rule.regex.test(text)) return rule.action;
   }
-  return null;
+  return undefined;
 }
 
 function splitCollectionName(name: string): string[] {
@@ -120,7 +109,10 @@ function findRelevantSummary(
 
   for (const summary of summaries) {
     const words = splitCollectionName(summary.collection);
-    const score = words.reduce((acc, word) => acc + (lower.includes(word) ? 1 : 0), 0);
+    const score = words.reduce(
+      (acc, word) => acc + (lower.includes(word) ? 1 : 0),
+      0
+    );
     if (score > bestScore) {
       bestScore = score;
       best = summary;
@@ -136,13 +128,16 @@ function isValueJoin(
   return "sourceCollection" in join;
 }
 
+/** Only a join with an actual defect may authorize remediation. A clean join
+ *  is never a defect. */
 function joinHasDefect(join: ValueJoinVerification): boolean {
   return join.outcome === "DEFECTS_FOUND" || join.outcome === "AMBIGUOUS";
 }
 
 function findRelevantJoinDefect(
-  text: string,
-  joins: Array<JoinVerification | ValueJoinVerification>
+  action: HighImpactAction,
+  joins: Array<JoinVerification | ValueJoinVerification>,
+  text: string
 ): ValueJoinVerification | undefined {
   const lower = text.toLowerCase();
   let best: ValueJoinVerification | undefined;
@@ -171,83 +166,159 @@ function findRelevantJoinDefect(
   return bestScore > 0 ? best : undefined;
 }
 
+const DEFECT_STATUS_KEYS = [
+  "failed",
+  "error",
+  "error_count",
+  "invalid",
+  "rejected",
+];
+
+/** A summary only constitutes verified defect evidence when it shows a real
+ *  record-level defect signal: confirmed missing required fields, failed /
+ *  errored statuses, or remediation-record evidence (import/join/schema/audit).
+ *  An empty or low count alone (e.g. actualCount=0) is NOT a verified defect,
+ *  because it does not prove records should exist. */
+function summaryIndicatesDefect(summary: CollectionSampleSummary): boolean {
+  const hasMissingFields = Object.values(summary.missingKeyCounts).some(
+    (count) => count > 0
+  );
+  if (hasMissingFields) return true;
+
+  const hasFailureStatus = Object.keys(summary.statusCounts).some((status) =>
+    DEFECT_STATUS_KEYS.some((key) => status.includes(key))
+  );
+  if (hasFailureStatus) return true;
+
+  // Remediation-record evidence (import job summary, value-join defect, schema
+  // inspection, audit log) is a real defect signal; a bare count is not.
+  return summary.evidence.some(
+    (evidence) =>
+      evidence.kind === "import_metadata" ||
+      evidence.kind === "value_join" ||
+      evidence.kind === "schema_inspection" ||
+      evidence.kind === "audit_logs"
+  );
+}
+
 function buildDefectClaim(
   action: HighImpactAction,
   text: string,
-  input: RecommendationGateInput
+  summaries: CollectionSampleSummary[],
+  contradictions: CountContradiction[],
+  joins: Array<JoinVerification | ValueJoinVerification>,
+  evidence: Evidence[]
 ): DefectClaim {
-  const relevantJoin = findRelevantJoinDefect(text, input.joins);
-  if (relevantJoin) {
-    return {
-      summary: `${relevantJoin.sourceCollection}.${relevantJoin.sourceKey} -> ${relevantJoin.targetCollection}.${relevantJoin.targetKey}: ${relevantJoin.outcome}`,
-      classification: relevantJoin.classification,
-      evidence: relevantJoin.evidence,
-    };
-  }
-
-  const relevant = findRelevantSummary(text, input.summaries);
+  const relevant = findRelevantSummary(text, summaries);
 
   if (!relevant) {
+    const relatedJoin = findRelevantJoinDefect(action, joins, text);
+    if (relatedJoin) {
+      return {
+        summary: `Related join defect evidence: ${relatedJoin.sourceCollection}.${relatedJoin.sourceKey} -> ${relatedJoin.targetCollection}.${relatedJoin.targetKey}: ${relatedJoin.outcome}`,
+        classification: relatedJoin.classification,
+        evidence: relatedJoin.evidence,
+      };
+    }
     return {
-      summary: "No defect context available",
+      summary: `No matching collection evidence for "${text}".`,
       classification: "UNKNOWN",
-      evidence: input.evidence,
+      evidence,
     };
   }
 
-  const missingFields = Object.keys(relevant.missingKeyCounts).join(", ") || "none";
+  // A summary must demonstrate an actual defect signal before it can be used
+  // as evidence whatsoever. Merely reporting a count (even zero) is not a
+  // defect and must yield UNKNOWN.
+  if (!summaryIndicatesDefect(relevant)) {
+    const missingFields =
+      Object.keys(relevant.missingKeyCounts).join(", ") || "none";
+    return {
+      summary: `${relevant.collection}: ${relevant.classification} — ${relevant.count.sampledCount} sampled, missing fields: ${missingFields}`,
+      classification: "UNKNOWN",
+      evidence: relevant.evidence,
+    };
+  }
 
+  const missingFields =
+    Object.keys(relevant.missingKeyCounts).join(", ") || "none";
+
+  const statusSummaries = Object.entries(relevant.statusCounts)
+    .filter(([, count]) => count > 0)
+    .map(([status, count]) => `${status}=${count}`)
+    .join(", ");
+
+  const contradiction = contradictions.find((c) =>
+    text.toLowerCase().includes(c.entity.toLowerCase())
+  );
+
+  // The summary genuinely indicates a defect, but only the summary's OWN
+  // classification decides whether it is VERIFIED. INFERRED / SAMPLED /
+  // UNKNOWN evidence never authorizes remediation.
   return {
-    summary: `${relevant.collection}: ${relevant.classification} — ${relevant.count.sampledCount} sampled, missing fields: ${missingFields}`,
+    summary: `${relevant.collection}: ${relevant.classification} — ${relevant.count.sampledCount} sampled, missing fields: ${missingFields}${statusSummaries ? `, statuses: ${statusSummaries}` : ""}${
+      contradiction ? `, count contradiction: ${contradiction.entity}` : ""
+    }`,
     classification: relevant.classification,
     evidence: relevant.evidence,
   };
 }
 
-function downgradeRecommendation(
-  sentence: string,
-  action: HighImpactAction,
-  reason: string
-): string {
+function buildDowngradedSentence(action: HighImpactAction): string {
   const verb = ACTION_VERBS[action] ?? "Remediating";
-  return `${verb} is not recommended yet because the underlying defect has not been verified. ${reason}. Audit the source data and verify the defect before proceeding with remediation.`;
+  return `${verb} is not recommended yet because the underlying defect has not been verified. Audit the source data and verify the defect before proceeding with remediation.`;
+}
+
+function isDiagnosticOnly(text: string): boolean {
+  const hasDiagnostic = DIAGNOSTIC_RULES.some((r) => r.test(text));
+  const hasHighImpact = HIGH_IMPACT_RULES.some((r) => r.regex.test(text));
+  return hasDiagnostic && !hasHighImpact;
 }
 
 export function applyRecommendationGate(
   input: RecommendationGateInput
-): RecommendationGateResult {
-  const units = splitUnits(input.answer);
-  const recommendations: GatedRecommendation[] = [];
-  const gatedParts: string[] = [];
+): GateResult {
+  const recommendations: GateResult["recommendations"] = [];
 
-  for (const unit of units) {
-    if (isDiagnosticOnly(unit)) {
-      gatedParts.push(unit);
-      continue;
-    }
+  // Split into sentences so we can replace only unsafe ones.
+  const parts = input.answer.split(/(?<=[.!?])\s+/);
 
-    const action = detectHighImpactAction(unit);
-    if (!action) {
-      gatedParts.push(unit);
-      continue;
-    }
+  const gatedParts = parts.map((part) => {
+    const text = part.trim();
+    if (!text) return part;
 
-    const defect = buildDefectClaim(action, unit, input);
+    const action = findProposedAction(text);
+    if (!action) return part;
+
+    // Diagnostic verbs are allowed only when no high-impact action is also
+    // proposed in the same sentence.
+    if (isDiagnosticOnly(text)) return part;
+
+    const defect = buildDefectClaim(
+      action,
+      text,
+      input.summaries,
+      input.contradictions,
+      input.joins,
+      input.evidence
+    );
+
     const decision = canRecommendAction(action, defect);
 
     recommendations.push({
-      original: unit,
       action,
       allowed: decision.allowed,
       reason: decision.reason,
     });
 
-    if (decision.allowed) {
-      gatedParts.push(unit);
-    } else {
-      gatedParts.push(downgradeRecommendation(unit, action, decision.reason));
-    }
-  }
+    if (decision.allowed) return part;
+
+    // REPLACE the unsafe sentence with a single consistent negative-safety
+    // downgrade. The raw affirmative recommendation is removed; the specific
+    // reason is carried in the metadata (recommendations) rather than appended
+    // to the model-facing text, so no duplicate generic gate warning appears.
+    return buildDowngradedSentence(action);
+  });
 
   return {
     gatedAnswer: gatedParts.join(" ").trim(),

@@ -661,6 +661,25 @@ describe("internal consistency", () => {
     ]);
     expect(contradictions).toHaveLength(0);
   });
+
+  it("does not treat sampled vs actual counts as contradictory", () => {
+    // sampledRows=1000 and actualCount=18839 are DIFFERENT semantic quantities
+    // (docs observed vs true collection size), NOT a contradiction.
+    const contradictions = findCountContradictions([
+      { entity: "patients:sampled", value: 1000, section: "summary:patients" },
+      { entity: "patients:actual", value: 18839, section: "aggregate:patients" },
+    ]);
+    expect(contradictions).toHaveLength(0);
+  });
+
+  it("still detects a true same-quantity contradiction", () => {
+    const contradictions = findCountContradictions([
+      { entity: "patients:actual", value: 18839, section: "aggregate:patients" },
+      { entity: "patients:actual", value: 18840, section: "aggregate:patients:recount" },
+    ]);
+    expect(contradictions).toHaveLength(1);
+    expect(contradictions[0].values).toEqual([18839, 18840]);
+  });
 });
 
 // ---------------------------------------------------------------------------
