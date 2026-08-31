@@ -15,7 +15,7 @@ export const ANALYTICS_PROMPT_SECTION = `
 Analytics & reporting guidance:
 - Counts: always report sampledCount separately from actualCount; say "unknown" for actualCount when no aggregate count ran.
 - Every reported figure carries a classification: VERIFIED, SAMPLED, INFERRED, UNKNOWN, or NOT TESTED.
-- Join claims require join-verification numbers (records tested, exact matches, unmatched, missing keys, ambiguous matches).
+- Join claims require join-verification numbers (records tested, exact matches, confirmed unmatched, not observed in target sample, unresolved against incomplete target, missing keys, ambiguous matches).
 - Claim strength: absolute terms require aggregate-grade evidence; otherwise use "suggests", "likely", "sample indicates".
 - Recommendation gating: migrations, restores, re-imports, new linkage keys, and data repair require a VERIFIED defect first.
 - Missing inputs: name the data source needed before relying on any metric.`;
@@ -57,7 +57,7 @@ export function buildAnalyticsContextSection(
       ? context.joins.map((join) => {
           if ("sourceCollection" in join) {
             return classificationLine(
-              `join ${join.sourceCollection}.${join.sourceKey} -> ${join.targetCollection}.${join.targetKey}: sourceTested=${join.sourceTestedCount}, targetTested=${join.targetTestedCount}, sourceWithKey=${join.sourceRecordsWithKey}, sourceMissingKeys=${join.sourceMissingKeyCount}, exactUniqueMatches=${join.exactUniqueMatches}, ambiguousMatches=${join.ambiguousMatches}, unmatched=${join.unmatched}, duplicateTargetKeys=${join.duplicateTargetKeys}, targetDuplicateKeyCount=${join.targetDuplicateKeyCount}, coverage=${join.coveragePercentage}%, outcome=${join.outcome}, sampleStatus=${join.sampleStatus}, joinMethod=${join.joinMethod}, joinComplete=${join.joinComplete}, sourceCountMethod=${join.sourceCountMethod}, targetCountMethod=${join.targetCountMethod}, evidenceRef=${join.evidenceRef}`,
+              `join ${join.sourceCollection}.${join.sourceKey} -> ${join.targetCollection}.${join.targetKey}: sourceTested=${join.sourceTestedCount}, targetTested=${join.targetTestedCount}, sourceWithKey=${join.sourceRecordsWithKey}, sourceMissingKeys=${join.sourceMissingKeyCount}, exactUniqueMatches=${join.exactUniqueMatches}, ambiguousMatches=${join.ambiguousMatches}, confirmedUnmatched=${join.unmatched}, notObservedInTargetSample=${join.notObservedInTargetSample}, unresolvedAgainstIncompleteTarget=${join.unresolvedAgainstIncompleteTarget}, duplicateTargetKeys=${join.duplicateTargetKeys}, targetDuplicateKeyCount=${join.targetDuplicateKeyCount}, coverage=${join.coveragePercentage}%, outcome=${join.outcome}, sampleStatus=${join.sampleStatus}, joinMethod=${join.joinMethod}, sourceScanComplete=${join.sourceScanComplete}, targetVerificationComplete=${join.targetVerificationComplete}, joinComplete=${join.joinComplete}, targetLookupMethod=${join.targetLookupMethod}, targetUniqueKeysChecked=${join.targetUniqueKeysChecked}, targetVerificationRecordsRead=${join.targetVerificationRecordsRead}, targetVerificationQueryOperations=${join.targetVerificationQueryOperations}, targetDuplicateKeysStructurallyImpossible=${join.targetDuplicateKeysStructurallyImpossible}, sourceCountMethod=${join.sourceCountMethod}, targetCountMethod=${join.targetCountMethod}, evidenceRef=${join.evidenceRef}`,
               join.classification
             );
           }

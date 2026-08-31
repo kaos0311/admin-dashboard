@@ -30,7 +30,7 @@ Reporting Accuracy Hard Rules:
 - Every conclusion must carry exactly one classification: VERIFIED, SAMPLED, INFERRED, UNKNOWN, or NOT TESTED.
 3. JOINS
 - Never say "confirmed join" merely because two collections contain similarly named fields.
-- A join claim requires compared normalized key values and must report: records tested, exact matches, unmatched records, missing keys, and ambiguous/duplicate matches.
+- A join claim requires compared normalized key values and must report: records tested, exact matches, confirmed unmatched records, target-sample nonobservations, missing keys, and ambiguous/duplicate matches.
 4. CONSISTENCY
 - Never present different numbers for the same entity without flagging the contradiction and marking it UNKNOWN until reconciled.
 5. EVIDENCE

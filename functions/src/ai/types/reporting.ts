@@ -234,8 +234,24 @@ export interface JoinVerification {
 }
 
 export type JoinCountMethod = "aggregate_count" | "limited_query" | "unavailable";
-export type JoinScanMethod = "complete_value_scan" | "limited_value_scan";
+export type JoinScanMethod =
+  | "complete_value_scan"
+  | "limited_value_scan"
+  | "exact_target_key_lookup";
 export type JoinOutcome = "CLEAN" | "DEFECTS_FOUND" | "AMBIGUOUS" | "UNKNOWN";
+export type TargetLookupMethod =
+  | "none"
+  | "document_id"
+  | "field_equality";
+
+export interface TargetKeyVerificationInput {
+  complete: boolean;
+  method: TargetLookupMethod;
+  matchCountsBySourceKey: Map<string, number>;
+  recordsRead: number;
+  queryOperations: number;
+  duplicateKeysStructurallyImpossible: boolean;
+}
 
 export interface ValueJoinVerification {
   sourceCollection: string;
@@ -259,10 +275,19 @@ export interface ValueJoinVerification {
   exactUniqueMatches: number;
   ambiguousMatches: number;
   unmatched: number;
+  notObservedInTargetSample: number;
+  unresolvedAgainstIncompleteTarget: number;
+  sourceScanComplete: boolean;
+  targetVerificationComplete: boolean;
   coveragePercentage: number;
   sampleStatus: "complete" | "sampled" | "not_tested";
   joinMethod: JoinScanMethod;
   joinComplete: boolean;
+  targetLookupMethod: TargetLookupMethod;
+  targetUniqueKeysChecked: number;
+  targetVerificationRecordsRead: number;
+  targetVerificationQueryOperations: number;
+  targetDuplicateKeysStructurallyImpossible: boolean;
   outcome: JoinOutcome;
   normalization: typeof KEY_NORMALIZE_RULE;
   classification: Classification;
@@ -434,7 +459,8 @@ function percent(part: number, total: number): number {
 
 export function verifyValueJoin(
   source: ValueJoinSideInput,
-  target: ValueJoinSideInput
+  target: ValueJoinSideInput,
+  targetVerification?: TargetKeyVerificationInput
 ): ValueJoinVerification {
   const targetFreq = new Map<string, number>();
   let targetMissingKeyCount = 0;
@@ -455,6 +481,8 @@ export function verifyValueJoin(
   let exactUniqueMatches = 0;
   let ambiguousMatches = 0;
   let unmatched = 0;
+  let notObservedInTargetSample = 0;
+  let unresolvedAgainstIncompleteTarget = 0;
 
   for (const value of source.values) {
     if (isMissingKey(value as string | number | null | undefined)) {
@@ -462,38 +490,61 @@ export function verifyValueJoin(
       continue;
     }
     sourceRecordsWithKey += 1;
-    const targetMatches = targetFreq.get(normalizeKeyValue(value)) ?? 0;
+    const normalized = normalizeKeyValue(value);
+    const exactTargetMatches =
+      targetVerification?.matchCountsBySourceKey.get(normalized);
+    const targetMatches = exactTargetMatches ?? targetFreq.get(normalized) ?? 0;
     if (targetMatches === 1) {
       exactUniqueMatches += 1;
     } else if (targetMatches > 1) {
       ambiguousMatches += 1;
-    } else {
+    } else if (targetVerification?.complete || target.complete) {
       unmatched += 1;
+    } else {
+      notObservedInTargetSample += 1;
+      unresolvedAgainstIncompleteTarget += 1;
     }
   }
 
-  const duplicateTargetKeys = Array.from(targetFreq.values()).filter(
-    (count) => count > 1
-  ).length;
-  const targetDuplicateKeyCount = Array.from(targetFreq.values()).reduce(
-    (sum, count) => sum + (count > 1 ? count : 0),
+  const verifiedDuplicateCounts = targetVerification
+    ? Array.from(targetVerification.matchCountsBySourceKey.values()).filter(
+        (count) => count > 1
+      )
+    : [];
+  const duplicateTargetKeys = targetVerification
+    ? verifiedDuplicateCounts.length
+    : Array.from(targetFreq.values()).filter((count) => count > 1).length;
+  const targetDuplicateKeyCount = targetVerification
+    ? verifiedDuplicateCounts.reduce((sum, count) => sum + count, 0)
+    : Array.from(targetFreq.values()).reduce(
+      (sum, count) => sum + (count > 1 ? count : 0),
     0
-  );
-  const joinComplete = source.complete && target.complete;
+    );
+  const sourceScanComplete = source.complete;
+  const targetVerificationComplete =
+    targetVerification?.complete ?? target.complete;
+  const joinComplete = sourceScanComplete && targetVerificationComplete;
+  const targetTestedCount = targetVerification
+    ? targetVerification.matchCountsBySourceKey.size
+    : target.values.length;
   const sampleStatus =
-    source.values.length === 0 && target.values.length === 0
+    source.values.length === 0 && targetTestedCount === 0
       ? "not_tested"
       : joinComplete
         ? "complete"
         : "sampled";
-  const joinMethod: JoinScanMethod = joinComplete
-    ? "complete_value_scan"
-    : "limited_value_scan";
+  const joinMethod: JoinScanMethod = targetVerification
+    ? "exact_target_key_lookup"
+    : joinComplete
+      ? "complete_value_scan"
+      : "limited_value_scan";
   let outcome: JoinOutcome;
   if (sampleStatus === "not_tested") {
     outcome = "UNKNOWN";
   } else if (ambiguousMatches > 0 || duplicateTargetKeys > 0) {
     outcome = "AMBIGUOUS";
+  } else if (!joinComplete) {
+    outcome = "UNKNOWN";
   } else if (
     sourceMissingKeyCount > 0 ||
     targetMissingKeyCount > 0 ||
@@ -538,7 +589,7 @@ export function verifyValueJoin(
     sourceCountMethod: source.countMethod,
     targetCountMethod: target.countMethod,
     sourceTestedCount: source.values.length,
-    targetTestedCount: target.values.length,
+    targetTestedCount,
     sourceRecordsWithKey,
     sourceMissingKeyCount,
     targetRecordsWithKey,
@@ -550,10 +601,22 @@ export function verifyValueJoin(
     exactUniqueMatches,
     ambiguousMatches,
     unmatched,
+    notObservedInTargetSample,
+    unresolvedAgainstIncompleteTarget,
+    sourceScanComplete,
+    targetVerificationComplete,
     coveragePercentage: percent(exactUniqueMatches, sourceRecordsWithKey),
     sampleStatus,
     joinMethod,
     joinComplete,
+    targetLookupMethod: targetVerification?.method ?? "none",
+    targetUniqueKeysChecked: targetVerification
+      ? targetVerification.matchCountsBySourceKey.size
+      : 0,
+    targetVerificationRecordsRead: targetVerification?.recordsRead ?? 0,
+    targetVerificationQueryOperations: targetVerification?.queryOperations ?? 0,
+    targetDuplicateKeysStructurallyImpossible:
+      targetVerification?.duplicateKeysStructurallyImpossible ?? false,
     outcome,
     normalization: KEY_NORMALIZE_RULE,
     classification,
@@ -565,7 +628,7 @@ export function verifyValueJoin(
     rightField: target.key,
     normalizeRule: KEY_NORMALIZE_RULE,
     recordsTestedLeft: source.values.length,
-    recordsTestedRight: target.values.length,
+    recordsTestedRight: targetTestedCount,
     missingKeysLeft: sourceMissingKeyCount,
     missingKeysRight: targetMissingKeyCount,
     duplicateRightKeys: duplicateTargetKeys,

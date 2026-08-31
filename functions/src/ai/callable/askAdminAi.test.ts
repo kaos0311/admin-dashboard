@@ -26,14 +26,17 @@ const mockSnapshot = (docs: Array<{ id: string; data: () => Record<string, unkno
 });
 
 const mockCollection = (
+  collectionName: string,
   records: Array<Record<string, unknown>>,
   countValue: number | null = null
 ) => {
   const self = () => self;
-  self.doc = vi.fn(() => ({
+  self.doc = vi.fn((id: string) => ({
+    collectionName,
+    id,
     get: vi.fn(() =>
       Promise.resolve({
-        id: "test-doc",
+        id,
         data: () => ({ generatedAtLabel: "2025-01-01" }),
       })
     ),
@@ -88,9 +91,9 @@ const mockCollection = (
 vi.mock("firebase-admin/firestore", () => {
   const collections: Record<string, Array<Record<string, unknown>>> = {
     patients: [
-      { patientId: "PAT-JOIN-001", patientName: "Alice Smith", dob: "1980-01-01", phone: "555-1111", insurance: "Acme" },
-      { patientId: "PAT-JOIN-002", patientName: "Bob Jones", dob: "1975-05-05", phone: "555-2222", insurance: "Beta" },
-      { patientId: "PAT-JOIN-003", patientName: "Carol White", dob: "1990-09-09", phone: "555-3333", insurance: "Gamma" },
+      { __id: "pat-join-001", patientId: "PAT-JOIN-001", patientName: "Alice Smith", dob: "1980-01-01", phone: "555-1111", insurance: "Acme" },
+      { __id: "pat-join-002", patientId: "PAT-JOIN-002", patientName: "Bob Jones", dob: "1975-05-05", phone: "555-2222", insurance: "Beta" },
+      { __id: "pat-join-003", patientId: "PAT-JOIN-003", patientName: "Carol White", dob: "1990-09-09", phone: "555-3333", insurance: "Gamma" },
     ],
     orders: [
       { patientName: "alice smith", status: "active", productType: "DME" },
@@ -131,7 +134,19 @@ vi.mock("firebase-admin/firestore", () => {
 
   const db = {
     collection: (name: string) =>
-      mockCollection(collections[name] ?? [], aggregateCounts[name] ?? null),
+      mockCollection(name, collections[name] ?? [], aggregateCounts[name] ?? null),
+    getAll: vi.fn(
+      async (...refs: Array<{ collectionName: string; id: string }>) =>
+        refs.map((ref) => {
+          const records = collections[ref.collectionName] ?? [];
+          const found = records.find((record) => record.__id === ref.id);
+          return {
+            id: ref.id,
+            exists: Boolean(found),
+            data: () => found ?? {},
+          };
+        })
+    ),
   };
 
   return {
@@ -515,8 +530,25 @@ describe("askAdminAi reporting contract integration", () => {
     const serializedParams = JSON.stringify(responseCalls[0]?.[0]);
     expect(serializedParams).not.toContain("exactUniqueMatches");
     expect(serializedParams).not.toContain(
-      "value-join:rentals.patientId->patients.patientId"
+      "value-join:rentals.patientId->patients.id"
     );
+  });
+
+  it("does not write raw patientIds in CSV report artifacts", async () => {
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: { prompt: "Export a report and verify patient joins" },
+    };
+
+    const result = (await (askAdminAi as unknown as (req: unknown) => Promise<{ reportArtifact: string | null }>)(request));
+
+    expect(result.reportArtifact).toContain("Collection");
+    expect(result.reportArtifact).not.toContain("PAT-JOIN-001");
+    expect(result.reportArtifact).not.toContain("PAT-JOIN-002");
+    expect(result.reportArtifact).not.toContain("PAT-JOIN-MISSING");
   });
 
   it("does not write raw patientIds in AI audit payload", async () => {

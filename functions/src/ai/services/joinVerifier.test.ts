@@ -7,22 +7,36 @@ import {
 } from "./joinVerifier";
 
 function doc(id: string, data: Record<string, unknown>) {
-  return { id, data: () => data };
+  const { __id: _id, ...stored } = data;
+  return { id, exists: true, data: () => stored };
+}
+
+function missingDoc(id: string) {
+  return { id, exists: false, data: () => ({}) };
+}
+
+function recordId(collectionName: string, record: Record<string, unknown>, index: number) {
+  return typeof record.__id === "string" ? record.__id : `${collectionName}-${index}`;
 }
 
 function mockDb(collections: Record<string, Array<Record<string, unknown>>>) {
   const limits: Record<string, number[]> = {};
   const countCalls: Record<string, number> = {};
   const scanCalls: Record<string, number> = {};
+  const docReads: string[] = [];
+  const whereCalls: Array<{ collectionName: string; field: string; values: unknown[] }> = [];
 
   return {
     limits,
     countCalls,
     scanCalls,
+    docReads,
+    whereCalls,
     db: {
       collection: (collectionName: string) => {
         const records = collections[collectionName] ?? [];
         return {
+          doc: (id: string) => ({ collectionName, id }),
           select: () => ({
             limit: (limit: number) => {
               scanCalls[collectionName] = (scanCalls[collectionName] ?? 0) + 1;
@@ -34,11 +48,27 @@ function mockDb(collections: Record<string, Array<Record<string, unknown>>>) {
                 get: async () => ({
                   docs: records
                     .slice(0, limit)
-                    .map((record, index) => doc(`${collectionName}-${index}`, record)),
+                    .map((record, index) =>
+                      doc(recordId(collectionName, record, index), record)
+                    ),
                 }),
               };
             },
           }),
+          where: (field: string, op: string, values: unknown[]) => {
+            whereCalls.push({ collectionName, field, values });
+            return {
+              get: async () => ({
+                docs: op === "in"
+                  ? records
+                      .filter((record) => values.includes(record[field]))
+                      .map((record, index) =>
+                        doc(recordId(collectionName, record, index), record)
+                      )
+                  : [],
+              }),
+            };
+          },
           count: () => ({
             get: async () => {
               countCalls[collectionName] = (countCalls[collectionName] ?? 0) + 1;
@@ -47,6 +77,15 @@ function mockDb(collections: Record<string, Array<Record<string, unknown>>>) {
           }),
         };
       },
+      getAll: async (...refs: Array<{ collectionName: string; id: string }>) =>
+        refs.map((ref) => {
+          docReads.push(`${ref.collectionName}/${ref.id}`);
+          const records = collections[ref.collectionName] ?? [];
+          const found = records.find((record, index) =>
+            recordId(ref.collectionName, record, index) === ref.id
+          );
+          return found ? doc(ref.id, found) : missingDoc(ref.id);
+        }),
     },
   };
 }
@@ -55,23 +94,25 @@ const definition = {
   sourceCollection: "rentals",
   sourceKey: "patientId",
   targetCollection: "patients",
-  targetKey: "patientId",
+  targetKey: "id",
   scanLimit: 3,
+  targetLookup: "document_id_from_safe_patient_id" as const,
 };
 
 describe("joinVerifier Firestore scan completeness", () => {
   it("marks fewer documents than scan limit complete", async () => {
     const { db, limits } = mockDb({
       rentals: [{ patientId: "PAT-001" }, { patientId: "PAT-002" }],
-      patients: [{ patientId: "PAT-001" }, { patientId: "PAT-002" }],
+      patients: [{ __id: "pat-001", patientId: "PAT-001" }, { __id: "pat-002", patientId: "PAT-002" }],
     });
 
     const result = await verifyValueJoinDefinition(db as never, definition);
 
     expect(limits.rentals).toEqual([4]);
-    expect(limits.patients).toEqual([4]);
+    expect(limits.patients).toBeUndefined();
     expect(result.sourceTestedCount).toBe(2);
     expect(result.targetTestedCount).toBe(2);
+    expect(result.targetVerificationRecordsRead).toBe(2);
     expect(result.joinComplete).toBe(true);
     expect(result.classification).toBe("VERIFIED");
   });
@@ -84,9 +125,9 @@ describe("joinVerifier Firestore scan completeness", () => {
         { patientId: "PAT-003" },
       ],
       patients: [
-        { patientId: "PAT-001" },
-        { patientId: "PAT-002" },
-        { patientId: "PAT-003" },
+        { __id: "pat-001", patientId: "PAT-001" },
+        { __id: "pat-002", patientId: "PAT-002" },
+        { __id: "pat-003", patientId: "PAT-003" },
       ],
     });
 
@@ -94,6 +135,7 @@ describe("joinVerifier Firestore scan completeness", () => {
 
     expect(result.sourceTestedCount).toBe(3);
     expect(result.targetTestedCount).toBe(3);
+    expect(result.targetVerificationRecordsRead).toBe(3);
     expect(result.joinComplete).toBe(true);
     expect(result.classification).toBe("VERIFIED");
   });
@@ -107,10 +149,10 @@ describe("joinVerifier Firestore scan completeness", () => {
         { patientId: "PAT-004" },
       ],
       patients: [
-        { patientId: "PAT-001" },
-        { patientId: "PAT-002" },
-        { patientId: "PAT-003" },
-        { patientId: "PAT-004" },
+        { __id: "pat-001", patientId: "PAT-001" },
+        { __id: "pat-002", patientId: "PAT-002" },
+        { __id: "pat-003", patientId: "PAT-003" },
+        { __id: "pat-004", patientId: "PAT-004" },
       ],
     });
 
@@ -118,8 +160,11 @@ describe("joinVerifier Firestore scan completeness", () => {
 
     expect(result.sourceTestedCount).toBe(3);
     expect(result.targetTestedCount).toBe(3);
+    expect(result.targetVerificationRecordsRead).toBe(3);
+    expect(result.targetVerificationComplete).toBe(true);
     expect(result.joinComplete).toBe(false);
     expect(result.classification).toBe("SAMPLED");
+    expect(result.outcome).toBe("UNKNOWN");
   });
 
   it("does not use aggregate count equality to prove completeness", async () => {
@@ -130,7 +175,7 @@ describe("joinVerifier Firestore scan completeness", () => {
         { patientId: "PAT-003" },
         { patientId: "PAT-004" },
       ],
-      patients: [{ patientId: "PAT-001" }],
+      patients: [{ __id: "pat-001", patientId: "PAT-001" }],
     });
 
     const result = await verifyValueJoinDefinition(db as never, definition);
@@ -138,9 +183,52 @@ describe("joinVerifier Firestore scan completeness", () => {
     expect(result.sourceActualCount).toBe(4);
     expect(result.sourceTestedCount).toBe(3);
     expect(result.targetActualCount).toBe(1);
-    expect(result.targetTestedCount).toBe(1);
+    expect(result.targetTestedCount).toBe(3);
     expect(result.joinComplete).toBe(false);
     expect(result.classification).toBe("SAMPLED");
+  });
+
+  it("uses exact document-ID reads for sampled source patient IDs", async () => {
+    const { db, docReads } = mockDb({
+      rentals: [
+        { patientId: "PAT-001" },
+        { patientId: "PAT-MISSING" },
+        { patientId: "PAT-001" },
+      ],
+      patients: [{ __id: "pat-001", patientId: "PAT-001" }],
+    });
+
+    const result = await verifyValueJoinDefinition(db as never, definition);
+
+    expect(docReads).toEqual(["patients/pat-001", "patients/pat-missing"]);
+    expect(result.exactUniqueMatches).toBe(2);
+    expect(result.unmatched).toBe(1);
+    expect(result.targetUniqueKeysChecked).toBe(2);
+    expect(result.targetDuplicateKeysStructurallyImpossible).toBe(true);
+    expect(result.outcome).toBe("DEFECTS_FOUND");
+  });
+
+  it("supports field equality lookup ambiguity when target IDs are not canonical", async () => {
+    const { db, whereCalls } = mockDb({
+      rentals: [{ patientId: "PAT-DUP" }],
+      patients: [
+        { __id: "patient-a", patientId: "PAT-DUP" },
+        { __id: "patient-b", patientId: "PAT-DUP" },
+      ],
+    });
+
+    const result = await verifyValueJoinDefinition(db as never, {
+      ...definition,
+      targetKey: "patientId",
+      targetLookup: "field_equality",
+    });
+
+    expect(whereCalls).toEqual([
+      { collectionName: "patients", field: "patientId", values: ["PAT-DUP"] },
+    ]);
+    expect(result.ambiguousMatches).toBe(1);
+    expect(result.outcome).toBe("AMBIGUOUS");
+    expect(result.targetDuplicateKeysStructurallyImpossible).toBe(false);
   });
 });
 
@@ -163,20 +251,21 @@ describe("joinVerifier request-local reuse and routing", () => {
   });
 
   it("reuses the patients scan and aggregate count across both joins", async () => {
-    const { db, scanCalls, countCalls } = mockDb({
+    const { db, scanCalls, countCalls, docReads } = mockDb({
       rentals: [{ patientId: "PAT-001" }],
       patientAuthorizations: [{ patientId: "PAT-001" }],
-      patients: [{ patientId: "PAT-001" }],
+      patients: [{ __id: "pat-001", patientId: "PAT-001" }],
     });
 
     const results = await verifyDefaultValueJoins(db as never);
 
     expect(results).toHaveLength(2);
-    expect(scanCalls.patients).toBe(1);
+    expect(scanCalls.patients).toBeUndefined();
     expect(countCalls.patients).toBe(1);
     expect(scanCalls.rentals).toBe(1);
     expect(scanCalls.patientAuthorizations).toBe(1);
     expect(countCalls.rentals).toBe(1);
     expect(countCalls.patientAuthorizations).toBe(1);
+    expect(docReads).toEqual(["patients/pat-001"]);
   });
 });

@@ -2,9 +2,12 @@ import type { Firestore } from "firebase-admin/firestore";
 
 import {
   type JoinCountMethod,
+  normalizeKeyValue,
+  type TargetKeyVerificationInput,
   type ValueJoinVerification,
   verifyValueJoin,
 } from "../types/reporting";
+import { safeFirestoreId } from "../../imports/utils/hash";
 
 export interface ValueJoinDefinition {
   sourceCollection: string;
@@ -12,6 +15,7 @@ export interface ValueJoinDefinition {
   targetCollection: string;
   targetKey: string;
   scanLimit: number;
+  targetLookup: "document_id_from_safe_patient_id" | "field_equality";
 }
 
 interface ScannedJoinSide {
@@ -25,6 +29,7 @@ interface ScannedJoinSide {
 interface JoinScanCache {
   scans: Map<string, Promise<ScannedJoinSide>>;
   counts: Map<string, Promise<number | null>>;
+  targetLookups: Map<string, Promise<TargetKeyVerificationInput>>;
 }
 
 export const DEFAULT_VALUE_JOIN_LIMIT = 1000;
@@ -34,15 +39,17 @@ export const DEFAULT_VALUE_JOIN_DEFINITIONS: ValueJoinDefinition[] = [
     sourceCollection: "patientAuthorizations",
     sourceKey: "patientId",
     targetCollection: "patients",
-    targetKey: "patientId",
+    targetKey: "id",
     scanLimit: DEFAULT_VALUE_JOIN_LIMIT,
+    targetLookup: "document_id_from_safe_patient_id",
   },
   {
     sourceCollection: "rentals",
     sourceKey: "patientId",
     targetCollection: "patients",
-    targetKey: "patientId",
+    targetKey: "id",
     scanLimit: DEFAULT_VALUE_JOIN_LIMIT,
+    targetLookup: "document_id_from_safe_patient_id",
   },
 ];
 
@@ -118,26 +125,150 @@ async function scanJoinSide(
   return scanPromise;
 }
 
+function getCachedAggregateCount(
+  db: Firestore,
+  collectionName: string,
+  cache?: JoinScanCache
+): Promise<number | null> {
+  let countPromise = cache?.counts.get(collectionName);
+  if (!countPromise) {
+    countPromise = getAggregateCount(db, collectionName);
+    cache?.counts.set(collectionName, countPromise);
+  }
+  return countPromise;
+}
+
+function uniqueNormalizedKeys(values: unknown[]): string[] {
+  return Array.from(
+    new Set(
+      values
+        .map((value) => normalizeKeyValue(value))
+        .filter((value) => value.length > 0)
+    )
+  );
+}
+
+async function verifyTargetDocumentIds(
+  db: Firestore,
+  collectionName: string,
+  sourceValues: unknown[]
+): Promise<TargetKeyVerificationInput> {
+  const keys = uniqueNormalizedKeys(sourceValues);
+  if (keys.length === 0) {
+    return {
+      complete: true,
+      method: "document_id",
+      matchCountsBySourceKey: new Map(),
+      recordsRead: 0,
+      queryOperations: 0,
+      duplicateKeysStructurallyImpossible: true,
+    };
+  }
+
+  const refs = keys.map((key) =>
+    db.collection(collectionName).doc(safeFirestoreId(key, "patient"))
+  );
+  const snapshots = await db.getAll(...refs);
+  const matchCountsBySourceKey = new Map<string, number>();
+
+  keys.forEach((key, index) => {
+    matchCountsBySourceKey.set(key, snapshots[index]?.exists ? 1 : 0);
+  });
+
+  return {
+    complete: true,
+    method: "document_id",
+    matchCountsBySourceKey,
+    recordsRead: refs.length,
+    queryOperations: 0,
+    duplicateKeysStructurallyImpossible: true,
+  };
+}
+
+const FIRESTORE_IN_QUERY_LIMIT = 30;
+
+async function verifyTargetFieldEquality(
+  db: Firestore,
+  collectionName: string,
+  targetKey: string,
+  sourceValues: unknown[]
+): Promise<TargetKeyVerificationInput> {
+  const keys = uniqueNormalizedKeys(sourceValues);
+  const matchCountsBySourceKey = new Map(keys.map((key) => [key, 0]));
+  let recordsRead = 0;
+  let queryOperations = 0;
+
+  for (let index = 0; index < keys.length; index += FIRESTORE_IN_QUERY_LIMIT) {
+    const chunk = keys.slice(index, index + FIRESTORE_IN_QUERY_LIMIT);
+    if (chunk.length === 0) continue;
+
+    queryOperations += 1;
+    const snapshot = await db
+      .collection(collectionName)
+      .where(targetKey, "in", chunk)
+      .get();
+    recordsRead += snapshot.docs.length;
+
+    for (const doc of snapshot.docs) {
+      const key = normalizeKeyValue(doc.data()[targetKey]);
+      if (!matchCountsBySourceKey.has(key)) continue;
+      matchCountsBySourceKey.set(key, (matchCountsBySourceKey.get(key) ?? 0) + 1);
+    }
+  }
+
+  return {
+    complete: true,
+    method: "field_equality",
+    matchCountsBySourceKey,
+    recordsRead,
+    queryOperations,
+    duplicateKeysStructurallyImpossible: false,
+  };
+}
+
+async function verifyTargetKeys(
+  db: Firestore,
+  definition: ValueJoinDefinition,
+  sourceValues: unknown[],
+  cache?: JoinScanCache
+): Promise<TargetKeyVerificationInput> {
+  const cacheKey = [
+    definition.targetCollection,
+    definition.targetKey,
+    definition.targetLookup,
+    ...uniqueNormalizedKeys(sourceValues).sort(),
+  ].join("|");
+  const cached = cache?.targetLookups.get(cacheKey);
+  if (cached) return cached;
+
+  const lookupPromise =
+    definition.targetLookup === "document_id_from_safe_patient_id"
+      ? verifyTargetDocumentIds(db, definition.targetCollection, sourceValues)
+      : verifyTargetFieldEquality(
+          db,
+          definition.targetCollection,
+          definition.targetKey,
+          sourceValues
+        );
+  cache?.targetLookups.set(cacheKey, lookupPromise);
+  return lookupPromise;
+}
+
 export async function verifyValueJoinDefinition(
   db: Firestore,
   definition: ValueJoinDefinition,
-  cache: JoinScanCache = { scans: new Map(), counts: new Map() }
+  cache: JoinScanCache = { scans: new Map(), counts: new Map(), targetLookups: new Map() }
 ): Promise<ValueJoinVerification> {
-  const [source, target] = await Promise.all([
-    scanJoinSide(
-      db,
-      definition.sourceCollection,
-      definition.sourceKey,
-      definition.scanLimit,
-      cache
-    ),
-    scanJoinSide(
-      db,
-      definition.targetCollection,
-      definition.targetKey,
-      definition.scanLimit,
-      cache
-    ),
+  const source = await scanJoinSide(
+    db,
+    definition.sourceCollection,
+    definition.sourceKey,
+    definition.scanLimit,
+    cache
+  );
+  const [targetActualCount, targetVerification] = await Promise.all([
+    getCachedAggregateCount(db, definition.targetCollection, cache),
+    verifyTargetKeys(db, definition, source.values, cache),
   ]);
 
   return verifyValueJoin(
@@ -152,11 +283,14 @@ export async function verifyValueJoinDefinition(
     {
       collection: definition.targetCollection,
       key: definition.targetKey,
-      values: target.values,
-      actualCount: target.actualCount,
-      countMethod: target.countMethod,
-      complete: target.complete,
-    }
+      values: [],
+      actualCount: targetActualCount,
+      countMethod: targetActualCount === null
+        ? ("unavailable" as const)
+        : ("aggregate_count" as const),
+      complete: targetVerification.complete,
+    },
+    targetVerification
   );
 }
 
@@ -164,7 +298,7 @@ export async function verifyDefaultValueJoins(
   db: Firestore,
   definitions: ValueJoinDefinition[] = DEFAULT_VALUE_JOIN_DEFINITIONS
 ): Promise<ValueJoinVerification[]> {
-  const cache: JoinScanCache = { scans: new Map(), counts: new Map() };
+  const cache: JoinScanCache = { scans: new Map(), counts: new Map(), targetLookups: new Map() };
   return Promise.all(
     definitions.map((definition) =>
       verifyValueJoinDefinition(db, definition, cache)
