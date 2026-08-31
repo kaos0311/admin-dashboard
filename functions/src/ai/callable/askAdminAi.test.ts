@@ -15,6 +15,10 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const mockState = vi.hoisted(() => ({
+  failingSampleCollections: new Set<string>(),
+}));
+
 vi.mock("firebase-admin/app", () => ({
   getApps: vi.fn(() => []),
   initializeApp: vi.fn(),
@@ -43,14 +47,16 @@ const mockCollection = (
   }));
   self.limit = vi.fn(() => ({
     get: vi.fn(() =>
-      Promise.resolve(
-        mockSnapshot(
-          records.map((data, index) => ({
-            id: `doc-${index}`,
-            data: () => data,
-          }))
+      mockState.failingSampleCollections.has(collectionName)
+        ? Promise.reject(new Error(`sample failed for ${collectionName}`))
+        : Promise.resolve(
+            mockSnapshot(
+              records.map((data, index) => ({
+                id: `doc-${index}`,
+                data: () => data,
+              }))
+            )
         )
-      ),
     ),
   }));
   self.select = vi.fn(() => ({
@@ -246,9 +252,38 @@ import {
   verifyJoin,
 } from "../types/reporting";
 
+function getLastOpenAiParams() {
+  const responseCalls = mockResponsesCreate.mock.calls as unknown as Array<
+    [Record<string, unknown>]
+  >;
+  return responseCalls.at(-1)?.[0] ?? {};
+}
+
+function getLastUserPayload() {
+  const params = getLastOpenAiParams() as { user?: string };
+  return JSON.parse(params.user ?? "{}") as {
+    question?: string;
+    intent?: string;
+    context?: {
+      operationsOverview?: {
+        unavailableContext?: Array<{
+          collection: string;
+          reason: string;
+          classification: string;
+          evidenceRef: string;
+        }>;
+        summaries?: Array<{ collection: string; classification: string }>;
+        joins?: unknown[];
+      };
+    };
+    webSearchInstructions?: unknown;
+  };
+}
+
 describe("askAdminAi reporting contract integration", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockState.failingSampleCollections.clear();
     mockResponsesCreate.mockResolvedValue({ output_text: "The sample suggests there are likely many records." });
   });
 
@@ -418,6 +453,124 @@ describe("askAdminAi reporting contract integration", () => {
     const { scanTextForPhi, redactPhi } = await import("../phiSafety.js");
     expect(scanTextForPhi).toHaveBeenCalled();
     expect(redactPhi).toHaveBeenCalled();
+  });
+
+  it("does not enable web_search for internal operations insurance payer audit", async () => {
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: { prompt: "Internal operations insurance payer audit." },
+    };
+
+    await (askAdminAi as unknown as (req: unknown) => Promise<void>)(request);
+
+    const params = getLastOpenAiParams();
+    const userPayload = getLastUserPayload();
+    expect(userPayload.intent).toBe("internal-operations");
+    expect(userPayload.webSearchInstructions).toBeNull();
+    expect(params.tools).toBeUndefined();
+    expect(params.tool_choice).toBeUndefined();
+  });
+
+  it("enables required web_search for explicit current insurance web request", async () => {
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: {
+        prompt: "Search the web for current Medicare coverage changes.",
+      },
+    };
+
+    await (askAdminAi as unknown as (req: unknown) => Promise<void>)(request);
+
+    const params = getLastOpenAiParams() as {
+      tools?: Array<{ type?: string }>;
+      tool_choice?: string;
+    };
+    const userPayload = getLastUserPayload();
+    expect(userPayload.intent).toBe("insurance-web-search");
+    expect(userPayload.webSearchInstructions).toMatchObject({
+      objective: expect.stringContaining("Search the live internet"),
+    });
+    expect(params.tools?.[0]).toMatchObject({ type: "web_search" });
+    expect(params.tool_choice).toBe("required");
+  });
+
+  it("keeps internal patient rental linkage audit off public web", async () => {
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: {
+        prompt:
+          "Internal audit: patients rentals linkage join verification and record integrity.",
+      },
+    };
+
+    await (askAdminAi as unknown as (req: unknown) => Promise<void>)(request);
+
+    const params = getLastOpenAiParams();
+    const userPayload = getLastUserPayload();
+    expect(userPayload.intent).toBe("internal-operations");
+    expect(userPayload.webSearchInstructions).toBeNull();
+    expect(params.tools).toBeUndefined();
+    expect(
+      JSON.stringify(userPayload.context?.operationsOverview?.joins)
+    ).toContain("value-join:rentals.patientId->patients.id");
+  });
+
+  it("includes an UNKNOWN marker for unsupported requested collections", async () => {
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: {
+        prompt: "Internal database audit collection billingRecords.",
+      },
+    };
+
+    await (askAdminAi as unknown as (req: unknown) => Promise<void>)(request);
+
+    const userPayload = getLastUserPayload();
+    expect(
+      userPayload.context?.operationsOverview?.unavailableContext
+    ).toContainEqual({
+      collection: "billingRecords",
+      reason: "unsupported_collection",
+      classification: "UNKNOWN",
+      evidenceRef: "unavailable-context:billingRecords:unsupported_collection",
+    });
+  });
+
+  it("includes an UNKNOWN marker when a collection sample query fails", async () => {
+    mockState.failingSampleCollections.add("insurancePatients");
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: {
+        prompt: "Internal operations audit collection insurancePatients.",
+      },
+    };
+
+    await (askAdminAi as unknown as (req: unknown) => Promise<void>)(request);
+
+    const userPayload = getLastUserPayload();
+    expect(
+      userPayload.context?.operationsOverview?.unavailableContext
+    ).toContainEqual({
+      collection: "insurancePatients",
+      reason: "sample_query_failed",
+      classification: "UNKNOWN",
+      evidenceRef: "unavailable-context:insurancePatients:sample_query_failed",
+    });
   });
 
   it("gates high-impact recommendation when defect is not VERIFIED", async () => {

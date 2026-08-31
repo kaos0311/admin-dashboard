@@ -86,6 +86,46 @@ const REQUIRED_FIELDS: Record<string, string[]> = {
   wipRecords: ["patientName", "assignedTo", "status"],
 };
 
+const INTERNAL_OPERATIONS_PATTERN =
+  /\b(internal operations|internal audit|database audit|collection|patients|patients_index|patientAuthorizations|rentals|insuranceRecords|insurancePatients|linkage|join verification|contradiction|record integrity)\b/i;
+
+const REQUESTED_COLLECTION_PATTERN =
+  /\bcollections?\s+([A-Za-z][A-Za-z0-9_]*)/gi;
+
+type CoreCollection = typeof CORE_COLLECTIONS[number];
+
+interface UnavailableContextMarker {
+  collection: string;
+  reason: "unsupported_collection" | "sample_query_failed";
+  classification: "UNKNOWN";
+  evidenceRef: string;
+}
+
+function isCoreCollection(value: string): value is CoreCollection {
+  return (CORE_COLLECTIONS as readonly string[]).includes(value);
+}
+
+function isInternalOperationsPrompt(prompt: string): boolean {
+  return INTERNAL_OPERATIONS_PATTERN.test(prompt);
+}
+
+function getRequestedUnsupportedCollections(prompt: string): UnavailableContextMarker[] {
+  const markers = new Map<string, UnavailableContextMarker>();
+
+  for (const match of prompt.matchAll(REQUESTED_COLLECTION_PATTERN)) {
+    const collection = match[1];
+    if (!collection || isCoreCollection(collection)) continue;
+    markers.set(collection, {
+      collection,
+      reason: "unsupported_collection",
+      classification: "UNKNOWN",
+      evidenceRef: `unavailable-context:${collection}:unsupported_collection`,
+    });
+  }
+
+  return Array.from(markers.values());
+}
+
 function requireAdmin(request: {
   auth?: {
     uid: string;
@@ -136,6 +176,17 @@ function getPrompt(data: unknown): string {
 
 function inferIntent(prompt: string): string {
   const lower = prompt.toLowerCase();
+
+  if (isInternalOperationsPrompt(prompt)) {
+    return "internal-operations";
+  }
+
+  if (
+    /\b(search the web|online|internet)\b/i.test(prompt) &&
+    /\b(insurance|medicare|medicaid|payer|coverage|authorization|prior auth|preauth|billing)\b/i.test(prompt)
+  ) {
+    return "insurance-web-search";
+  }
 
   if (
     (lower.includes("deal") ||
@@ -375,14 +426,24 @@ async function getCollectionAggregateCount(collectionName: string): Promise<numb
 
 async function buildJarvisOperationsContext(options: {
   valueJoinDefinitions: import("../services/joinVerifier").ValueJoinDefinition[];
+  prompt: string;
 }) {
   const results: CollectionFetchResult[] = [];
   const samples: Record<string, Array<Record<string, unknown>>> = {};
+  const unavailableContext = getRequestedUnsupportedCollections(options.prompt);
 
   await Promise.all(
     CORE_COLLECTIONS.map(async (collectionName) => {
       const [docs, aggregateCount] = await Promise.all([
-        getCollectionSample(collectionName, SUMMARY_DOC_LIMIT).catch(() => []),
+        getCollectionSample(collectionName, SUMMARY_DOC_LIMIT).catch(() => {
+          unavailableContext.push({
+            collection: collectionName,
+            reason: "sample_query_failed",
+            classification: "UNKNOWN",
+            evidenceRef: `unavailable-context:${collectionName}:sample_query_failed`,
+          });
+          return [];
+        }),
         getCollectionAggregateCount(collectionName),
       ]);
       results.push({
@@ -424,6 +485,7 @@ async function buildJarvisOperationsContext(options: {
     joins: operationsContext.joins,
     evidence: operationsContext.evidence,
     samples,
+    unavailableContext,
     dataQualityAlerts: dataQualityAlerts.slice(0, 50),
     reportingCapabilities: [
       "CSV export artifact from current operational summary",
@@ -443,6 +505,7 @@ async function buildJarvisOperationsContext(options: {
     >;
     evidence: import("../types/reporting").Evidence[];
     samples: Record<string, Array<Record<string, unknown>>>;
+    unavailableContext: UnavailableContextMarker[];
     dataQualityAlerts: Array<{ collection: string; field: string; missing: number; loaded: number }>;
     reportingCapabilities: string[];
   };
@@ -537,6 +600,7 @@ async function buildAiContext(intent: string, prompt: string) {
 
   const operations = await buildJarvisOperationsContext({
     valueJoinDefinitions: selectValueJoinDefinitions(prompt),
+    prompt,
   });
 
   const context: Record<string, unknown> = {
