@@ -914,4 +914,168 @@ describe("recommendation gate", () => {
     expect(result.recommendations[0].allowed).toBe(true);
     expect(result.gatedAnswer).toContain("Re-import the insurancePatients records.");
   });
+
+  // ==========================================================================
+  // IDEMPOTENCY / DEDUPLICATION / NEGATIVE-LANGUAGE RECOGNITION
+  // ==========================================================================
+
+  it("emits exactly one downgrade for one unsafe restore sentence", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Restore insurancePatients.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("restore");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect((result.gatedAnswer.match(/is not recommended yet/g) ?? []).length).toBe(1);
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+    expect(result.gatedAnswer).not.toContain("Restore insurancePatients.");
+  });
+
+  it("emits exactly one downgrade for three unsafe restore sentences on the same domain", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer:
+        "Restore insurancePatients. We should restore insurancePatients again. Restore insurancePatients now.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations.length).toBeGreaterThan(0);
+    expect(result.recommendations[0].action).toBe("restore");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect((result.gatedAnswer.match(/is not recommended yet/g) ?? []).length).toBe(1);
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+  });
+
+  it("emits at most one downgrade per distinct action for restore + re-import same domain", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Restore insurancePatients. Re-import the insurancePatients data.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    const downgrades = (result.gatedAnswer.match(/is not recommended yet/g) ?? []);
+    expect(downgrades.length).toBeLessThanOrEqual(2);
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+    expect(result.gatedAnswer).toContain("Re-importing is not recommended yet");
+  });
+
+  it("does not re-downgrade already-negative safety language", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer:
+        "Restoring is not recommended yet because the underlying defect has not been verified.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(0);
+    expect(result.gatedAnswer).toBe(
+      "Restoring is not recommended yet because the underlying defect has not been verified."
+    );
+  });
+
+  it("does not re-downgrade do-not-restore safety language", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Do not restore the records until the defect is verified.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(0);
+    expect(result.gatedAnswer).toBe("Do not restore the records until the defect is verified.");
+  });
+
+  it("passes evidence sentences mentioning restore/import without a downgrade", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer:
+        "The restore operation was logged in the audit trail and the import job failed to produce records.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(0);
+    expect(result.gatedAnswer).toBe(
+      "The restore operation was logged in the audit trail and the import job failed to produce records."
+    );
+  });
+
+  it("is idempotent: running applyRecommendationGate twice produces identical text", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer:
+        "Restore insurancePatients. Re-import the insurancePatients data. Restoring is not recommended yet because the underlying defect has not been verified.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const first = applyRecommendationGate(input);
+    const second = applyRecommendationGate({
+      ...input,
+      answer: first.gatedAnswer,
+    });
+
+    expect(second.gatedAnswer).toBe(first.gatedAnswer);
+  });
+
+  it("removes the affirmative original sentence", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Restore insurancePatients immediately.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.gatedAnswer).not.toContain("Restore insurancePatients immediately.");
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+  });
+
+  it("keeps recommendation metadata accurate even when display text is emitted once", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer:
+        "Restore insurancePatients. Restore insurancePatients now. Restore insurancePatients again.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect((result.gatedAnswer.match(/is not recommended yet/g) ?? []).length).toBe(1);
+    expect(result.recommendations.length).toBe(3);
+    result.recommendations.forEach((rec) => {
+      expect(rec.action).toBe("restore");
+      expect(rec.allowed).toBe(false);
+    });
+  });
+
+  it("does not dedupe unrelated actions globally", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Restore insurancePatients. Migrate the schema to version 2.",
+      summaries: [
+        makeSummary("insurancePatients", "UNKNOWN"),
+        makeSummary("schemaMigration", "UNKNOWN"),
+      ],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+    expect(result.gatedAnswer).toContain("Migrating the schema is not recommended yet");
+    expect(result.recommendations.length).toBeGreaterThanOrEqual(2);
+  });
+
 });

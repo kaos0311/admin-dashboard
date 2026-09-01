@@ -16,6 +16,11 @@
  *   affirmative recommendation is not left in the response).
  * - Diagnostic verbs (investigate / audit / verify) are never blocked, unless
  *   the same sentence also proposes a high-impact action.
+ * - The gate is IDEMPOTENT: multiple affirmative sentences for the SAME
+ *   blocked action+domain emit ONE downgrade, and already-negative safety
+ *   language ("Restoring is not recommended yet...") is never re-classified as
+ *   a proposed action. Evidence sentences that merely mention restore/import
+ *   in a blocked/past context are ignored.
  */
 
 import {
@@ -67,6 +72,41 @@ const ACTION_VERBS: Record<HighImpactAction, string> = {
   data_repair: "Repairing data",
 };
 
+/**
+ * Phrases that mark a sentence as already-negative safety language. These are
+ * NOT affirmative recommendations and must pass through unchanged. When such a
+ * phrase is present, we must not treat the sentence as a proposed high-impact
+ * action and must not emit another downgrade.
+ */
+const NEGATIVE_LANGUAGE_PATTERNS = [
+  /\bnot\s+recommended\b/i,
+  /\bdo\s+not\s+(?:restore|import|re-?import|repair|migrat(?:e|ing)|delet(?:e|ing|ed|es)?|backfill(?:ing|ed)?|overwrit(?:e|ing|ten)|rebuild(?:ing|ed)?|normaliz(?:e|ing|ed)|rewrit(?:e|ing|ten)|add(?:ing)?)\b/i,
+  /\bshould\s+not\s+(?:restore|import|re-?import|repair|migrat(?:e|ing)|delet(?:e|ing|ed|es)?|backfill(?:ing|ed)?|overwrit(?:e|ing|ten)|rebuild(?:ing|ed)?|normaliz(?:e|ing|ed)|rewrit(?:e|ing|ten)|add(?:ing)?)\b/i,
+  /\bcannot\s+recommend\b/i,
+  /\bcan'?t\s+recommend\b/i,
+  /\bnot\s+authorized\b/i,
+  /\bnot\s+allowed\b/i,
+  /\bblocked\b/i,
+  /\brecommend(?:s|ed)?\s+against\b/i,
+  /\badvise\s+against\b/i,
+];
+
+/**
+ * Evidence sentences merely mention restore/import/etc. in a blocked context
+ * (a past operation, a report, an event log, an attempted build) rather than
+ * proposing a NEW high-impact action. These must not create warnings.
+ */
+const EVIDENCE_MENTION_PATTERNS = [
+  // "<verb> operation/job/process/attempt/log/event/record/report/summary..."
+  /\b(?:restore|re-?import|repair|migrat(?:e|ing|ed|ion)|backfill(?:ing|ed)?|rebuild(?:ing|ed)?|overwrit(?:e|ing|ten)|normaliz(?:e|ing|ed)|rewrit(?:e|ing|ten)|import(?:ing|ed)?|delet(?:e|ing|ed|es)?)\s+(?:operation|job|process|attempt|log|event|record|report|summary|metadata|evidence|action|step|task|history|run|routine)\b/i,
+  // "the <verb> was/were/is/are/has/had/have/been/appears/seems/got ..."
+  /\b(?:the|a|an|this|that|some|any)\s+(?:restore|re-?import|repair|migrat(?:e|ing|ed|ion)|backfill(?:ing|ed)?|rebuild(?:ing|ed)?|overwrit(?:e|ing|ten)|normaliz(?:e|ing|ed)|rewrit(?:e|ing|ten)|import(?:ing|ed)?|delet(?:e|ing|ed|es)?)\s+(?:was|were|is|are|has|had|have|been|appears?|seems?|got)\b/i,
+  // "<verb> of/for ..."
+  /\b(?:restore|re-?import|repair|migrat(?:e|ing|ed|ion)|backfill(?:ing|ed)?|rebuild(?:ing|ed)?|overwrit(?:e|ing|ten)|normaliz(?:e|ing|ed)|rewrit(?:e|ing|ten)|import(?:ing|ed)?|delet(?:e|ing|ed|es)?)\s+(?:of|for)\b/i,
+  // "<verb> was/were/had/has/been ..."
+  /\b(?:restore|restoring|restored|import|importing|imported|re-?import(?:ing|ed)?|repair|repairing|repaired|migrat(?:e|ing|ed|ion)?|backfill(?:ing|ed)?|rebuild(?:ing|ed)?|overwrit(?:e|ing|ten)|normaliz(?:e|ing|ed)|rewrit(?:e|ing|ten)|delet(?:e|ing|ed))\s+(?:was|were|had|has|been)\b/i,
+];
+
 export interface RecommendationGateInput {
   answer: string;
   summaries: CollectionSampleSummary[];
@@ -89,6 +129,16 @@ function findProposedAction(text: string): HighImpactAction | undefined {
     if (rule.regex.test(text)) return rule.action;
   }
   return undefined;
+}
+
+/** True when the sentence already uses negative/un-recommended safety language. */
+function hasNegativeLanguage(text: string): boolean {
+  return NEGATIVE_LANGUAGE_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+/** True when the sentence merely mentions a high-impact verb as evidence. */
+function isEvidenceMention(text: string): boolean {
+  return EVIDENCE_MENTION_PATTERNS.some((pattern) => pattern.test(text));
 }
 
 function splitCollectionName(name: string): string[] {
@@ -275,6 +325,42 @@ function isDiagnosticOnly(text: string): boolean {
   return hasDiagnostic && !hasHighImpact;
 }
 
+/**
+ * Derive a stable domain token from a sentence. This is used to build the
+ * deduplication key so multiple sentences targeting the same collection/domain
+ * collapse into a single downgrade, while genuinely distinct actions/domains
+ * still produce their own downgrade.
+ */
+function deriveDomainToken(
+  text: string,
+  summaries: CollectionSampleSummary[]
+): string {
+  const relevant = findRelevantSummary(text, summaries);
+  if (relevant) return relevant.collection.toLowerCase();
+
+  const lower = text.toLowerCase();
+  // Extract a plausible camelCase/collection-like token ("insurancePatients").
+  const camel = lower.match(/[a-z]+(?:[A-Z][a-z]+)+/);
+  if (camel) return camel[0].toLowerCase();
+
+  // Fall back to the longest meaningful word in the sentence.
+  const words = lower.split(/[^a-z0-9]+/).filter((w) => w.length > 3);
+  return words.sort((a, b) => b.length - a.length)[0] ?? "unknown";
+}
+
+/** Stable deduplication key: action + relevant domain/evidenceRef. */
+function buildDedupeKey(
+  action: HighImpactAction,
+  text: string,
+  summaries: CollectionSampleSummary[],
+  joins: Array<JoinVerification | ValueJoinVerification>
+): string {
+  const domain = deriveDomainToken(text, summaries);
+  const join = findRelevantJoinDefect(action, joins, text);
+  const evidenceRef = join ? join.evidenceRef : action;
+  return `${action}::${domain}::${evidenceRef}`;
+}
+
 export function applyRecommendationGate(
   input: RecommendationGateInput
 ): GateResult {
@@ -283,16 +369,47 @@ export function applyRecommendationGate(
   // Split into sentences so we can replace only unsafe ones.
   const parts = input.answer.split(/(?<=[.!?])\s+/);
 
-  const gatedParts = parts.map((part) => {
+  const gatedParts: string[] = [];
+  // Track the first occurrence of each blocked dedupe key. On subsequent
+  // occurrences we suppress the duplicated downgrade text but still record the
+  // accurate recommendation metadata for each original blocked sentence.
+  const seenBlocked = new Set<string>();
+
+  for (const part of parts) {
     const text = part.trim();
-    if (!text) return part;
+    if (!text) {
+      gatedParts.push(part);
+      continue;
+    }
 
     const action = findProposedAction(text);
-    if (!action) return part;
+    if (!action) {
+      gatedParts.push(part);
+      continue;
+    }
 
     // Diagnostic verbs are allowed only when no high-impact action is also
     // proposed in the same sentence.
-    if (isDiagnosticOnly(text)) return part;
+    if (isDiagnosticOnly(text)) {
+      gatedParts.push(part);
+      continue;
+    }
+
+    // ALREADY-NEGATIVE SAFETY LANGUAGE: "Restoring is not recommended yet..."
+    // is itself a negative-safety downgrade, not an affirmative recommendation.
+    // It must pass through unchanged and must NOT trigger a new downgrade.
+    if (hasNegativeLanguage(text)) {
+      gatedParts.push(part);
+      continue;
+    }
+
+    // EVIDENCE MENTION: a sentence that merely references restore/import in a
+    // blocked/past context (an operation, a log, an attempted job) is not a
+    // proposed action. Pass through unchanged, no new warning.
+    if (isEvidenceMention(text)) {
+      gatedParts.push(part);
+      continue;
+    }
 
     const defect = buildDefectClaim(
       action,
@@ -311,14 +428,33 @@ export function applyRecommendationGate(
       reason: decision.reason,
     });
 
-    if (decision.allowed) return part;
+    if (decision.allowed) {
+      gatedParts.push(part);
+      continue;
+    }
 
     // REPLACE the unsafe sentence with a single consistent negative-safety
     // downgrade. The raw affirmative recommendation is removed; the specific
     // reason is carried in the metadata (recommendations) rather than appended
     // to the model-facing text, so no duplicate generic gate warning appears.
-    return buildDowngradedSentence(action);
-  });
+    //
+    // IDEMPOTENCY: multiple affirmative sentences for the SAME blocked
+    // action+domain produce only ONE downgrade, not one per sentence.
+    const dedupeKey = buildDedupeKey(
+      action,
+      text,
+      input.summaries,
+      input.joins
+    );
+
+    if (seenBlocked.has(dedupeKey)) {
+      // Duplicate blocked recommendation for the same action+domain: suppress
+      // the extra downgrade text, but keep the (already-recorded) metadata.
+      continue;
+    }
+    seenBlocked.add(dedupeKey);
+    gatedParts.push(buildDowngradedSentence(action));
+  }
 
   return {
     gatedAnswer: gatedParts.join(" ").trim(),
