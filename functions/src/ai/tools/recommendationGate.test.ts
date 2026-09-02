@@ -1078,4 +1078,183 @@ describe("recommendation gate", () => {
     expect(result.recommendations.length).toBeGreaterThanOrEqual(2);
   });
 
+
+  // =========================================================================
+  // DIAGNOSTIC-MENTION REGRESSION: high-impact verbs used as the SUBJECT of
+  // diagnostic work (audit/query/verify/inspect/review/monitor/search) must NOT
+  // be treated as remediation proposals, but TRUE affirmative instructions
+  // ("Audit the records and then restore them") still are.
+  // =========================================================================
+
+  it("leaves 'audit logs for restore events' unchanged", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Audit logs for restore events.",
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(0);
+    expect(result.gatedAnswer).toBe("Audit logs for restore events.");
+  });
+
+  it("leaves 'query import/restore history' unchanged", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Query import/restore history.",
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(0);
+    expect(result.gatedAnswer).toBe("Query import/restore history.");
+  });
+
+  it("leaves 'verify whether restore occurred' unchanged", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Verify whether restore occurred.",
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(0);
+    expect(result.gatedAnswer).toBe("Verify whether restore occurred.");
+  });
+
+  it("leaves 'investigate failed imports' unchanged", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Investigate failed imports.",
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(0);
+    expect(result.gatedAnswer).toBe("Investigate failed imports.");
+  });
+
+  it("leaves the live audit-log sentence unchanged", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer:
+        "Run a targeted audit log query for insurancePatients import or restore events to confirm whether a restore was performed.",
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(0);
+    expect(result.gatedAnswer).toBe(
+      "Run a targeted audit log query for insurancePatients import or restore events to confirm whether a restore was performed."
+    );
+  });
+
+  it("gates 'Audit the records and then restore them'", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Audit the records and then restore them.",
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("restore");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+    expect(result.gatedAnswer).not.toContain("restore them");
+  });
+
+  it("still gates a direct affirmative restore", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer: "Restore insurancePatients.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("restore");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+  });
+
+  it("existing negative restore warning + diagnostic restore mention => one warning total", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer:
+        "Restoring is not recommended yet because the underlying defect has not been verified. Audit logs for restore events.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect((result.gatedAnswer.match(/is not recommended yet/g) ?? []).length).toBe(
+      1
+    );
+    expect(result.gatedAnswer).toContain("Audit logs for restore events.");
+  });
+
+  it("applying the gate twice remains identical", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer:
+        "Run a targeted audit log query for insurancePatients import or restore events. Restore insurancePatients.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const first = applyRecommendationGate(input);
+    const second = applyRecommendationGate({
+      ...input,
+      answer: first.gatedAnswer,
+    });
+
+    expect(second.gatedAnswer).toBe(first.gatedAnswer);
+  });
+
+  it("metadata stays accurate when a diagnostic mention coexists with a gate", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer:
+        "Run a targeted audit log query for insurancePatients import or restore events. Restore insurancePatients.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("restore");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("UNKNOWN");
+    expect(result.gatedAnswer).toContain(
+      "Run a targeted audit log query for insurancePatients import or restore events."
+    );
+    expect(result.gatedAnswer).toContain("Restoring is not recommended yet");
+  });
+
+  it("live response: diagnostic sentence + existing negative warning + direct restore emits exactly one downgrade", () => {
+    const input: RecommendationGateInput = {
+      ...baseInput,
+      answer:
+        "Run a targeted audit log query for insurancePatients import or restore events to confirm whether a restore was performed. " +
+        "Restoring is not recommended yet because the underlying defect has not been verified. " +
+        "Restore insurancePatients.",
+      summaries: [makeSummary("insurancePatients", "UNKNOWN")],
+    };
+
+    const result = applyRecommendationGate(input);
+
+    expect(result.gatedAnswer).toContain(
+      "Run a targeted audit log query for insurancePatients import or restore events to confirm whether a restore was performed."
+    );
+    expect((result.gatedAnswer.match(/is not recommended yet/g) ?? []).length).toBe(
+      1
+    );
+    expect(result.gatedAnswer).not.toContain("Restore insurancePatients.");
+    expect(result.recommendations).toHaveLength(1);
+    expect(result.recommendations[0].action).toBe("restore");
+    expect(result.recommendations[0].allowed).toBe(false);
+    expect(result.recommendations[0].reason).toContain("UNKNOWN");
+  });
+
 });
