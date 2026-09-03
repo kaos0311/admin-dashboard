@@ -1,5 +1,4 @@
 import {
-  addDoc,
   collection,
   doc,
   getDocs,
@@ -10,7 +9,6 @@ import {
   serverTimestamp,
   setDoc,
   startAfter,
-  updateDoc,
   where,
   type DocumentData,
   type QueryDocumentSnapshot,
@@ -130,40 +128,6 @@ export const OrderRepository = {
     const hasMore = snapshot.docs.length === pageSize;
 
     return { orders, nextCursor, hasMore };
-  },
-
-  // ---- WRITE: Order documents ---------------------------------------------
-
-  /**
-   * Create a new order document. Returns the generated document ID.
-   */
-  async create(data: Record<string, unknown>): Promise<string> {
-    const ref = await addDoc(collection(db, COLLECTION_ORDERS), {
-      ...data,
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-    return ref.id;
-  },
-
-  /**
-   * Update an existing order document (merge semantics with updatedAt).
-   */
-  async update(id: string, data: Record<string, unknown>): Promise<void> {
-    await updateDoc(doc(db, COLLECTION_ORDERS, id), {
-      ...data,
-      updatedAt: serverTimestamp(),
-    });
-  },
-
-  /**
-   * Update an order after initial creation (adds serverTimestamp).
-   */
-  async updateAfterCreate(id: string, data: Record<string, unknown>): Promise<void> {
-    await updateDoc(doc(db, COLLECTION_ORDERS, id), {
-      ...data,
-      updatedAt: serverTimestamp(),
-    });
   },
 
   // ---- WRITE: Import jobs -------------------------------------------------

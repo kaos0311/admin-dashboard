@@ -35,8 +35,8 @@ export const orderWorkflowCallable = onCall(
     const data = request.data as Record<string, unknown> | undefined;
     const action = cleanString(data?.action) as OrderWorkflowInput["action"] | undefined;
 
-    if (!action || !["create", "cancel", "restore", "edit"].includes(action)) {
-      throw new HttpsError("invalid-argument", "Invalid order action. Must be create, cancel, restore, or edit.");
+    if (!action || !["create", "cancel", "restore", "edit", "ready", "archive"].includes(action)) {
+      throw new HttpsError("invalid-argument", "Invalid order action. Must be create, cancel, restore, edit, ready, or archive.");
     }
 
     const input: OrderWorkflowInput = {

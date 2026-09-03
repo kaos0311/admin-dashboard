@@ -452,7 +452,12 @@ service cloud.firestore {
 
     match /orders/{docId} {
       allow read: if isStaffOrAdmin();
-      allow write: if isStaffOrAdmin();
+      // ORDERS ARE SERVER-WRITE-ONLY.
+      // Every legitimate order mutation (create, edit, ready, delivered,
+      // cancel, restore, archive) is performed by the order workflow callable
+      // or the delivery workflow, both using the Admin SDK, which bypasses
+      // these rules. No browser client write is permitted.
+      allow create, update, delete: if false;
     }
 
     match /rentals/{docId} {

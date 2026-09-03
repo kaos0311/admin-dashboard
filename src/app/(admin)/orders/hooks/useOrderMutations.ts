@@ -1,11 +1,15 @@
-"use client";
-
 import toast from "react-hot-toast";
 
-import { auth } from "@/lib/firebase";
-import { OrderRepository } from "@/repositories/firestore/order.repository";
 import { findProductByBarcode } from "@/lib/inventory";
-import { createOrder as createOrderWorkflow, cancelOrder as cancelOrderWorkflow, restoreOrder as restoreOrderWorkflow, editOrder as editOrderWorkflow, createOrderOperationId } from "@/lib/orders/orderWorkflows";
+import {
+  createOrder as createOrderWorkflow,
+  cancelOrder as cancelOrderWorkflow,
+  restoreOrder as restoreOrderWorkflow,
+  editOrder as editOrderWorkflow,
+  readyOrder as readyOrderWorkflow,
+  archiveOrder as archiveOrderWorkflow,
+  createOrderOperationId,
+} from "@/lib/orders/orderWorkflows";
 import { normalizeBarcode } from "@/lib/barcode";
 
 import { initialFormState } from "../lib/orderConstants";
@@ -15,15 +19,6 @@ import {
   validateOrderForm,
 } from "../lib/orderValidation";
 import type { OrderFormState, OrderRow, OrderStatus } from "../lib/orderTypes";
-
-function getCurrentUserLabel(): string {
-  return (
-    auth.currentUser?.displayName ||
-    auth.currentUser?.email ||
-    auth.currentUser?.uid ||
-    "Unknown user"
-  );
-}
 
 import React from "react";
 
@@ -195,8 +190,6 @@ export function useOrderMutations({
 
       const payload = buildSmartOrderPayload(editForm);
 
-      const currentOrder = orders.find((order) => order.id === editingOrderId);
-
       const editResult = await editOrderWorkflow({
         operationId: `edit-${editingOrderId}`,
         orderId: editingOrderId,
@@ -244,7 +237,7 @@ export function useOrderMutations({
     }
   }
 
-  function applyLocalStatusUpdate(orderId: string, status: OrderStatus) {
+  function applyServerStatusUpdate(orderId: string, status: OrderStatus) {
     const now = new Date();
 
     setOrders((prev) =>
@@ -260,17 +253,43 @@ export function useOrderMutations({
     );
   }
 
+  function filterOutIfTabMismatch(orderId: string, status: OrderStatus) {
+    if (tab !== "all" && tab !== status) {
+      setOrders((prev) => prev.filter((order) => order.id !== orderId));
+    }
+  }
+
   async function updateStatus(orderId: string, status: OrderStatus) {
     const previousOrders = orders;
     const currentOrder = orders.find((order) => order.id === orderId);
 
+    if (!currentOrder) {
+      toast.error("Order not found.");
+      return;
+    }
+
     try {
-      if (
-        status === "cancelled" &&
-        currentOrder?.productId &&
-        currentOrder.inventoryAllocated === true &&
-        currentOrder.inventoryRestored !== true
-      ) {
+      if (status === "ready") {
+        const readyResult = await readyOrderWorkflow({
+          operationId: `ready-${orderId}`,
+          orderId,
+          productId: currentOrder.productId,
+          quantity: currentOrder.quantity,
+          patientName: currentOrder.patientName,
+        });
+
+        if (readyResult.status !== "success" && readyResult.status !== "duplicate_operation") {
+          throw new Error(readyResult.message || "Failed to mark order ready.");
+        }
+
+        applyServerStatusUpdate(orderId, "ready");
+        filterOutIfTabMismatch(orderId, "ready");
+        await loadOrders("refresh");
+        toast.success("Order marked ready.");
+        return;
+      }
+
+      if (status === "cancelled") {
         const cancelResult = await cancelOrderWorkflow({
           operationId: `cancel-${orderId}`,
           orderId,
@@ -282,28 +301,21 @@ export function useOrderMutations({
         if (cancelResult.status !== "success" && cancelResult.status !== "duplicate_operation") {
           throw new Error(cancelResult.message || "Failed to cancel order inventory.");
         }
+
+        applyServerStatusUpdate(orderId, "cancelled");
+        filterOutIfTabMismatch(orderId, "cancelled");
+        await loadOrders("refresh");
+        toast.success("Order cancelled.");
+        return;
       }
 
-      applyLocalStatusUpdate(orderId, status);
-
-      const nextOrder = currentOrder
-        ? normalizeOrder(orderId, { ...currentOrder, status })
-        : null;
-
-      await OrderRepository.update(orderId, {
-        status,
-        needsReview: nextOrder?.needsReview ?? false,
-        reviewReasons: nextOrder?.reviewReasons ?? [],
-        smartRouteTargets: nextOrder?.smartRouteTargets ?? [],
-        updatedBy: getCurrentUserLabel(),
-        updatedByUid: auth.currentUser?.uid ?? "",
-      });
-
-      if (tab !== "all" && tab !== status) {
-        setOrders((prev) => prev.filter((order) => order.id !== orderId));
+      if (status === "delivered") {
+        throw new Error(
+          "Delivered is managed by the delivery workflow. Use delivery scanning to complete an order.",
+        );
       }
 
-      toast.success(`Order marked ${status}.`);
+      throw new Error(`Unsupported order status transition: ${status}.`);
     } catch (error: unknown) {
       console.error("UPDATE ORDER STATUS ERROR:", error);
       setOrders(previousOrders);
@@ -315,24 +327,29 @@ export function useOrderMutations({
 
   async function archiveOrder(orderId: string): Promise<void> {
     const previousOrders = orders;
+    const currentOrder = orders.find((order) => order.id === orderId);
+
+    if (!currentOrder) {
+      toast.error("Order not found.");
+      return;
+    }
 
     try {
-      applyLocalStatusUpdate(orderId, "archived");
-
-      await OrderRepository.update(orderId, {
-        status: "archived",
-        needsReview: false,
-        reviewReasons: ["archived"],
-        archivedAt: new Date(),
-        archivedBy: getCurrentUserLabel(),
-        archivedByUid: auth.currentUser?.uid ?? "",
-        updatedBy: getCurrentUserLabel(),
-        updatedByUid: auth.currentUser?.uid ?? "",
+      const archiveResult = await archiveOrderWorkflow({
+        operationId: `archive-${orderId}`,
+        orderId,
+        productId: currentOrder.productId,
+        quantity: currentOrder.quantity,
+        patientName: currentOrder.patientName,
       });
 
-      if (tab !== "all" && tab !== "archived") {
-        setOrders((prev) => prev.filter((order) => order.id !== orderId));
+      if (archiveResult.status !== "success" && archiveResult.status !== "duplicate_operation") {
+        throw new Error(archiveResult.message || "Failed to archive order.");
       }
+
+      applyServerStatusUpdate(orderId, "archived");
+      filterOutIfTabMismatch(orderId, "archived");
+      await loadOrders("refresh");
 
       toast.success("Order archived.");
     } catch (error: unknown) {
@@ -348,48 +365,27 @@ export function useOrderMutations({
     const previousOrders = orders;
     const currentOrder = orders.find((order) => order.id === orderId);
 
-    try {
-      applyLocalStatusUpdate(orderId, "processing");
+    if (!currentOrder) {
+      toast.error("Order not found.");
+      return;
+    }
 
+    try {
       const restoreResult = await restoreOrderWorkflow({
         operationId: `restore-${orderId}`,
         orderId,
-        productId: currentOrder?.productId ?? "",
-        quantity: currentOrder?.quantity ?? 1,
-        patientName: currentOrder?.patientName,
+        productId: currentOrder.productId ?? "",
+        quantity: currentOrder.quantity ?? 1,
+        patientName: currentOrder.patientName,
       });
 
       if (restoreResult.status !== "success" && restoreResult.status !== "duplicate_operation") {
         throw new Error(restoreResult.message || "Failed to restore order.");
       }
 
-      const nextOrder = currentOrder
-        ? normalizeOrder(orderId, {
-            ...currentOrder,
-            status: "processing",
-            inventoryAllocated: true,
-            inventoryRestored: false,
-          })
-        : null;
-
-      await OrderRepository.update(orderId, {
-        status: "processing",
-        inventoryAllocated: true,
-        inventoryAllocationSourceId: orderId,
-        inventoryRestored: false,
-        needsReview: nextOrder?.needsReview ?? false,
-        reviewReasons: nextOrder?.reviewReasons ?? [],
-        smartRouteTargets: nextOrder?.smartRouteTargets ?? [],
-        restoredAt: new Date(),
-        restoredBy: getCurrentUserLabel(),
-        restoredByUid: auth.currentUser?.uid ?? "",
-        updatedBy: getCurrentUserLabel(),
-        updatedByUid: auth.currentUser?.uid ?? "",
-      });
-
-      if (tab !== "all" && tab !== "processing") {
-        setOrders((prev) => prev.filter((order) => order.id !== orderId));
-      }
+      applyServerStatusUpdate(orderId, "processing");
+      filterOutIfTabMismatch(orderId, "processing");
+      await loadOrders("refresh");
 
       toast.success("Order restored.");
     } catch (error: unknown) {

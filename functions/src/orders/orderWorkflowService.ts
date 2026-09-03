@@ -12,17 +12,18 @@ import {
   completeWorkflowOperation,
   text,
   type WorkflowResult,
+  writeWorkflowAudit,
 } from "../domainWorkflows/shared.js";
 
 const ORDER_TRANSITIONS: Record<string, Set<string>> = {
-  processing: new Set(["ready", "delivered", "cancelled"]),
-  ready: new Set(["delivered", "cancelled"]),
+  processing: new Set(["ready", "delivered", "cancelled", "archived"]),
+  ready: new Set(["delivered", "cancelled", "archived"]),
   delivered: new Set(["archived"]),
-  cancelled: new Set(["processing"]),
-  archived: new Set([]),
+  cancelled: new Set(["processing", "archived"]),
+  archived: new Set(["processing"]),
 };
 
-export type OrderWorkflowAction = "create" | "cancel" | "restore" | "edit";
+export type OrderWorkflowAction = "create" | "cancel" | "restore" | "edit" | "ready" | "archive";
 
 export type OrderWorkflowInput = {
   operationId: string;
@@ -142,6 +143,48 @@ function isSerializedInventory(inventory: Record<string, unknown>): boolean {
       text(inventory.serialNumber)
     )
   );
+}
+
+function computeOrderReviewState(orderData: Record<string, unknown>): {
+  needsReview: boolean;
+  reviewReasons: string[];
+  smartRouteTargets: string[];
+} {
+  const status = text(orderData.status).toLowerCase();
+  const inventoryAllocated = orderData.inventoryAllocated === true;
+  const inventoryRestored = orderData.inventoryRestored === true;
+  const reasons = new Set<string>();
+
+  if (!text(orderData.patientName)) reasons.add("missingPatientName");
+  if (!text(orderData.patientAddress)) reasons.add("missingAddress");
+  if (!text(orderData.productType)) reasons.add("missingProduct");
+  if (!text(orderData.productId)) reasons.add("missingProductId");
+  if (!text(orderData.dob)) reasons.add("missingDob");
+  if (!text(orderData.phone)) reasons.add("missingPhone");
+
+  const isHospice =
+    orderData.isHospice === true ||
+    text(orderData.insurance).toLowerCase().includes("hospice") ||
+    text(orderData.facilityName).toLowerCase().includes("hospice") ||
+    text(orderData.notes).toLowerCase().includes("hospice");
+  if (isHospice) reasons.add("possibleHospice");
+
+  if (!inventoryAllocated && status !== "cancelled") reasons.add("inventoryNotAllocated");
+  if (status === "cancelled" && inventoryRestored) reasons.add("cancelledInventoryRestored");
+  if (status === "archived") reasons.add("archived");
+  if (status === "delivered" || status === "cancelled") reasons.add("deliveredReadyForArchive");
+
+  const reviewReasons = [...reasons];
+  const targets = new Set<string>(["orders", "patients", "analytics"]);
+  if (text(orderData.insurance)) targets.add("insurancePatients");
+  if (isHospice) targets.add("hospicePatients");
+  if (reviewReasons.length > 0) targets.add("review");
+
+  return {
+    needsReview: reviewReasons.length > 0,
+    reviewReasons,
+    smartRouteTargets: [...targets],
+  };
 }
 
 async function resolveAvailableInventory(
@@ -294,6 +337,14 @@ export async function orderWorkflow(
 
     if (input.action === "edit") {
       return await editOrderWorkflow({ database, transaction, input, actor, operationId, workflowType });
+    }
+
+    if (input.action === "ready") {
+      return await readyOrderWorkflow({ database, transaction, input, actor, operationId, workflowType });
+    }
+
+    if (input.action === "archive") {
+      return await archiveOrderWorkflow({ database, transaction, input, actor, operationId, workflowType });
     }
 
     throw new HttpsError("invalid-argument", `Unsupported order action: ${input.action}`);
@@ -548,9 +599,18 @@ async function cancelOrderWorkflow(params: {
     movementIds.push(movementResult.movementId ?? movementId);
   }
 
+  const cancelledReviewState = computeOrderReviewState({
+    ...orderData,
+    status: "cancelled",
+    inventoryRestored: true,
+  });
+
   transaction.update(orderRef, {
     status: "cancelled",
     inventoryRestored: true,
+    needsReview: cancelledReviewState.needsReview,
+    reviewReasons: cancelledReviewState.reviewReasons,
+    smartRouteTargets: cancelledReviewState.smartRouteTargets,
     updatedBy: actor.email ?? actor.uid,
     updatedByUid: actor.uid,
     updatedAt: FieldValue.serverTimestamp(),
@@ -568,6 +628,22 @@ async function cancelOrderWorkflow(params: {
       workflowType,
       movementIds,
       metadata: { orderId, restoredQuantity: allocations.reduce((sum, a) => sum + a.quantity, 0) },
+    },
+  });
+
+  writeWorkflowAudit({
+    transaction,
+    database,
+    actor,
+    action: workflowType,
+    targetCollection: "orders",
+    targetId: orderId,
+    details: {
+      operationId,
+      previousStatus: currentStatus,
+      nextStatus: "cancelled",
+      restoredQuantity: allocations.reduce((sum, a) => sum + a.quantity, 0),
+      inventoryRestored: true,
     },
   });
 
@@ -659,6 +735,13 @@ async function restoreOrderWorkflow(params: {
     });
   }
 
+  const restoredReviewState = computeOrderReviewState({
+    ...orderData,
+    status: "processing",
+    inventoryAllocated: true,
+    inventoryRestored: false,
+  });
+
   transaction.update(orderRef, {
     status: "processing",
     inventoryAllocated: true,
@@ -667,6 +750,9 @@ async function restoreOrderWorkflow(params: {
     restoredAt: FieldValue.serverTimestamp(),
     restoredBy: actor.email ?? actor.uid,
     restoredByUid: actor.uid,
+    needsReview: restoredReviewState.needsReview,
+    reviewReasons: restoredReviewState.reviewReasons,
+    smartRouteTargets: restoredReviewState.smartRouteTargets,
     updatedBy: actor.email ?? actor.uid,
     updatedByUid: actor.uid,
     updatedAt: FieldValue.serverTimestamp(),
@@ -684,6 +770,21 @@ async function restoreOrderWorkflow(params: {
       workflowType,
       movementIds,
       metadata: { orderId, allocations: allocationSnapshot },
+    },
+  });
+
+  writeWorkflowAudit({
+    transaction,
+    database,
+    actor,
+    action: workflowType,
+    targetCollection: "orders",
+    targetId: orderId,
+    details: {
+      operationId,
+      previousStatus: currentStatus,
+      nextStatus: "processing",
+      restoredQuantity: allocations.reduce((sum, a) => sum + a.quantity, 0),
     },
   });
 
@@ -824,5 +925,169 @@ async function editOrderWorkflow(params: {
     workflowType,
     orderId,
     orderStatus: text(orderData.status),
+  };
+}
+
+async function readyOrderWorkflow(params: {
+  database: Firestore;
+  transaction: Transaction;
+  input: OrderWorkflowInput;
+  actor: MovementActor;
+  operationId: string;
+  workflowType: string;
+}): Promise<WorkflowResult> {
+  const { database, transaction, input, actor, operationId, workflowType } = params;
+  const orderId = text(input.orderId);
+
+  if (!orderId) {
+    throw new HttpsError("invalid-argument", "orderId is required to mark an order ready.");
+  }
+
+  const orderRef = database.collection("orders").doc(orderId);
+  const orderSnap = await transaction.get(orderRef);
+
+  if (!orderSnap.exists) {
+    throw new HttpsError("not-found", "Order not found.");
+  }
+
+  const orderData = orderSnap.data() as Record<string, unknown>;
+  const currentStatus = text(orderData.status).toLowerCase();
+
+  assertTransition(currentStatus, "ready", "order");
+
+  const reviewState = computeOrderReviewState(orderData);
+
+  transaction.update(orderRef, {
+    status: "ready",
+    needsReview: reviewState.needsReview,
+    reviewReasons: reviewState.reviewReasons,
+    smartRouteTargets: reviewState.smartRouteTargets,
+    updatedBy: actor.email ?? actor.uid,
+    updatedByUid: actor.uid,
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
+  completeWorkflowOperation({
+    transaction,
+    database,
+    operationId,
+    workflowType,
+    actor,
+    result: {
+      status: "success",
+      operationId,
+      workflowType,
+      orderId,
+      orderStatus: "ready",
+    },
+  });
+
+  writeWorkflowAudit({
+    transaction,
+    database,
+    actor,
+    action: workflowType,
+    targetCollection: "orders",
+    targetId: orderId,
+    details: {
+      operationId,
+      previousStatus: currentStatus,
+      nextStatus: "ready",
+      needsReview: reviewState.needsReview,
+      reviewReasons: reviewState.reviewReasons,
+    },
+  });
+
+  return {
+    status: "success",
+    operationId,
+    workflowType,
+    orderId,
+    orderStatus: "ready",
+  };
+}
+
+async function archiveOrderWorkflow(params: {
+  database: Firestore;
+  transaction: Transaction;
+  input: OrderWorkflowInput;
+  actor: MovementActor;
+  operationId: string;
+  workflowType: string;
+}): Promise<WorkflowResult> {
+  const { database, transaction, input, actor, operationId, workflowType } = params;
+  const orderId = text(input.orderId);
+
+  if (!orderId) {
+    throw new HttpsError("invalid-argument", "orderId is required to archive an order.");
+  }
+
+  const orderRef = database.collection("orders").doc(orderId);
+  const orderSnap = await transaction.get(orderRef);
+
+  if (!orderSnap.exists) {
+    throw new HttpsError("not-found", "Order not found.");
+  }
+
+  const orderData = orderSnap.data() as Record<string, unknown>;
+  const currentStatus = text(orderData.status).toLowerCase();
+
+  assertTransition(currentStatus, "archived", "order");
+
+  const reviewState = computeOrderReviewState({
+    ...orderData,
+    status: "archived",
+  });
+
+  transaction.update(orderRef, {
+    status: "archived",
+    archivedAt: FieldValue.serverTimestamp(),
+    archivedBy: actor.email ?? actor.uid,
+    archivedByUid: actor.uid,
+    updatedBy: actor.email ?? actor.uid,
+    updatedByUid: actor.uid,
+    updatedAt: FieldValue.serverTimestamp(),
+    needsReview: reviewState.needsReview,
+    reviewReasons: reviewState.reviewReasons,
+    smartRouteTargets: reviewState.smartRouteTargets,
+  });
+
+  completeWorkflowOperation({
+    transaction,
+    database,
+    operationId,
+    workflowType,
+    actor,
+    result: {
+      status: "success",
+      operationId,
+      workflowType,
+      orderId,
+      orderStatus: "archived",
+    },
+  });
+
+  writeWorkflowAudit({
+    transaction,
+    database,
+    actor,
+    action: workflowType,
+    targetCollection: "orders",
+    targetId: orderId,
+    details: {
+      operationId,
+      previousStatus: currentStatus,
+      nextStatus: "archived",
+      archivedByUid: actor.uid,
+      archivedBy: actor.email ?? actor.uid,
+    },
+  });
+
+  return {
+    status: "success",
+    operationId,
+    workflowType,
+    orderId,
+    orderStatus: "archived",
   };
 }
