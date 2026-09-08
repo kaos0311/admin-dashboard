@@ -31,17 +31,15 @@ service cloud.firestore {
 
     function isActiveProfile() {
       return isSignedIn()
-        && (!hasProfile()
-          || (
-            profileData().active != false
-            && profileData().disabled != true
-            && profileData().deleted != true
-          ));
+        && hasProfile()
+        && (!("active" in profileData()) || profileData().active != false)
+        && (!("disabled" in profileData()) || profileData().disabled != true)
+        && (!("deleted" in profileData()) || profileData().deleted != true);
     }
 
     function role() {
-      return isSignedIn()
-        ? (claimRole() != "" ? claimRole() : (isActiveProfile() ? profileRole() : ""))
+      return isSignedIn() && isActiveProfile()
+        ? profileRole()
         : "";
     }
 

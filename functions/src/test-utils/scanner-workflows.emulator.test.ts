@@ -242,6 +242,18 @@ async function seedPatientAssignmentFixture(prefix: string) {
 
 beforeEach(async () => {
   await clearEmulatorData();
+  // AUTHORITATIVE PROFILE: the users/{uid} active profile is the single
+  // source of truth. Seed the authorized actor so shared callable auth
+  // (resolveCallableRole) resolves the staff role instead of relying on a
+  // custom claim alone.
+  await db.collection("users").doc(actor.uid).set({
+    uid: actor.uid,
+    email: actor.email,
+    role: actor.role,
+    active: true,
+    disabled: false,
+    deleted: false,
+  });
 });
 
 describe("scanner equipment check-in workflow", () => {

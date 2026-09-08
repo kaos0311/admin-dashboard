@@ -35,16 +35,20 @@ const mockCollection = (
   countValue: number | null = null
 ) => {
   const self = () => self;
-  self.doc = vi.fn((id: string) => ({
-    collectionName,
-    id,
-    get: vi.fn(() =>
-      Promise.resolve({
-        id,
-        data: () => ({ generatedAtLabel: "2025-01-01" }),
-      })
-    ),
-  }));
+  self.doc = vi.fn((id: string) => {
+    const record = records.find((item) => item.__id === id);
+    return {
+      collectionName,
+      id,
+      get: vi.fn(() =>
+        Promise.resolve({
+          id,
+          exists: Boolean(record),
+          data: () => record ?? { generatedAtLabel: "2025-01-01" },
+        })
+      ),
+    };
+  });
   self.limit = vi.fn(() => ({
     get: vi.fn(() =>
       mockState.failingSampleCollections.has(collectionName)
@@ -96,21 +100,24 @@ const mockCollection = (
 
 vi.mock("firebase-admin/firestore", () => {
   const collections: Record<string, Array<Record<string, unknown>>> = {
+    users: [
+      { __id: "test-user", uid: "test-user", role: "admin", active: true, disabled: false, deleted: false },
+    ],
     patients: [
       { __id: "pat-join-001", patientId: "PAT-JOIN-001", patientName: "Alice Smith", dob: "1980-01-01", phone: "555-1111", insurance: "Acme" },
       { __id: "pat-join-002", patientId: "PAT-JOIN-002", patientName: "Bob Jones", dob: "1975-05-05", phone: "555-2222", insurance: "Beta" },
       { __id: "pat-join-003", patientId: "PAT-JOIN-003", patientName: "Carol White", dob: "1990-09-09", phone: "555-3333", insurance: "Gamma" },
     ],
     orders: [
-      { patientName: "alice smith", status: "active", productType: "DME" },
-      { patientName: "BOB  JONES", status: "active", productType: "DME" },
-      { patientName: "Dan Brown", status: "active", productType: "DME" },
+      { __id: "order-1", patientName: "alice smith", status: "active", productType: "DME" },
+      { __id: "order-2", patientName: "BOB  JONES", status: "active", productType: "DME" },
+      { __id: "order-3", patientName: "Dan Brown", status: "active", productType: "DME" },
     ],
     rentals: [
-      { patientId: "PAT-JOIN-001", patientName: "Alice Smith", status: "active" },
+      { __id: "rental-1", patientId: "PAT-JOIN-001", patientName: "Alice Smith", status: "active" },
     ],
     wipRecords: [
-      { patientName: "Unknown", status: "open" },
+      { __id: "wip-1", patientName: "Unknown", status: "open" },
     ],
     analytics: [],
     auditLogs: [],

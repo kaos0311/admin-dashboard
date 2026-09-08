@@ -4,6 +4,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 
+import { resolveCallableRole } from "../../auth/roles.js";
 import {
   createPhiAlert,
   type PhiFinding,
@@ -58,30 +59,34 @@ type FieldScanResult = {
   findings: PhiFinding[];
 };
 
-function requireAdmin(request: {
+async function requireAdmin(request: {
   auth?: {
     uid: string;
     token: Record<string, unknown>;
   };
-}): { uid: string; email: string | null } {
+}): Promise<{ uid: string; email: string | null }> {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
 
-  if (
-    request.auth.token.role !== "admin" &&
-    request.auth.token.role !== "tank"
-  ) {
-    throw new HttpsError("permission-denied", "Admin access required.");
+  // AUTHORITATIVE: resolve from the active users/{uid} profile. A stale
+  // admin custom claim without a matching active admin profile is denied.
+  const role = await resolveCallableRole({
+    uid: request.auth.uid,
+    token: request.auth.token as Record<string, unknown>,
+  });
+
+  if (role === "admin" || role === "tank") {
+    return {
+      uid: request.auth.uid,
+      email:
+        typeof request.auth.token.email === "string"
+          ? request.auth.token.email
+          : null,
+    };
   }
 
-  return {
-    uid: request.auth.uid,
-    email:
-      typeof request.auth.token.email === "string"
-        ? request.auth.token.email
-        : null,
-  };
+  throw new HttpsError("permission-denied", "Admin access required.");
 }
 
 function normalizeCollections(input: unknown): string[] {
@@ -213,7 +218,7 @@ export const scanDatabasePhiSafety = onCall<ScanRequest>(
     memory: "1GiB",
   },
   async (request) => {
-    const actor = requireAdmin(request);
+    const actor = await requireAdmin(request);
     const collections = normalizeCollections(request.data?.collections);
     const limitPerCollection = getLimit(request.data?.limitPerCollection);
     const dryRun = request.data?.dryRun === true;

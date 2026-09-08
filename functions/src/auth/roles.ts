@@ -59,14 +59,32 @@ function getRoleFromUserRecord(
   return null;
 }
 
+/**
+ * Resolve the effective dashboard role for a callable caller.
+ *
+ * AUTHORITATIVE POLICY: the `users/{uid}` profile is the single source of
+ * truth for dashboard authority. A custom claim is never an authority by
+ * itself. A missing, disabled, deleted, or inactive profile MUST NOT grant
+ * dashboard access even when a stale or elevated custom claim is present.
+ *
+ * Required conditions to obtain any role:
+ *   1. The caller is an authenticated Firebase user.
+ *   2. `users/{uid}` exists.
+ *   3. The profile is active (not disabled / deleted / inactive).
+ *
+ * The returned role is the profile role. A custom claim does NOT elevate or
+ * preserve access. This is intentionally the same authority used by
+ * Firestore rules, Storage rules, and the client permission resolver.
+ */
 export async function resolveCallableRole(
   auth: CallableAuthLike
 ): Promise<DashboardRole | null> {
-  const tokenRole = parseRole(auth.token.role);
   const userSnap = await getFirestore().collection("users").doc(auth.uid).get();
 
+  // No profile => no dashboard authority. A custom claim alone is never
+  // sufficient. (Bootstrap is UID-pinned and writes the profile itself.)
   if (!userSnap.exists) {
-    return tokenRole;
+    return null;
   }
 
   const userData = userSnap.data() as Record<string, unknown>;
@@ -74,7 +92,10 @@ export async function resolveCallableRole(
     return null;
   }
 
-  return getRoleFromUserRecord(userData) ?? tokenRole;
+  // The profile role is authoritative. We deliberately do NOT fall back to
+  // `auth.token.role` here, so a stale/elevated claim cannot override a
+  // downgraded, disabled, or deleted profile.
+  return getRoleFromUserRecord(userData);
 }
 
 export async function requireCallableAdmin(

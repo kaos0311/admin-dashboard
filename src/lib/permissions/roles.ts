@@ -92,16 +92,29 @@ export function getRoleFromUserRecord(
   return null;
 }
 
+/**
+ * Resolve the effective client-visible role.
+ *
+ * AUTHORITATIVE POLICY: the `users/{uid}` profile is the source of truth.
+ * A missing profile grants NO role, regardless of any custom claim. A
+ * custom claim may only mirror/profile-data that already exists on an
+ * active profile - it can never grant authority by itself.
+ *
+ * This is UX-only (client rendering). Server enforcement (Firestore
+ * rules, Storage rules, callables) uses the same profile-authority policy.
+ */
 export function resolveUserRole(params: {
   tokenRole: UserRole | null;
   dbRole: UserRole | null;
   hasUserRecord: boolean;
 }): UserRole | null {
-  if (params.hasUserRecord && params.dbRole) {
-    return params.dbRole;
+  // No profile => no privileged role. Never fall back to the claim.
+  if (!params.hasUserRecord) {
+    return null;
   }
 
-  return params.tokenRole;
+  // Profile exists => profile role is authoritative. The claim is ignored.
+  return params.dbRole ?? null;
 }
 
 export function isAdminRole(role: UserRole | null): boolean {

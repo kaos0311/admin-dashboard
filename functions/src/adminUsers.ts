@@ -3,6 +3,7 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+import { resolveCallableRole } from "./auth/roles.js";
 import { writeAuditEntry } from "./audit/writeAuditEntry.js";
 import { enforceCallableRateLimit } from "./security/rateLimit.js";
 
@@ -29,25 +30,24 @@ function isAdminRole(value: unknown): boolean {
 async function requireAdmin(request: {
   auth?: { uid?: string; token?: Record<string, unknown> };
 }) {
-  const role = request.auth?.token?.role;
-  const uid = request.auth?.uid;
-
-  if (!uid) {
+  if (!request.auth?.uid) {
     throw new HttpsError(
       "permission-denied",
       "Only admins can create dashboard users."
     );
   }
 
-  const userSnap = await db.collection("users").doc(uid).get();
-  const userData = userSnap.exists ? userSnap.data() : null;
-  const docRole = userData?.role;
-  const isDisabled =
-    userData?.active === false ||
-    userData?.disabled === true ||
-    userData?.deleted === true;
+  // AUTHORITATIVE POLICY:
+  // The users/{uid} active profile is the single source of truth. The
+  // custom claim is never an authority by itself. A stale or elevated
+  // admin claim MUST NOT grant admin authority when the profile is
+  // missing, disabled, deleted, inactive, or has a lower role.
+  const role = await resolveCallableRole({
+    uid: request.auth.uid,
+    token: request.auth.token ?? {},
+  });
 
-  if (isDisabled || (!isAdminRole(role) && !isAdminRole(docRole))) {
+  if (!role || !isAdminRole(role)) {
     throw new HttpsError(
       "permission-denied",
       "Only admins can create dashboard users."
@@ -173,10 +173,11 @@ export const createDashboardUser = onCall(
         disabled: false,
       });
 
-      await auth.setCustomUserClaims(userRecord.uid, {
-        role,
-      });
-
+      // AUTHORITATIVE PROFILE FIRST:
+      // Firestore is the source of truth for dashboard authority. The user
+      // is created with an active profile before the claim mirror is set so
+      // a failed claim sync can never produce a user with a role claim but
+      // no authoritative profile.
       await db.collection("users").doc(userRecord.uid).set(
         {
           uid: userRecord.uid,
@@ -191,13 +192,27 @@ export const createDashboardUser = onCall(
         { merge: true }
       );
 
+      // CLAIM MIRROR SECOND:
+      // The custom claim is a mirror of the authoritative profile role. A
+      // failed claim sync here does not change effective authorization -
+      // enforcement layers read the profile. We report the partial failure
+      // so the operator can retry reconciliation.
+      let claimSynced = true;
+      try {
+        await auth.setCustomUserClaims(userRecord.uid, {
+          role,
+        });
+      } catch {
+        claimSynced = false;
+      }
+
       await writeAuditEntry({
         action: "user_created",
         performedByUid: request.auth.uid,
         performedByEmail: String(request.auth.token?.email ?? ""),
         targetUid: userRecord.uid,
         targetEmail: email,
-        details: { displayName, role },
+        details: { displayName, role, claimSynced },
         success: true,
       });
 
@@ -207,6 +222,7 @@ export const createDashboardUser = onCall(
         email,
         displayName,
         role,
+        claimSynced,
       };
     } catch (error) {
       throw mapAuthError(error);

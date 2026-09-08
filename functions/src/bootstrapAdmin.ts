@@ -11,10 +11,11 @@ export const bootstrapAdminClaim = onCall(
       throw new HttpsError("permission-denied", "Bootstrap denied.");
     }
 
-    await getAuth().setCustomUserClaims(BOOTSTRAP_UID, {
-      role: "admin",
-    });
-
+    // AUTHORITATIVE PROFILE FIRST:
+    // Firestore is the single source of truth for dashboard authority. The
+    // active admin profile is written before the claim mirror so a failed
+    // claim sync can never create an orphan admin claim. The claim is only a
+    // mirror/cache — no enforcement layer trusts it by itself.
     await getFirestore().collection("users").doc(BOOTSTRAP_UID).set(
       {
         uid: BOOTSTRAP_UID,
@@ -26,10 +27,24 @@ export const bootstrapAdminClaim = onCall(
       { merge: true }
     );
 
+    // CLAIM MIRROR SECOND:
+    // Keep the custom claim as a mirror/cache/bootstrap metadata for the
+    // initial UID. If this fails, authority remains correct (the profile is
+    // authoritative) and the operator can retry reconciliation.
+    let claimSynced = true;
+    try {
+      await getAuth().setCustomUserClaims(BOOTSTRAP_UID, {
+        role: "admin",
+      });
+    } catch {
+      claimSynced = false;
+    }
+
     return {
       success: true,
       uid: BOOTSTRAP_UID,
       role: "admin",
+      claimSynced,
     };
   }
 );
