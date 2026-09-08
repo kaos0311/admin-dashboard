@@ -164,6 +164,7 @@ export async function clearEmulatorData(): Promise<void> {
 export const EMULATOR_PORTS = {
   firestore: 8085,
   auth: 9099,
+  storage: 9199,
 } as const;
 
 export function getFirestoreEmulatorHost(): { host: string; port: number } {

@@ -20,6 +20,7 @@ export default defineConfig({
     env: {
       FIRESTORE_EMULATOR_HOST: "localhost:8085",
       FIREBASE_AUTH_EMULATOR_HOST: "localhost:9099",
+      FIREBASE_STORAGE_EMULATOR_HOST: "localhost:9199",
       GCLOUD_PROJECT: "demo-advanced-home-medical",
     },
   },
