@@ -5,6 +5,8 @@ import { getAllLocations } from "@/services/location/location.service";
 
 import { createEquipment } from "../actions";
 
+export const dynamic = "force-dynamic";
+
 export default async function NewEquipmentPage() {
   const models = await getAllEquipmentModels();
   const locations = await getAllLocations();

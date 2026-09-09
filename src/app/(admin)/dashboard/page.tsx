@@ -13,6 +13,8 @@ import { PageShell } from "@/components/ui/page-shell";
 import { StatCard } from "@/components/ui/stat-card";
 import { getDashboardSummary } from "@/services/equipment/dashboard.service";
 
+export const dynamic = "force-dynamic";
+
 export default async function DashboardPage() {
   const summary = await getDashboardSummary();
 

@@ -1,6 +1,8 @@
 ﻿import { requireUser } from "@/lib/auth/require-user";
 import { getEquipment } from "@/services/equipment/equipment.service";
 
+export const dynamic = "force-dynamic";
+
 export default async function EquipmentPage() {
   await requireUser();
 
