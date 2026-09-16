@@ -19,6 +19,8 @@ const mockState = vi.hoisted(() => ({
   failingSampleCollections: new Set<string>(),
 }));
 
+const mockRunDiagnosticRequest = vi.hoisted(() => vi.fn());
+
 vi.mock("firebase-admin/app", () => ({
   getApps: vi.fn(() => []),
   initializeApp: vi.fn(),
@@ -205,6 +207,10 @@ vi.mock("../../security/rateLimit", () => ({
   enforceCallableRateLimit: vi.fn(),
 }));
 
+vi.mock("../../diagnostics/service", () => ({
+  runDiagnosticRequest: mockRunDiagnosticRequest,
+}));
+
 vi.mock("../phiSafety", () => ({
   createPhiAlert: vi.fn(() => Promise.resolve("alert-id")),
   redactPhi: vi.fn((text: string) => text),
@@ -282,6 +288,13 @@ function getLastUserPayload() {
         summaries?: Array<{ collection: string; classification: string }>;
         joins?: unknown[];
       };
+      diagnosticsOverview?: {
+        results?: Array<{
+          evidence: {
+            status: string;
+          };
+        }>;
+      };
     };
     webSearchInstructions?: unknown;
   };
@@ -292,6 +305,63 @@ describe("askAdminAi reporting contract integration", () => {
     vi.clearAllMocks();
     mockState.failingSampleCollections.clear();
     mockResponsesCreate.mockResolvedValue({ output_text: "The sample suggests there are likely many records." });
+    mockRunDiagnosticRequest.mockImplementation(async (request: {tool: string}) => {
+      if (request.tool === "repo_status") {
+        return {
+          tool: "repo_status",
+          evidence: {status: "VERIFIED", source: "test", checkedAt: "now"},
+          result: {
+            provider: {
+              providerType: "LOCAL_WORKTREE",
+              repository: "test",
+              snapshot: "local-worktree:abc",
+              branch: "ai-development",
+              commit: "abc",
+              evidenceTimestamp: "now",
+            },
+            branch: "ai-development",
+            head: "abc",
+            clean: true,
+            dirtyFiles: 0,
+          },
+          resultCount: 1,
+        };
+      }
+
+      if (request.tool === "repo_search") {
+        return {
+          tool: "repo_search",
+          evidence: {status: "VERIFIED", source: "test", checkedAt: "now"},
+          result: {
+            provider: {
+              providerType: "LOCAL_WORKTREE",
+              repository: "test",
+              snapshot: "local-worktree:abc",
+              branch: "ai-development",
+              commit: "abc",
+              evidenceTimestamp: "now",
+            },
+            hits: [
+              {
+                path: "functions/src/ai/callable/askAdminAi.ts",
+                line: 1,
+                preview: "export const askAdminAi = onCall(...)",
+              },
+            ],
+            resultCount: 1,
+            truncated: false,
+          },
+          resultCount: 1,
+        };
+      }
+
+      return {
+        tool: request.tool,
+        evidence: {status: "VERIFIED", source: "test", checkedAt: "now"},
+        result: null,
+        resultCount: 0,
+      };
+    });
   });
 
   it("uses buildJarvisSystemPrompt instead of inline prompt", async () => {
@@ -731,5 +801,92 @@ describe("askAdminAi reporting contract integration", () => {
     expect(serializedPayload).not.toContain("PAT-JOIN-001");
     expect(serializedPayload).not.toContain("PAT-JOIN-002");
     expect(serializedPayload).not.toContain("PAT-JOIN-MISSING");
+  });
+
+  it("passes source-evidence questions through internal diagnostics before Jarvis can claim VERIFIED source evidence", async () => {
+    mockResponsesCreate.mockResolvedValue({
+      output_text:
+        "VERIFIED: askAdminAi is in functions/src/ai/callable/askAdminAi.ts line 1.",
+    });
+
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: { prompt: "What file and line define askAdminAi source?" },
+    };
+
+    const result = (await (askAdminAi as unknown as (req: unknown) => Promise<{ answer: string }>)(request));
+
+    expect(result.answer).toContain("VERIFIED");
+    expect(mockRunDiagnosticRequest).toHaveBeenCalledWith({ tool: "repo_status" });
+    expect(mockRunDiagnosticRequest).toHaveBeenCalledWith({
+      tool: "repo_search",
+      params: { query: "askAdminAi", limit: 5 },
+    });
+
+    const userPayload = getLastUserPayload();
+    expect(userPayload.context?.diagnosticsOverview?.results?.[0]?.evidence.status).toBe("VERIFIED");
+    expect(JSON.stringify(userPayload.context?.diagnosticsOverview)).toContain("LOCAL_WORKTREE");
+  });
+
+  it("marks source-evidence questions UNVERIFIED when the repository provider is unavailable", async () => {
+    mockRunDiagnosticRequest.mockImplementation(async (request: {tool: string}) => ({
+      tool: request.tool,
+      evidence: {
+        status: "UNVERIFIED",
+        source: "repository_provider_unavailable",
+        checkedAt: "now",
+        reason: "Repository diagnostics provider is not configured.",
+      },
+      result: request.tool === "repo_status"
+        ? {
+            provider: {
+              providerType: "UNAVAILABLE",
+              repository: "Repository diagnostics provider is not configured.",
+              snapshot: "unavailable",
+              branch: null,
+              commit: null,
+              evidenceTimestamp: "now",
+            },
+            branch: "",
+            head: "",
+            clean: false,
+            dirtyFiles: 0,
+          }
+        : {
+            provider: {
+              providerType: "UNAVAILABLE",
+              repository: "Repository diagnostics provider is not configured.",
+              snapshot: "unavailable",
+              branch: null,
+              commit: null,
+              evidenceTimestamp: "now",
+            },
+            hits: [],
+            resultCount: 0,
+            truncated: false,
+          },
+      resultCount: 0,
+    }));
+    mockResponsesCreate.mockResolvedValue({
+      output_text: "I found the source file.",
+    });
+
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: { prompt: "What source file defines askAdminAi?" },
+    };
+
+    const result = (await (askAdminAi as unknown as (req: unknown) => Promise<{ answer: string }>)(request));
+
+    expect(result.answer).toContain("UNVERIFIED");
+    const userPayload = getLastUserPayload();
+    expect(userPayload.context?.diagnosticsOverview?.results?.[0]?.evidence.status).toBe("UNVERIFIED");
+    expect(JSON.stringify(userPayload.context?.diagnosticsOverview)).toContain("UNAVAILABLE");
   });
 });

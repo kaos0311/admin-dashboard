@@ -12,6 +12,7 @@ export { createDashboardUser } from "./adminUsers";
 export { askAdminAi } from "./ai/callable/askAdminAi";
 export { scanDatabasePhiSafety } from "./ai/callable/scanDatabasePhiSafety";
 export { screenImportJobWithJarvis } from "./ai/callable/screenImportJobWithJarvis";
+export { jarvisDiagnosticsCallable } from "./diagnostics/callable";
 
 // Import pipeline
 export { importFileFromStorage } from "./imports/importFileFromStorage";

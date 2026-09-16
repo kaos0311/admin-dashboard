@@ -39,6 +39,8 @@ import {
 import {
   evaluateClaimLanguage,
 } from "../types/reporting";
+import { runDiagnosticRequest } from "../../diagnostics/service.js";
+import type { DiagnosticResult } from "../../diagnostics/types.js";
 
 if (!getApps().length) {
   initializeApp();
@@ -93,6 +95,14 @@ const INTERNAL_OPERATIONS_PATTERN =
 const REQUESTED_COLLECTION_PATTERN =
   /\bcollections?\s+([A-Za-z][A-Za-z0-9_]*)/gi;
 
+const SOURCE_DIAGNOSTIC_PATTERN =
+  /\b(source|code|file|filename|line|git head|commit|repo|repository)\b/i;
+
+const FUNCTION_DIAGNOSTIC_PATTERN =
+  /\b(runtime|deployed revision|revision|function config|function configuration|deployment state)\b/i;
+
+const LOG_DIAGNOSTIC_PATTERN = /\blogs?\b/i;
+
 type CoreCollection = typeof CORE_COLLECTIONS[number];
 
 interface UnavailableContextMarker {
@@ -125,6 +135,68 @@ function getRequestedUnsupportedCollections(prompt: string): UnavailableContextM
   }
 
   return Array.from(markers.values());
+}
+
+function getDiagnosticSearchQuery(prompt: string): string {
+  const knownIdentifiers = [
+    "askAdminAi",
+    "joinVerifier",
+    "adminSystemPrompt",
+    "recommendationGate",
+    "jarvisDiagnosticsCallable",
+  ];
+  const foundIdentifier = knownIdentifiers.find((identifier) => prompt.includes(identifier));
+  if (foundIdentifier) return foundIdentifier;
+
+  const codeToken = prompt.match(/\b[A-Za-z_][A-Za-z0-9_]{4,}\b/u)?.[0];
+  return codeToken ?? "askAdminAi";
+}
+
+function requiresDiagnostics(prompt: string): boolean {
+  return SOURCE_DIAGNOSTIC_PATTERN.test(prompt) ||
+    FUNCTION_DIAGNOSTIC_PATTERN.test(prompt) ||
+    LOG_DIAGNOSTIC_PATTERN.test(prompt);
+}
+
+async function buildJarvisDiagnosticsContext(prompt: string): Promise<DiagnosticResult[]> {
+  if (!requiresDiagnostics(prompt)) return [];
+
+  const diagnostics: DiagnosticResult[] = [];
+
+  if (SOURCE_DIAGNOSTIC_PATTERN.test(prompt)) {
+    diagnostics.push(await runDiagnosticRequest({tool: "repo_status"}));
+    diagnostics.push(await runDiagnosticRequest({
+      tool: "repo_search",
+      params: {
+        query: getDiagnosticSearchQuery(prompt),
+        limit: 5,
+      },
+    }));
+  }
+
+  if (FUNCTION_DIAGNOSTIC_PATTERN.test(prompt)) {
+    diagnostics.push(await runDiagnosticRequest({
+      tool: "function_describe",
+      params: {functionName: "askAdminAi"},
+    }));
+  }
+
+  if (LOG_DIAGNOSTIC_PATTERN.test(prompt)) {
+    diagnostics.push(await runDiagnosticRequest({
+      tool: "function_logs",
+      params: {
+        functionName: "askAdminAi",
+        minutes: 15,
+        limit: 10,
+      },
+    }));
+  }
+
+  return diagnostics;
+}
+
+function hasUnverifiedDiagnostics(diagnostics: DiagnosticResult[]): boolean {
+  return diagnostics.some((diagnostic) => diagnostic.evidence.status !== "VERIFIED");
 }
 
 async function requireAdmin(request: {
@@ -608,6 +680,7 @@ async function buildAiContext(intent: string, prompt: string) {
     valueJoinDefinitions: selectValueJoinDefinitions(prompt),
     prompt,
   });
+  const diagnostics = await buildJarvisDiagnosticsContext(prompt);
 
   const context: Record<string, unknown> = {
     dashboard,
@@ -616,6 +689,13 @@ async function buildAiContext(intent: string, prompt: string) {
     recentImportJobs,
     operationsOverview: operations,
     retailFinancialInsights: await buildRetailFinancialContext(),
+    diagnosticsOverview: diagnostics.length > 0
+      ? {
+          contract:
+            "Jarvis may claim filenames, source lines, Git HEAD, runtime, deployed revision, Function configuration, or logs only from VERIFIED diagnostics evidence. Missing or unavailable diagnostics must be classified UNVERIFIED.",
+          results: diagnostics,
+        }
+      : null,
   };
 
   const collectionsUsed = [
@@ -697,6 +777,7 @@ async function buildAiContext(intent: string, prompt: string) {
     operationsEvidence: operations.evidence,
     contradictions: operations.contradictions,
     joins: operations.joins,
+    diagnostics,
   } as {
     context: Record<string, unknown>;
     collectionsUsed: string[];
@@ -706,6 +787,7 @@ async function buildAiContext(intent: string, prompt: string) {
       | import("../types/reporting").JoinVerification
       | import("../types/reporting").ValueJoinVerification
     >;
+    diagnostics: DiagnosticResult[];
   };
 }
 
@@ -766,6 +848,7 @@ export const askAdminAi = onCall(
       operationsEvidence,
       contradictions,
       joins,
+      diagnostics,
     } = await buildAiContext(intent, safePrompt);
 
     const reportArtifact =
@@ -902,7 +985,7 @@ export const askAdminAi = onCall(
       ],
     });
 
-    const answer =
+    const answerBase =
       responsePhiFindings.length > 0
         ? `${redactPhi(
             gatedAnswer
@@ -910,6 +993,10 @@ export const askAdminAi = onCall(
         : claimCheck.allowed
           ? gatedAnswer
           : `${gatedAnswer}\n\n[Jarvis accuracy note: some absolute language was downgraded because the evidence does not support it. ${claimCheck.suggestions.join(" / ")}.]`;
+
+    const answer = hasUnverifiedDiagnostics(diagnostics)
+      ? `${answerBase}\n\nDiagnostics evidence note: one or more requested repository/deployment/log diagnostics could not be VERIFIED. Treat related claims as UNVERIFIED.`
+      : answerBase;
 
     const phiAlertIds = [promptPhiAlertId, responsePhiAlertId].filter(
       (id): id is string => Boolean(id)

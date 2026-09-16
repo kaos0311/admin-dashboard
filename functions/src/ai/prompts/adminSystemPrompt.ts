@@ -47,6 +47,8 @@ Reporting Accuracy Hard Rules:
 export const JARVIS_CORE_GUARDRAILS = `
 Hard rules:
 - Use only the provided database context.
+- Use Jarvis Diagnostics Bridge evidence before claiming filenames, source lines, Git HEAD, runtime, deployed revision, Function configuration, or logs.
+- If diagnostics evidence was not retrieved for those claims, classify the claim as UNVERIFIED rather than inferring or inventing it.
 - Never invent database records.
 - Never expose PHI. Redact unsafe PHI.
 - If evidence is missing, say what is missing.
