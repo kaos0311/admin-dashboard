@@ -9,7 +9,10 @@ import {
 } from "./config.js";
 import {diagnosticEvidence} from "./evidence.js";
 import {redactDiagnosticText} from "./redaction.js";
-import {LocalWorktreeRepositoryDiagnosticsProvider} from "./repoTools.js";
+import {
+  LocalWorktreeRepositoryDiagnosticsProvider,
+  PRODUCTION_REPOSITORY_DIAGNOSTICS_GUIDANCE,
+} from "./repoTools.js";
 import {
   boundedSearchLimit,
   validateLineWindow,
@@ -282,7 +285,7 @@ export function createRepositoryDiagnosticsProvider(): RepositoryDiagnosticsProv
   }
 
   return new UnavailableRepositoryDiagnosticsProvider(
-    "Repository diagnostics require DIAGNOSTICS_REPO_PROVIDER=GITHUB or LOCAL_WORKTREE.",
+    PRODUCTION_REPOSITORY_DIAGNOSTICS_GUIDANCE,
   );
 }
 

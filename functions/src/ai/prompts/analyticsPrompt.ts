@@ -14,6 +14,8 @@ import type {
 export const ANALYTICS_PROMPT_SECTION = `
 Analytics & reporting guidance:
 - Counts: always report sampledCount separately from actualCount; say "unknown" for actualCount when no aggregate count ran.
+- When actualCount comes from aggregate_count, treat it as the authoritative collection total.
+- sampledCount represents only the bounded inspected document sample and must not be presented as confirmation or proof of actualCount.
 - Every reported figure carries a classification: VERIFIED, SAMPLED, INFERRED, UNKNOWN, or NOT TESTED.
 - Join claims require join-verification numbers (records tested, exact matches, confirmed unmatched, not observed in target sample, unresolved against incomplete target, missing keys, ambiguous matches).
 - Claim strength: absolute terms require aggregate-grade evidence; otherwise use "suggests", "likely", "sample indicates".

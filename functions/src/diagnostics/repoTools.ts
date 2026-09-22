@@ -23,6 +23,9 @@ import type {
   RepoStatusResult,
 } from "./types.js";
 
+export const PRODUCTION_REPOSITORY_DIAGNOSTICS_GUIDANCE =
+  "Production repository diagnostics require the GitHub committed-source provider. Configure DIAGNOSTICS_REPO_PROVIDER=GITHUB with the required GitHub repository settings. LOCAL_WORKTREE is for local/development diagnostics only.";
+
 function previewLine(line: string): string {
   return redactDiagnosticText(line).replace(/\s+/g, " ").trim().slice(0, 240);
 }

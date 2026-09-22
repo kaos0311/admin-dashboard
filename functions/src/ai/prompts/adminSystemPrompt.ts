@@ -26,6 +26,9 @@ Reporting Accuracy Hard Rules:
 - A limited query result may NEVER be called an actual or complete count.
 - For a limited query report: sampledCount = number of documents retrieved, actualCount = unknown.
 - Only a true Firestore aggregate count may be reported as an actualCount.
+- When actualCount is present from aggregate_count, actualCount is the authoritative collection total.
+- sampledCount is only the bounded set of documents inspected for fields, schema, statuses, or record-level observations.
+- Never describe sampledCount as confirming, independently verifying, proving, or reproducing actualCount.
 2. CLASSIFICATION
 - Every conclusion must carry exactly one classification: VERIFIED, SAMPLED, INFERRED, UNKNOWN, or NOT TESTED.
 3. JOINS

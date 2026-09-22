@@ -199,6 +199,13 @@ function hasUnverifiedDiagnostics(diagnostics: DiagnosticResult[]): boolean {
   return diagnostics.some((diagnostic) => diagnostic.evidence.status !== "VERIFIED");
 }
 
+function hasFullyVerifiedDiagnostics(diagnostics: DiagnosticResult[]): boolean {
+  return (
+    diagnostics.length > 0 &&
+    diagnostics.every((diagnostic) => diagnostic.evidence.status === "VERIFIED")
+  );
+}
+
 async function requireAdmin(request: {
   auth?: {
     uid: string;
@@ -966,6 +973,12 @@ export const askAdminAi = onCall(
     const claimCheck = evaluateClaimLanguage(gatedAnswer, {
       hasAggregateEvidence: operationsEvidence.some((e) => e.kind === "aggregate_count"),
     });
+    const operationalClaimEvidence = isInternalOperationsPrompt(safePrompt)
+      ? operationsEvidence
+      : [];
+    const suppressGenericAccuracyNote =
+      hasFullyVerifiedDiagnostics(diagnostics) &&
+      operationalClaimEvidence.length === 0;
 
     const responsePhiFindings = isPublicWebSearchIntent(intent)
       ? filterPublicWebResponsePhiFindings(scanTextForPhi(gatedAnswer, "response"))
@@ -990,7 +1003,7 @@ export const askAdminAi = onCall(
         ? `${redactPhi(
             gatedAnswer
           )}\n\nPHI Sentinel: Potential PHI was detected in the generated response and redacted. An alert was created for review.`
-        : claimCheck.allowed
+        : claimCheck.allowed || suppressGenericAccuracyNote
           ? gatedAnswer
           : `${gatedAnswer}\n\n[Jarvis accuracy note: some absolute language was downgraded because the evidence does not support it. ${claimCheck.suggestions.join(" / ")}.]`;
 

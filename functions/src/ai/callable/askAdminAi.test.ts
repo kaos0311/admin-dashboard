@@ -413,6 +413,45 @@ describe("askAdminAi reporting contract integration", () => {
     expect(summary.classification).toBe("VERIFIED");
   });
 
+  it("keeps aggregate actualCount authoritative while sampledCount remains bounded", async () => {
+    const summary = summarizeSample(
+      "inventory",
+      Array.from({ length: 1000 }, (_, i) => ({ id: `inv-${i}` })),
+      1000,
+      { aggregateCount: 1042 }
+    );
+
+    expect(summary.count.actualCount).toBe(1042);
+    expect(summary.count.sampledCount).toBe(1000);
+    expect(summary.count.method).toBe("aggregate_count");
+    expect(summary.classification).toBe("VERIFIED");
+
+    const adminPrompt = await vi.importActual<typeof import("../prompts/adminSystemPrompt")>(
+      "../prompts/adminSystemPrompt"
+    );
+    const analyticsPrompt = await vi.importActual<typeof import("../prompts/analyticsPrompt")>(
+      "../prompts/analyticsPrompt"
+    );
+
+    const systemPrompt = adminPrompt.buildJarvisSystemPrompt();
+    const analyticsSection = analyticsPrompt.buildAnalyticsContextSection({
+      summaries: [summary],
+      contradictions: [],
+      joins: [],
+    });
+
+    expect(systemPrompt).toContain("actualCount is the authoritative collection total");
+    expect(systemPrompt).toContain("sampledCount is only the bounded set");
+    expect(systemPrompt).toContain(
+      "Never describe sampledCount as confirming, independently verifying, proving, or reproducing actualCount."
+    );
+    expect(analyticsSection).toContain("actualCount comes from aggregate_count");
+    expect(analyticsSection).toContain("authoritative collection total");
+    expect(analyticsSection).toContain("bounded inspected document sample");
+    expect(analyticsSection).toContain("proof of actualCount");
+    expect(analyticsSection).toContain("inventory (sampled=1000, actual=1042): VERIFIED");
+  });
+
   it("does not confirm a join from field-name similarity alone when values mismatch", () => {
     const left = { collection: "patients", field: "patientName", values: ["Alice Smith", "Bob Jones"] };
     const right = { collection: "orders", field: "patientName", values: ["Charlie", "Dave"] };
@@ -831,6 +870,48 @@ describe("askAdminAi reporting contract integration", () => {
     expect(JSON.stringify(userPayload.context?.diagnosticsOverview)).toContain("LOCAL_WORKTREE");
   });
 
+  it("does not add a generic accuracy note for fully VERIFIED diagnostics-only answers", async () => {
+    mockResponsesCreate.mockResolvedValue({
+      output_text:
+        "VERIFIED: askAdminAi source diagnostics are confirmed and actual.",
+    });
+
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: { prompt: "What file and line define askAdminAi source?" },
+    };
+
+    const result = (await (askAdminAi as unknown as (req: unknown) => Promise<{ answer: string }>)(request));
+
+    expect(result.answer).toContain("VERIFIED");
+    expect(result.answer).toContain("confirmed and actual");
+    expect(result.answer).not.toContain("Jarvis accuracy note");
+    expect(result.answer).not.toContain("Diagnostics evidence note");
+  });
+
+  it("keeps claim-language protection for mixed operational and VERIFIED diagnostics answers", async () => {
+    mockResponsesCreate.mockResolvedValue({
+      output_text:
+        "VERIFIED: askAdminAi source diagnostics are confirmed and actual for patients.",
+    });
+
+    const request = {
+      auth: {
+        uid: "test-user",
+        token: { role: "admin", email: "admin@test.com" },
+      },
+      data: { prompt: "What source file defines askAdminAi, and are patients confirmed?" },
+    };
+
+    const result = (await (askAdminAi as unknown as (req: unknown) => Promise<{ answer: string }>)(request));
+
+    expect(result.answer).toContain("Jarvis accuracy note");
+    expect(result.answer).not.toContain("Diagnostics evidence note");
+  });
+
   it("marks source-evidence questions UNVERIFIED when the repository provider is unavailable", async () => {
     mockRunDiagnosticRequest.mockImplementation(async (request: {tool: string}) => ({
       tool: request.tool,
@@ -885,6 +966,7 @@ describe("askAdminAi reporting contract integration", () => {
     const result = (await (askAdminAi as unknown as (req: unknown) => Promise<{ answer: string }>)(request));
 
     expect(result.answer).toContain("UNVERIFIED");
+    expect(result.answer).toContain("Diagnostics evidence note");
     const userPayload = getLastUserPayload();
     expect(userPayload.context?.diagnosticsOverview?.results?.[0]?.evidence.status).toBe("UNVERIFIED");
     expect(JSON.stringify(userPayload.context?.diagnosticsOverview)).toContain("UNAVAILABLE");
