@@ -822,6 +822,7 @@ export const askAdminAi = onCall(
     region: "us-central1",
     timeoutSeconds: 120,
     memory: "1GiB",
+    minInstances: 1,
     secrets: [OPENAI_API_KEY],
   },
   async (request) => {
