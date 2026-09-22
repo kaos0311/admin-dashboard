@@ -49,6 +49,7 @@ if (!getApps().length) {
 const db = getFirestore();
 
 const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
+const DIAGNOSTICS_GITHUB_TOKEN = defineSecret("DIAGNOSTICS_GITHUB_TOKEN");
 
 const MODEL = "gpt-4.1-mini";
 const MAX_PROMPT_LENGTH = 4000;
@@ -823,7 +824,7 @@ export const askAdminAi = onCall(
     timeoutSeconds: 120,
     memory: "1GiB",
     minInstances: 1,
-    secrets: [OPENAI_API_KEY],
+    secrets: [OPENAI_API_KEY, DIAGNOSTICS_GITHUB_TOKEN],
   },
   async (request) => {
     await enforceCallableRateLimit(request, "ai");

@@ -193,3 +193,5 @@ nul
 # Malformed shell/output artifacts
 Get-Process*
 console.error('IMPORT
+# Firebase production non-secret function configuration
+!functions/.env.advanced-home-medical-55772
