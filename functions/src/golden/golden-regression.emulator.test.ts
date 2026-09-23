@@ -1770,6 +1770,105 @@ describe("AHM Golden Regression Suite - emulator invariants", () => {
     expect(await countByOperation("inventoryTransactions", "golden-emu-rec-006")).toBe(0);
   });
 
+  it("GOLDEN-EMU-REC-006B receive-scanned product merge movement failure leaves metadata unchanged", async () => {
+    await seedProduct("golden-rec-product-006b", {
+      name: "Golden failed movement product",
+      sku: "GOLDEN-REC-SCAN-006B",
+      upc: "GOLDEN-REC-SCAN-006B",
+    });
+    await seedInventory("product-scan-golden-rec-product-006b-GOLDEN-REC-SCAN-006B", {
+      name: "Existing failed movement inventory",
+      productId: "golden-rec-product-006b",
+      barcode: "GOLDEN-REC-SCAN-006B",
+      quantityOnHand: 4,
+      available: 4,
+      status: "discontinued",
+      locationName: "Original Product Location",
+      scanSource: "legacy",
+      pendingScanReview: true,
+      lastScannedAt: "before-failure",
+      lastScanDirection: "out",
+    });
+
+    await expect(
+      receiveScannedInventoryIntake(
+        {
+          operationId: "golden-emu-rec-006b",
+          mode: "product-match",
+          productId: "golden-rec-product-006b",
+          rawScan: "GOLDEN-REC-SCAN-006B",
+          normalizedScan: "GOLDEN-REC-SCAN-006B",
+          quantity: 2,
+          locationId: "Should Not Persist",
+        },
+        actor,
+        db
+      )
+    ).rejects.toMatchObject({ code: "failed-precondition" });
+
+    const inventory = (await db.collection("inventory").doc("product-scan-golden-rec-product-006b-GOLDEN-REC-SCAN-006B").get()).data();
+    expect(inventory).toMatchObject({
+      quantityOnHand: 4,
+      available: 4,
+      status: "discontinued",
+      locationName: "Original Product Location",
+      scanSource: "legacy",
+      pendingScanReview: true,
+      lastScannedAt: "before-failure",
+      lastScanDirection: "out",
+    });
+    expect(inventory).not.toHaveProperty("lastMovementId");
+    expect((await db.collection("inventoryOperations").doc(`${actor.uid}_golden-emu-rec-006b`).get()).exists).toBe(false);
+    expect(await countByOperation("inventoryTransactions", "golden-emu-rec-006b")).toBe(0);
+  });
+
+  it("GOLDEN-EMU-REC-006C receive-scanned pending merge movement failure leaves pending record unchanged", async () => {
+    await seedInventory("pending-scan-GOLDEN-REC-SCAN-006C", {
+      name: "Pending scanned item GOLDEN-REC-SCAN-006C",
+      category: "Pending Scan Review",
+      barcode: "GOLDEN-REC-SCAN-006C",
+      serial: "GOLDEN-REC-SCAN-006C",
+      quantityOnHand: 1,
+      available: 1,
+      status: "discontinued",
+      locationName: "Original Pending Location",
+      scanSource: "scan_in_unmatched",
+      pendingScanReview: true,
+      lastScannedAt: "before-failure",
+      lastScanDirection: "out",
+    });
+
+    await expect(
+      receiveScannedInventoryIntake(
+        {
+          operationId: "golden-emu-rec-006c",
+          mode: "pending-scan",
+          rawScan: "GOLDEN-REC-SCAN-006C",
+          normalizedScan: "GOLDEN-REC-SCAN-006C",
+          quantity: 1,
+          locationId: "Should Not Persist",
+        },
+        actor,
+        db
+      )
+    ).rejects.toMatchObject({ code: "failed-precondition" });
+
+    const inventory = (await db.collection("inventory").doc("pending-scan-GOLDEN-REC-SCAN-006C").get()).data();
+    expect(inventory).toMatchObject({
+      quantityOnHand: 1,
+      available: 1,
+      status: "discontinued",
+      locationName: "Original Pending Location",
+      scanSource: "scan_in_unmatched",
+      pendingScanReview: true,
+      lastScannedAt: "before-failure",
+      lastScanDirection: "out",
+    });
+    expect(inventory).not.toHaveProperty("lastMovementId");
+    expect((await db.collection("inventoryOperations").doc(`${actor.uid}_golden-emu-rec-006c`).get()).exists).toBe(false);
+    expect(await countByOperation("inventoryTransactions", "golden-emu-rec-006c")).toBe(0);
+  });
+
   it("GOLDEN-EMU-REC-007 receive-scanned merge retry, conflict, independent operation, and concurrency are stable", async () => {
     await seedProduct("golden-rec-product-007", {
       name: "Golden retry product",
