@@ -1893,9 +1893,43 @@ describe("AHM Golden Regression Suite - emulator invariants", () => {
 
     const first = await receiveScannedInventoryIntake(input, actor, db);
     const retry = await receiveScannedInventoryIntake(input, actor, db);
+    expect(retry).toEqual(first);
+    expect(await countByOperation("inventoryTransactions", "golden-emu-rec-007")).toBe(1);
+    expect((await db.collection("inventoryIntakeOperations").doc("golden-emu-rec-007").get()).data()).toMatchObject({
+      operationId: "golden-emu-rec-007",
+      actorUid: actor.uid,
+      intakeMode: "product-match",
+      intakeResult: {
+        status: "success",
+        inventoryItemId: first.inventoryItemId,
+        movementId: first.movementId,
+      },
+    });
     await expect(
       receiveScannedInventoryIntake({ ...input, quantity: 5 }, actor, db)
     ).rejects.toMatchObject({ code: "failed-precondition" });
+    await seedProduct("golden-rec-product-007-other", {
+      name: "Golden retry conflict product",
+      sku: "GOLDEN-REC-SCAN-007-OTHER",
+      upc: "GOLDEN-REC-SCAN-007-OTHER",
+    });
+    await expect(
+      receiveScannedInventoryIntake(
+        {
+          ...input,
+          productId: "golden-rec-product-007-other",
+          rawScan: "GOLDEN-REC-SCAN-007-OTHER",
+          normalizedScan: "GOLDEN-REC-SCAN-007-OTHER",
+        },
+        actor,
+        db
+      )
+    ).rejects.toMatchObject({ code: "failed-precondition" });
+    await expect(
+      receiveScannedInventoryIntake(input, adminActor, db)
+    ).rejects.toMatchObject({ code: "failed-precondition" });
+    expect(await countByOperation("inventoryTransactions", "golden-emu-rec-007")).toBe(1);
+    expect((await db.collection("inventory").doc("product-scan-golden-rec-product-007-other-GOLDEN-REC-SCAN-007-OTHER").get()).exists).toBe(false);
     const independent = await receiveScannedInventoryIntake(
       { ...input, operationId: "golden-emu-rec-007-independent", quantity: 1 },
       actor,
@@ -1911,7 +1945,6 @@ describe("AHM Golden Regression Suite - emulator invariants", () => {
       receiveScannedInventoryIntake(concurrentInput, actor, db),
     ]);
 
-    expect(retry).toMatchObject(first);
     expect(independent.quantityAfter).toBe(11);
     expect(concurrent.every((result) => result.status === "fulfilled")).toBe(true);
     const concurrentResults = concurrent.map((result) => result.status === "fulfilled" ? result.value : null);
@@ -1922,6 +1955,87 @@ describe("AHM Golden Regression Suite - emulator invariants", () => {
     expect(await countByOperation("inventoryTransactions", "golden-emu-rec-007")).toBe(1);
     expect(await countByOperation("inventoryTransactions", "golden-emu-rec-007-independent")).toBe(1);
     expect(await countByOperation("inventoryTransactions", "golden-emu-rec-007-concurrent")).toBe(1);
+  });
+
+  it("GOLDEN-EMU-REC-007B receive-scanned failed attempt can retry legitimately with same operationId", async () => {
+    const input = {
+      operationId: "golden-emu-rec-007b",
+      mode: "product-match" as const,
+      productId: "golden-rec-product-007b",
+      rawScan: "GOLDEN-REC-SCAN-007B",
+      normalizedScan: "GOLDEN-REC-SCAN-007B",
+      quantity: 3,
+      locationId: "Retry Location",
+    };
+
+    await expect(receiveScannedInventoryIntake(input, actor, db)).rejects.toMatchObject({ code: "not-found" });
+    expect((await db.collection("inventoryIntakeOperations").doc(input.operationId).get()).exists).toBe(false);
+    expect((await db.collection("inventoryOperations").doc(`${actor.uid}_${input.operationId}`).get()).exists).toBe(false);
+    expect(await countByOperation("inventoryTransactions", input.operationId)).toBe(0);
+
+    await seedProduct("golden-rec-product-007b", {
+      name: "Golden retry after failure product",
+      sku: "GOLDEN-REC-SCAN-007B",
+      upc: "GOLDEN-REC-SCAN-007B",
+    });
+
+    const result = await receiveScannedInventoryIntake(input, actor, db);
+    const retry = await receiveScannedInventoryIntake(input, actor, db);
+
+    expect(retry).toEqual(result);
+    expect(result).toMatchObject({
+      status: "success",
+      quantityBefore: 0,
+      quantityChange: 3,
+      quantityAfter: 3,
+    });
+    expect(await countByOperation("inventoryTransactions", input.operationId)).toBe(1);
+    expect((await db.collection("inventory").doc(result.inventoryItemId).get()).data()).toMatchObject({
+      quantityOnHand: 3,
+      available: 3,
+      lastMovementId: result.movementId,
+    });
+  });
+
+  it("GOLDEN-EMU-REC-007C receive-scanned cross-user concurrent operationId reuse applies once", async () => {
+    await seedProduct("golden-rec-product-007c", {
+      name: "Golden cross user product",
+      sku: "GOLDEN-REC-SCAN-007C",
+      upc: "GOLDEN-REC-SCAN-007C",
+    });
+    await seedInventory("product-scan-golden-rec-product-007c-GOLDEN-REC-SCAN-007C", {
+      productId: "golden-rec-product-007c",
+      barcode: "GOLDEN-REC-SCAN-007C",
+      quantityOnHand: 6,
+      available: 6,
+    });
+    const input = {
+      operationId: "golden-emu-rec-007c",
+      mode: "product-match" as const,
+      productId: "golden-rec-product-007c",
+      rawScan: "GOLDEN-REC-SCAN-007C",
+      normalizedScan: "GOLDEN-REC-SCAN-007C",
+      quantity: 5,
+      locationId: "Cross User Location",
+    };
+
+    const results = await Promise.allSettled([
+      receiveScannedInventoryIntake(input, actor, db),
+      receiveScannedInventoryIntake(input, adminActor, db),
+    ]);
+    const fulfilled = results.filter((result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof receiveScannedInventoryIntake>>> => result.status === "fulfilled");
+    const rejected = results.filter((result): result is PromiseRejectedResult => result.status === "rejected");
+
+    expect(fulfilled).toHaveLength(1);
+    expect(rejected).toHaveLength(1);
+    expect(rejected[0].reason).toMatchObject({ code: "failed-precondition" });
+    expect(await countByOperation("inventoryTransactions", input.operationId)).toBe(1);
+    expect(await countByOperation("inventoryOperations", input.operationId)).toBe(1);
+    expect((await db.collection("inventory").doc("product-scan-golden-rec-product-007c-GOLDEN-REC-SCAN-007C").get()).data()).toMatchObject({
+      quantityOnHand: 11,
+      available: 11,
+      lastMovementId: fulfilled[0].value.movementId,
+    });
   });
 
   it("GOLDEN-EMU-RENT-001 create-and-checkout rental completes atomically", async () => {

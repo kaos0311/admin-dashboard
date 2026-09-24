@@ -23,6 +23,7 @@ const MAX_INTAKE_QUANTITY = 1000;
 const INVENTORY_COLLECTION = "inventory";
 const PRODUCTS_COLLECTION = "products";
 const OPERATIONS_COLLECTION = "inventoryOperations";
+const INTAKE_OPERATIONS_COLLECTION = "inventoryIntakeOperations";
 const PENDING_SCAN_SOURCE = "scan_in_unmatched";
 const PRODUCT_MATCH_SOURCE = "product_catalog_scan";
 const PENDING_SCAN_FIELDS: InventoryScanField[] = [
@@ -522,8 +523,8 @@ export async function receiveScannedInventoryIntake(
   const locationName = typeof input.locationId === "string" && input.locationId.trim() ? input.locationId.trim() : "Main Location";
 
   return database.runTransaction(async (transaction) => {
-    const operationRef = database.collection(OPERATIONS_COLLECTION).doc(`${actor.uid}_${input.operationId}`);
-    const opSnap = await transaction.get(operationRef);
+    const intakeOperationRef = database.collection(INTAKE_OPERATIONS_COLLECTION).doc(input.operationId);
+    const intakeOperationSnap = await transaction.get(intakeOperationRef);
     const intakeFingerprint = buildIntakeRequestFingerprint({
       actorUid: actor.uid,
       mode: input.mode,
@@ -533,6 +534,29 @@ export async function receiveScannedInventoryIntake(
       quantity,
       locationId: input.locationId,
     });
+
+    if (intakeOperationSnap.exists) {
+      const intakeOperationData = intakeOperationSnap.data() as Record<string, unknown>;
+      if (text(intakeOperationData.intakeRequestFingerprint) !== intakeFingerprint) {
+        throw new HttpsError(
+          "failed-precondition",
+          "This operationId was already used with different request data.",
+        );
+      }
+
+      const stored = buildStoredResult(intakeOperationData.intakeResult as Record<string, unknown>);
+      if (stored) {
+        return stored;
+      }
+
+      throw new HttpsError(
+        "failed-precondition",
+        "This operationId has already been processed.",
+      );
+    }
+
+    const operationRef = database.collection(OPERATIONS_COLLECTION).doc(`${actor.uid}_${input.operationId}`);
+    const opSnap = await transaction.get(operationRef);
 
     if (opSnap.exists) {
       const opData = opSnap.data() as Record<string, unknown>;
@@ -545,6 +569,20 @@ export async function receiveScannedInventoryIntake(
 
       const stored = buildStoredResult(opData.intakeResult as Record<string, unknown>);
       if (stored) {
+        transaction.set(
+          intakeOperationRef,
+          {
+            operationId: input.operationId,
+            intakeRequestFingerprint: intakeFingerprint,
+            intakeMode: input.mode,
+            intakeResult: stored,
+            inventoryOperationId: operationRef.id,
+            actorUid: actor.uid,
+            actorEmail: actor.email,
+            completedAt: FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
         return stored;
       }
 
@@ -655,6 +693,21 @@ export async function receiveScannedInventoryIntake(
         intakeRequestFingerprint: intakeFingerprint,
         intakeMode: input.mode,
         intakeResult: result,
+      },
+      { merge: true },
+    );
+
+    transaction.set(
+      intakeOperationRef,
+      {
+        operationId: input.operationId,
+        intakeRequestFingerprint: intakeFingerprint,
+        intakeMode: input.mode,
+        intakeResult: result,
+        inventoryOperationId: operationRef.id,
+        actorUid: actor.uid,
+        actorEmail: actor.email,
+        completedAt: FieldValue.serverTimestamp(),
       },
       { merge: true },
     );
