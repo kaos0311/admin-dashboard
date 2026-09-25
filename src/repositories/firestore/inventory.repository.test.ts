@@ -118,6 +118,35 @@ describe("InventoryRepository", () => {
       expect(mockGetDoc).toHaveBeenCalledTimes(1);
       expect(mockGetDocs).toHaveBeenCalled();
     });
+
+    it("matches products by barcode after existing identity fields", async () => {
+      collectionDocs = {
+        products: [
+          { id: "barcode-product", data: { deleted: false, barcode: "BAR-123" } },
+        ],
+      };
+
+      const result = await InventoryRepository.findProductByScan("BAR-123");
+
+      expect(result).toEqual({
+        id: "barcode-product",
+        deleted: false,
+        barcode: "BAR-123",
+      });
+    });
+
+    it("fails deterministically when multiple active products share a barcode", async () => {
+      collectionDocs = {
+        products: [
+          { id: "barcode-product-a", data: { deleted: false, barcode: "BAR-123" } },
+          { id: "barcode-product-b", data: { deleted: false, barcode: "BAR-123" } },
+        ],
+      };
+
+      await expect(
+        InventoryRepository.findProductByScan("BAR-123"),
+      ).rejects.toThrow("Scan code BAR-123 matches 2 product records by barcode.");
+    });
   });
 
   describe("findExistingProduct", () => {
@@ -188,6 +217,33 @@ describe("InventoryRepository", () => {
       expect(result).not.toBeNull();
       expect(result?.id).toBe("item-1");
       expect(result?.sku).toBe("SKU-123");
+    });
+
+    it("uses movement-compatible inventory identity fields during fallback lookup", async () => {
+      collectionDocs = {
+        inventory: [
+          {
+            id: "item-1",
+            data: {
+              barcode: "",
+              serial: "",
+              serialNumber: "",
+              lotNumber: "",
+              sku: "",
+              manufacturerItemId: "MFG-123",
+              productId: "prod-123",
+              hcpc: "",
+              name: "Manufacturer Match",
+            },
+          },
+        ],
+      };
+
+      const result = await InventoryRepository.findByScan("MFG-123");
+
+      expect(result).not.toBeNull();
+      expect(result?.id).toBe("item-1");
+      expect(result?.manufacturerItemId).toBe("MFG-123");
     });
 
     it("returns null when no inventory item matches any scan field", async () => {

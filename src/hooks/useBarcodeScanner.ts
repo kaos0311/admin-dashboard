@@ -44,7 +44,21 @@ export interface UseBarcodeScannerReturn {
 
 const DEFAULT_SCAN_TIMEOUT = 150;
 const DEFAULT_MIN_BUFFER_LENGTH = 3;
-const DEFAULT_DUPLICATE_SUPPRESSION_MS = 2000;
+const DEFAULT_DUPLICATE_SUPPRESSION_MS = 0;
+
+export function shouldSuppressDuplicateScan(params: {
+  normalizedValue: string;
+  lastValue: string;
+  now: number;
+  lastAcceptedAt: number;
+  duplicateSuppressionMs: number;
+}): boolean {
+  return (
+    params.duplicateSuppressionMs > 0 &&
+    params.normalizedValue === params.lastValue &&
+    params.now - params.lastAcceptedAt < params.duplicateSuppressionMs
+  );
+}
 
 /**
  * Hook for capturing barcode scanner HID keyboard input.
@@ -84,7 +98,7 @@ export function useBarcodeScanner(
   }, []);
 
   const flushBuffer = useCallback(
-    (source: "enter" | "timeout") => {
+    (_source: "enter" | "timeout") => {
       const raw = bufferRef.current;
       bufferRef.current = "";
 
@@ -95,12 +109,14 @@ export function useBarcodeScanner(
 
       clearTimer();
 
-      // Duplicate suppression
       const now = Date.now();
-      if (
-        normalized === lastScanValueRef.current &&
-        now - lastScanTimeRef.current < duplicateSuppressionMs
-      ) {
+      if (shouldSuppressDuplicateScan({
+        normalizedValue: normalized,
+        lastValue: lastScanValueRef.current,
+        now,
+        lastAcceptedAt: lastScanTimeRef.current,
+        duplicateSuppressionMs,
+      })) {
         return;
       }
 
@@ -162,12 +178,14 @@ export function useBarcodeScanner(
         return;
       }
 
-      // Duplicate suppression
       const now = Date.now();
-      if (
-        normalized === lastScanValueRef.current &&
-        now - lastScanTimeRef.current < duplicateSuppressionMs
-      ) {
+      if (shouldSuppressDuplicateScan({
+        normalizedValue: normalized,
+        lastValue: lastScanValueRef.current,
+        now,
+        lastAcceptedAt: lastScanTimeRef.current,
+        duplicateSuppressionMs,
+      })) {
         return;
       }
 

@@ -68,6 +68,13 @@ import {
   runCanonicalScanMovement,
   type ScanOutReason,
 } from "../lib/scanMovementAuthority";
+import {
+  executeResolvedInventoryScanReceiveWithRetry,
+  markResolvedInventoryScanReceiveOutcomeUncertain,
+  reconcileResolvedInventoryScanReceiveState,
+  type ResolvedInventoryScanReceiveState,
+  resolveResolvedInventoryScanReceiveIntent,
+} from "../lib/resolvedInventoryScanReceiveLifecycle";
 import { isLowStock } from "../lib/inventoryAlerts";
 import { buildSearchText, toSafeNumber } from "../lib/inventoryNormalize";
 import { logInventoryMovement } from "../lib/inventoryMovements";
@@ -164,6 +171,8 @@ export function useInventoryActions({
   const manualUpsertOperationRef = useRef<ManualUpsertOperationState | null>(null);
   const existingMetadataUpdateOperationRef = useRef<ManualUpsertOperationState | null>(null);
   const existingLocationTransferOperationRef = useRef<ManualUpsertOperationState | null>(null);
+  const resolvedInventoryScanReceiveStateRef =
+    useRef<ResolvedInventoryScanReceiveState | null>(null);
   const hardDeleteInFlightRef = useRef(new Set<string>());
 
   async function executeSaveMovement(state: SaveMovementState): Promise<void> {
@@ -317,6 +326,100 @@ export function useInventoryActions({
     }
   }
 
+  async function receiveResolvedInventoryScan(
+    rawCode: string,
+    inventoryItem: InventoryItem,
+  ): Promise<boolean> {
+    const pendingState = resolvedInventoryScanReceiveStateRef.current;
+
+    // A completed physical scan is a new receive. The pending operation is
+    // reused only when the operator explicitly retries the SAME uncertain
+    // attempt, never because a fingerprint happens to match.
+    const intent = resolveResolvedInventoryScanReceiveIntent({
+      pendingState,
+      rawCode,
+      inventoryItem,
+      confirmRetry: (message) => window.confirm(message),
+    });
+
+    const state = reconcileResolvedInventoryScanReceiveState({
+      current: pendingState,
+      intent,
+      rawCode,
+      inventoryItem,
+      createOperationId: () =>
+        createInventoryOperationId("inventory-scan"),
+    });
+
+    resolvedInventoryScanReceiveStateRef.current = state;
+
+    try {
+      const execution =
+        await executeResolvedInventoryScanReceiveWithRetry({
+          state,
+          execute: createInventoryMovement,
+          isRetryableError: isRetryableInventoryTransactionError,
+          shouldRetry: (error) => {
+            const message =
+              error instanceof Error
+                ? error.message
+                : "Inventory movement response was lost.";
+
+            return window.confirm(
+              `${message}\n\n` +
+                "The server may have applied this scan even though the response was not received.\n\n" +
+                "Retry this SAME scan now using the same operation ID?"
+            );
+          },
+        });
+
+      if (execution.status === "retry_declined") {
+        resolvedInventoryScanReceiveStateRef.current =
+          markResolvedInventoryScanReceiveOutcomeUncertain(state);
+
+        toast.error(
+          "Scan outcome is uncertain. Scan the same item again and confirm the retry to reuse the same operation."
+        );
+        return false;
+      }
+
+      const { movement } = execution;
+
+      if (
+        movement.status !== "success" &&
+        movement.status !== "duplicate_operation"
+      ) {
+        resolvedInventoryScanReceiveStateRef.current = null;
+        throw new Error(
+          movement.message || "Inventory movement was not applied.",
+        );
+      }
+
+      resolvedInventoryScanReceiveStateRef.current = null;
+
+      if (inventoryItem.pendingScanReview) {
+        await runJarvisInventoryIdentification(inventoryItem.id, rawCode);
+      } else {
+        void ensureProductFromInventory(inventoryItem).catch((error) => {
+          console.error("INVENTORY PRODUCT SYNC ERROR:", error);
+          toast.error("Inventory moved, but product catalog sync needs review.");
+        });
+      }
+
+      toast.success(`${inventoryItem.name || "Inventory"} scanned in.`);
+      return true;
+    } catch (error: unknown) {
+      if (isRetryableInventoryTransactionError(error)) {
+        resolvedInventoryScanReceiveStateRef.current =
+          markResolvedInventoryScanReceiveOutcomeUncertain(state);
+      } else {
+        resolvedInventoryScanReceiveStateRef.current = null;
+      }
+
+      throw error;
+    }
+  }
+
   async function handleScanMovement(
     rawCode: string,
     direction: "in" | "out",
@@ -413,6 +516,10 @@ export function useInventoryActions({
             deleted: scanResolution.product.deleted,
           });
           return true;
+        }
+
+        if (scanResolution.kind === "inventory") {
+          return await receiveResolvedInventoryScan(rawCode, scanResolution.item);
         }
 
         await createPendingScanIn(rawCode);
@@ -1481,4 +1588,3 @@ export function useInventoryActions({
     handleBatchDiscontinue,
   };
 }
-

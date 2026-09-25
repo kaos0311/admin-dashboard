@@ -49,15 +49,21 @@ describe("MATCHED_FIELD_LABELS", () => {
   it("provides human-readable labels for each matched field", () => {
     expect(MATCHED_FIELD_LABELS.barcode).toBe("Barcode");
     expect(MATCHED_FIELD_LABELS.serial).toBe("Serial Number");
+    expect(MATCHED_FIELD_LABELS.serialNumber).toBe("Serial Number");
     expect(MATCHED_FIELD_LABELS.lotNumber).toBe("Lot Number");
     expect(MATCHED_FIELD_LABELS.sku).toBe("SKU");
+    expect(MATCHED_FIELD_LABELS.manufacturerItemId).toBe("Manufacturer Item ID");
+    expect(MATCHED_FIELD_LABELS.productId).toBe("Product ID");
   });
 
   it("getMatchedFieldLabel returns correct label for each field", () => {
     expect(getMatchedFieldLabel("barcode")).toBe("Barcode");
     expect(getMatchedFieldLabel("serial")).toBe("Serial Number");
+    expect(getMatchedFieldLabel("serialNumber")).toBe("Serial Number");
     expect(getMatchedFieldLabel("lotNumber")).toBe("Lot Number");
     expect(getMatchedFieldLabel("sku")).toBe("SKU");
+    expect(getMatchedFieldLabel("manufacturerItemId")).toBe("Manufacturer Item ID");
+    expect(getMatchedFieldLabel("productId")).toBe("Product ID");
   });
 });
 
@@ -275,11 +281,14 @@ describe("InventoryLookupMatchedField", () => {
     const validFields: InventoryLookupMatchedField[] = [
       "barcode",
       "serial",
+      "serialNumber",
       "lotNumber",
       "sku",
+      "manufacturerItemId",
+      "productId",
     ];
 
-    expect(validFields).toHaveLength(4);
+    expect(validFields).toHaveLength(7);
     expect(validFields).not.toContain("unknown");
   });
 

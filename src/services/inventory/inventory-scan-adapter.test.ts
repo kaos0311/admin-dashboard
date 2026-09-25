@@ -120,6 +120,38 @@ describe("resolveInventoryScanForIntake", () => {
     expect(mockFindProductByScan).toHaveBeenCalledOnce();
   });
 
+  it("reports barcode as the matched product field when products.barcode matched", async () => {
+    const product = {
+      id: "prod-barcode",
+      name: "Barcode Product",
+      category: "Supplies",
+      sku: "",
+      hcpcs: "",
+      upc: "",
+      barcode: "BAR-123",
+      manufacturer: "Acme",
+      brand: "Acme Brand",
+      manufacturerItemId: "",
+      model: "",
+      defaultPurchasePrice: 0,
+      reorderLevel: 0,
+      status: "available",
+      deleted: false,
+    } as ProductDocument;
+
+    mockFindByScan.mockResolvedValue(null);
+    mockFindProductByScan.mockResolvedValue(product);
+
+    const result = await resolveInventoryScanForIntake({ rawCode: "BAR-123" });
+
+    expect(result).toEqual({
+      kind: "product_suggestion",
+      normalizedScan: "BAR-123",
+      matchedBy: "barcode",
+      product,
+    });
+  });
+
   it("keeps product suggestions distinct from inventory identity", async () => {
     const product: ProductDocument = {
       id: "prod-suggestion",
@@ -235,8 +267,11 @@ describe("adaptInventoryLookupResponse", () => {
   it.each([
     ["barcode", "Barcode"],
     ["serial", "Serial Number"],
+    ["serialNumber", "Serial Number"],
     ["lotNumber", "Lot Number"],
     ["sku", "SKU"],
+    ["manufacturerItemId", "Manufacturer Item ID"],
+    ["productId", "Product ID"],
   ] as const)("labels %s matches for scanner UI display", (field, label) => {
     expect(getMatchedFieldLabel(field)).toBe(label);
   });

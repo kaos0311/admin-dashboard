@@ -1599,6 +1599,56 @@ describe("AHM Golden Regression Suite - emulator invariants", () => {
     expect(await countByOperation("inventoryTransactions", "golden-emu-rec-001")).toBe(1);
   });
 
+  it("GOLDEN-EMU-REC-001B repeated physical receive scans use independent operation IDs and retry safely", async () => {
+    await seedInventory("golden-rec-001b", {
+      barcode: "GOLDEN-REC-SCAN-001B",
+      quantityOnHand: 4,
+      available: 4,
+    });
+
+    const scanA = await invokeReceiveInventoryByBarcode({
+      operationId: "golden-emu-rec-001b-a",
+      barcode: "GOLDEN-REC-SCAN-001B",
+      rawScan: "GOLDEN-REC-SCAN-001B",
+      quantity: 1,
+      source: "manual_entry",
+    });
+    const scanB = await invokeReceiveInventoryByBarcode({
+      operationId: "golden-emu-rec-001b-b",
+      barcode: "GOLDEN-REC-SCAN-001B",
+      rawScan: "GOLDEN-REC-SCAN-001B",
+      quantity: 1,
+      source: "manual_entry",
+    });
+    const scanC = await invokeReceiveInventoryByBarcode({
+      operationId: "golden-emu-rec-001b-c",
+      barcode: "GOLDEN-REC-SCAN-001B",
+      rawScan: "GOLDEN-REC-SCAN-001B",
+      quantity: 1,
+      source: "manual_entry",
+    });
+    const retryC = await invokeReceiveInventoryByBarcode({
+      operationId: "golden-emu-rec-001b-c",
+      barcode: "GOLDEN-REC-SCAN-001B",
+      rawScan: "GOLDEN-REC-SCAN-001B",
+      quantity: 1,
+      source: "manual_entry",
+    });
+
+    expect(scanA).toMatchObject({ status: "success", quantityBefore: 4, quantityAfter: 5 });
+    expect(scanB).toMatchObject({ status: "success", quantityBefore: 5, quantityAfter: 6 });
+    expect(scanC).toMatchObject({ status: "success", quantityBefore: 6, quantityAfter: 7 });
+    expect(retryC).toMatchObject(scanC);
+
+    const inventory = (await db.collection("inventory").doc("golden-rec-001b").get()).data();
+    expect(inventory?.quantityOnHand).toBe(7);
+    expect(inventory?.available).toBe(7);
+    expect(inventory?.lastMovementId).toBe(scanC.transactionId);
+    expect(await countByOperation("inventoryTransactions", "golden-emu-rec-001b-a")).toBe(1);
+    expect(await countByOperation("inventoryTransactions", "golden-emu-rec-001b-b")).toBe(1);
+    expect(await countByOperation("inventoryTransactions", "golden-emu-rec-001b-c")).toBe(1);
+  });
+
   it("GOLDEN-EMU-REC-002 retry with same operation ID does not duplicate receive mutations", async () => {
     await seedInventory("golden-rec-002", { barcode: "GOLDEN-REC-SCAN-002", quantityOnHand: 30, available: 30 });
     const input = {

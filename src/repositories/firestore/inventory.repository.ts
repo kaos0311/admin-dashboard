@@ -107,6 +107,32 @@ async function findFirstDocumentByFields<T>(
   return null;
 }
 
+async function findUniqueDocumentByField<T>(
+  collectionName: string,
+  field: string,
+  value: string,
+  predicate: (data: Record<string, unknown>) => boolean,
+  mapResult: (id: string, data: Record<string, unknown>) => T,
+): Promise<T | null> {
+  if (!value) return null;
+
+  const documents = await queryDocumentsByField(collectionName, field, value, 25);
+  const matches = documents.filter((document) => predicate(document.data));
+
+  if (matches.length > 1) {
+    const label = collectionName === COLLECTIONS.PRODUCTS
+      ? "product"
+      : collectionName;
+
+    throw new Error(
+      `Scan code ${value} matches ${matches.length} ${label} records by ${field}.`,
+    );
+  }
+
+  const match = matches[0];
+  return match ? mapResult(match.id, match.data) : null;
+}
+
 // ---------------------------------------------------------------------------
 // Inventory Repository
 // ---------------------------------------------------------------------------
@@ -147,11 +173,14 @@ export const InventoryRepository = {
     const clean = normalizeBarcode(rawCode);
     const upper = clean.toUpperCase();
 
-    const fields: Array<[keyof InventoryItem, string]> = [
+    const fields: Array<[string, string]> = [
       ["barcode", clean],
       ["serial", clean],
+      ["serialNumber", clean],
       ["lotNumber", clean],
       ["sku", clean],
+      ["manufacturerItemId", clean],
+      ["productId", clean],
       ["hcpc", upper],
     ];
 
@@ -160,7 +189,7 @@ export const InventoryRepository = {
 
       const documents = await queryDocumentsByField(
         COLLECTIONS.INVENTORY,
-        field as string,
+        field,
         value,
         25,
       );
@@ -241,10 +270,22 @@ export const InventoryRepository = {
       ["manufacturerItemId", clean],
     ];
 
-    return findFirstDocumentByFields(
+    const product = await findFirstDocumentByFields(
       COLLECTIONS.PRODUCTS,
       checks,
       1,
+      (data) => data.deleted !== true,
+      (id, data) => ({ id, ...data } as ProductDocument),
+    );
+
+    if (product) {
+      return product;
+    }
+
+    return findUniqueDocumentByField(
+      COLLECTIONS.PRODUCTS,
+      "barcode",
+      clean,
       (data) => data.deleted !== true,
       (id, data) => ({ id, ...data } as ProductDocument),
     );

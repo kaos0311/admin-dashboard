@@ -9,8 +9,11 @@
 export type InventoryLookupMatchedField =
   | "barcode"
   | "serial"
+  | "serialNumber"
   | "lotNumber"
-  | "sku";
+  | "sku"
+  | "manufacturerItemId"
+  | "productId";
 
 /** Item fields returned to the scanner page – no sensitive or internal data. */
 export interface InventoryLookupItem {

@@ -36,6 +36,11 @@ import { createInventoryMovement } from "@/lib/inventory/movements";
 import { equipmentCheckInByBarcodeWorkflow } from "@/lib/domainWorkflows";
 import { OperationIdManager } from "@/lib/inventory/receive-inventory";
 import { buttons, colors, glass, tiles, typography } from "@/theme";
+import {
+  createScannerScanQueue,
+  enqueueAndDrainScanQueue,
+  ScannerScanQueueDrainError,
+} from "./scanQueue";
 
 type TransactionMode =
   | "lookup"
@@ -82,8 +87,11 @@ function MatchedFieldBadge({ field }: { field: InventoryLookupMatchedField }) {
   const colors: Record<InventoryLookupMatchedField, string> = {
     barcode: "bg-blue-500/20 text-blue-300 border-blue-500/30",
     serial: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+    serialNumber: "bg-purple-500/20 text-purple-300 border-purple-500/30",
     lotNumber: "bg-orange-500/20 text-orange-300 border-orange-500/30",
     sku: "bg-[#6a9a6a]/20 text-[#8aba8a] border-[#6a9a6a]/30",
+    manufacturerItemId: "bg-[#c49a4a]/20 text-[#d4b86a] border-[#c49a4a]/30",
+    productId: "bg-slate-500/20 text-slate-300 border-slate-500/30",
   };
 
   return (
@@ -154,7 +162,7 @@ export default function ScannerPage() {
   const [showConfirmation, setShowConfirmation] = useState(false);
 
   const scannerRef = useRef<BarcodeScannerInputHandle>(null);
-  const processingRef = useRef(false);
+  const scanQueueRef = useRef(createScannerScanQueue());
   const diagnosticToggleRef = useRef(false);
 
   // operationId lifecycle manager (PHASE 2 — reused for retries)
@@ -184,17 +192,8 @@ export default function ScannerPage() {
     [],
   );
 
-  const handleScan = useCallback(
+  const processScan = useCallback(
     async (barcode: string) => {
-      // Prevent duplicate submission while a lookup is already in-flight
-      if (processingRef.current) {
-        if (process.env.NODE_ENV === "development") {
-          console.warn("[BarcodeScanner] Blocked duplicate scan while processing:", barcode);
-        }
-        return;
-      }
-
-      processingRef.current = true;
       const scanStartTime = Date.now();
 
       // Dev logging
@@ -224,8 +223,6 @@ export default function ScannerPage() {
 
       const result = await lookupByBarcode(barcode);
       const responseTimeMs = Date.now() - scanStartTime;
-
-      processingRef.current = false;
 
       // Handle null result (error / network failure)
       if (!result) {
@@ -325,10 +322,49 @@ export default function ScannerPage() {
           setLookupError("Unexpected server response.");
       }
 
-      // Auto-clear and refocus for next scan
       refocusScanner();
     },
     [addRecentScan, lookupByBarcode, refocusScanner, resetTx, transactionMode, txError, user?.uid],
+  );
+
+  /**
+   * Surface a failed scan drain.
+   *
+   * The queue keeps draining after an individual processor failure, so this
+   * reports every completed scan that failed during the same drain instead of
+   * leaving them silently queued.
+   */
+  const reportScanQueueFailure = useCallback((error: unknown) => {
+    if (error instanceof ScannerScanQueueDrainError) {
+      console.error("SCANNER SCAN QUEUE DRAIN FAILED", {
+        failedScans: error.failures.length,
+        firstBarcode: error.firstFailure.barcode,
+        firstError: error.firstFailure.error,
+      });
+
+      toast.error(error.message);
+      return;
+    }
+
+    console.error("SCANNER SCAN QUEUE ERROR:", error);
+    toast.error("A scanned barcode could not be processed.");
+  }, []);
+
+  const handleScan = useCallback(
+    (barcode: string) => {
+      if (scanQueueRef.current.processing) {
+        if (process.env.NODE_ENV === "development") {
+          console.warn("[BarcodeScanner] Queued scan while lookup is processing:", barcode);
+        }
+      }
+
+      void enqueueAndDrainScanQueue(
+        scanQueueRef.current,
+        barcode,
+        processScan,
+      ).catch(reportScanQueueFailure);
+    },
+    [processScan, reportScanQueueFailure],
   );
 
   /**
@@ -741,7 +777,7 @@ export default function ScannerPage() {
     setDiagnosticData(null);
     setToLocation("");
     setToBinLocation("");
-    processingRef.current = false;
+    scanQueueRef.current = createScannerScanQueue();
     operationIdManagerRef.current.reset();
     pendingOperationIdRef.current = null;
     resetTx();

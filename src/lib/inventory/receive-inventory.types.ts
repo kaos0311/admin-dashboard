@@ -6,8 +6,11 @@
 export type InventoryLookupMatchedField =
   | "barcode"
   | "serial"
+  | "serialNumber"
   | "lotNumber"
-  | "sku";
+  | "sku"
+  | "manufacturerItemId"
+  | "productId";
 
 /** A single inventory item returned by the lookup function. */
 export interface InventoryLookupItem {

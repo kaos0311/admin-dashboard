@@ -6,8 +6,11 @@ import type { ProductDocument } from "@/repositories/firestore/inventory.types";
 export type InventoryScanField =
   | "barcode"
   | "serial"
+  | "serialNumber"
   | "lotNumber"
   | "sku"
+  | "manufacturerItemId"
+  | "productId"
   | "hcpc";
 
 export type ProductScanField =
@@ -15,7 +18,8 @@ export type ProductScanField =
   | "upc"
   | "sku"
   | "hcpcs"
-  | "manufacturerItemId";
+  | "manufacturerItemId"
+  | "barcode";
 
 export type InventoryScanIdentification =
   | {
@@ -64,8 +68,11 @@ export type ClientInventoryScanResult =
 export type InventoryLookupMatchedField =
   | "barcode"
   | "serial"
+  | "serialNumber"
   | "lotNumber"
-  | "sku";
+  | "sku"
+  | "manufacturerItemId"
+  | "productId";
 
 export interface InventoryLookupItem {
   id: string;
@@ -114,8 +121,11 @@ export type BarcodeLookupResult =
 export const MATCHED_FIELD_LABELS: Record<InventoryLookupMatchedField, string> = {
   barcode: "Barcode",
   serial: "Serial Number",
+  serialNumber: "Serial Number",
   lotNumber: "Lot Number",
   sku: "SKU",
+  manufacturerItemId: "Manufacturer Item ID",
+  productId: "Product ID",
 };
 
 export function getMatchedFieldLabel(field: InventoryLookupMatchedField): string {
@@ -151,6 +161,8 @@ function inferInventoryMatchField(
   if (item.serial === normalizedScan) return "serial";
   if (item.lotNumber === normalizedScan) return "lotNumber";
   if (item.sku === normalizedScan) return "sku";
+  if (item.manufacturerItemId === normalizedScan) return "manufacturerItemId";
+  if (item.productId === normalizedScan) return "productId";
   if (item.hcpc === normalizedScan.toUpperCase()) return "hcpc";
 
   return "sku";
@@ -168,6 +180,9 @@ function inferProductMatchField(
   }
   if (normalizeMatchValue(product.manufacturerItemId) === normalizedScan) {
     return "manufacturerItemId";
+  }
+  if (normalizeMatchValue(product.barcode) === normalizedScan) {
+    return "barcode";
   }
 
   return "sku";

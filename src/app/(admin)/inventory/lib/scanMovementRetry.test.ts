@@ -219,4 +219,81 @@ describe("inventory scan movement retry lifecycle", () => {
       "physical-scan-2",
     ]);
   });
+
+  it("uses fresh operation IDs for repeated physical scans and reuses only the retried request ID", async () => {
+    let quantity = 4;
+    const attempts: InventoryMovementRequest[] = [];
+
+    const execute = vi.fn(
+      async (
+        request: InventoryMovementRequest,
+      ): Promise<InventoryMovementResult> => {
+        attempts.push(request);
+
+        if (
+          request.operationId === "physical-scan-C" &&
+          attempts.filter((attempt) => attempt.operationId === "physical-scan-C").length === 1
+        ) {
+          throw Object.assign(new Error("Connection interrupted."), {
+            code: "functions/unavailable",
+          });
+        }
+
+        const quantityBefore = quantity;
+        quantity += 1;
+
+        return {
+          status: "success",
+          operationId: request.operationId,
+          movementId: `movement-${request.operationId}`,
+          inventoryItemId: "inventory-1",
+          quantityBefore,
+          quantityDelta: 1,
+          quantityAfter: quantity,
+        };
+      },
+    );
+
+    const request: ScanMovementRequest = {
+      ...REQUEST,
+      movementType: "receive",
+      metadata: {
+        rawCode: "1234567890123",
+        direction: "in",
+      },
+    };
+
+    await executeScanMovementWithRetry({
+      request,
+      operationId: "physical-scan-A",
+      execute,
+      isRetryableError: () => false,
+      shouldRetry: () => false,
+    });
+
+    await executeScanMovementWithRetry({
+      request,
+      operationId: "physical-scan-B",
+      execute,
+      isRetryableError: () => false,
+      shouldRetry: () => false,
+    });
+
+    await executeScanMovementWithRetry({
+      request,
+      operationId: "physical-scan-C",
+      execute,
+      isRetryableError: (error) =>
+        (error as { code?: string }).code === "functions/unavailable",
+      shouldRetry: () => true,
+    });
+
+    expect(attempts.map((attempt) => attempt.operationId)).toEqual([
+      "physical-scan-A",
+      "physical-scan-B",
+      "physical-scan-C",
+      "physical-scan-C",
+    ]);
+    expect(quantity).toBe(7);
+  });
 });

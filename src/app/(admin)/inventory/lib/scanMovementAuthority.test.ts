@@ -9,6 +9,7 @@ import type { InventoryItem } from "./inventoryTypes";
 
 import {
   buildCanonicalScanMovementRequest,
+  buildResolvedInventoryScanReceiveRequest,
   runCanonicalScanMovement,
 } from "./scanMovementAuthority";
 
@@ -159,6 +160,36 @@ describe("canonical scan movement authority", () => {
     });
     expect(execute.mock.calls[0][0]).not.toHaveProperty("inventoryItemId");
     expect(params.resolveIntake).not.toHaveBeenCalled();
+  });
+
+  it("builds authoritative receive requests for inventory fallback matches", () => {
+    expect(
+      buildResolvedInventoryScanReceiveRequest({
+        rawCode: " SCAN-1 ",
+        inventoryItem: {
+          ...INVENTORY_ITEM,
+          id: "client-found-item",
+          productId: "product-client-found",
+          serial: "SER-1",
+          lotNumber: "LOT-1",
+        },
+      }),
+    ).toEqual({
+      movementType: "receive",
+      inventoryItemId: "client-found-item",
+      productId: "product-client-found",
+      barcode: "SCAN-1",
+      serialNumber: "SER-1",
+      lotNumber: "LOT-1",
+      quantity: 1,
+      reason: "Scanned into inventory.",
+      source: "scanner",
+      metadata: {
+        rawCode: " SCAN-1 ",
+        direction: "in",
+        fallback: "resolved_inventory_match",
+      },
+    });
   });
 
   it("uses movement.inventoryItemId as the post-success enrichment source", async () => {

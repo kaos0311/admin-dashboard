@@ -68,8 +68,11 @@ function toLookupMatchedFields(
     (field): field is InventoryLookupMatchedField =>
       field === "barcode" ||
       field === "serial" ||
+      field === "serialNumber" ||
       field === "lotNumber" ||
-      field === "sku",
+      field === "sku" ||
+      field === "manufacturerItemId" ||
+      field === "productId",
   );
 }
 
@@ -77,7 +80,7 @@ function toLookupMatchedFields(
  * Callable function: lookupInventoryByBarcode
  *
  * Given a normalized barcode, search the inventory collection for
- * exact matches across barcode, serial, lotNumber, and sku fields.
+ * exact matches across the same identity fields used by scan movements.
  *
  * Returns a strictly-typed discriminated union:
  * - status "found":     exactly one inventory document matched.
@@ -115,7 +118,15 @@ export const lookupInventoryByBarcode = onCall(
       );
     }
     const resolved = await resolveInventoryScan(db, parsedBarcode.value, {
-      fields: ["barcode", "serial", "lotNumber", "sku"],
+      fields: [
+        "barcode",
+        "serial",
+        "serialNumber",
+        "lotNumber",
+        "sku",
+        "manufacturerItemId",
+        "productId",
+      ],
       includeUppercaseVariant: true,
     });
 
@@ -134,8 +145,11 @@ export const lookupInventoryByBarcode = onCall(
           (field): field is InventoryLookupMatchedField =>
             field === "barcode" ||
             field === "serial" ||
+            field === "serialNumber" ||
             field === "lotNumber" ||
-            field === "sku",
+            field === "sku" ||
+            field === "manufacturerItemId" ||
+            field === "productId",
         ),
       };
     }

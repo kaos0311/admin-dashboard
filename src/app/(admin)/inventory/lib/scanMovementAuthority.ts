@@ -63,6 +63,28 @@ export function buildCanonicalScanMovementRequest(params: {
   };
 }
 
+export function buildResolvedInventoryScanReceiveRequest(params: {
+  rawCode: string;
+  inventoryItem: InventoryItem;
+}): Omit<ScanMovementRequest, "operationId"> {
+  return {
+    movementType: "receive",
+    inventoryItemId: params.inventoryItem.id,
+    productId: params.inventoryItem.productId,
+    barcode: normalizeBarcode(params.rawCode),
+    serialNumber: params.inventoryItem.serial,
+    lotNumber: params.inventoryItem.lotNumber,
+    quantity: 1,
+    reason: "Scanned into inventory.",
+    source: "scanner",
+    metadata: {
+      rawCode: params.rawCode,
+      direction: "in",
+      fallback: "resolved_inventory_match",
+    },
+  };
+}
+
 export async function runCanonicalScanMovement(params: {
   rawCode: string;
   direction: ScanMovementDirection;
