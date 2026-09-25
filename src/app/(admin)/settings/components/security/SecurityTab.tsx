@@ -5,6 +5,7 @@ import { Field } from "../shared/Field";
 import { InfoCard } from "../shared/InfoCard";
 import { SectionHeader } from "../shared/SectionHeader";
 import { ToggleRow } from "../shared/ToggleRow";
+import { MfaSection } from "./MfaSection";
 
 type SecurityTabProps = {
   settings: AppSettings;
@@ -100,6 +101,15 @@ export function SecurityTab({ settings, setSettings }: SecurityTabProps) {
 
         <div className="lg:col-span-2">
           <InfoCard
+            title="Multi-Factor Authentication"
+            description="Add an extra layer of security by requiring a one-time code from an authenticator app during sign-in."
+          >
+            <MfaSection />
+          </InfoCard>
+        </div>
+
+        <div className="lg:col-span-2">
+          <InfoCard
             title="HIPAA Position"
             description="This page should store security preferences and operational flags only. Do not store PHI here. Patient-specific records belong behind authenticated report, patient, order, rental, or audit collections with proper Firestore rules."
           />
@@ -108,6 +118,3 @@ export function SecurityTab({ settings, setSettings }: SecurityTabProps) {
     </section>
   );
 }
-
-
-

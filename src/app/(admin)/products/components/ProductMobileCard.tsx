@@ -1,6 +1,6 @@
 "use client";
 
-import { typography } from "@/theme";
+import { buttons, colors, glass, typography } from "@/theme";
 import { Pencil, Trash2 } from "lucide-react";
 
 import type { Product } from "../utils/productTypes";
@@ -25,7 +25,7 @@ export function ProductMobileCard({
   const productName = product.name || "Unnamed product";
 
   const productMeta =
-    [product.brand, product.model, product.category].filter(Boolean).join(" â€¢ ") ||
+    [product.brand, product.model, product.category].filter(Boolean).join(" • ") ||
     "No category";
 
   const formattedPrice =
@@ -34,14 +34,14 @@ export function ProductMobileCard({
       : "-";
 
   return (
-    <article className="min-w-0 overflow-visible rounded-3xl border border-white/10 bg-white/[0.06] p-4 shadow-2xl shadow-black/30 backdrop-blur-2xl">
+    <article className={`${glass.cardPadded} min-w-0`}>
       <div className="flex min-w-0 gap-3">
         <input
           type="checkbox"
           checked={selected}
           onChange={onSelect}
           aria-label={`Select ${productName}`}
-          className="mt-1 h-4 w-4 shrink-0 accent-sky-400"
+          className="mt-1 h-4 w-4 shrink-0"
         />
 
         <div className="shrink-0">
@@ -49,15 +49,15 @@ export function ProductMobileCard({
         </div>
 
         <div className="min-w-0 flex-1">
-          <div className="min-w-0 break-words text-sm font-semibold leading-5 text-white">
+          <div className={`min-w-0 break-words ${typography.bodyStrong}`}>
             {productName}
           </div>
 
-          <div className={`mt-1 min-w-0 break-words text-xs leading-5 ${typography.caption}`}>
+          <div className={`mt-1 min-w-0 break-words ${typography.caption}`}>
             {productMeta}
           </div>
 
-          <div className="mt-3 grid min-w-0 gap-2 text-xs text-slate-300">
+          <div className="mt-3 grid min-w-0 gap-2 text-xs">
             <InfoLine label="SKU" value={product.sku} />
             <InfoLine label="UPC" value={product.upc} />
             <InfoLine label="HCPCS" value={product.hcpcs} />
@@ -76,7 +76,7 @@ export function ProductMobileCard({
               type="button"
               onClick={onEdit}
               aria-label={`Edit ${productName}`}
-              className="inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.08] px-3 py-2 text-sm font-medium text-slate-100 transition hover:bg-white/[0.14] focus:outline-none focus:ring-2 focus:ring-sky-300/30"
+              className={buttons.icon}
             >
               <Pencil className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="truncate">Edit</span>
@@ -86,7 +86,7 @@ export function ProductMobileCard({
               type="button"
               onClick={onArchive}
               aria-label={`Archive ${productName}`}
-              className="inline-flex min-h-10 min-w-0 items-center justify-center gap-2 rounded-xl border border-red-400/20 bg-red-400/10 px-3 py-2 text-sm font-medium text-red-200 transition hover:bg-red-400/20 focus:outline-none focus:ring-2 focus:ring-red-300/30"
+              className={buttons.iconDanger}
             >
               <Trash2 className="h-4 w-4 shrink-0" aria-hidden="true" />
               <span className="truncate">Archive</span>
@@ -113,14 +113,9 @@ function InfoLine({
   return (
     <div className="grid min-w-0 grid-cols-[96px_minmax(0,1fr)] gap-3">
       <span className={`shrink-0 ${typography.caption}`}>{label}</span>
-      <span className="min-w-0 break-words text-right text-slate-300">
+      <span className={`min-w-0 break-words text-right ${colors.textSecondary}`}>
         {displayValue}
       </span>
     </div>
   );
 }
-
-
-
-
-

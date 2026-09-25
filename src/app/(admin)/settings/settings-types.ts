@@ -8,7 +8,8 @@
   | "improvements"
   | "users"
   | "security"
-  | "danger";
+  | "danger"
+  | "audit-log";
 
 export type TabKey = SettingsTabKey;
 
@@ -196,5 +197,3 @@ export type SettingsMessage = {
   type: "success" | "error" | "info";
   text: string;
 };
-
-

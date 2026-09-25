@@ -16,6 +16,7 @@ import {
   badges,
   buttons,
   glass,
+  tables,
   typography,
 } from "@/theme";
 
@@ -186,8 +187,7 @@ export function OrdersTable({
                           Edit
                         </ActionButton>
 
-                        {order.status !== "ready" &&
-                        order.status !== "archived" ? (
+                        {order.status === "processing" ? (
                           <ActionButton
                             label="Mark ready"
                             disabled={isSaving}
@@ -201,25 +201,8 @@ export function OrdersTable({
                           </ActionButton>
                         ) : null}
 
-                        {order.status !== "delivered" &&
-                        order.status !== "archived" ? (
-                          <ActionButton
-                            label="Mark delivered"
-                            disabled={isSaving}
-                            onClick={() =>
-                              onUpdateStatus(order.id, "delivered")
-                            }
-                          >
-                            <CheckCircle2
-                              className="h-4 w-4"
-                              aria-hidden={true}
-                            />
-                            Delivered
-                          </ActionButton>
-                        ) : null}
-
-                        {order.status !== "cancelled" &&
-                        order.status !== "archived" ? (
+                        {order.status === "processing" ||
+                        order.status === "ready" ? (
                           <ActionButton
                             label="Cancel order"
                             disabled={isSaving}
@@ -275,7 +258,7 @@ export function OrdersTable({
 }
 
 function TableHead({ children }: { children: React.ReactNode }) {
-  return <th className="px-4 py-3 font-semibold">{children}</th>;
+  return <th className={tables.headCell}>{children}</th>;
 }
 
 function ActionButton({
@@ -301,4 +284,3 @@ function ActionButton({
     </button>
   );
 }
-

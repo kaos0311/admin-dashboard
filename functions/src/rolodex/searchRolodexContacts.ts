@@ -2,6 +2,8 @@ import { getApps, initializeApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
+import { resolveCallableRole } from "../auth/roles.js";
+
 if (!getApps().length) {
   initializeApp();
 }
@@ -44,17 +46,22 @@ type RolodexSearchContact = {
   updatedAtLabel: string;
 };
 
-function assertStaffOrAdmin(request: {
+async function assertStaffOrAdmin(request: {
   auth?: {
     uid: string;
     token: Record<string, unknown>;
   };
 }) {
-  const role = request.auth?.token.role;
-
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
+
+  // AUTHORITATIVE: resolve from the active users/{uid} profile. A stale
+  // staff/admin custom claim without a matching active profile is denied.
+  const role = await resolveCallableRole({
+    uid: request.auth.uid,
+    token: request.auth.token as Record<string, unknown>,
+  });
 
   if (role !== "admin" && role !== "staff" && role !== "tank") {
     throw new HttpsError("permission-denied", "Staff access required.");
@@ -148,7 +155,7 @@ export const searchRolodexContacts = onCall<SearchRolodexRequest>(
     memory: "256MiB",
   },
   async (request) => {
-    assertStaffOrAdmin(request);
+    await assertStaffOrAdmin(request);
 
     const criteria = request.data ?? {};
     const contactType = text(criteria.contactType);

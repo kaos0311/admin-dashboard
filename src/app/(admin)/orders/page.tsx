@@ -5,7 +5,7 @@ import { useMemo, useState } from "react";
 import { ClipboardList, Loader2, ShieldCheck, Truck } from "lucide-react";
 import toast from "react-hot-toast";
 
-import { buttons, colors, glass, tiles, typography } from "@/theme";
+import { alerts, buttons, colors, glass, tiles, typography } from "@/theme";
 
 import BarcodeScannerModal from "@/app/components/barcode-scanner/BarcodeScannerModal";
 import { normalizeBarcode } from "@/lib/barcode";
@@ -262,9 +262,12 @@ export default function OrdersPage() {
         <div aria-hidden="true" className={colors.grid} />
 
         <div className="relative z-10 flex min-h-[60vh] items-center justify-center">
-          <div className="rounded-3xl border border-red-500/20 bg-red-500/10 px-6 py-5 text-sm text-red-300 shadow-[0_0_35px_rgba(239,68,68,0.18)]">
-            Authentication required to access orders.
-          </div>
+        <div
+          role="alert"
+          className={alerts.danger}
+        >
+          Authentication required to access orders.
+        </div>
         </div>
       </main>
     );
@@ -290,12 +293,10 @@ export default function OrdersPage() {
               <div>
                 <h1 className={typography.pageTitle}>Orders Command Center</h1>
 
-                <p className={`mt-3 max-w-3xl ${typography.body}`}>
+                <p className={`mt-1 max-w-2xl ${typography.bodyMuted}`}>
                   Operational order management for routing, imports, inventory
-                  matching, hospice review, barcode intake, smart filtering,
-                  delivery tracking, and escalation monitoring. Because somebody
-                  always forgets to assign a product and then acts surprised
-                  when the warehouse catches fire.
+                  allocation, review flags, barcode intake, smart filtering,
+                  delivery tracking, and escalation monitoring.
                 </p>
               </div>
             </div>
@@ -313,7 +314,7 @@ export default function OrdersPage() {
                     </p>
 
                     <span className={tiles.label}>
-                      <span className="h-2 w-2 animate-pulse rounded-full bg-sky-200 shadow-[0_0_10px_rgba(186,230,253,0.9)]" />
+                      <span className={`h-2 w-2 animate-pulse rounded-full ${colors.pulse}`} />
                       Active
                     </span>
                   </div>
@@ -325,7 +326,7 @@ export default function OrdersPage() {
               </div>
 
               <div className={`${glass.insetPadded} mt-4 flex items-center gap-2 px-3 py-2 text-xs ${typography.bodyMuted}`}>
-                <ClipboardList className="h-3.5 w-3.5 text-sky-200" />
+                 <ClipboardList className={`h-3.5 w-3.5 ${colors.textInfo}`} />
                 Operational order intelligence active
               </div>
             </div>
@@ -485,6 +486,7 @@ export default function OrdersPage() {
             patientOptions={autofill.patients}
             productOptions={autofill.products}
             facilityOptions={autofill.facilities}
+            order={orders.find((item) => item.id === editingOrderId)}
             onSave={() =>
               void saveEditOrder({
                 editingOrderId,
@@ -531,10 +533,3 @@ export default function OrdersPage() {
     </main>
   );
 }
-
-
-
-
-
-
-

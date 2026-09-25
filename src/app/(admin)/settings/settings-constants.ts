@@ -89,6 +89,11 @@ export const SETTINGS_TABS: {
     label: "Danger Zone",
     description: "High-risk reset and maintenance actions.",
   },
+  {
+    key: "audit-log",
+    label: "Audit Log",
+    description: "Immutable record of all administrative actions.",
+  },
 ];
 
 /* -------------------------------------------------------------------------- */
@@ -227,5 +232,3 @@ export const SETTINGS_SUCCESS_TIMEOUT = 2500;
 export const SETTINGS_ERROR_TIMEOUT = 5000;
 
 export const SETTINGS_SEARCH_DEBOUNCE = 250;
-
-

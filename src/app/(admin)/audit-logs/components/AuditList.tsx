@@ -1,4 +1,4 @@
-﻿import { Filter } from "lucide-react";
+import { Filter } from "lucide-react";
 
 import { badges, glass, typography } from "@/theme";
 
@@ -65,7 +65,7 @@ export function AuditList({
                   className={`w-full rounded-2xl border p-4 text-left transition ${glass.focus} ${
                     selected
                       ? glass.selectedListItem
-                      : "border-white/10 bg-white/[0.045] hover:bg-white/[0.07]"
+                      : glass.inset
                   }`}
                 >
                   <div className="flex items-center justify-between gap-3">

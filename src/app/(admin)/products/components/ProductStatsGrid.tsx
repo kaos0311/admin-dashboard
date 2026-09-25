@@ -1,6 +1,6 @@
 "use client";
 
-import { colors, metricActionButtonClass, tiles, typography } from "@/theme";
+import { metricActionButtonClass, surfaces, tiles } from "@/theme";
 import {
   AlertTriangle,
   Boxes,
@@ -90,6 +90,8 @@ function StatCard({
   tone: string;
   onClick: () => void;
 }) {
+  const isWarningTone = tone === "yellow" || tone === "red";
+
   const Icon =
     icon === "money"
       ? CircleDollarSign
@@ -105,32 +107,33 @@ function StatCard({
     <button
       type="button"
       onClick={onClick}
-      className={`${tiles.base} ${tiles.compact} ${tiles.hover} min-h-[10.75rem] min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a9a5e]/40`}
+      className={`${tiles.base} ${tiles.compact} ${tiles.hover} min-h-[10.75rem] min-w-0 text-left ${surfaces.focus}`}
       aria-label={`Show ${label.toLowerCase()} products`}
     >
-      <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
-        <div className={["shrink-0 rounded-2xl p-3 shadow-inner shadow-black/30", colors.neutral].join(" ")}>
-          <Icon className="h-5 w-5" aria-hidden="true" />
+      <div className="flex flex-col justify-between h-full min-w-0">
+        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-end gap-3">
+          <div className={tiles.icon}>
+            {isWarningTone ? (
+              <AlertTriangle className="h-5 w-5" />
+            ) : (
+              <Icon className="h-5 w-5" aria-hidden="true" />
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <p className={tiles.value}>
+              {Number.isFinite(value) ? value.toLocaleString() : "0"}
+            </p>
+            <p className={tiles.metricLabel} title={label}>
+              {label}
+            </p>
+          </div>
         </div>
 
+        <span className={metricActionButtonClass(tone)}>
+          Open
+        </span>
       </div>
-
-      <div className="mt-4 min-w-0">
-        <p className={['truncate', typography.metricCompact].join(' ')}>
-          {Number.isFinite(value) ? value.toLocaleString() : "0"}
-        </p>
-        <p className="mt-2 min-w-0 truncate text-[0.7rem] font-semibold uppercase leading-5 text-[#888888]" title={label}>
-          {label}
-        </p>
-      </div>
-
-      <span className={metricActionButtonClass(tone)}>
-        Open
-      </span>
     </button>
   );
 }
-
-
-
-

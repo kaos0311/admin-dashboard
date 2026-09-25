@@ -2,13 +2,45 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import { getApps, initializeApp } from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
-import OpenAI from "openai";
 
+import { resolveCallableRole } from "../../auth/roles.js";
 import {
   createPhiAlert,
   redactPhi,
   scanTextForPhi,
 } from "../phiSafety";
+import { enforceCallableRateLimit } from "../../security/rateLimit.js";
+import { buildJarvisSystemPrompt } from "../prompts/adminSystemPrompt";
+import {
+  buildAuditContext,
+} from "../services/auditContext";
+import {
+  buildOperationsContext,
+  type CollectionFetchResult,
+} from "../services/contextBuilder";
+import {
+  selectValueJoinDefinitions,
+  verifyDefaultValueJoins,
+} from "../services/joinVerifier";
+import { buildJarvisResponsesParams, createOpenAiClient } from "../services/openaiClient";
+import {
+  buildAiAuditLogPayload,
+} from "../services/aiLogger";
+import {
+  buildReportCsv,
+  type CollectionSampleSummary,
+} from "../tools/reportInsights";
+import {
+  applyRecommendationGate,
+} from "../tools/recommendationGate";
+import {
+  buildAnalyticsContextSection,
+} from "../prompts/analyticsPrompt";
+import {
+  evaluateClaimLanguage,
+} from "../types/reporting";
+import { runDiagnosticRequest } from "../../diagnostics/service.js";
+import type { DiagnosticResult } from "../../diagnostics/types.js";
 
 if (!getApps().length) {
   initializeApp();
@@ -17,34 +49,12 @@ if (!getApps().length) {
 const db = getFirestore();
 
 const OPENAI_API_KEY = defineSecret("OPENAI_API_KEY");
+const DIAGNOSTICS_GITHUB_TOKEN = defineSecret("DIAGNOSTICS_GITHUB_TOKEN");
 
 const MODEL = "gpt-4.1-mini";
 const MAX_PROMPT_LENGTH = 4000;
 const RECENT_DOC_LIMIT = 20;
 const SUMMARY_DOC_LIMIT = 1000;
-
-type NumericSummary = {
-  count: number;
-  sum: number;
-  average: number;
-  min: number;
-  max: number;
-};
-
-type CollectionSummary = {
-  collection: string;
-  loaded: number;
-  statusCounts: Record<string, number>;
-  numeric: Record<string, NumericSummary>;
-  missingKeyCounts: Record<string, number>;
-};
-
-type ReportArtifact = {
-  type: "csv";
-  fileName: string;
-  title: string;
-  content: string;
-};
 
 const CORE_COLLECTIONS = [
   "patients",
@@ -67,19 +77,6 @@ const CORE_COLLECTIONS = [
   "shopInventorySerials",
 ] as const;
 
-const SUMMARY_FIELDS: Record<string, string[]> = {
-  orders: ["quantity", "total", "amount", "chargeAmount"],
-  inventory: ["quantityOnHand", "available", "committed", "onRent", "totalValue", "unitCost"],
-  products: ["basePrice", "defaultPurchasePrice", "defaultRentalRate", "reorderLevel"],
-  shopCostOfGoodsSold: ["quantity", "revenue", "cost", "grossProfit", "grossProfitPct"],
-  shopInventoryLots: ["onHandQty", "onRentQty", "onOrderQty", "availableQty", "committedQty"],
-  shopInventorySerials: ["availableQty", "onRentQty"],
-  rentals: ["quantity", "monthlyRate", "total"],
-  wipRecords: ["daysOpen", "daysInState"],
-  patientAuthorizations: ["quantity"],
-  insuranceRecords: ["payPercentage"],
-};
-
 const REQUIRED_FIELDS: Record<string, string[]> = {
   patients: ["patientName", "dob", "phone", "insurance"],
   patients_index: ["patientName", "dob", "phone", "insuranceName"],
@@ -93,32 +90,154 @@ const REQUIRED_FIELDS: Record<string, string[]> = {
   wipRecords: ["patientName", "assignedTo", "status"],
 };
 
-function requireAdmin(request: {
+const INTERNAL_OPERATIONS_PATTERN =
+  /\b(internal operations|internal audit|database audit|collection|patients|patients_index|patientAuthorizations|rentals|insuranceRecords|insurancePatients|linkage|join verification|contradiction|record integrity)\b/i;
+
+const REQUESTED_COLLECTION_PATTERN =
+  /\bcollections?\s+([A-Za-z][A-Za-z0-9_]*)/gi;
+
+const SOURCE_DIAGNOSTIC_PATTERN =
+  /\b(source|code|file|filename|line|git head|commit|repo|repository)\b/i;
+
+const FUNCTION_DIAGNOSTIC_PATTERN =
+  /\b(runtime|deployed revision|revision|function config|function configuration|deployment state)\b/i;
+
+const LOG_DIAGNOSTIC_PATTERN = /\blogs?\b/i;
+
+type CoreCollection = typeof CORE_COLLECTIONS[number];
+
+interface UnavailableContextMarker {
+  collection: string;
+  reason: "unsupported_collection" | "sample_query_failed";
+  classification: "UNKNOWN";
+  evidenceRef: string;
+}
+
+function isCoreCollection(value: string): value is CoreCollection {
+  return (CORE_COLLECTIONS as readonly string[]).includes(value);
+}
+
+function isInternalOperationsPrompt(prompt: string): boolean {
+  return INTERNAL_OPERATIONS_PATTERN.test(prompt);
+}
+
+function getRequestedUnsupportedCollections(prompt: string): UnavailableContextMarker[] {
+  const markers = new Map<string, UnavailableContextMarker>();
+
+  for (const match of prompt.matchAll(REQUESTED_COLLECTION_PATTERN)) {
+    const collection = match[1];
+    if (!collection || isCoreCollection(collection)) continue;
+    markers.set(collection, {
+      collection,
+      reason: "unsupported_collection",
+      classification: "UNKNOWN",
+      evidenceRef: `unavailable-context:${collection}:unsupported_collection`,
+    });
+  }
+
+  return Array.from(markers.values());
+}
+
+function getDiagnosticSearchQuery(prompt: string): string {
+  const knownIdentifiers = [
+    "askAdminAi",
+    "joinVerifier",
+    "adminSystemPrompt",
+    "recommendationGate",
+    "jarvisDiagnosticsCallable",
+  ];
+  const foundIdentifier = knownIdentifiers.find((identifier) => prompt.includes(identifier));
+  if (foundIdentifier) return foundIdentifier;
+
+  const codeToken = prompt.match(/\b[A-Za-z_][A-Za-z0-9_]{4,}\b/u)?.[0];
+  return codeToken ?? "askAdminAi";
+}
+
+function requiresDiagnostics(prompt: string): boolean {
+  return SOURCE_DIAGNOSTIC_PATTERN.test(prompt) ||
+    FUNCTION_DIAGNOSTIC_PATTERN.test(prompt) ||
+    LOG_DIAGNOSTIC_PATTERN.test(prompt);
+}
+
+async function buildJarvisDiagnosticsContext(prompt: string): Promise<DiagnosticResult[]> {
+  if (!requiresDiagnostics(prompt)) return [];
+
+  const diagnostics: DiagnosticResult[] = [];
+
+  if (SOURCE_DIAGNOSTIC_PATTERN.test(prompt)) {
+    diagnostics.push(await runDiagnosticRequest({tool: "repo_status"}));
+    diagnostics.push(await runDiagnosticRequest({
+      tool: "repo_search",
+      params: {
+        query: getDiagnosticSearchQuery(prompt),
+        limit: 5,
+      },
+    }));
+  }
+
+  if (FUNCTION_DIAGNOSTIC_PATTERN.test(prompt)) {
+    diagnostics.push(await runDiagnosticRequest({
+      tool: "function_describe",
+      params: {functionName: "askAdminAi"},
+    }));
+  }
+
+  if (LOG_DIAGNOSTIC_PATTERN.test(prompt)) {
+    diagnostics.push(await runDiagnosticRequest({
+      tool: "function_logs",
+      params: {
+        functionName: "askAdminAi",
+        minutes: 15,
+        limit: 10,
+      },
+    }));
+  }
+
+  return diagnostics;
+}
+
+function hasUnverifiedDiagnostics(diagnostics: DiagnosticResult[]): boolean {
+  return diagnostics.some((diagnostic) => diagnostic.evidence.status !== "VERIFIED");
+}
+
+function hasFullyVerifiedDiagnostics(diagnostics: DiagnosticResult[]): boolean {
+  return (
+    diagnostics.length > 0 &&
+    diagnostics.every((diagnostic) => diagnostic.evidence.status === "VERIFIED")
+  );
+}
+
+async function requireAdmin(request: {
   auth?: {
     uid: string;
     token: Record<string, unknown>;
   };
-}): { uid: string; email: string | null } {
+}): Promise<{ uid: string; email: string | null }> {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
 
-  const role = request.auth.token.role;
+  // AUTHORITATIVE: resolve from the active users/{uid} profile. A stale
+  // admin custom claim without a matching active admin profile is denied.
+  const role = await resolveCallableRole({
+    uid: request.auth.uid,
+    token: request.auth.token as Record<string, unknown>,
+  });
 
-  if (role !== "admin" && role !== "tank") {
-    throw new HttpsError(
-      "permission-denied",
-      "Admin or Tank access required."
-    );
+  if (role === "admin" || role === "tank") {
+    return {
+      uid: request.auth.uid,
+      email:
+        typeof request.auth.token.email === "string"
+          ? request.auth.token.email
+          : null,
+    };
   }
 
-  return {
-    uid: request.auth.uid,
-    email:
-      typeof request.auth.token.email === "string"
-        ? request.auth.token.email
-        : null,
-  };
+  throw new HttpsError(
+    "permission-denied",
+    "Admin or Tank access required."
+  );
 }
 
 function getPrompt(data: unknown): string {
@@ -143,6 +262,17 @@ function getPrompt(data: unknown): string {
 
 function inferIntent(prompt: string): string {
   const lower = prompt.toLowerCase();
+
+  if (isInternalOperationsPrompt(prompt)) {
+    return "internal-operations";
+  }
+
+  if (
+    /\b(search the web|online|internet)\b/i.test(prompt) &&
+    /\b(insurance|medicare|medicaid|payer|coverage|authorization|prior auth|preauth|billing)\b/i.test(prompt)
+  ) {
+    return "insurance-web-search";
+  }
 
   if (
     (lower.includes("deal") ||
@@ -278,89 +408,6 @@ async function getRecentCollectionDocs(collectionName: string, limit: number) {
   }));
 }
 
-function safeNumber(value: unknown): number | null {
-  if (value === null || value === undefined || value === "") return null;
-  const parsed = Number(String(value).replace(/[$,% ,]/g, ""));
-  return Number.isFinite(parsed) ? parsed : null;
-}
-
-function getNestedValue(source: Record<string, unknown>, key: string): unknown {
-  if (!key.includes(".")) return source[key];
-
-  return key.split(".").reduce<unknown>((current, part) => {
-    if (!current || typeof current !== "object") return undefined;
-    return (current as Record<string, unknown>)[part];
-  }, source);
-}
-
-function getStatusValue(data: Record<string, unknown>): string {
-  const value =
-    data.status ||
-    data.hospiceStatus ||
-    data.patientStatus ||
-    data.lifecycleStatus ||
-    data.importStatus ||
-    data.parseStatus ||
-    "unknown";
-
-  return String(value || "unknown").toLowerCase().trim() || "unknown";
-}
-
-function updateNumericSummary(
-  current: NumericSummary | undefined,
-  value: number
-): NumericSummary {
-  if (!current) {
-    return { count: 1, sum: value, average: value, min: value, max: value };
-  }
-
-  const count = current.count + 1;
-  const sum = current.sum + value;
-
-  return {
-    count,
-    sum,
-    average: sum / count,
-    min: Math.min(current.min, value),
-    max: Math.max(current.max, value),
-  };
-}
-
-function summarizeDocs(
-  collectionName: string,
-  docs: Array<Record<string, unknown>>
-): CollectionSummary {
-  const statusCounts: Record<string, number> = {};
-  const numeric: Record<string, NumericSummary> = {};
-  const missingKeyCounts: Record<string, number> = {};
-
-  for (const doc of docs) {
-    const status = getStatusValue(doc);
-    statusCounts[status] = (statusCounts[status] ?? 0) + 1;
-
-    for (const field of SUMMARY_FIELDS[collectionName] ?? []) {
-      const value = safeNumber(getNestedValue(doc, field));
-      if (value === null) continue;
-      numeric[field] = updateNumericSummary(numeric[field], value);
-    }
-
-    for (const field of REQUIRED_FIELDS[collectionName] ?? []) {
-      const value = getNestedValue(doc, field);
-      if (value === null || value === undefined || value === "") {
-        missingKeyCounts[field] = (missingKeyCounts[field] ?? 0) + 1;
-      }
-    }
-  }
-
-  return {
-    collection: collectionName,
-    loaded: docs.length,
-    statusCounts,
-    numeric,
-    missingKeyCounts,
-  };
-}
-
 function redactContextDoc(data: Record<string, unknown>): Record<string, unknown> {
   const redacted: Record<string, unknown> = {};
   const allowed = [
@@ -454,37 +501,77 @@ async function getCollectionDocsWhereEquals(
   }));
 }
 
-async function buildOperationsOverview() {
-  const summaries: CollectionSummary[] = [];
-  const samples: Record<string, unknown[]> = {};
+async function getCollectionAggregateCount(collectionName: string): Promise<number | null> {
+  try {
+    const snapshot = await db.collection(collectionName).count().get();
+    return snapshot.data().count;
+  } catch {
+    return null;
+  }
+}
+
+async function buildJarvisOperationsContext(options: {
+  valueJoinDefinitions: import("../services/joinVerifier").ValueJoinDefinition[];
+  prompt: string;
+}) {
+  const results: CollectionFetchResult[] = [];
+  const samples: Record<string, Array<Record<string, unknown>>> = {};
+  const unavailableContext = getRequestedUnsupportedCollections(options.prompt);
 
   await Promise.all(
     CORE_COLLECTIONS.map(async (collectionName) => {
-      const docs = await getCollectionSample(collectionName, SUMMARY_DOC_LIMIT).catch(() => []);
-      summaries.push(summarizeDocs(collectionName, docs));
+      const [docs, aggregateCount] = await Promise.all([
+        getCollectionSample(collectionName, SUMMARY_DOC_LIMIT).catch(() => {
+          unavailableContext.push({
+            collection: collectionName,
+            reason: "sample_query_failed",
+            classification: "UNKNOWN",
+            evidenceRef: `unavailable-context:${collectionName}:sample_query_failed`,
+          });
+          return [];
+        }),
+        getCollectionAggregateCount(collectionName),
+      ]);
+      results.push({
+        collection: collectionName,
+        docs,
+        limit: SUMMARY_DOC_LIMIT,
+        aggregateCount,
+      });
       samples[collectionName] = docs.slice(0, 10).map(redactContextDoc);
     })
   );
 
-  summaries.sort((a, b) => a.collection.localeCompare(b.collection));
+  const valueJoins = options.valueJoinDefinitions.length > 0
+    ? await verifyDefaultValueJoins(db, options.valueJoinDefinitions)
+    : [];
+  const operationsContext = buildOperationsContext(
+    results,
+    REQUIRED_FIELDS,
+    [],
+    valueJoins
+  );
 
-  const totalRecordsLoaded = summaries.reduce((sum, item) => sum + item.loaded, 0);
-  const dataQualityAlerts = summaries.flatMap((summary) =>
+  const dataQualityAlerts = operationsContext.summaries.flatMap((summary) =>
     Object.entries(summary.missingKeyCounts)
       .filter(([, count]) => count > 0)
       .map(([field, count]) => ({
         collection: summary.collection,
         field,
         missing: count,
-        loaded: summary.loaded,
+        loaded: summary.count.sampledCount,
       }))
   );
 
   return {
     generatedAt: new Date().toISOString(),
-    totalRecordsLoaded,
-    summaries,
+    totalSampledRecords: operationsContext.totalSampledRecords,
+    summaries: operationsContext.summaries,
+    contradictions: operationsContext.contradictions,
+    joins: operationsContext.joins,
+    evidence: operationsContext.evidence,
     samples,
+    unavailableContext,
     dataQualityAlerts: dataQualityAlerts.slice(0, 50),
     reportingCapabilities: [
       "CSV export artifact from current operational summary",
@@ -493,6 +580,20 @@ async function buildOperationsOverview() {
       "Simple trend/forecast guidance when date fields exist in context",
       "Patient-care guardrails: administrative support only, no clinical replacement",
     ],
+  } as {
+    generatedAt: string;
+    totalSampledRecords: number;
+    summaries: import("../types/reporting").CollectionSampleSummary[];
+    contradictions: import("../types/reporting").CountContradiction[];
+    joins: Array<
+      | import("../types/reporting").JoinVerification
+      | import("../types/reporting").ValueJoinVerification
+    >;
+    evidence: import("../types/reporting").Evidence[];
+    samples: Record<string, Array<Record<string, unknown>>>;
+    unavailableContext: UnavailableContextMarker[];
+    dataQualityAlerts: Array<{ collection: string; field: string; missing: number; loaded: number }>;
+    reportingCapabilities: string[];
   };
 }
 
@@ -539,39 +640,7 @@ async function buildRetailFinancialContext() {
   };
 }
 
-function csvEscape(value: unknown): string {
-  const text = String(value ?? "");
-  if (/[",\n\r]/.test(text)) return `"${text.replace(/"/g, '""')}"`;
-  return text;
-}
-
-function buildCsvReport(context: Record<string, unknown>, intent: string): ReportArtifact | null {
-  const overview = context.operationsOverview as
-    | { summaries?: CollectionSummary[]; dataQualityAlerts?: unknown[] }
-    | undefined;
-
-  if (!overview?.summaries?.length) return null;
-
-  const rows = [
-    ["Collection", "Loaded Rows", "Statuses", "Numeric Summaries", "Missing Field Counts"],
-    ...overview.summaries.map((summary) => [
-      summary.collection,
-      summary.loaded,
-      JSON.stringify(summary.statusCounts),
-      JSON.stringify(summary.numeric),
-      JSON.stringify(summary.missingKeyCounts),
-    ]),
-  ];
-
-  return {
-    type: "csv",
-    title: "Jarvis Operations Summary",
-    fileName: `jarvis-${intent}-${new Date().toISOString().slice(0, 10)}.csv`,
-    content: rows.map((row) => row.map(csvEscape).join(",")).join("\n"),
-  };
-}
-
-async function buildAiContext(intent: string) {
+async function buildAiContext(intent: string, prompt: string) {
   const [dashboardSnap, auditLogsSnap, importJobsSnap] = await Promise.all([
     db.collection("analytics").doc("dashboard").get(),
     db.collection("auditLogs").orderBy("createdAt", "desc").limit(25).get(),
@@ -585,9 +654,9 @@ async function buildAiContext(intent: string) {
 
     return {
       id: doc.id,
-      action: data.action ?? null,
-      actorEmail: data.actorEmail ?? null,
-      severity: data.severity ?? null,
+      action: typeof data.action === "string" ? data.action : null,
+      actorEmail: typeof data.actorEmail === "string" ? data.actorEmail : null,
+      severity: typeof data.severity === "string" ? data.severity : null,
       createdAt: data.createdAt ?? null,
     };
   });
@@ -597,19 +666,44 @@ async function buildAiContext(intent: string) {
 
     return {
       id: doc.id,
-      status: data.status ?? null,
-      fileName: data.fileName ?? null,
+      status: typeof data.status === "string" ? data.status : null,
+      fileName: typeof data.fileName === "string" ? data.fileName : null,
       createdAt: data.createdAt ?? null,
-      error: data.error ?? null,
+      error: typeof data.error === "string" ? data.error : null,
     };
   });
 
+  const auditContext = buildAuditContext({
+    entries: recentAuditLogs.map((entry) => ({
+      id: entry.id,
+      action: entry.action,
+      actorEmail: entry.actorEmail,
+      severity: entry.severity,
+      createdAt: entry.createdAt,
+    })),
+    limitApplied: 25,
+  });
+
+  const operations = await buildJarvisOperationsContext({
+    valueJoinDefinitions: selectValueJoinDefinitions(prompt),
+    prompt,
+  });
+  const diagnostics = await buildJarvisDiagnosticsContext(prompt);
+
   const context: Record<string, unknown> = {
     dashboard,
-    recentAuditLogs,
+    recentAuditLogs: auditContext.recentAuditLogs,
+    auditSampleNote: auditContext.auditSampleNote,
     recentImportJobs,
-    operationsOverview: await buildOperationsOverview(),
+    operationsOverview: operations,
     retailFinancialInsights: await buildRetailFinancialContext(),
+    diagnosticsOverview: diagnostics.length > 0
+      ? {
+          contract:
+            "Jarvis may claim filenames, source lines, Git HEAD, runtime, deployed revision, Function configuration, or logs only from VERIFIED diagnostics evidence. Missing or unavailable diagnostics must be classified UNVERIFIED.",
+          results: diagnostics,
+        }
+      : null,
   };
 
   const collectionsUsed = [
@@ -621,12 +715,16 @@ async function buildAiContext(intent: string) {
   ];
 
   if (intent === "orders" || intent === "general") {
-    context.recentOrders = await getRecentCollectionDocs("orders", RECENT_DOC_LIMIT);
+    context.recentOrders = (
+      await getRecentCollectionDocs("orders", RECENT_DOC_LIMIT)
+    ).map(redactContextDoc);
     collectionsUsed.push("orders");
   }
 
   if (intent === "rentals" || intent === "general") {
-    context.recentRentals = await getRecentCollectionDocs("rentals", RECENT_DOC_LIMIT);
+    context.recentRentals = (
+      await getRecentCollectionDocs("rentals", RECENT_DOC_LIMIT)
+    ).map(redactContextDoc);
     collectionsUsed.push("rentals");
   }
 
@@ -647,18 +745,18 @@ async function buildAiContext(intent: string) {
   }
 
   if (intent === "hospice") {
-    context.recentHospicePatients = await getRecentCollectionDocs(
+    context.recentHospicePatients = (await getRecentCollectionDocs(
       "hospicePatients",
       15
-    );
+    )).map(redactContextDoc);
     collectionsUsed.push("hospicePatients");
   }
 
   if (intent === "insurance") {
-    context.recentInsuranceRecords = await getRecentCollectionDocs(
+    context.recentInsuranceRecords = (await getRecentCollectionDocs(
       "insuranceRecords",
       15
-    );
+    )).map(redactContextDoc);
     collectionsUsed.push("insuranceRecords");
   }
 
@@ -684,6 +782,20 @@ async function buildAiContext(intent: string) {
   return {
     context,
     collectionsUsed,
+    operationsEvidence: operations.evidence,
+    contradictions: operations.contradictions,
+    joins: operations.joins,
+    diagnostics,
+  } as {
+    context: Record<string, unknown>;
+    collectionsUsed: string[];
+    operationsEvidence: import("../types/reporting").Evidence[];
+    contradictions: import("../types/reporting").CountContradiction[];
+    joins: Array<
+      | import("../types/reporting").JoinVerification
+      | import("../types/reporting").ValueJoinVerification
+    >;
+    diagnostics: DiagnosticResult[];
   };
 }
 
@@ -706,89 +818,17 @@ async function logJarvisMemory(params: {
   });
 }
 
-const JARVIS_SYSTEM_PROMPT = `
-You are Jarvis, the administrative intelligence assistant for Advanced Home Medical.
-
-Personality:
-- Calm, precise, composed, and professionally dry.
-- Helpful without being overly cheerful.
-- Speak with quiet confidence and subtle wit.
-- Do not use childish slang, hype, fake excitement, or rambling.
-- Be direct, analytical, and operationally useful.
-
-Hard rules:
-- Use only the provided database context.
-- Never invent database records.
-- Never expose PHI.
-- Redact unsafe PHI.
-- If evidence is missing, say what is missing.
-- Prioritize compliance, auditability, accuracy, and system health.
-- Recommend actions, but do not claim you changed database records.
-- You are an administrative decision-support tool, not a replacement for patient care staff.
-- Do not make clinical judgments, diagnosis decisions, or treatment decisions.
-- When asked for patient-care decisions, provide operational checks and advise human review.
-
-Focus areas:
-- Imports
-- Audit activity
-- Dashboard metrics
-- System health
-- PHI leak risk
-- Orders
-- Rentals
-- Inventory
-- Discontinued product review and product lifecycle status
-- Internet search for Home Medical Equipment and Durable Medical Equipment sales, deals, clearance items, and purchasing opportunities when explicitly prompted
-- Retail financial analytics: gross margin, inventory turnover, GMROI, sales per square foot, average transaction value, profit margin, sell-through rate, CAC, conversion rate, foot traffic, in-stock percentage, net sales, returns and allowances, current ratio, quick ratio, and revenue growth
-- Growth and item-purchasing recommendations grounded in margin, turnover, stock availability, sell-through, GMROI, and order demand
-- Hospice
-- Insurance
-- API registry and integration governance
-- Operational bottlenecks
-- Exportable reports
-- Counts, sums, averages, missing-data checks, and record keeping
-- Basic forecasting from available operational history
-- Graph-ready data summaries
-- Missing-input guidance for any metric that cannot be calculated yet
-- API recommendations for growth, but always include security and key-management cautions
-
-Retail recommendation rules:
-- Use the retailFinancialInsights context first when answering retail, growth, graph, or purchasing questions.
-- If a metric is marked missing or partial, explain what source data is needed before relying on it.
-- Do not recommend buying more of an item from one metric alone; combine margin, turnover, GMROI, sell-through, in-stock status, and known order/patient demand.
-- For growth recommendations, separate proven findings from suggested data improvements.
-
-DME/HME web search rules:
-- Only search the internet when the user explicitly asks for DME/HME/home medical deals, sales, discounts, clearance, promotions, or market purchasing opportunities.
-- Prioritize reputable Home Medical Equipment and Durable Medical Equipment suppliers, manufacturer direct stores, and specialty equipment retailers.
-- Look for CPAP/sleep therapy, oxygen, mobility, bath safety, incontinence, wound care, orthotics, lift chairs, hospital beds, wheelchair, walker, and general DME/HME categories when relevant.
-- Return each finding with item/category, vendor, sale/deal/clearance evidence, price or discount when visible, URL, date checked, and a caution if eligibility, shipping, prescription, MAP pricing, or stock status needs human verification.
-- Do not invent deals or prices. If the page does not clearly show the deal, say it needs verification.
-
-Insurance web search rules:
-- Only search the internet when the user explicitly asks for insurance changes, updates, payer requirements, authorization requirements, billing requirements, coverage rules, or related insurance operations.
-- Prioritize reliable sources: CMS, Medicare, Medicaid, state Medicaid programs, payer provider bulletins, payer medical policies, payer prior authorization pages, MAC/DME MAC guidance, and official regulator pages.
-- For each finding, return source organization, topic, what changed or what requirement applies, effective date if visible, billing or authorization impact, direct URL, date checked, and what staff should verify before changing workflow.
-- Do not provide legal or clinical advice. Treat findings as operational guidance requiring human payer-policy verification.
-- Do not invent requirements, effective dates, codes, or payer rules. If the source is unclear, say it needs payer verification.
-
-Response style:
-- Start with the direct answer.
-- Then list key evidence.
-- Then list recommended next actions.
-- Keep it concise unless the question requires depth.
-- If a CSV artifact is available, mention that a downloadable report was generated.
-`;
-
 export const askAdminAi = onCall(
   {
     region: "us-central1",
     timeoutSeconds: 120,
     memory: "1GiB",
-    secrets: [OPENAI_API_KEY],
+    minInstances: 1,
+    secrets: [OPENAI_API_KEY, DIAGNOSTICS_GITHUB_TOKEN],
   },
   async (request) => {
-    const actor = requireAdmin(request);
+    await enforceCallableRateLimit(request, "ai");
+    const actor = await requireAdmin(request);
     const prompt = getPrompt(request.data);
 
     const intent = inferIntent(prompt);
@@ -811,24 +851,102 @@ export const askAdminAi = onCall(
 
     const safePrompt = redactPhi(prompt);
 
-    const { context, collectionsUsed } = await buildAiContext(intent);
+    const {
+      context,
+      collectionsUsed,
+      operationsEvidence,
+      contradictions,
+      joins,
+      diagnostics,
+    } = await buildAiContext(intent, safePrompt);
+
     const reportArtifact =
       intent === "analysis-reporting" || /export|csv|report|graph|chart|summary/i.test(safePrompt)
-        ? buildCsvReport(context, intent)
+        ? buildReportCsv(
+            (context.operationsOverview as { summaries?: CollectionSampleSummary[] })?.summaries ?? []
+          )
         : null;
 
-    const openai = new OpenAI({
-      apiKey: OPENAI_API_KEY.value(),
+    const systemPrompt = buildJarvisSystemPrompt();
+
+    const analyticsSection = buildAnalyticsContextSection({
+      summaries:
+        (context.operationsOverview as { summaries?: CollectionSampleSummary[] })
+          ?.summaries ?? [],
+      contradictions,
+      joins,
     });
 
+    const openai = createOpenAiClient(OPENAI_API_KEY.value());
     const shouldSearchWeb = isPublicWebSearchIntent(intent);
 
-    const response = await openai.responses.create({
-      model: MODEL,
-      temperature: 0.25,
-      ...(shouldSearchWeb
-        ? {
-            tools: [
+    const response = await openai.responses.create(
+      buildJarvisResponsesParams({
+        system: `${systemPrompt}\n\n${analyticsSection}`,
+        user: JSON.stringify({
+          question: safePrompt,
+          intent,
+          context,
+          webSearchInstructions: shouldSearchWeb
+            ? {
+                objective:
+                  intent === "insurance-web-search"
+                    ? "Search the live internet for reliable insurance changes, payer updates, authorization requirements, and billing requirements relevant to Home Medical Equipment and Durable Medical Equipment operations."
+                    : "Search the live internet for current Home Medical Equipment and Durable Medical Equipment sales, deals, promotions, and clearance items.",
+                preferredSearchAreas: [
+                  ...(intent === "insurance-web-search"
+                    ? [
+                        "CMS and Medicare DME coverage updates",
+                        "DME MAC billing and prior authorization guidance",
+                        "state Medicaid DME provider bulletins",
+                        "commercial payer DME medical policies",
+                        "payer prior authorization and documentation requirements",
+                        "CPAP, oxygen, mobility, hospital bed, wheelchair, and supplies billing requirements",
+                      ]
+                    : [
+                        "CPAP and sleep therapy supplies",
+                        "oxygen concentrators and oxygen accessories",
+                        "mobility aids, wheelchairs, walkers, rollators, scooters",
+                        "bath safety and transfer equipment",
+                        "hospital beds, support surfaces, lift chairs",
+                        "wound care, incontinence, braces, orthotics, general DME",
+                      ]),
+                ],
+                suggestedSourcesToCheck:
+                  intent === "insurance-web-search"
+                    ? [
+                        "CMS",
+                        "Medicare",
+                        "CGS Medicare",
+                        "Noridian Medicare",
+                        "Palmetto GBA",
+                        "state Medicaid provider bulletins",
+                        "Anthem provider medical policies",
+                        "UnitedHealthcare provider policies",
+                        "Aetna clinical policy bulletins",
+                        "Humana provider policies",
+                      ]
+                    : [
+                        "Direct Home Medical",
+                        "CPAP.com",
+                        "The CPAP Shop",
+                        "1800Wheelchair",
+                        "Rehabmart",
+                        "Vitality Medical",
+                        "Carewell",
+                        "Oxygen Concentrator Store",
+                        "Respshop",
+                        "Sleep Direct",
+                      ],
+                requiredOutput:
+                  intent === "insurance-web-search"
+                    ? "Return a concise table or bullets with source organization, topic, change or requirement, effective date if visible, billing/authorization impact, direct URL, date checked, and human verification steps."
+                    : "Return a concise table or bullets with vendor, category/item, deal evidence, price/discount if visible, direct URL, date checked, and human verification steps.",
+              }
+            : null,
+        }),
+        tools: shouldSearchWeb
+          ? [
               {
                 type: "web_search",
                 search_context_size: "low",
@@ -837,95 +955,36 @@ export const askAdminAi = onCall(
                   country: "US",
                 },
               },
-            ],
-            tool_choice: "required",
-          }
-        : {}),
-      input: [
-        {
-          role: "system",
-          content: JARVIS_SYSTEM_PROMPT,
-        },
-        {
-          role: "user",
-          content: JSON.stringify({
-            question: safePrompt,
-            intent,
-            context,
-            webSearchInstructions: shouldSearchWeb
-              ? {
-                  objective:
-                    intent === "insurance-web-search"
-                      ? "Search the live internet for reliable insurance changes, payer updates, authorization requirements, and billing requirements relevant to Home Medical Equipment and Durable Medical Equipment operations."
-                      : "Search the live internet for current Home Medical Equipment and Durable Medical Equipment sales, deals, promotions, and clearance items.",
-                  preferredSearchAreas: [
-                    ...(intent === "insurance-web-search"
-                      ? [
-                          "CMS and Medicare DME coverage updates",
-                          "DME MAC billing and prior authorization guidance",
-                          "state Medicaid DME provider bulletins",
-                          "commercial payer DME medical policies",
-                          "payer prior authorization and documentation requirements",
-                          "CPAP, oxygen, mobility, hospital bed, wheelchair, and supplies billing requirements",
-                        ]
-                      : [
-                          "CPAP and sleep therapy supplies",
-                          "oxygen concentrators and oxygen accessories",
-                          "mobility aids, wheelchairs, walkers, rollators, scooters",
-                          "bath safety and transfer equipment",
-                          "hospital beds, support surfaces, lift chairs",
-                          "wound care, incontinence, braces, orthotics, general DME",
-                        ]),
-                  ],
-                  suggestedSourcesToCheck:
-                    intent === "insurance-web-search"
-                      ? [
-                          "CMS",
-                          "Medicare",
-                          "CGS Medicare",
-                          "Noridian Medicare",
-                          "Palmetto GBA",
-                          "state Medicaid provider bulletins",
-                          "Anthem provider medical policies",
-                          "UnitedHealthcare provider policies",
-                          "Aetna clinical policy bulletins",
-                          "Humana provider policies",
-                        ]
-                      : [
-                          "Direct Home Medical",
-                          "CPAP.com",
-                          "The CPAP Shop",
-                          "1800Wheelchair",
-                          "Rehabmart",
-                          "Vitality Medical",
-                          "Carewell",
-                          "Oxygen Concentrator Store",
-                          "Respshop",
-                          "Sleep Direct",
-                        ],
-                  requiredOutput:
-                    intent === "insurance-web-search"
-                      ? "Return a concise table or bullets with source organization, topic, change or requirement, effective date if visible, billing/authorization impact, direct URL, date checked, and human verification steps."
-                      : "Return a concise table or bullets with vendor, category/item, deal evidence, price/discount if visible, direct URL, date checked, and human verification steps.",
-                }
-              : null,
-            availableArtifact: reportArtifact
-              ? {
-                  type: reportArtifact.type,
-                  fileName: reportArtifact.fileName,
-                  title: reportArtifact.title,
-                }
-              : null,
-          }),
-        },
-      ],
-    });
+            ]
+          : undefined,
+        tool_choice: shouldSearchWeb ? "required" : undefined,
+      })
+    );
 
-    const rawAnswer = response.output_text?.trim() || "No response generated.";
+    const rawAnswer = (response as { output_text?: string }).output_text?.trim() || "No response generated.";
+
+    const gateResult = applyRecommendationGate({
+      answer: rawAnswer,
+      summaries: (context.operationsOverview as { summaries?: CollectionSampleSummary[] })?.summaries ?? [],
+      contradictions,
+      joins,
+      evidence: operationsEvidence,
+    });
+    const gatedAnswer = gateResult.gatedAnswer;
+
+    const claimCheck = evaluateClaimLanguage(gatedAnswer, {
+      hasAggregateEvidence: operationsEvidence.some((e) => e.kind === "aggregate_count"),
+    });
+    const operationalClaimEvidence = isInternalOperationsPrompt(safePrompt)
+      ? operationsEvidence
+      : [];
+    const suppressGenericAccuracyNote =
+      hasFullyVerifiedDiagnostics(diagnostics) &&
+      operationalClaimEvidence.length === 0;
 
     const responsePhiFindings = isPublicWebSearchIntent(intent)
-      ? filterPublicWebResponsePhiFindings(scanTextForPhi(rawAnswer, "response"))
-      : scanTextForPhi(rawAnswer, "response");
+      ? filterPublicWebResponsePhiFindings(scanTextForPhi(gatedAnswer, "response"))
+      : scanTextForPhi(gatedAnswer, "response");
     const responsePhiAlertId = await createPhiAlert(db, {
       actorUid: actor.uid,
       actorEmail: actor.email,
@@ -941,31 +1000,57 @@ export const askAdminAi = onCall(
       ],
     });
 
-    const answer =
+    const answerBase =
       responsePhiFindings.length > 0
         ? `${redactPhi(
-            rawAnswer
+            gatedAnswer
           )}\n\nPHI Sentinel: Potential PHI was detected in the generated response and redacted. An alert was created for review.`
-        : rawAnswer;
+        : claimCheck.allowed || suppressGenericAccuracyNote
+          ? gatedAnswer
+          : `${gatedAnswer}\n\n[Jarvis accuracy note: some absolute language was downgraded because the evidence does not support it. ${claimCheck.suggestions.join(" / ")}.]`;
+
+    const answer = hasUnverifiedDiagnostics(diagnostics)
+      ? `${answerBase}\n\nDiagnostics evidence note: one or more requested repository/deployment/log diagnostics could not be VERIFIED. Treat related claims as UNVERIFIED.`
+      : answerBase;
 
     const phiAlertIds = [promptPhiAlertId, responsePhiAlertId].filter(
       (id): id is string => Boolean(id)
     );
 
-    await db.collection("aiAuditLogs").add({
-      actorUid: actor.uid,
-      actorEmail: actor.email,
-      prompt: safePrompt,
-      intent,
-      model: MODEL,
-      responseLength: answer.length,
-      collectionsUsed,
-      promptPhiFindingCount: promptPhiFindings.length,
-      responsePhiFindingCount: responsePhiFindings.length,
-      phiAlertIds,
-      reportArtifactCreated: Boolean(reportArtifact),
-      createdAt: FieldValue.serverTimestamp(),
-    });
+    const countMethods = Object.fromEntries(
+      (context.operationsOverview as { summaries?: CollectionSampleSummary[] })
+        ?.summaries?.map((s) => [s.collection, s.count.method]) ?? []
+    );
+    const joinEvidenceRefs = joins
+      .map((join) => ("evidenceRef" in join ? join.evidenceRef : null))
+      .filter((ref): ref is string => Boolean(ref));
+
+    const auditPayload = buildAiAuditLogPayload(
+      {
+        actorUid: actor.uid,
+        actorEmail: actor.email,
+        prompt: safePrompt,
+        intent,
+        model: MODEL,
+        responseLength: answer.length,
+        collectionsUsed,
+        promptPhiFindingCount: promptPhiFindings.length,
+        responsePhiFindingCount: responsePhiFindings.length,
+        phiAlertIds,
+        reportArtifactCreated: Boolean(reportArtifact),
+        countMethods,
+        evidenceRefs: [
+          ...operationsEvidence.map((e) => e.reference),
+          ...joinEvidenceRefs,
+        ],
+        joinEvidenceRefs,
+        recommendationGatedCount: gateResult.recommendations.length,
+        recommendationBlockedCount: gateResult.recommendations.filter((r) => !r.allowed).length,
+      },
+      FieldValue.serverTimestamp()
+    );
+
+    await db.collection("aiAuditLogs").add(auditPayload);
 
     await logJarvisMemory({
       actorUid: actor.uid,

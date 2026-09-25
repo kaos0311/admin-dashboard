@@ -25,7 +25,7 @@ export function ProductTableRow({
   const productName = product.name || "Unnamed product";
 
   const productMeta =
-    [product.brand, product.model, product.category].filter(Boolean).join(" â€¢ ") ||
+    [product.brand, product.model, product.category].filter(Boolean).join(" • ") ||
     "No category";
 
   const formattedPrice =
@@ -41,7 +41,7 @@ export function ProductTableRow({
           checked={selected}
           onChange={onSelect}
           aria-label={`Select ${productName}`}
-          className="h-4 w-4 accent-sky-400"
+          className="h-4 w-4"
         />
       </td>
 
@@ -126,6 +126,3 @@ function TableTextCell({
     </td>
   );
 }
-
-
-

@@ -1,26 +1,26 @@
 ﻿export const tables = {
   wrapper:
-    "min-w-0 overflow-hidden rounded-2xl border border-[#3a3a3a] bg-[#1c1c1c] shadow-lg shadow-black/25",
+    "min-w-0 overflow-hidden rounded-2xl border border-[#3a3a3a] bg-[#1c1c1c] shadow-xl shadow-black/15",
   shell:
-    "min-w-0 overflow-hidden rounded-2xl border border-[#3a3a3a] bg-[#1c1c1c] shadow-lg shadow-black/25",
+    "min-w-0 overflow-hidden rounded-2xl border border-[#3a3a3a] bg-[#1c1c1c] shadow-xl shadow-black/15",
   toolbar:
     "flex flex-col gap-4 border-b border-[#3a3a3a] bg-[#1a1a1a] p-4 sm:flex-row sm:items-center sm:justify-between",
   toolbarActions:
     "flex flex-wrap items-center gap-2",
   filterGrid:
-    "grid gap-3 border-b border-[#3a3a3a] bg-[#181818] p-4 sm:grid-cols-2",
+    "grid gap-3 border-b border-[#3a3a3a] bg-[#161616] p-4 sm:grid-cols-2",
   field:
     "min-w-0 space-y-1.5",
   label:
     "text-xs font-semibold uppercase tracking-[0.16em] text-[#888888]",
   select:
-    "w-full rounded-xl border border-[#3a3a3a] bg-[#181818] px-3 py-2 text-sm text-[#ececec] outline-none transition focus:border-[#7a9a5e]/40 focus:ring-2 focus:ring-[#7a9a5e]/20",
+    "w-full rounded-xl border border-[#3a3a3a] bg-[#1a1a1a] px-3 py-2 text-sm text-[#e6e6e6] outline-none transition focus:border-[#7a9a5e]/40 focus:ring-2 focus:ring-[#7a9a5e]/20",
   searchWrap:
     "relative",
   searchIcon:
     "pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#606060]",
   searchInput:
-    "w-full rounded-xl border border-[#3a3a3a] bg-[#181818] py-2 pl-9 pr-3 text-sm text-[#ececec] outline-none transition placeholder:text-[#606060] focus:border-[#7a9a5e]/40 focus:ring-2 focus:ring-[#7a9a5e]/20",
+    "w-full rounded-xl border border-[#3a3a3a] bg-[#1a1a1a] py-2 pl-9 pr-3 text-sm text-[#e6e6e6] outline-none transition placeholder:text-[#606060] focus:border-[#7a9a5e]/40 focus:ring-2 focus:ring-[#7a9a5e]/20",
   scroll:
     "min-w-0 overflow-x-auto",
   table:
@@ -32,13 +32,13 @@
   headRow:
     "border-b border-[#2a2a2a]",
   headCell:
-    "px-5 py-4 text-left font-semibold sm:px-6",
+    "px-5 py-4 text-left font-semibold uppercase tracking-[0.12em] text-[#b8b8b8] sm:px-6",
   headCellRight:
-    "px-5 py-4 text-right font-semibold sm:px-6",
+    "px-5 py-4 text-right font-semibold uppercase tracking-[0.12em] text-[#b8b8b8] sm:px-6",
   headerCell:
-    "px-5 py-4 text-left font-semibold sm:px-6",
+    "px-5 py-4 text-left font-semibold uppercase tracking-[0.12em] text-[#b8b8b8] sm:px-6",
   headerCellRight:
-    "px-5 py-4 text-right font-semibold sm:px-6",
+    "px-5 py-4 text-right font-semibold uppercase tracking-[0.12em] text-[#b8b8b8] sm:px-6",
   body:
     "divide-y divide-[#2a2a2a]",
   row:
@@ -48,25 +48,31 @@
   cell:
     "px-5 py-4 align-top leading-6 text-[#b8b8b8] sm:px-6",
   cellStrong:
-    "px-5 py-4 align-top font-semibold leading-6 text-[#ececec] sm:px-6",
+    "px-5 py-4 align-top font-semibold leading-6 text-[#e6e6e6] sm:px-6",
   cellMuted:
     "px-5 py-4 align-top leading-6 text-[#606060] sm:px-6",
   cellRight:
     "px-5 py-4 text-right align-top leading-6 text-[#b8b8b8] sm:px-6",
+  stickyHead:
+    "sticky top-0 z-10 bg-[#222222] shadow-sm",
+  stickyFooter:
+    "sticky bottom-0 z-10 bg-[#222222] shadow-sm",
   empty:
-    "min-w-0 rounded-xl border border-[#3a3a3a] bg-[#181818] p-6 text-center text-sm text-[#888888]",
+    "min-w-0 rounded-xl border border-[#3a3a3a] bg-[#161616] p-6 text-center text-sm text-[#888888]",
   loadingState:
-    "rounded-xl border border-[#3a3a3a] bg-[#181818] p-6 text-center text-sm text-[#888888]",
+    "rounded-xl border border-[#3a3a3a] bg-[#161616] p-6 text-center text-sm text-[#888888]",
   emptyInline:
-    "rounded-xl border border-[#3a3a3a] bg-[#181818] p-6 text-center text-sm text-[#888888]",
+    "rounded-xl border border-[#3a3a3a] bg-[#161616] p-6 text-center text-sm text-[#888888]",
   badge:
-    "inline-flex items-center rounded-full border border-[#3a3a3a] bg-[#222222] px-3 py-1.5 text-xs font-semibold leading-5 text-[#b8b8b8]",
+    "inline-flex items-center rounded-full border border-[#3a3a3a] bg-[#1c1c1c] px-3 py-1.5 text-xs font-semibold leading-5 text-[#b8b8b8]",
   actionIcon:
-    "rounded-xl border border-[#3a3a3a] bg-[#222222] p-2 text-[#b8b8b8] transition hover:bg-[#2a2a2a] focus:outline-none focus:ring-2 focus:ring-[#7a9a5e]/30",
+    "rounded-xl border border-[#3a3a3a] bg-[#1c1c1c] p-2 text-[#b8b8b8] transition hover:bg-[#242424] focus:outline-none focus:ring-2 focus:ring-[#7a9a5e]/30",
   actionIconDanger:
-    "rounded-xl border border-[#b84a4a]/25 bg-[#8a2a2a]/30 p-2 text-[#d47a7a] transition hover:bg-[#8a2a2a]/40 focus:outline-none focus:ring-2 focus:ring-[#b84a4a]/30",
+    "rounded-xl border border-[#b84a4a]/25 bg-[#3a1a1a] p-2 text-[#d47a7a] transition hover:bg-[#4a1e1e] focus:outline-none focus:ring-2 focus:ring-[#b84a4a]/30",
   checkboxButton:
     "inline-flex items-center justify-center rounded-lg focus:outline-none focus:ring-2 focus:ring-[#7a9a5e]/30",
   checkboxBox:
-    "flex h-5 w-5 items-center justify-center rounded-md border border-[#3a3a3a] bg-[#181818] text-[#9aba7e]",
-};
+    "flex h-5 w-5 items-center justify-center rounded-md border border-[#3a3a3a] bg-[#1a1a1a] text-[#9aba7e]",
+} as const;
+
+export type TableKey = keyof typeof tables;

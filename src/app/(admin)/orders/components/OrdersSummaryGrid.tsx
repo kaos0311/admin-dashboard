@@ -2,7 +2,7 @@
 
 import { Activity, Archive, Ban, CheckCircle2, Clock } from "lucide-react";
 
-import { colors, metricActionButtonClass, tiles, typography } from "@/theme";
+import { metricActionButtonClass, surfaces, tiles, typography } from "@/theme";
 
 import type { FilterTab } from "../lib/orderTypes";
 
@@ -69,7 +69,7 @@ export function OrdersSummaryGrid({
             key={card.label}
             type="button"
             onClick={() => onSelectStatus?.(card.status)}
-            className={`${tiles.base} ${tiles.compact} ${tiles.hover} min-h-[10.75rem] min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a9a5e]/40`}
+            className={`${tiles.base} ${tiles.compact} ${tiles.hover} min-h-[10.75rem] min-w-0 text-left ${surfaces.focus}`}
             aria-label={`Open ${card.label.toLowerCase()} orders`}
           >
             <div className="flex min-w-0 items-center justify-between gap-3">
@@ -78,7 +78,7 @@ export function OrdersSummaryGrid({
                 <p className={["mt-2", typography.metricCompact].join(" ")}>{card.value.toLocaleString()}</p>
               </div>
 
-              <div className={["flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl", colors.neutral].join(" ")}>
+              <div className={["flex h-11 w-11 shrink-0 items-center justify-center", tiles.icon].join(" ")}>
                 <Icon className="h-5 w-5" aria-hidden={true} />
               </div>
             </div>

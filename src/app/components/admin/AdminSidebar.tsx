@@ -4,6 +4,7 @@ import { type ComponentType, useMemo } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { navigation, typography } from "@/theme";
+import type { UserRole } from "@/lib/permissions/roles";
 import {
   BookOpen,
   Boxes,
@@ -24,7 +25,6 @@ import {
   X,
 } from "lucide-react";
 
-type UserRole = "admin" | "staff" | "tank";
 type NavSection = "core" | "reports" | "system";
 
 type NavItem = {

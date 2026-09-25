@@ -2,24 +2,12 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { onAuthStateChanged } from "firebase/auth";
-import {
-  collection,
-  type DocumentData,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  type QueryDocumentSnapshot,
-  startAfter,
-  where,
-} from "firebase/firestore";
 import toast from "react-hot-toast";
 
-import { auth, db } from "@/lib/firebase";
-import { getImportRetentionCutoff } from "@/lib/importRetention";
+import { auth } from "@/lib/firebase";
+import { OrderRepository } from "@/repositories/firestore/order.repository";
 
 import { ORDERS_PAGE_SIZE } from "../lib/orderConstants";
-import { normalizeOrder } from "../lib/orderNormalize";
 import { isHospiceText } from "../lib/orderValidation";
 import type { FilterTab, OrderRow, OrderStatus } from "../lib/orderTypes";
 
@@ -31,8 +19,7 @@ export function useOrders() {
   const [isAuthed, setIsAuthed] = useState(false);
   const [tab, setTab] = useState<FilterTab>("processing");
   const [hasMore, setHasMore] = useState(false);
-  const [lastCursor, setLastCursor] =
-    useState<QueryDocumentSnapshot<DocumentData> | null>(null);
+  const [lastCursor, setLastCursor] = useState<unknown>(null);
 
   useEffect(() => {
     const unsubscribeAuth = onAuthStateChanged(auth, (user) => {
@@ -49,55 +36,6 @@ export function useOrders() {
     return () => unsubscribeAuth();
   }, []);
 
-  const buildOrdersQuery = useCallback(
-    (
-      currentTab: FilterTab,
-      cursor?: QueryDocumentSnapshot<DocumentData> | null
-    ) => {
-      const baseCollection = collection(db, "orders");
-      const importCutoff = getImportRetentionCutoff();
-
-      if (currentTab === "all") {
-        return cursor
-          ? query(
-              baseCollection,
-              where("isHospice", "==", false),
-              where("createdAt", ">=", importCutoff),
-              orderBy("createdAt", "desc"),
-              startAfter(cursor),
-              limit(ORDERS_PAGE_SIZE)
-            )
-          : query(
-              baseCollection,
-              where("isHospice", "==", false),
-              where("createdAt", ">=", importCutoff),
-              orderBy("createdAt", "desc"),
-              limit(ORDERS_PAGE_SIZE)
-            );
-      }
-
-      return cursor
-        ? query(
-            baseCollection,
-            where("status", "==", currentTab),
-            where("isHospice", "==", false),
-            where("createdAt", ">=", importCutoff),
-            orderBy("createdAt", "desc"),
-            startAfter(cursor),
-            limit(ORDERS_PAGE_SIZE)
-          )
-        : query(
-            baseCollection,
-            where("status", "==", currentTab),
-            where("isHospice", "==", false),
-            where("createdAt", ">=", importCutoff),
-            orderBy("createdAt", "desc"),
-            limit(ORDERS_PAGE_SIZE)
-          );
-    },
-    []
-  );
-
   const loadOrders = useCallback(
     async (mode: "initial" | "refresh" | "more" = "initial") => {
       if (!isAuthed) return;
@@ -107,21 +45,16 @@ export function useOrders() {
         if (mode === "refresh") setRefreshing(true);
         if (mode === "more") setLoadingMore(true);
 
-        const cursor = mode === "more" ? lastCursor : null;
-        const ordersQuery = buildOrdersQuery(tab, cursor);
-        const snapshot = await getDocs(ordersQuery);
+        const result = await OrderRepository.getOrdersPage({
+          tab,
+          cursor: mode === "more" ? (lastCursor as any) : null,
+          pageSize: ORDERS_PAGE_SIZE,
+        });
 
-        const next = snapshot.docs
-          .map((docSnap) =>
-            normalizeOrder(
-              docSnap.id,
-              docSnap.data() as Record<string, unknown>
-            )
-          )
-          .filter(
-            (order) =>
-              !order.isHospice && !isHospiceText(order.insurance || "")
-          );
+        const next = result.orders.filter(
+          (order) =>
+            !order.isHospice && !isHospiceText(order.insurance || ""),
+        );
 
         setOrders((prev) => {
           if (mode !== "more") return next;
@@ -132,19 +65,15 @@ export function useOrders() {
           return [...prev, ...uniqueNext];
         });
 
-        setHasMore(snapshot.docs.length === ORDERS_PAGE_SIZE);
-        setLastCursor(
-          snapshot.docs.length
-            ? snapshot.docs[snapshot.docs.length - 1]
-            : null
-        );
+        setHasMore(result.hasMore);
+        setLastCursor(result.nextCursor);
       } catch (error: unknown) {
         console.error("LOAD ORDERS ERROR:", error);
 
         if (mode !== "more") setOrders([]);
 
         toast.error(
-          error instanceof Error ? error.message : "Failed to load orders."
+          error instanceof Error ? error.message : "Failed to load orders.",
         );
       } finally {
         setLoading(false);
@@ -152,7 +81,7 @@ export function useOrders() {
         setLoadingMore(false);
       }
     },
-    [buildOrdersQuery, isAuthed, lastCursor, tab]
+    [isAuthed, lastCursor, tab],
   );
 
   useEffect(() => {
@@ -230,5 +159,3 @@ export function useOrders() {
     isAuthed,
   };
 }
-
-

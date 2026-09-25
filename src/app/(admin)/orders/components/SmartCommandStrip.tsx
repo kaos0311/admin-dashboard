@@ -89,7 +89,7 @@ function SmartQueueButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-2xl px-4 py-3 text-left shadow-inner shadow-black/20 backdrop-blur-xl transition ${hasWork ? badges.info : badges.neutral}`}
+      className={`rounded-xl px-4 py-3 text-left ${hasWork ? badges.info : badges.neutral}`}
     >
       <div className={typography.caption}>{label}</div>
       <div className={`${typography.metricCompact} mt-1`}>

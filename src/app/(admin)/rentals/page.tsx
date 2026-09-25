@@ -6,27 +6,18 @@ import Link from "next/link";
 import {
   AlertTriangle,
   CalendarClock,
+  Loader2,
   PackageCheck,
+  RefreshCcw,
   ShieldCheck,
   Stethoscope,
   Wrench,
 } from "lucide-react";
 
-import {
-  addDoc,
-  collection,
-  doc,
-  getDocs,
-  limit,
-  query,
-  serverTimestamp,
-  updateDoc,
-  where,
-} from "firebase/firestore";
-
-import { auth, db } from "@/lib/firebase";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
-import { alerts, badges, buttons, colors, glass, spacing, tables, typography } from "@/theme";
+import { alerts, badges, buttons, colors, forms, glass, spacing, tables, typography } from "@/theme";
+
+import { PAR_SYNC_WINDOW_DAYS, syncRentalParsToPatientRecords } from "@/services/rentals/rental-par.service";
 
 import { useRentalProducts } from "./hooks/useRentalProducts";
 import { useRentalStats } from "./hooks/useRentalStats";
@@ -47,104 +38,8 @@ import { formatCurrency, formatDate } from "./utils/formatters";
 import {
   isRentalOverdue,
   isRentalParAttentionRecord,
-  isRentalParExpired,
   sortRentalParRecords,
 } from "./utils/calculations";
-
-const PAR_SYNC_WINDOW_DAYS = 30;
-
-function rentalPatientKey(record: RentalRecord): string {
-  return record.patientId || record.patientName || "";
-}
-
-function rentalParSyncKey(record: RentalRecord): string {
-  return [record.id, record.parNumber, record.parExpiration].join("|");
-}
-
-function rentalParNumber(record: unknown): string {
-  if (typeof record === "string") return record.trim();
-  if (typeof record === "number" && Number.isFinite(record)) return String(record);
-  return "";
-}
-
-function buildRentalParAuthorizationPayload(record: RentalRecord) {
-  return {
-    patientKey: rentalPatientKey(record),
-    patientId: record.patientId,
-    patientName: record.patientName,
-    parNumber: record.parNumber,
-    parStatus: isRentalParExpired(record) ? "expired" : "expiring",
-    parExpiration: record.parExpiration,
-    parInitialDate: record.checkedOutDate,
-    insurance: record.insuranceName || record.payor,
-    insuranceStatus: record.payor ? "active" : "",
-    salesOrderId: record.salesOrderId,
-    salesOrderStatus: "rental",
-    itemId: record.itemId,
-    itemName: record.productName,
-    quantity: record.quantity,
-    procedureCode: record.procCode,
-    modifiers: record.modifiers,
-    branchOffice: record.location,
-    actualDeliveryDate: record.checkedOutDate,
-    nextBillingDate: record.nextBillingDate,
-    orderingDoctor: record.orderingDoctor,
-    sourceReport: "rentals",
-    sourceRentalId: record.id,
-    rentalStatus: record.status,
-    rentalMonthlyRate: record.monthlyRate,
-    rentalCharge: record.extCharge || record.charge,
-    rentalAllow: record.extAllow || record.allow,
-    updatedAt: serverTimestamp(),
-    updatedBy: auth.currentUser?.email ?? null,
-  };
-}
-
-async function syncRentalParsToPatientRecords(
-  recordsToSync: RentalRecord[],
-  syncedKeys: Set<string>
-): Promise<number> {
-  let synced = 0;
-
-  for (const record of recordsToSync) {
-    const key = rentalParSyncKey(record);
-    if (syncedKeys.has(key)) continue;
-
-    const patientKey = rentalPatientKey(record);
-    if (!patientKey || !record.parNumber || !record.parExpiration) {
-      syncedKeys.add(key);
-      continue;
-    }
-
-    const existing = await getDocs(
-      query(
-        collection(db, "patientAuthorizations"),
-        where("patientKey", "==", patientKey),
-        limit(200)
-      )
-    );
-    const existingDoc = existing.docs.find((docSnap) =>
-      rentalParNumber(docSnap.data().parNumber) === record.parNumber
-    );
-
-    const payload = buildRentalParAuthorizationPayload(record);
-
-    if (existingDoc) {
-      await updateDoc(doc(db, "patientAuthorizations", existingDoc.id), payload);
-    } else {
-      await addDoc(collection(db, "patientAuthorizations"), {
-        ...payload,
-        createdAt: serverTimestamp(),
-      });
-    }
-
-    syncedKeys.add(key);
-    synced += 1;
-  }
-
-  return synced;
-}
-
 
 export default function RentalsPage() {
   const {
@@ -157,6 +52,7 @@ export default function RentalsPage() {
     saving,
     saveRental,
     editRental,
+    exchangeRental,
     resetForm,
   } = useRentals();
 
@@ -180,6 +76,16 @@ export default function RentalsPage() {
     useState("");
   const [parSyncMessage, setParSyncMessage] =
     useState("");
+  const [exchangeRecord, setExchangeRecord] =
+    useState<RentalRecord | null>(null);
+  const [exchangeReplacementId, setExchangeReplacementId] =
+    useState("");
+  const [exchangeReplacementSerial, setExchangeReplacementSerial] =
+    useState("");
+  const [exchangeReason, setExchangeReason] =
+    useState("");
+  const [exchangeSaving, setExchangeSaving] =
+    useState(false);
   const syncedParKeysRef = useRef(new Set<string>());
 
   useEffect(() => {
@@ -269,6 +175,40 @@ export default function RentalsPage() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
+  function startExchange(record: RentalRecord) {
+    setExchangeRecord(record);
+    setExchangeReplacementId("");
+    setExchangeReplacementSerial("");
+    setExchangeReason("");
+    setError("");
+  }
+
+  async function submitExchange() {
+    if (!exchangeRecord) return;
+
+    const confirmed = window.confirm(
+      `Exchange ${exchangeRecord.productName || "this rental"} for replacement inventory ${exchangeReplacementId.trim()}?`
+    );
+    if (!confirmed) return;
+
+    setExchangeSaving(true);
+    setError("");
+
+    try {
+      await exchangeRental({
+        record: exchangeRecord,
+        replacementInventoryItemId: exchangeReplacementId,
+        replacementSerialNumber: exchangeReplacementSerial,
+        reason: exchangeReason,
+      });
+      setExchangeRecord(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "Unable to exchange rental.");
+    } finally {
+      setExchangeSaving(false);
+    }
+  }
+
   return (
     <main
       className={`${glass.page} ${colors.app} relative min-h-screen overflow-x-hidden`}
@@ -302,12 +242,10 @@ export default function RentalsPage() {
                   Rentals Command Center
                 </h1>
 
-                <p className={`mt-3 max-w-3xl ${typography.body}`}>
-                  Operational rental tracking for active equipment,
-                  returns, patient-linked rental records, product
-                  availability, billing visibility, and overdue rental
-                  oversight. Because rented equipment has a funny habit
-                  of wandering off like it joined witness protection.
+                <p className={`mt-1 max-w-2xl ${typography.bodyMuted}`}>
+                  Operational rental tracking for active equipment, returns,
+                  patient-linked records, product availability, billing
+                  visibility, and overdue oversight.
                 </p>
               </div>
             </div>
@@ -394,11 +332,27 @@ export default function RentalsPage() {
             parSyncMessage={parSyncMessage}
             loading={loading}
             onStartRepair={startRepairRecord}
+            onStartExchange={startExchange}
             onEdit={editRental}
             onParFocus={setParFocus}
             onClearParFocus={() => setParFocus("")}
           />
         </section>
+
+        {exchangeRecord ? (
+          <ExchangeRentalModal
+            record={exchangeRecord}
+            replacementInventoryItemId={exchangeReplacementId}
+            setReplacementInventoryItemId={setExchangeReplacementId}
+            replacementSerialNumber={exchangeReplacementSerial}
+            setReplacementSerialNumber={setExchangeReplacementSerial}
+            reason={exchangeReason}
+            setReason={setExchangeReason}
+            saving={exchangeSaving}
+            onCancel={() => setExchangeRecord(null)}
+            onSubmit={submitExchange}
+          />
+        ) : null}
       </div>
     </main>
   );
@@ -415,6 +369,7 @@ function RentalCallableReport({
   onEdit,
   onParFocus,
   onClearParFocus,
+  onStartExchange,
 }: {
   report: RentalReportKey;
   records: RentalRecord[];
@@ -426,6 +381,7 @@ function RentalCallableReport({
   onEdit: (record: RentalRecord) => void;
   onParFocus: (value: string) => void;
   onClearParFocus: () => void;
+  onStartExchange: (record: RentalRecord) => void;
 }) {
   const selectedEquipmentRows = selectedEquipment
     ? records.filter((record) => {
@@ -467,6 +423,7 @@ function RentalCallableReport({
         rows={selectedEquipmentRows}
         empty="No patients found for this equipment."
         onStartRepair={onStartRepair}
+        onStartExchange={onStartExchange}
         onEdit={onEdit}
       />
     );
@@ -481,6 +438,7 @@ function RentalCallableReport({
         rows={overdueRows}
         empty="No overdue rentals found."
         onStartRepair={onStartRepair}
+        onStartExchange={onStartExchange}
         onEdit={onEdit}
       />
     );
@@ -495,6 +453,7 @@ function RentalCallableReport({
         rows={maintenanceRows}
         empty="No maintenance records yet."
         onStartRepair={onStartRepair}
+        onStartExchange={onStartExchange}
         onEdit={onEdit}
         action={
           <button
@@ -529,6 +488,7 @@ function RentalCallableReport({
           ) : null
         }
         onStartRepair={onStartRepair}
+        onStartExchange={onStartExchange}
         onEdit={onEdit}
         mode="pars"
         parFocus={parFocus}
@@ -563,6 +523,7 @@ function RentalCallableReport({
       rows={rows}
       empty="No rows found for this report."
       onStartRepair={onStartRepair}
+      onStartExchange={onStartExchange}
       onEdit={onEdit}
     />
   );
@@ -580,6 +541,7 @@ function ReportTable({
   parSyncMessage,
   onParFocus,
   onStartRepair,
+  onStartExchange,
   onEdit,
 }: {
   title: string;
@@ -593,6 +555,7 @@ function ReportTable({
   parSyncMessage?: string;
   onParFocus?: (value: string) => void;
   onStartRepair: (record: RentalRecord) => void;
+  onStartExchange: (record: RentalRecord) => void;
   onEdit: (record: RentalRecord) => void;
 }) {
   return (
@@ -612,7 +575,7 @@ function ReportTable({
       </div>
 
       {mode === "pars" && parSyncMessage ? (
-        <div className={`${glass.inset} mb-4 text-sm text-cyan-100`}>
+        <div className={`${glass.inset} mb-4 text-sm ${colors.textInfo}`}>
           {parSyncMessage}
         </div>
       ) : null}
@@ -680,7 +643,7 @@ function ReportTable({
                           {record.patientId ? (
                             <Link
                               href={`/reports/patients/${encodeURIComponent(record.patientId)}?tab=insurance`}
-                              className={`text-sm font-semibold ${colors.textSecondary} hover:${colors.textPrimary}`}
+                              className={`text-sm font-semibold ${colors.textSecondary} hover:text-[#e6e6e6]`}
                             >
                               {record.parNumber}
                             </Link>
@@ -719,6 +682,16 @@ function ReportTable({
                         >
                           Repair
                         </button>
+                        {record.status === "checked_out" || record.status === "overdue" ? (
+                          <button
+                            type="button"
+                            className={buttons.compactPrimary}
+                            onClick={() => onStartExchange(record)}
+                          >
+                            <RefreshCcw className="h-3.5 w-3.5" />
+                            Exchange
+                          </button>
+                        ) : null}
                       </div>
                     </td>
                   </tr>
@@ -732,6 +705,91 @@ function ReportTable({
   );
 }
 
+function ExchangeRentalModal({
+  record,
+  replacementInventoryItemId,
+  setReplacementInventoryItemId,
+  replacementSerialNumber,
+  setReplacementSerialNumber,
+  reason,
+  setReason,
+  saving,
+  onCancel,
+  onSubmit,
+}: {
+  record: RentalRecord;
+  replacementInventoryItemId: string;
+  setReplacementInventoryItemId: (value: string) => void;
+  replacementSerialNumber: string;
+  setReplacementSerialNumber: (value: string) => void;
+  reason: string;
+  setReason: (value: string) => void;
+  saving: boolean;
+  onCancel: () => void;
+  onSubmit: () => Promise<void>;
+}) {
+  const canSubmit = Boolean(replacementInventoryItemId.trim() && reason.trim()) && !saving;
 
+  return (
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="exchange-modal-title"
+      className={`fixed inset-0 z-50 flex items-center justify-center ${colors.overlay} p-4`}
+    >
+      <div className={`${glass.panelPadded} w-full max-w-2xl`}>
+        <div className="flex items-start justify-between gap-4">
+          <div>
+             <h2 id="exchange-modal-title" className={typography.sectionTitle}>Exchange Rental Asset</h2>
+            <p className={`${typography.bodyMuted} mt-2`}>
+              Current: {record.productName || "Unnamed rental"} · {record.itemId || "No inventory ID"} · SN {record.serialNumber || "—"}
+            </p>
+          </div>
+          <button type="button" className={buttons.compactSecondary} onClick={onCancel} disabled={saving}>
+            Close
+          </button>
+        </div>
 
+        <div className="mt-5 grid gap-4 sm:grid-cols-2">
+            <label className="block">
+            <span className={typography.smallMuted}>Replacement inventory ID</span>
+            <input
+              value={replacementInventoryItemId}
+              onChange={(event) => setReplacementInventoryItemId(event.target.value)}
+              className={`mt-2 ${forms.input}`}
+              placeholder="inventory/{id}"
+            />
+          </label>
+          <label className="block">
+            <span className={typography.smallMuted}>Replacement serial</span>
+            <input
+              value={replacementSerialNumber}
+              onChange={(event) => setReplacementSerialNumber(event.target.value)}
+              className={`mt-2 ${forms.input}`}
+              placeholder="Optional serial"
+            />
+          </label>
+          <label className="block sm:col-span-2">
+            <span className={typography.smallMuted}>Reason</span>
+            <textarea
+              value={reason}
+              onChange={(event) => setReason(event.target.value)}
+              className={`mt-2 min-h-24 ${forms.textareaCompact}`}
+              placeholder="Required reason for exchange"
+            />
+          </label>
+        </div>
 
+        <div className="mt-5 flex justify-end gap-3">
+          <button type="button" className={buttons.secondary} onClick={onCancel} disabled={saving}>
+            Cancel
+          </button>
+          <button type="button" className={buttons.primary} onClick={onSubmit} disabled={!canSubmit}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
+            Exchange
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}

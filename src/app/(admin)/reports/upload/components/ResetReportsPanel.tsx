@@ -9,18 +9,27 @@ import {
   Loader2,
   RefreshCw,
   RotateCcw,
+  Trash2,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 import { db } from "@/lib/firebase";
 import { alerts, badges, buttons, forms, glass, typography } from "@/theme";
 import { ProgressStyles } from "./ProgressStyles";
 
 const CONFIRM_TEXT = "RESET REPORTS";
+const RESET_DB_CONFIRM = "RESET DATABASE";
 
 type SoftResetReportsResult = {
   ok?: boolean;
   deletedCounts?: Record<string, number>;
   message?: string;
+};
+
+type ResetOperationalDatabaseResult = {
+  ok?: boolean;
+  clearedCollections?: string[];
+  deletedCounts?: Record<string, number>;
 };
 
 type ResetProgress = {
@@ -54,17 +63,26 @@ export function ResetReportsPanel({
   canResetReports,
 }: ResetReportsPanelProps) {
   const [confirmation, setConfirmation] = useState("");
+  const [resetDbConfirmation, setResetDbConfirmation] = useState("");
   const [runningOperation, setRunningOperation] = useState<
-    "reset" | "rebuild" | null
+    "reports-reset" | "db-reset" | "rebuild" | null
   >(null);
   const [status, setStatus] = useState<string | null>(null);
+  const [resetDbStatus, setResetDbStatus] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [resetDbError, setResetDbError] = useState<string | null>(null);
+  const [resetDbResult, setResetDbResult] =
+    useState<ResetOperationalDatabaseResult | null>(null);
   const [jobId, setJobId] = useState("");
   const [progress, setProgress] = useState<ResetProgress | null>(null);
 
-  const canRunReset =
+  const canRunReportsReset =
     canResetReports &&
     confirmation.trim() === CONFIRM_TEXT &&
+    runningOperation === null;
+  const canRunDbReset =
+    canResetReports &&
+    resetDbConfirmation.trim() === RESET_DB_CONFIRM &&
     runningOperation === null;
   const canRunRebuild =
     canResetReports && runningOperation === null;
@@ -102,7 +120,7 @@ export function ResetReportsPanel({
       .slice(2, 10)}`;
   }
 
-  function startProgress(operation: "reset" | "rebuild", nextJobId: string) {
+  function startProgress(operation: "reports-reset" | "rebuild", nextJobId: string) {
     setRunningOperation(operation);
     setStatus(null);
     setError(null);
@@ -123,7 +141,7 @@ export function ResetReportsPanel({
   }
 
   async function handleResetReports() {
-    if (!canRunReset) return;
+    if (!canRunReportsReset) return;
 
     const finalConfirm = window.confirm(
       "This will zero out imported reports and report-derived data so fresh uploads can rebuild them. Continue?"
@@ -132,7 +150,7 @@ export function ResetReportsPanel({
     if (!finalConfirm) return;
 
     const nextResetJobId = buildJobId("reports-reset");
-    startProgress("reset", nextResetJobId);
+    startProgress("reports-reset", nextResetJobId);
 
     try {
       const functions = getFunctions(getApp(), "us-central1");
@@ -158,6 +176,56 @@ export function ResetReportsPanel({
           : "Reset failed. Check Cloud Function logs.";
 
       setError(message);
+    } finally {
+      setRunningOperation(null);
+    }
+  }
+
+  async function handleResetTestData() {
+    if (!canRunDbReset) return;
+
+    const finalConfirm = window.confirm(
+      "This will permanently remove ALL test and operational data created during report-import testing, including orders, inventory, patients, rentals, and analytics. This action cannot be undone. Continue?"
+    );
+
+    if (!finalConfirm) return;
+
+    setRunningOperation("db-reset");
+    setResetDbStatus(null);
+    setResetDbError(null);
+    setResetDbResult(null);
+
+    try {
+      const functions = getFunctions(getApp(), "us-central1");
+      const resetOperationalDatabase = httpsCallable<
+        { confirmText: string },
+        ResetOperationalDatabaseResult
+      >(functions, "resetOperationalDatabase");
+
+      const result = await resetOperationalDatabase({
+        confirmText: RESET_DB_CONFIRM,
+      });
+
+      setResetDbResult(result.data);
+      setResetDbStatus("Reset completed.");
+      setResetDbConfirmation("");
+
+      const totalDeleted = Object.values(result.data.deletedCounts ?? {}).reduce(
+        (sum, count) => sum + count,
+        0
+      );
+
+      toast.success(
+        `Test data reset complete. ${totalDeleted.toLocaleString()} total records removed.`
+      );
+    } catch (caught) {
+      const message =
+        caught instanceof Error
+          ? caught.message
+          : "Reset failed. Check Cloud Function logs.";
+
+      setResetDbError(message);
+      toast.error(message);
     } finally {
       setRunningOperation(null);
     }
@@ -215,6 +283,13 @@ export function ResetReportsPanel({
       ? `${progress.deletedDocuments.toLocaleString()} of ${progress.totalDocuments.toLocaleString()} report records deleted`
       : `${progress.completedCollections.toLocaleString()} of ${progress.totalCollections.toLocaleString()} report areas cleared`
     : "";
+
+  const dbTotalDeleted = resetDbResult
+    ? Object.values(resetDbResult.deletedCounts ?? {}).reduce(
+        (sum, count) => sum + count,
+        0
+      )
+    : 0;
 
   return (
     <section
@@ -315,15 +390,15 @@ export function ResetReportsPanel({
           <button
             type="button"
             onClick={handleResetReports}
-            disabled={!canRunReset}
+            disabled={!canRunReportsReset}
             className={`${buttons.danger} disabled:cursor-not-allowed disabled:opacity-40`}
           >
-            {runningOperation === "reset" ? (
+            {runningOperation === "reports-reset" ? (
               <Loader2 className="h-4 w-4 animate-spin" />
             ) : (
               <RotateCcw className="h-4 w-4" />
             )}
-            {runningOperation === "reset"
+            {runningOperation === "reports-reset"
               ? "Resetting..."
               : "Operational Reset"}
           </button>
@@ -342,6 +417,75 @@ export function ResetReportsPanel({
             {runningOperation === "rebuild"
               ? "Rebuilding..."
               : "Full Rebuild"}
+          </button>
+        </div>
+      </div>
+
+      <div className={`mt-6 min-w-0 ${alerts.danger}`}>
+        <div className="flex min-w-0 items-start gap-3">
+          <Trash2 className="mt-0.5 h-5 w-5 shrink-0" aria-hidden="true" />
+          <div className="min-w-0">
+            <p className="break-words text-sm font-semibold leading-6">
+              Reset Test Data
+            </p>
+            <p className="mt-1 break-words text-sm leading-6">
+              Permanently removes all test and operational data created during
+              report-import testing, including orders, inventory, patients,
+              rentals, analytics, and report-derived collections. System and
+              reference data are preserved.
+            </p>
+          </div>
+        </div>
+
+        <input
+          value={resetDbConfirmation}
+          onChange={(event) => setResetDbConfirmation(event.target.value)}
+          disabled={runningOperation !== null || !canResetReports}
+          placeholder={RESET_DB_CONFIRM}
+          className={`${forms.input} mt-4 w-full min-w-0`}
+        />
+
+        {!canResetReports ? (
+          <p className={`mt-3 break-words px-3 py-2 text-sm ${alerts.warning}`}>
+            Only admins can reset test data.
+          </p>
+        ) : null}
+
+        {resetDbStatus ? (
+          <p className={`mt-3 break-words px-3 py-2 text-sm ${alerts.success}`}>
+            {resetDbStatus}{" "}
+            {dbTotalDeleted > 0
+              ? `Total records removed: ${dbTotalDeleted.toLocaleString()}.`
+              : null}
+            {resetDbResult?.clearedCollections?.length ? (
+              <span className="mt-1 block text-xs opacity-80">
+                Cleared: {resetDbResult.clearedCollections.join(", ")}
+              </span>
+            ) : null}
+          </p>
+        ) : null}
+
+        {resetDbError ? (
+          <p className={`mt-3 break-words px-3 py-2 text-sm ${alerts.danger}`}>
+            {resetDbError}
+          </p>
+        ) : null}
+
+        <div className="mt-4">
+          <button
+            type="button"
+            onClick={handleResetTestData}
+            disabled={!canRunDbReset}
+            className={`${buttons.danger} disabled:cursor-not-allowed disabled:opacity-40`}
+          >
+            {runningOperation === "db-reset" ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Trash2 className="h-4 w-4" />
+            )}
+            {runningOperation === "db-reset"
+              ? "Resetting..."
+              : "Reset Test Data"}
           </button>
         </div>
       </div>

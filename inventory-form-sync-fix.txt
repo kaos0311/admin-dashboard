@@ -1,0 +1,227 @@
+﻿Work directly in this project:
+
+D:\projects\admin-dashboard
+
+Fix the inventory Scan In / Scan Out form synchronization completely.
+
+CONFIRMED RUNTIME BEHAVIOR
+
+Firestore updates are successful.
+
+Example console verification:
+
+INVENTORY SCAN VERIFY
+expected: quantityOnHand 6, available 6
+actual: quantityOnHand 6, available 6
+
+However, the visible InventoryForm still shows an old quantity such as 2.
+
+Do not change the working Firestore write or quantity arithmetic unless you find and prove a separate defect.
+
+FILES TO INSPECT
+
+src/app/(admin)/inventory/page.tsx
+src/app/(admin)/inventory/hooks/useInventoryForm.ts
+src/app/(admin)/inventory/hooks/useInventoryActions.ts
+src/app/(admin)/inventory/hooks/useInventoryData.ts
+src/app/(admin)/inventory/components/InventoryForm.tsx
+src/app/(admin)/inventory/components/InventoryTable.tsx
+src/app/(admin)/inventory/components/InventoryTableRow.tsx
+src/app/(admin)/inventory/components/InventoryStatsDrilldownModal.tsx
+
+REQUIRED FIXES
+
+1. VERIFY EDIT ITEM ID
+
+Inspect useInventoryForm.ts.
+
+The editItem(item) function must store the Firestore inventory document id:
+
+id: item.id
+
+Do not leave the form id blank when editing an existing record.
+
+2. MAKE FORM CALLBACKS STABLE
+
+Import and use useCallback where appropriate.
+
+editItem, resetForm, updateForm, and syncStockFields should have stable callback identities where they are used in effect dependency arrays.
+
+syncStockFields must not be recreated on every render if page.tsx includes it in a useEffect dependency array.
+
+3. STOCK-ONLY SYNCHRONIZATION
+
+Implement syncStockFields(item: InventoryItem) using functional state:
+
+setForm((previous) => {
+  if (!previous.id || previous.id !== item.id) {
+    return previous;
+  }
+
+  const nextQuantityOnHand = String(item.quantityOnHand);
+  const nextCommitted = String(item.committed);
+  const nextOnRent = String(item.onRent);
+  const nextOnOrder = String(item.onOrder);
+
+  if (
+    previous.quantityOnHand === nextQuantityOnHand &&
+    previous.committed === nextCommitted &&
+    previous.onRent === nextOnRent &&
+    previous.onOrder === nextOnOrder
+  ) {
+    return previous;
+  }
+
+  return {
+    ...previous,
+    quantityOnHand: nextQuantityOnHand,
+    committed: nextCommitted,
+    onRent: nextOnRent,
+    onOrder: nextOnOrder,
+  };
+});
+
+Do not replace the whole form during live snapshot synchronization.
+
+Do not overwrite unsaved changes to:
+
+name
+category
+sku
+HCPC
+manufacturer
+notes
+warranty fields
+lifecycle fields
+location
+bin
+cost
+barcode
+serial
+lot number
+
+4. FIX PAGE SYNCHRONIZATION EFFECT
+
+In page.tsx, synchronize only the record actively loaded into the form.
+
+Use logic equivalent to:
+
+useEffect(() => {
+  if (!form.id) {
+    return;
+  }
+
+  const liveItem = items.find((item) => item.id === form.id);
+
+  if (!liveItem) {
+    return;
+  }
+
+  syncStockFields(liveItem);
+}, [items, form.id, syncStockFields]);
+
+Do not include form.quantityOnHand, form.name, or the full form object in this dependency array.
+
+Do not call editItem(liveItem) inside this effect.
+
+Avoid infinite update loops.
+
+5. ENSURE THE TABLE LOADS THE FORM
+
+InventoryTable must remain rendered in page.tsx.
+
+Wire:
+
+onEdit={editItem}
+
+The InventoryTableRow edit action must ultimately pass the exact InventoryItem object and document id to editItem.
+
+6. ENSURE SCANNED RECORD AND FORM RECORD MATCH
+
+The scan code logs an inventory item id.
+
+The open form should update only when:
+
+form.id === scanned inventory item id
+
+Do not update an unrelated form.
+
+If the form is in new-record mode with an empty id, leave it unchanged.
+
+7. ENSURE AVAILABLE IS CORRECT
+
+Inspect InventoryForm.tsx.
+
+If available is derived as:
+
+quantityOnHand - committed - onRent
+
+keep it derived and do not add duplicate form state.
+
+If the form actually stores available independently, synchronize it consistently or refactor it to a derived value.
+
+8. FIX THE STRAY HOOK
+
+Remove any orphan line like:
+
+useState<string | null>(null);
+
+that is not assigned to a variable.
+
+9. REMOVE TEMPORARY DEBUG OUTPUT
+
+After the fix is verified in code, remove temporary console logging including:
+
+INVENTORY SCAN MATCH
+INVENTORY SCAN UPDATE START
+INVENTORY SCAN VERIFY
+INVENTORY SCAN UPDATE COMPLETE
+
+Keep meaningful error logging.
+
+10. JARVIS 404
+
+The console also shows:
+
+/api/jarvis/product-enrichment 404 Not Found
+
+Inspect whether this API route exists under the Next.js app router.
+
+If the route was renamed, update the fetch URL to the real route.
+
+If the feature is optional and no route exists, prevent the scan flow from repeatedly calling a nonexistent endpoint. Do not let Jarvis enrichment failure block inventory movement.
+
+Report this separately from the stock synchronization fix.
+
+11. BROWSER EXTENSION ERROR
+
+Do not modify application code for:
+
+UsernameElementUniqueID
+
+unless that text exists inside the project source. It appears to come from an injected browser extension content script.
+
+Search the project before making any change.
+
+12. VALIDATION
+
+Run:
+
+npm run lint
+npx tsc --noEmit
+npm run build
+
+Then report:
+
+- Root cause found
+- Files changed
+- Whether editItem preserved item.id
+- Exact synchronization effect
+- How unsaved fields are protected
+- Whether available is derived
+- Whether the Jarvis 404 was fixed or safely handled
+- Lint result
+- TypeScript result
+- Build result
+
+Do not only explain the repair. Modify the files and validate the project.

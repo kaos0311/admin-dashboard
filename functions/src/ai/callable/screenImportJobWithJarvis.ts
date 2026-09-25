@@ -1,7 +1,9 @@
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 
+import { resolveCallableRole } from "../../auth/roles.js";
 import { applyJarvisImportScreening } from "../importScreening";
+import { enforceCallableRateLimit } from "../../security/rateLimit.js";
 
 const db = getFirestore();
 
@@ -9,17 +11,22 @@ type ScreenImportRequest = {
   jobId?: string;
 };
 
-function requireStaffOrAdmin(request: {
+async function requireStaffOrAdmin(request: {
   auth?: {
     uid: string;
     token: Record<string, unknown>;
   };
-}): { uid: string; email: string | null; role: string } {
+}): Promise<{ uid: string; email: string | null; role: string }> {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "You must be signed in.");
   }
 
-  const role = String(request.auth.token.role ?? "");
+  // AUTHORITATIVE: resolve from the active users/{uid} profile. A stale
+  // staff/admin custom claim without a matching active profile is denied.
+  const role = await resolveCallableRole({
+    uid: request.auth.uid,
+    token: request.auth.token as Record<string, unknown>,
+  });
 
   if (role !== "admin" && role !== "staff" && role !== "tank") {
     throw new HttpsError(
@@ -45,7 +52,8 @@ export const screenImportJobWithJarvis = onCall<ScreenImportRequest>(
     memory: "512MiB",
   },
   async (request) => {
-    const actor = requireStaffOrAdmin(request);
+    await enforceCallableRateLimit(request, "import");
+    const actor = await requireStaffOrAdmin(request);
     const jobId = String(request.data?.jobId ?? "").trim();
 
     if (!jobId) {

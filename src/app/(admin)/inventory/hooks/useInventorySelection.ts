@@ -1,8 +1,15 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import type { InventoryItem } from "../lib/inventoryTypes";
+
+type InventorySelectionItem = Pick<InventoryItem, "id">;
 
 type UseInventorySelectionResult = {
   selectedIds: string[];
@@ -13,126 +20,174 @@ type UseInventorySelectionResult = {
 
   clearSelected: () => void;
   removeSelectedId: (id: string) => void;
-
-  setSelectedIds: React.Dispatch<React.SetStateAction<string[]>>;
 };
+
+export function reconcileSelectedInventoryIds(
+  selectedIds: readonly string[],
+  items: readonly InventorySelectionItem[],
+  filteredItems: readonly InventorySelectionItem[],
+  canSelect: boolean,
+): string[] {
+  if (!canSelect) {
+    return [];
+  }
+
+  const validIds = new Set(items.map((item) => item.id));
+  const visibleIds = new Set(filteredItems.map((item) => item.id));
+  const seen = new Set<string>();
+
+  return selectedIds.filter((id) => {
+    if (
+      seen.has(id) ||
+      !validIds.has(id) ||
+      !visibleIds.has(id)
+    ) {
+      return false;
+    }
+
+    seen.add(id);
+    return true;
+  });
+}
+
+function sameSelection(
+  left: readonly string[],
+  right: readonly string[],
+): boolean {
+  return (
+    left.length === right.length &&
+    left.every((id, index) => id === right[index])
+  );
+}
 
 export function useInventorySelection(
   items: InventoryItem[],
   filteredItems: InventoryItem[],
+  canSelect: boolean,
 ): UseInventorySelectionResult {
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [selectedIds, setSelectedIds] =
+    useState<string[]>([]);
+
+  const visibleIds = useMemo(
+    () => new Set(filteredItems.map((item) => item.id)),
+    [filteredItems],
+  );
+
+  const safeSelectedIds = useMemo(
+    () =>
+      reconcileSelectedInventoryIds(
+        selectedIds,
+        items,
+        filteredItems,
+        canSelect,
+      ),
+    [
+      selectedIds,
+      items,
+      filteredItems,
+      canSelect,
+    ],
+  );
 
   /*
-  |--------------------------------------------------------------------------
-  | Valid Item IDs
-  |--------------------------------------------------------------------------
-  */
+   * Keep backing state reconciled as inventory, filters,
+   * or permissions change. safeSelectedIds above also
+   * guarantees callers never observe stale selection
+   * during the render before this effect runs.
+   */
+  useEffect(() => {
+    setSelectedIds((previous) => {
+      const next = reconcileSelectedInventoryIds(
+        previous,
+        items,
+        filteredItems,
+        canSelect,
+      );
 
-  const validItemIds = useMemo(() => {
-    return new Set(items.map((item) => item.id));
-  }, [items]);
+      return sameSelection(previous, next)
+        ? previous
+        : next;
+    });
+  }, [
+    items,
+    filteredItems,
+    canSelect,
+  ]);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Derived Safe Selection
-  |--------------------------------------------------------------------------
-  |
-  | Removes deleted/missing IDs
-  | WITHOUT effect-driven state sync.
-  |
-  */
-
-  const safeSelectedIds = useMemo(() => {
-    return selectedIds.filter((id) => validItemIds.has(id));
-  }, [selectedIds, validItemIds]);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Visible Selection Count
-  |--------------------------------------------------------------------------
-  */
-
-  const selectedVisibleCount = useMemo(() => {
-    const visibleSet = new Set(filteredItems.map((item) => item.id));
-
-    return safeSelectedIds.filter((id) => visibleSet.has(id)).length;
-  }, [filteredItems, safeSelectedIds]);
-
-  /*
-  |--------------------------------------------------------------------------
-  | Toggle Single Selection
-  |--------------------------------------------------------------------------
-  */
-
-  const toggleSelected = useCallback((id: string) => {
-    setSelectedIds((prev) => {
-      if (prev.includes(id)) {
-        return prev.filter((itemId) => itemId !== id);
+  const toggleSelected = useCallback(
+    (id: string) => {
+      if (!canSelect || !visibleIds.has(id)) {
+        return;
       }
 
-      return [...prev, id];
-    });
-  }, []);
+      setSelectedIds((previous) => {
+        if (previous.includes(id)) {
+          return previous.filter(
+            (itemId) => itemId !== id,
+          );
+        }
 
-  /*
-  |--------------------------------------------------------------------------
-  | Toggle Visible Selection
-  |--------------------------------------------------------------------------
-  */
+        return [...previous, id];
+      });
+    },
+    [canSelect, visibleIds],
+  );
 
   const toggleSelectAll = useCallback(() => {
-    const visibleIds = filteredItems.map((item) => item.id);
-
-    if (!visibleIds.length) {
+    if (!canSelect) {
       setSelectedIds([]);
       return;
     }
 
-    const allVisibleSelected = visibleIds.every((id) =>
-      safeSelectedIds.includes(id),
+    const visibleItemIds = filteredItems.map(
+      (item) => item.id,
     );
 
-    if (allVisibleSelected) {
-      setSelectedIds((prev) =>
-        prev.filter((id) => !visibleIds.includes(id)),
-      );
-
+    if (!visibleItemIds.length) {
+      setSelectedIds([]);
       return;
     }
 
-    setSelectedIds((prev) => {
-      return Array.from(new Set([...prev, ...visibleIds]));
-    });
-  }, [filteredItems, safeSelectedIds]);
+    const selectedSet = new Set(safeSelectedIds);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Clear Selection
-  |--------------------------------------------------------------------------
-  */
+    const allVisibleSelected =
+      visibleItemIds.every((id) =>
+        selectedSet.has(id),
+      );
+
+    if (allVisibleSelected) {
+      setSelectedIds([]);
+      return;
+    }
+
+    setSelectedIds(
+      Array.from(new Set(visibleItemIds)),
+    );
+  }, [
+    canSelect,
+    filteredItems,
+    safeSelectedIds,
+  ]);
 
   const clearSelected = useCallback(() => {
     setSelectedIds([]);
   }, []);
 
-  /*
-  |--------------------------------------------------------------------------
-  | Remove Single ID
-  |--------------------------------------------------------------------------
-  */
-
-  const removeSelectedId = useCallback((id: string) => {
-    setSelectedIds((prev) =>
-      prev.filter((itemId) => itemId !== id),
-    );
-  }, []);
+  const removeSelectedId = useCallback(
+    (id: string) => {
+      setSelectedIds((previous) =>
+        previous.filter(
+          (itemId) => itemId !== id,
+        ),
+      );
+    },
+    [],
+  );
 
   return {
     selectedIds: safeSelectedIds,
-    setSelectedIds,
-
-    selectedVisibleCount,
+    selectedVisibleCount:
+      safeSelectedIds.length,
 
     toggleSelected,
     toggleSelectAll,
@@ -141,5 +196,3 @@ export function useInventorySelection(
     removeSelectedId,
   };
 }
-
-

@@ -1,0 +1,798 @@
+/**
+ * Deterministic unit tests for the Jarvis reporting contract.
+ *
+ * Covers every fixture category required by the reporting-accuracy audit:
+ *   1. 1000-record query cap labeling
+ *   2. true counts > 1000 (aggregate)
+ *   3. partial schemas
+ *   4. missing linkage fields
+ *   5. successful joins
+ *   6. failed joins
+ *   7. duplicate/ambiguous joins
+ *   8. contradictory counts
+ *   9. unsupported inference / claim strength
+ *   10. PHI redaction (Sentinel behavior preserved)
+ *
+ * Pure logic + pattern scanning only. No Firebase network access.
+ */
+
+import { describe, expect, it } from "vitest";
+
+import {
+  canRecommendAction,
+  countFromAggregate,
+  countFromLimitedQuery,
+  evaluateClaimLanguage,
+  findCountContradictions,
+  normalizeKeyValue,
+  notTestedJoin,
+  summarizeSample,
+  verifyJoin,
+  verifyValueJoin,
+} from "./reporting";
+import { redactPhi, scanTextForPhi } from "../phiSafety";
+
+const CAP = 1000;
+
+function exactTargetLookup(matchCounts: Record<string, number>) {
+  return {
+    complete: true,
+    method: "document_id" as const,
+    matchCountsBySourceKey: new Map(Object.entries(matchCounts)),
+    recordsRead: Object.keys(matchCounts).length,
+    queryOperations: 0,
+    duplicateKeysStructurallyImpossible: true,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 1 + 2. Sample vs actual
+// ---------------------------------------------------------------------------
+
+describe("sample vs actual count", () => {
+  it("labels a capped 1000-doc limited query as sampled with unknown actual", () => {
+    const docs = Array.from({ length: CAP }, (_, i) => ({ id: `d${i}` }));
+    const summary = summarizeSample("patients", docs, CAP);
+
+    expect(summary.count.sampledCount).toBe(1000);
+    expect(summary.count.actualCount).toBeNull();
+    expect(summary.count.method).toBe("limited_query");
+    expect(summary.classification).toBe("UNKNOWN");
+    expect(summary.evidence.some((e) => e.kind === "aggregate_count")).toBe(
+      false
+    );
+  });
+
+  it("reports an aggregate count when a true count() was executed (>1000)", () => {
+    const docs = Array.from({ length: CAP }, (_, i) => ({ id: `d${i}` }));
+    const summary = summarizeSample("patients", docs, CAP, {
+      aggregateCount: 96234,
+    });
+
+    expect(summary.count.actualCount).toBe(96234);
+    expect(summary.count.sampledCount).toBe(1000);
+    expect(summary.count.method).toBe("aggregate_count");
+    expect(summary.count.limit).toBeNull();
+    expect(summary.classification).toBe("VERIFIED");
+    expect(summary.evidence[0].kind).toBe("aggregate_count");
+  });
+
+  it("never fabricates actualCount from countFromLimitedQuery", () => {
+    const report = countFromLimitedQuery(1000, 1000);
+    expect(report.actualCount).toBeNull();
+    expect(report.limit).toBe(1000);
+  });
+
+  it("countFromAggregate keeps sample size distinct from actual size", () => {
+    const report = countFromAggregate(5000, 1000);
+    expect(report.actualCount).toBe(5000);
+    expect(report.sampledCount).toBe(1000);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 3. Partial schemas
+// ---------------------------------------------------------------------------
+
+describe("partial schema discovery", () => {
+  it("counts missing required fields without inventing values", () => {
+    const docs = [
+      { patientName: "A", dob: "1980-01-01", phone: "" },
+      { patientName: "B" },
+      { patientName: "C", dob: null, phone: "555-123-4567" },
+    ];
+    const summary = summarizeSample(
+      "patients",
+      docs,
+      10,
+      { requiredFields: ["patientName", "dob", "phone"] }
+    );
+
+    expect(summary.missingKeyCounts.dob).toBe(2);
+    expect(summary.missingKeyCounts.phone).toBe(2); // "" and absent count; valid value does not
+    expect(summary.missingKeyCounts.patientName).toBeUndefined();
+  });
+
+  it("marks schemaCompleteness=partial when documents lack observed fields", () => {
+    const docs = [{ a: 1 }, { a: 1, b: 2 }];
+    const summary = summarizeSample("orders", docs, 10);
+    expect(summary.schemaCompleteness).toBe("partial");
+  });
+
+  it("marks schemaCompleteness=partial when sample < aggregate", () => {
+    const docs = Array.from({ length: 5 }, (_, i) => ({ a: i }));
+    const summary = summarizeSample("orders", docs, 100, {
+      aggregateCount: 900,
+    });
+    expect(summary.schemaCompleteness).toBe("partial");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 4-7. Join verification
+// ---------------------------------------------------------------------------
+
+describe("join verification", () => {
+  const left = {
+    collection: "patients",
+    field: "patientName",
+    values: ["Alice Smith", "Bob Jones", "Carol White"],
+  };
+  const right = {
+    collection: "orders",
+    field: "patientName",
+    values: ["Alice Smith", "Bob Jones", "Dan Brown"],
+  };
+
+  it("matches normalized keys and reports unmatched on both sides", () => {
+    const result = verifyJoin(left, right);
+
+    expect(result.recordsTestedLeft).toBe(3);
+    expect(result.recordsTestedRight).toBe(3);
+    expect(result.exactMatches).toBe(2);
+    expect(result.unmatchedLeft).toBe(1); // Carol White
+    expect(result.unmatchedRight).toBe(1); // Dan Brown
+    expect(result.normalizeRule).toBe("trim");
+    // Matches exist but sides have unmatched rows -> INFERRED, never VERIFIED
+    expect(result.classification).toBe("INFERRED");
+  });
+
+  it("classifies a fully clean join as VERIFIED", () => {
+    const result = verifyJoin(
+      { ...left, values: ["Alice Smith", "Bob Jones"] },
+      { ...right, values: ["Alice Smith", "Bob Jones"] }
+    );
+    expect(result.exactMatches).toBe(2);
+    expect(result.unmatchedLeft).toBe(0);
+    expect(result.unmatchedRight).toBe(0);
+    expect(result.classification).toBe("VERIFIED");
+  });
+
+  it("reports failed joins with zero matches as UNKNOWN, not confirmed", () => {
+    const result = verifyJoin(
+      left,
+      { ...right, values: ["Xavier X", "Yolanda Y"] }
+    );
+    expect(result.exactMatches).toBe(0);
+    expect(result.unmatchedLeft).toBe(3);
+    expect(result.classification).toBe("UNKNOWN");
+  });
+
+  it("flags ambiguous/duplicate right-side matches", () => {
+    const result = verifyJoin(
+      { ...left, values: ["Alice Smith"] },
+      { ...right, values: ["Alice Smith", "Alice Smith"] }
+    );
+    expect(result.exactMatches).toBe(1);
+    expect(result.ambiguousMatches).toBe(1);
+    expect(result.duplicateRightKeys).toBe(1);
+    expect(result.classification).toBe("INFERRED"); // dupes block VERIFIED
+  });
+
+  it("counts missing linkage fields separately from unmatched", () => {
+    const result = verifyJoin(
+      { ...left, values: ["Alice Smith", null, ""] },
+      { ...right, values: [undefined, "Alice Smith"] }
+    );
+    expect(result.missingKeysLeft).toBe(2);
+    expect(result.missingKeysRight).toBe(1);
+    expect(result.exactMatches).toBe(1);
+    expect(result.classification).toBe("INFERRED"); // missing keys block VERIFIED
+  });
+
+  it("normalizes only with trim for patientId-safe comparisons", () => {
+    expect(normalizeKeyValue("  PAT-001 ")).toBe("PAT-001");
+    expect(normalizeKeyValue("PAT-001")).not.toBe(
+      normalizeKeyValue("pat-001")
+    );
+  });
+
+  it("untested joins are NOT_TESTED with zero evidence", () => {
+    const result = notTestedJoin("patients", "orders", "patientName", "name");
+    expect(result.classification).toBe("NOT_TESTED");
+    expect(result.recordsTestedLeft).toBe(0);
+    expect(result.evidence).toHaveLength(0);
+  });
+});
+
+describe("value-level join verification", () => {
+  it("counts exact unique matches correctly", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "rentals",
+        key: "patientId",
+        values: ["PAT-001", "PAT-002"],
+        actualCount: 2,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        collection: "patients",
+        key: "patientId",
+        values: ["PAT-001", "PAT-002"],
+        actualCount: 2,
+        countMethod: "aggregate_count",
+        complete: true,
+      }
+    );
+
+    expect(result.exactUniqueMatches).toBe(2);
+    expect(result.ambiguousMatches).toBe(0);
+    expect(result.unmatched).toBe(0);
+    expect(result.coveragePercentage).toBe(100);
+    expect(result.classification).toBe("VERIFIED");
+    expect(result.outcome).toBe("CLEAN");
+  });
+
+  it("counts unmatched IDs correctly", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "rentals",
+        key: "patientId",
+        values: ["PAT-001", "PAT-MISSING"],
+        actualCount: 2,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        collection: "patients",
+        key: "patientId",
+        values: ["PAT-001"],
+        actualCount: 1,
+        countMethod: "aggregate_count",
+        complete: true,
+      }
+    );
+
+    expect(result.exactUniqueMatches).toBe(1);
+    expect(result.unmatched).toBe(1);
+    expect(result.classification).toBe("VERIFIED");
+    expect(result.outcome).toBe("DEFECTS_FOUND");
+  });
+
+  it("counts missing source IDs correctly", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "patientAuthorizations",
+        key: "patientId",
+        values: ["PAT-001", "", null],
+        actualCount: 3,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        collection: "patients",
+        key: "patientId",
+        values: ["PAT-001"],
+        actualCount: 1,
+        countMethod: "aggregate_count",
+        complete: true,
+      }
+    );
+
+    expect(result.sourceRecordsWithKey).toBe(1);
+    expect(result.sourceMissingKeyCount).toBe(2);
+    expect(result.unmatched).toBe(0);
+    expect(result.classification).toBe("VERIFIED");
+    expect(result.outcome).toBe("DEFECTS_FOUND");
+  });
+
+  it("turns duplicate target patientIds into ambiguity", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "rentals",
+        key: "patientId",
+        values: ["PAT-001"],
+        actualCount: 1,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        collection: "patients",
+        key: "patientId",
+        values: ["PAT-001", "PAT-001"],
+        actualCount: 2,
+        countMethod: "aggregate_count",
+        complete: true,
+      }
+    );
+
+    expect(result.duplicateTargetKeys).toBe(1);
+    expect(result.targetDuplicateKeyCount).toBe(2);
+    expect(result.ambiguityCount).toBe(1);
+    expect(result.classification).toBe("VERIFIED");
+    expect(result.outcome).toBe("AMBIGUOUS");
+  });
+
+  it("does not count ambiguous matches as unique matches", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "rentals",
+        key: "patientId",
+        values: ["PAT-001"],
+        actualCount: 1,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        collection: "patients",
+        key: "patientId",
+        values: ["PAT-001", "PAT-001"],
+        actualCount: 2,
+        countMethod: "aggregate_count",
+        complete: true,
+      }
+    );
+
+    expect(result.exactUniqueMatches).toBe(0);
+    expect(result.ambiguousMatches).toBe(1);
+    expect(result.classification).toBe("VERIFIED");
+    expect(result.outcome).toBe("AMBIGUOUS");
+  });
+
+  it("limited scans never claim complete verification", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "rentals",
+        key: "patientId",
+        values: ["PAT-001"],
+        actualCount: 2,
+        countMethod: "aggregate_count",
+        complete: false,
+      },
+      {
+        collection: "patients",
+        key: "patientId",
+        values: ["PAT-001"],
+        actualCount: 2,
+        countMethod: "aggregate_count",
+        complete: false,
+      }
+    );
+
+    expect(result.joinComplete).toBe(false);
+    expect(result.joinMethod).toBe("limited_value_scan");
+    expect(result.classification).toBe("SAMPLED");
+    expect(result.outcome).toBe("UNKNOWN");
+  });
+
+  it("does not convert absence from an incomplete target sample into unmatched", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "rentals",
+        key: "patientId",
+        values: ["PAT-001", "PAT-OUTSIDE-SAMPLE"],
+        actualCount: 2,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        collection: "patients",
+        key: "patientId",
+        values: ["PAT-001"],
+        actualCount: 18839,
+        countMethod: "aggregate_count",
+        complete: false,
+      }
+    );
+
+    expect(result.exactUniqueMatches).toBe(1);
+    expect(result.unmatched).toBe(0);
+    expect(result.notObservedInTargetSample).toBe(1);
+    expect(result.unresolvedAgainstIncompleteTarget).toBe(1);
+    expect(result.classification).toBe("SAMPLED");
+    expect(result.outcome).toBe("UNKNOWN");
+  });
+
+  it("uses exact target lookup to prove a true unmatched key", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "rentals",
+        key: "patientId",
+        values: ["PAT-001", "PAT-MISSING"],
+        actualCount: 2,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        collection: "patients",
+        key: "id",
+        values: [],
+        actualCount: 18839,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      exactTargetLookup({ "PAT-001": 1, "PAT-MISSING": 0 })
+    );
+
+    expect(result.targetLookupMethod).toBe("document_id");
+    expect(result.exactUniqueMatches).toBe(1);
+    expect(result.unmatched).toBe(1);
+    expect(result.notObservedInTargetSample).toBe(0);
+    expect(result.targetVerificationComplete).toBe(true);
+    expect(result.classification).toBe("VERIFIED");
+    expect(result.outcome).toBe("DEFECTS_FOUND");
+  });
+
+  it("uses exact target lookup to prove a unique match", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "patientAuthorizations",
+        key: "patientId",
+        values: ["PAT-001"],
+        actualCount: 1,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        collection: "patients",
+        key: "id",
+        values: [],
+        actualCount: 18839,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      exactTargetLookup({ "PAT-001": 1 })
+    );
+
+    expect(result.exactUniqueMatches).toBe(1);
+    expect(result.unmatched).toBe(0);
+    expect(result.targetUniqueKeysChecked).toBe(1);
+    expect(result.targetVerificationRecordsRead).toBe(1);
+    expect(result.joinComplete).toBe(true);
+    expect(result.classification).toBe("VERIFIED");
+    expect(result.outcome).toBe("CLEAN");
+  });
+
+  it("field lookup duplicate target matches produce ambiguity", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "rentals",
+        key: "patientId",
+        values: ["PAT-DUP"],
+        actualCount: 1,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        collection: "patients",
+        key: "patientId",
+        values: [],
+        actualCount: 2,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        complete: true,
+        method: "field_equality",
+        matchCountsBySourceKey: new Map([["PAT-DUP", 2]]),
+        recordsRead: 2,
+        queryOperations: 1,
+        duplicateKeysStructurallyImpossible: false,
+      }
+    );
+
+    expect(result.ambiguousMatches).toBe(1);
+    expect(result.duplicateTargetKeys).toBe(1);
+    expect(result.targetDuplicateKeyCount).toBe(2);
+    expect(result.targetDuplicateKeysStructurallyImpossible).toBe(false);
+    expect(result.classification).toBe("VERIFIED");
+    expect(result.outcome).toBe("AMBIGUOUS");
+  });
+
+  it("complete clean scans may produce VERIFIED evidence", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "patientAuthorizations",
+        key: "patientId",
+        values: ["PAT-001"],
+        actualCount: 1,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        collection: "patients",
+        key: "patientId",
+        values: ["PAT-001"],
+        actualCount: 1,
+        countMethod: "aggregate_count",
+        complete: true,
+      }
+    );
+
+    expect(result.joinComplete).toBe(true);
+    expect(result.joinMethod).toBe("complete_value_scan");
+    expect(result.classification).toBe("VERIFIED");
+    expect(result.outcome).toBe("CLEAN");
+    expect(result.evidenceRef).not.toContain("PAT-001");
+  });
+
+  it("keeps aggregate counts separate from scan counts", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "rentals",
+        key: "patientId",
+        values: Array.from({ length: 1000 }, (_, index) => `PAT-${index}`),
+        actualCount: 1034,
+        countMethod: "aggregate_count",
+        complete: false,
+      },
+      {
+        collection: "patients",
+        key: "patientId",
+        values: Array.from({ length: 1000 }, (_, index) => `PAT-${index}`),
+        actualCount: 5000,
+        countMethod: "aggregate_count",
+        complete: false,
+      }
+    );
+
+    expect(result.sourceActualCount).toBe(1034);
+    expect(result.sourceTestedCount).toBe(1000);
+    expect(result.sourceCountMethod).toBe("aggregate_count");
+    expect(result.joinMethod).toBe("limited_value_scan");
+    expect(result.joinComplete).toBe(false);
+    expect(result.classification).toBe("SAMPLED");
+  });
+
+  it("source scan incomplete keeps whole join sampled after exact target verification", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "rentals",
+        key: "patientId",
+        values: ["PAT-001"],
+        actualCount: 2,
+        countMethod: "aggregate_count",
+        complete: false,
+      },
+      {
+        collection: "patients",
+        key: "id",
+        values: [],
+        actualCount: 18839,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      exactTargetLookup({ "PAT-001": 1 })
+    );
+
+    expect(result.sourceScanComplete).toBe(false);
+    expect(result.targetVerificationComplete).toBe(true);
+    expect(result.joinComplete).toBe(false);
+    expect(result.classification).toBe("SAMPLED");
+    expect(result.outcome).toBe("UNKNOWN");
+  });
+
+  it("complete source scan plus complete target key verification is verified", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "rentals",
+        key: "patientId",
+        values: ["PAT-001"],
+        actualCount: 1,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        collection: "patients",
+        key: "id",
+        values: [],
+        actualCount: 18839,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      exactTargetLookup({ "PAT-001": 1 })
+    );
+
+    expect(result.sourceScanComplete).toBe(true);
+    expect(result.targetVerificationComplete).toBe(true);
+    expect(result.joinComplete).toBe(true);
+    expect(result.classification).toBe("VERIFIED");
+    expect(result.outcome).toBe("CLEAN");
+  });
+
+  it("aggregate target count does not establish target key completeness", () => {
+    const result = verifyValueJoin(
+      {
+        collection: "patientAuthorizations",
+        key: "patientId",
+        values: ["PAT-MISSING"],
+        actualCount: 1,
+        countMethod: "aggregate_count",
+        complete: true,
+      },
+      {
+        collection: "patients",
+        key: "patientId",
+        values: [],
+        actualCount: 18839,
+        countMethod: "aggregate_count",
+        complete: false,
+      }
+    );
+
+    expect(result.targetActualCount).toBe(18839);
+    expect(result.targetVerificationComplete).toBe(false);
+    expect(result.unmatched).toBe(0);
+    expect(result.unresolvedAgainstIncompleteTarget).toBe(1);
+    expect(result.outcome).toBe("UNKNOWN");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 8. Contradictory counts
+// ---------------------------------------------------------------------------
+
+describe("internal consistency", () => {
+  it("detects PRESENT 962 vs MISSING 962 style contradictions", () => {
+    const contradictions = findCountContradictions([
+      { entity: "wipRecords", value: 962, section: "landingAudit:PRESENT" },
+      { entity: "WipRecords ", value: 0, section: "handoff:MISSING" },
+    ]);
+    expect(contradictions).toHaveLength(1);
+    expect(contradictions[0].entity).toBe("wiprecords");
+    expect(contradictions[0].values).toEqual([962, 0]);
+  });
+
+  it("passes consistent claims", () => {
+    const contradictions = findCountContradictions([
+      { entity: "orders", value: 42, section: "summary" },
+      { entity: "orders", value: 42, section: "csv" },
+    ]);
+    expect(contradictions).toHaveLength(0);
+  });
+
+  it("does not treat sampled vs actual counts as contradictory", () => {
+    // sampledRows=1000 and actualCount=18839 are DIFFERENT semantic quantities
+    // (docs observed vs true collection size), NOT a contradiction.
+    const contradictions = findCountContradictions([
+      { entity: "patients:sampled", value: 1000, section: "summary:patients" },
+      { entity: "patients:actual", value: 18839, section: "aggregate:patients" },
+    ]);
+    expect(contradictions).toHaveLength(0);
+  });
+
+  it("still detects a true same-quantity contradiction", () => {
+    const contradictions = findCountContradictions([
+      { entity: "patients:actual", value: 18839, section: "aggregate:patients" },
+      { entity: "patients:actual", value: 18840, section: "aggregate:patients:recount" },
+    ]);
+    expect(contradictions).toHaveLength(1);
+    expect(contradictions[0].values).toEqual([18839, 18840]);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 9. Claim strength + recommendation gating
+// ---------------------------------------------------------------------------
+
+describe("conclusion strength", () => {
+  it("rejects confirmed/proven regardless of evidence source", () => {
+    const result = evaluateClaimLanguage("The join is confirmed and proven.", {
+      hasAggregateEvidence: true,
+    });
+    expect(result.allowed).toBe(false);
+    expect(result.violations).toEqual(expect.arrayContaining(["confirmed", "proven"]));
+    expect(result.suggestions).toEqual(
+      expect.arrayContaining(["suggests", "likely", "sample indicates"])
+    );
+  });
+
+  it("rejects actual/complete wording without aggregate evidence", () => {
+    const result = evaluateClaimLanguage(
+      "actual count is 962, complete analysis",
+      { hasAggregateEvidence: false }
+    );
+    expect(result.allowed).toBe(false);
+    expect(result.violations).toEqual(
+      expect.arrayContaining(["actual", "complete"])
+    );
+  });
+
+  it("permits actual/complete only with aggregate-grade evidence", () => {
+    const result = evaluateClaimLanguage("Actual count is 962.", {
+      hasAggregateEvidence: true,
+    });
+    expect(result.allowed).toBe(true);
+  });
+
+  it("accepts hedged language always", () => {
+    const result = evaluateClaimLanguage(
+      "The sample suggests a likely gap.",
+      { hasAggregateEvidence: false }
+    );
+    expect(result.allowed).toBe(true);
+  });
+});
+
+describe("recommendation gating", () => {
+  it("blocks re-import advice for INFERRED defects", () => {
+    const decision = canRecommendAction("re_import", {
+      summary: "rows missing",
+      classification: "INFERRED",
+      evidence: [{ kind: "import_metadata", reference: "job-1" }],
+    });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toContain("INFERRED");
+  });
+
+  it("allows re-import advice for VERIFIED defects with import evidence", () => {
+    const decision = canRecommendAction("re_import", {
+      summary: "written=0 while totalRows=962",
+      classification: "VERIFIED",
+      evidence: [
+        { kind: "import_metadata", reference: "job-1 destinationSummary" },
+        { kind: "aggregate_count", reference: "orders.count()=962" },
+      ],
+    });
+    expect(decision.allowed).toBe(true);
+  });
+
+  it("blocks VERIFIED defects lacking the required evidence kind", () => {
+    const decision = canRecommendAction("restore", {
+      summary: "bad data",
+      classification: "VERIFIED",
+      evidence: [{ kind: "sampled_documents", reference: "x" }],
+    });
+    expect(decision.allowed).toBe(false);
+    expect(decision.reason).toContain("audit_logs");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// 10. PHI redaction (Sentinel regression guards)
+// ---------------------------------------------------------------------------
+
+describe("PHI Sentinel", () => {
+  it("redacts SSN, DOB, phone, email, insurance, MRN patterns", () => {
+    const text =
+      "SSN 123-45-6789 DOB: 01/02/1980 call (555) 123-4567 email a@b.com Policy #ABC123XYZ9 MRN A-1234";
+    const findings = scanTextForPhi(text, "test");
+
+    const types = findings.map((f) => f.type);
+    expect(types).toContain("SSN");
+    expect(types).toContain("DOB");
+    expect(types).toContain("Phone Number");
+    expect(types).toContain("Email Address");
+    expect(types).toContain("Insurance Identifier");
+    expect(types).toContain("Medical Record Identifier");
+
+    const redacted = redactPhi(text);
+    expect(redacted).not.toContain("123-45-6789");
+    expect(redacted).not.toContain("a@b.com");
+    expect(redacted).not.toContain("ABC123XYZ9");
+    expect(redacted).toContain("***REDACTED_PHI***");
+  });
+
+  it("returns no findings for clean operational text", () => {
+    expect(scanTextForPhi("Inventory low: sku W-123 qty 4", "note")).toEqual(
+      []
+    );
+  });
+
+  it("keeps finding previews partially redacted", () => {
+    const findings = scanTextForPhi("SSN 123-45-6789", "preview");
+    expect(findings[0].preview).toMatch(/\*\*\*REDACTED\*\*\*/);
+    expect(findings[0].severity).toBe("critical");
+  });
+});

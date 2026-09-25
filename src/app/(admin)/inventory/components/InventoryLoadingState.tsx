@@ -12,9 +12,9 @@ export function InventoryLoadingState() {
       </div>
 
       <div className="grid gap-3 md:grid-cols-3">
-        <div className={`${glass.card} h-20 animate-pulse`} />
-        <div className={`${glass.card} h-20 animate-pulse`} />
-        <div className={`${glass.card} h-20 animate-pulse`} />
+        <div className={`${glass.loadingCard} h-20 animate-pulse`} />
+        <div className={`${glass.loadingCard} h-20 animate-pulse`} />
+        <div className={`${glass.loadingCard} h-20 animate-pulse`} />
       </div>
     </div>
   );

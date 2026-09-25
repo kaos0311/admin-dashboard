@@ -1,6 +1,6 @@
 "use client";
 
-import { buttons, glass, typography } from "@/theme";
+import { buttons, colors, glass, typography } from "@/theme";
 
 import {
   CheckSquare,
@@ -64,10 +64,10 @@ export function ProductFilters({
 }: ProductFiltersProps) {
   return (
     <>
-      <div className={`${glass.panel} mb-4 p-4`}>
-        <div className={`${typography.cardTitle} mb-3 flex items-center gap-2`}>
+      <div className={`${glass.panelPadded} mb-4`}>
+        <div className="flex items-center gap-2 mb-3">
           <Filter className="h-4 w-4" />
-          Adaptive Filters
+          <span className={typography.cardTitle}>Adaptive Filters</span>
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 2xl:grid-cols-8">
@@ -197,7 +197,7 @@ export function ProductFilters({
         </div>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-center gap-2">
+      <div className="mb-4 flex min-w-0 flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={onToggleVisible}
@@ -215,7 +215,7 @@ export function ProductFilters({
           type="button"
           onClick={onBatchArchive}
           disabled={!selectedCount || deleting}
-          className="inline-flex items-center gap-2 rounded-2xl border border-red-400/20 bg-red-400/10 px-4 py-2 text-sm text-red-200 transition hover:bg-red-400/20 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`inline-flex items-center gap-2 rounded-xl border ${colors.danger} px-4 py-2 text-sm font-semibold disabled:cursor-not-allowed disabled:opacity-50`}
         >
           {deleting ? (
             <Loader2 className="h-4 w-4 animate-spin" />
@@ -238,8 +238,3 @@ export function ProductFilters({
     </>
   );
 }
-
-
-
-
-

@@ -8,6 +8,7 @@ import { ArrowLeft, PackageCheck, RefreshCcw } from "lucide-react";
 import { buttons, colors, glass, tiles, typography } from "@/theme";
 
 import { useAuthRole } from "@/app/hooks/useAuthRole";
+import { hasPermission } from "@/lib/permissions/roles";
 
 import { InventoryAssetTiles } from "../components/InventoryAssetTiles";
 import { InventoryEmptyState } from "../components/InventoryEmptyState";
@@ -18,10 +19,13 @@ import { isActiveAssetRecord } from "../lib/assetRecords";
 export default function InventoryAssetRecordsPage() {
   const {
     loading: authLoading,
-    isAdminOrStaff,
+    role,
+    canAccessCommandCenter,
   } = useAuthRole();
 
-  const canRead = isAdminOrStaff;
+  const canRead =
+    canAccessCommandCenter &&
+    hasPermission(role, "inventory:read");
 
   const [refreshKey, setRefreshKey] = useState(0);
 
@@ -79,9 +83,9 @@ export default function InventoryAssetRecordsPage() {
 
                 <div className="min-w-0">
                   <p className={tiles.label}>Inventory asset records</p>
-                  <h1 className="mt-2 break-words text-3xl font-bold tracking-tight">
-                    Asset Records
-                  </h1>
+              <h1 className={`mt-2 break-words ${typography.pageTitle}`}>
+                Asset Records
+              </h1>
                   <p className={`${typography.bodyMuted} mt-2 max-w-3xl`}>
                     Asset title groups, patient links, serial tracking, HCPCS,
                     and callable asset detail records from the inventory

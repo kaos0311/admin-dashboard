@@ -73,16 +73,25 @@ export function WipStatGrid({
             className={`${tiles.base} ${tiles.compact} ${tiles.hover} min-h-[10.75rem] min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a9a5e]/40 disabled:cursor-default disabled:hover:translate-y-0`}
             disabled={!stat.onClick}
           >
-            <div className={["flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl", colors.neutral].join(" ")}>
-              <Icon className="h-5 w-5" aria-hidden="true" />
+            {/* Title at top: icon + label */}
+            <div className="flex items-center gap-3">
+              <div className={["flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl", colors.neutral].join(" ")}>
+                <Icon className="h-5 w-5" aria-hidden="true" />
+              </div>
+              <p className={tiles.metricLabel} title={stat.label}>
+                {stat.label}
+              </p>
             </div>
 
-            <p className={["mt-4", tiles.metricLabel].join(" ")} title={stat.label}>{stat.label}</p>
-            <p className={tiles.value}>{stat.value}</p>
+            {/* Buttons in the middle */}
+            <div className="flex-1 flex items-center">
+              <span className={metricActionButtonClass(stat.tone)}>
+                {stat.onClick ? "Open" : "Review"}
+              </span>
+            </div>
 
-            <span className={metricActionButtonClass(stat.tone)}>
-              {stat.onClick ? "Open" : "Review"}
-            </span>
+            {/* Description (value) at bottom */}
+            <p className={tiles.value}>{stat.value}</p>
           </button>
         );
       })}

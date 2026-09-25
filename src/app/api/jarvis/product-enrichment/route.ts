@@ -1,30 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue as AdminFieldValue } from "firebase-admin/firestore";
 
-import { adminAuth, adminDb } from "@/lib/firebaseAdmin";
+import { adminDb } from "@/lib/firebaseAdmin";
+import { requireApiPermission } from "@/lib/auth/require-api-auth";
 import { normalizeBarcode } from "@/lib/barcode";
+import { enforceRateLimit } from "@/lib/security/rate-limit";
+import { findImageUrl, processProductImageUrl } from "@/services/jarvis/product-image.service";
+import { lookupBarcodeProduct } from "@/services/jarvis/barcode-lookup.service";
+import type { SearchResult } from "@/services/jarvis/product-enrichment-types";
+import { identifySku, identifyProduct } from "@/services/jarvis/product-identification.service";
+import {
+  loadVendorResearchSites,
+  extractDomain,
+  decodeHtml,
+} from "@/services/jarvis/web-search.service";
 
 export const runtime = "nodejs";
-
-type SearchResult = {
-  title: string;
-  url: string;
-  snippet: string;
-};
-
-type ProductGuess = {
-  name: string;
-  category: string;
-  manufacturer: string;
-  model: string;
-  sku: string;
-  upc: string;
-  hcpcs: string;
-  imageUrl: string;
-  sourceUrl: string;
-  confidence: number;
-  warrantyMonths: number;
-};
 
 type BarcodeLookupProduct = {
   title?: unknown;
@@ -40,12 +31,6 @@ type BarcodeLookupProduct = {
   barcode?: unknown;
 };
 
-type VendorResearchSite = {
-  id: string;
-  name: string;
-  url: string;
-};
-
 function text(value: unknown): string {
   return typeof value === "string" ? value.trim() : "";
 }
@@ -58,484 +43,9 @@ function buildSearchKeywords(values: string[]): string[] {
   return Array.from(new Set(normalizeSearchText(values.join(" ")).split(" ").filter(Boolean))).slice(0, 100);
 }
 
-function normalizeVendorSite(
-  id: string,
-  data: Record<string, unknown>
-): VendorResearchSite {
-  const url = typeof data.url === "string" ? data.url.trim() : "";
-  return { id, name: typeof data.name === "string" ? data.name.trim() : id, url };
-}
-
-function extractDomain(url: string): string {
-  try {
-    return new URL(url).hostname.toLowerCase();
-  } catch {
-    return "";
-  }
-}
-
 function domainFromRecord(record: { url?: string }): string {
   const url = typeof record.url === "string" ? record.url : "";
   return extractDomain(url);
-}
-
-function canonicalDomain(domain: string): string {
-  return domain.toLowerCase().replace(/^www\./, "");
-}
-
-function domainMatchesPreferred(domain: string, preferredDomain: string): boolean {
-  const current = canonicalDomain(domain);
-  const preferred = canonicalDomain(preferredDomain);
-  return current === preferred || current.endsWith(`.${preferred}`);
-}
-
-function rankSearchResults(
-  results: SearchResult[],
-  preferredDomains: string[]
-): SearchResult[] {
-  if (!preferredDomains.length || !results.length) return results;
-
-  const preferred = new Set(
-    preferredDomains
-      .map((domain) => domain.toLowerCase())
-      .filter((domain) => domain.length > 0)
-  );
-
-  const preferredResults: SearchResult[] = [];
-  const otherResults: SearchResult[] = [];
-
-  for (const result of results) {
-    const domain = extractDomain(result.url);
-    if (
-      domain &&
-      Array.from(preferred).some((preferredDomain) =>
-        domainMatchesPreferred(domain, preferredDomain)
-      )
-    ) {
-      preferredResults.push(result);
-    } else {
-      otherResults.push(result);
-    }
-  }
-
-  return [...preferredResults, ...otherResults];
-}
-
-async function loadVendorResearchSites(): Promise<VendorResearchSite[]> {
-  try {
-    const snapshot = await adminDb
-      .collection("vendorResearchSites")
-      .limit(200)
-      .get();
-
-    return snapshot.docs.map((docSnap) => normalizeVendorSite(docSnap.id, docSnap.data()));
-  } catch {
-    return [];
-  }
-}
-
-function decodeHtml(value: string): string {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, "\"")
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function stripTags(value: string): string {
-  return decodeHtml(value.replace(/<[^>]+>/g, " "));
-}
-
-function cleanTitle(value: string): string {
-  return value
-    .replace(/\s+[-|]\s+(Amazon|Walmart|eBay|Google Shopping|Shop|Store).*$/i, "")
-    .replace(/\bNew\b|\bBuy\b|\bSale\b/gi, " ")
-    .replace(/\s+/g, " ")
-    .trim();
-}
-
-function inferCategory(value: string): string {
-  const haystack = value.toLowerCase();
-  if (haystack.includes("cpap") || haystack.includes("bipap") || haystack.includes("mask")) return "CPAP";
-  if (haystack.includes("oxygen") || haystack.includes("concentrator")) return "Oxygen";
-  if (haystack.includes("wheelchair")) return "Mobility";
-  if (haystack.includes("walker") || haystack.includes("rollator")) return "Mobility";
-  if (haystack.includes("hospital bed") || haystack.includes("bed rail")) return "Beds";
-  if (haystack.includes("commode") || haystack.includes("bath")) return "Bath Safety";
-  return "Pending Web Review";
-}
-
-function guessManufacturer(value: string): string {
-  const known = [
-    "ResMed",
-    "Philips",
-    "Respironics",
-    "Drive",
-    "Invacare",
-    "Medline",
-    "Fisher & Paykel",
-    "Sunrise",
-    "Pride",
-    "Golden",
-    "DeVilbiss",
-  ];
-  const match = known.find((brand) => value.toLowerCase().includes(brand.toLowerCase()));
-  return match ?? "";
-}
-
-function extractWarrantyMonths(value: string): number {
-  const text = value.toLowerCase();
-
-  const yearMatch = /\b(\d+)\s*-?\s*year\b/.exec(text);
-  if (yearMatch) {
-    const years = Number(yearMatch[1]);
-    if (Number.isFinite(years)) {
-      return Math.round(years * 12);
-    }
-  }
-
-  const monthMatch = /\b(\d+)\s*-?\s*month\b/.exec(text);
-  if (monthMatch) {
-    const months = Number(monthMatch[1]);
-    if (Number.isFinite(months)) {
-      return months;
-    }
-  }
-
-  return 0;
-}
-
-function extractModelNumber(value: string): string {
-  const match = /(?:model|part)[\s:#-]*([A-Z0-9][A-Z0-9\-\._\/]{2,})/i.exec(value);
-  if (!match) return "";
-  return match[1].replace(/[\s]+/g, " ").trim();
-}
-
-function extractDuckResults(html: string): SearchResult[] {
-  const results: SearchResult[] = [];
-  const resultPattern = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/gi;
-  let match: RegExpExecArray | null;
-
-  while ((match = resultPattern.exec(html)) && results.length < 8) {
-    let url = decodeHtml(match[1] ?? "");
-    const uddg = /uddg=([^&]+)/.exec(url);
-    if (uddg) {
-      try {
-        url = decodeURIComponent(uddg[1]);
-      } catch {
-        url = decodeHtml(match[1] ?? "");
-      }
-    }
-
-    results.push({
-      title: stripTags(match[2] ?? ""),
-      url,
-      snippet: stripTags(match[3] ?? ""),
-    });
-  }
-
-  return results;
-}
-
-async function webSearch(query: string, preferredDomains: string[] = []): Promise<SearchResult[]> {
-  const url = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
-  const response = await fetch(url, {
-    headers: {
-      "user-agent": "Mozilla/5.0 JarvisProductEnrichment/1.0",
-    },
-    cache: "no-store",
-  });
-
-  if (!response.ok) return [];
-  const results = extractDuckResults(await response.text());
-  return rankSearchResults(results, preferredDomains);
-}
-
-function uniqueResults(results: SearchResult[]): SearchResult[] {
-  const seen = new Set<string>();
-  return results.filter((result) => {
-    const key = result.url || `${result.title}:${result.snippet}`;
-    if (!key || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-}
-
-async function webSearchVendorFirst(
-  query: string,
-  preferredDomains: string[] = []
-): Promise<SearchResult[]> {
-  const cleanDomains = Array.from(
-    new Set(
-      preferredDomains
-        .map((domain) => domain.trim().toLowerCase())
-        .filter(Boolean)
-    )
-  );
-
-  const sourceResults: SearchResult[] = [];
-  for (const domain of cleanDomains.slice(0, 6)) {
-    const results = await webSearch(`site:${domain} ${query}`, cleanDomains);
-    sourceResults.push(...results.slice(0, 3));
-  }
-
-  const broadResults = await webSearch(query, cleanDomains);
-  return rankSearchResults(uniqueResults([...sourceResults, ...broadResults]), cleanDomains);
-}
-
-async function identifySku(
-  sku: string,
-  preferredDomains: string[] = []
-): Promise<ProductGuess | null> {
-  const barcodeGuess = await lookupBarcodeProduct(sku);
-  if (barcodeGuess) return barcodeGuess;
-
-  const query = [
-    sku,
-    "home medical equipment product",
-  ].join(" ");
-  const results = await webSearchVendorFirst(query, preferredDomains);
-  const best = results[0];
-
-  if (!best) return null;
-
-  const combined = `${best.title} ${best.snippet}`;
-  const name = cleanTitle(best.title) || cleanTitle(best.snippet);
-  const imageUrl = await findImageUrl(results);
-
-  return {
-    name: name || sku,
-    category: inferCategory(combined),
-    manufacturer: guessManufacturer(combined),
-    model: extractModelNumber(combined),
-    sku,
-    upc: "",
-    hcpcs: "",
-    imageUrl,
-    sourceUrl: best.url,
-    confidence: name ? 0.6 : 0.35,
-    warrantyMonths: extractWarrantyMonths(combined),
-  };
-}
-
-function looksLikeProductBarcode(value: string): boolean {
-  return /^\d{8,14}$/.test(value.trim());
-}
-
-function readFirstString(value: unknown): string {
-  if (typeof value === "string") return value.trim();
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      const normalized = readFirstString(item);
-      if (normalized) return normalized;
-    }
-  }
-  if (value && typeof value === "object") {
-    const record = value as Record<string, unknown>;
-    return readFirstString(record.url || record.link || record.src);
-  }
-  return "";
-}
-
-function pickBarcodeProductPayload(data: unknown): BarcodeLookupProduct | null {
-  if (!data || typeof data !== "object") return null;
-  const record = data as Record<string, unknown>;
-  const directProduct = record.product;
-  if (directProduct && typeof directProduct === "object") {
-    return directProduct as BarcodeLookupProduct;
-  }
-
-  const products = record.products;
-  if (Array.isArray(products) && products[0] && typeof products[0] === "object") {
-    return products[0] as BarcodeLookupProduct;
-  }
-
-  return record as BarcodeLookupProduct;
-}
-
-async function lookupBarcodeProduct(barcode: string): Promise<ProductGuess | null> {
-  const cleanBarcode = normalizeBarcode(barcode);
-  const apiKey = text(process.env.RAPIDAPI_KEY);
-  if (!looksLikeProductBarcode(cleanBarcode) || !apiKey) return null;
-
-  try {
-    const response = await fetch(
-      `https://barcode-lookup.p.rapidapi.com/v3/products?barcode=${encodeURIComponent(cleanBarcode)}`,
-      {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          "x-rapidapi-host": "barcode-lookup.p.rapidapi.com",
-          "x-rapidapi-key": apiKey,
-        },
-        cache: "no-store",
-      }
-    );
-
-    if (!response.ok) return null;
-
-    const product = pickBarcodeProductPayload(await response.json());
-    if (!product) return null;
-
-    const name = text(product.title) || text(product.name) || text(product.description);
-    if (!name) return null;
-
-    const imageUrl = await processProductImageUrl(
-      readFirstString(product.images) || readFirstString(product.image)
-    );
-
-    return {
-      name,
-      category: text(product.category) || inferCategory(name),
-      manufacturer: text(product.brand) || text(product.manufacturer),
-      model: text(product.model) || text(product.mpn),
-      sku: text(product.mpn),
-      upc: text(product.barcode) || cleanBarcode,
-      hcpcs: "",
-      imageUrl,
-      sourceUrl: `https://barcode-lookup.p.rapidapi.com/v3/products?barcode=${encodeURIComponent(cleanBarcode)}`,
-      confidence: 0.85,
-      warrantyMonths: 0,
-    };
-  } catch {
-    return null;
-  }
-}
-
-function extractMetaImage(html: string): string {
-  const patterns = [
-    /<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']/i,
-    /<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']/i,
-    /<meta[^>]+name=["']twitter:image["'][^>]+content=["']([^"']+)["']/i,
-    /<img[^>]+src=["']([^"']+\.(?:jpg|jpeg|png|webp)(?:\?[^"']*)?)["']/i,
-  ];
-
-  for (const pattern of patterns) {
-    const match = pattern.exec(html);
-    if (match?.[1]) return decodeHtml(match[1]);
-  }
-
-  return "";
-}
-
-async function processProductImageUrl(imageUrl: string): Promise<string> {
-  const apiKey = text(process.env.CHANGE_PHOTOS_API_KEY);
-  if (!imageUrl || !apiKey) return imageUrl;
-
-  try {
-    const response = await fetch("https://change.photos/api/change", {
-      method: "POST",
-      headers: {
-        "X-Api-Key": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        url: imageUrl,
-        width: 800,
-        height: 800,
-        fit: "inside",
-        compress: true,
-        format: "webp",
-      }),
-      cache: "no-store",
-    });
-
-    if (!response.ok) return imageUrl;
-
-    const data = (await response.json()) as { url?: unknown };
-    const processedUrl = text(data.url);
-    return processedUrl || imageUrl;
-  } catch {
-    return imageUrl;
-  }
-}
-
-async function findImageUrl(results: SearchResult[]): Promise<string> {
-  for (const result of results.slice(0, 5)) {
-    try {
-      const response = await fetch(result.url, {
-        headers: { "user-agent": "Mozilla/5.0 JarvisProductEnrichment/1.0" },
-        cache: "no-store",
-      });
-      if (!response.ok) continue;
-      const image = extractMetaImage(await response.text());
-      if (image && image.startsWith("http")) return processProductImageUrl(image);
-      if (image && image.startsWith("/")) {
-        const base = new URL(result.url);
-        return processProductImageUrl(`${base.origin}${image}`);
-      }
-    } catch {
-      continue;
-    }
-  }
-
-  return "";
-}
-
-async function identifyProduct(
-  queryParts: string[],
-  preferredDomains: string[] = []
-): Promise<ProductGuess | null> {
-  for (const part of queryParts) {
-    const barcodeGuess = await lookupBarcodeProduct(part);
-    if (barcodeGuess) return barcodeGuess;
-  }
-
-  const strongIdentifiers = queryParts
-    .map((part) => part.trim())
-    .filter((part) => /^[A-Z0-9-]{6,}$/i.test(part));
-  const query = [
-    ...queryParts.filter(Boolean),
-    "home medical equipment product",
-  ].join(" ");
-  const results = await webSearchVendorFirst(query, preferredDomains);
-  const best = results[0];
-
-  if (!best) return null;
-
-  const combined = `${best.title} ${best.snippet}`;
-  const combinedLower = combined.toLowerCase();
-  const hasIdentifierMatch =
-    strongIdentifiers.length === 0 ||
-    strongIdentifiers.some((identifier) =>
-      combinedLower.includes(identifier.toLowerCase())
-    );
-
-  if (!hasIdentifierMatch) {
-    return null;
-  }
-
-  const name = cleanTitle(best.title) || cleanTitle(best.snippet);
-  const imageUrl = await findImageUrl(results);
-
-  return {
-    name: name || queryParts.filter(Boolean).join(" "),
-    category: inferCategory(combined),
-    manufacturer: guessManufacturer(combined),
-    model: extractModelNumber(combined),
-    sku: queryParts.find((part) => /^[A-Z0-9-]{6,}$/i.test(part.trim()))?.trim() ?? "",
-    upc: "",
-    hcpcs: "",
-    imageUrl,
-    sourceUrl: best.url,
-    confidence: name ? 0.55 : 0.35,
-    warrantyMonths: extractWarrantyMonths(combined),
-  };
-}
-
-async function requireUser(request: NextRequest) {
-  const header = request.headers.get("authorization") ?? "";
-  const token = header.startsWith("Bearer ") ? header.slice(7) : "";
-  if (!token) return null;
-
-  try {
-    return await adminAuth.verifyIdToken(token);
-  } catch {
-    return null;
-  }
 }
 
 async function enrichInventory(body: Record<string, unknown>, actor: string) {
@@ -569,7 +79,10 @@ async function enrichInventory(body: Record<string, unknown>, actor: string) {
   );
 
   if (!guess) {
-    return NextResponse.json({ error: "Jarvis could not identify a likely product." }, { status: 404 });
+    return NextResponse.json({
+      ok: false,
+      error: "Jarvis could not identify a likely product.",
+    });
   }
 
   const name = guess.name || text(current.name);
@@ -677,6 +190,7 @@ async function enrichInventory(body: Record<string, unknown>, actor: string) {
   );
 
   return NextResponse.json({
+    ok: true,
     productId,
     inventoryId,
     product: {
@@ -1176,14 +690,27 @@ async function autoFillBlankFields(
 }
 
 export async function POST(request: NextRequest) {
-  const user = await requireUser(request);
-  if (!user) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  const ipRateLimit = await enforceRateLimit({
+    request,
+    policyName: "ai",
+    scope: "ip",
+  });
+  if (ipRateLimit) return ipRateLimit;
+
+  const auth = await requireApiPermission(request, "inventory:write");
+  if (!auth.ok) return auth.response;
+
+  const userRateLimit = await enforceRateLimit({
+    request,
+    policyName: "ai",
+    scope: "user",
+    identifier: auth.uid,
+  });
+  if (userRateLimit) return userRateLimit;
 
   const body = (await request.json()) as Record<string, unknown>;
   const mode = text(body.mode);
-  const actor = user.email ?? user.uid;
+  const actor = auth.email ?? auth.uid;
 
   if (mode === "identifyInventory") {
     return enrichInventory(body, actor);
@@ -1222,5 +749,3 @@ export async function POST(request: NextRequest) {
 
   return NextResponse.json({ error: "Unsupported enrichment mode" }, { status: 400 });
 }
-
-

@@ -1,7 +1,6 @@
 "use client";
 
-
-import { colors, surfaces, typography } from "@/theme";
+import { buttons, colors, surfaces, typography } from "@/theme";
 import { Boxes, Filter, RefreshCcw } from "lucide-react";
 
 type InventoryHeaderProps = {
@@ -16,24 +15,24 @@ export function InventoryHeader({
   onRefresh,
 }: InventoryHeaderProps) {
   return (
-    <section className={`${surfaces.cardPadded} rounded-[2rem] shadow-2xl shadow-black/30 backdrop-blur-2xl`}>
+    <section className={`${surfaces.toolbar} p-4 sm:p-6`}>
       <div className="flex min-w-0 flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
         <div className="flex min-w-0 items-center gap-3">
-          <div className={`rounded-2xl border ${colors.border} ${colors.surface} p-3 shadow-inner shadow-white/5`}>
+          <div className={surfaces.iconBox}>
             <Boxes className={`h-6 w-6 ${colors.textInfo}`} />
           </div>
 
           <div className="min-w-0">
-            <h1 className={`break-words text-2xl font-bold leading-[1.15] tracking-tight ${colors.textPrimary}`}>
+            <h1 className={typography.pageTitle}>
               Inventory
             </h1>
 
-            <p className={typography.body}>
+            <p className={typography.bodyMuted}>
               Stock, serials, lots, manufacturer data, warranty, lifecycle,
               service alerts, and batch controls.
             </p>
 
-            <p className={`mt-1 text-xs ${typography.caption}`}>
+            <p className={`mt-1 ${typography.caption}`}>
               {lastLoadedAt
                 ? `Last synced: ${lastLoadedAt.toLocaleTimeString()}`
                 : "Waiting for inventory sync..."}
@@ -45,7 +44,7 @@ export function InventoryHeader({
           <button
             type="button"
             onClick={onResetFilters}
-            className={`inline-flex items-center gap-2 rounded-2xl border ${colors.border} ${colors.surface} px-4 py-3 text-sm font-semibold ${colors.textPrimary} shadow-lg shadow-black/20 backdrop-blur-xl transition ${colors.surfaceHover}`}
+            className={buttons.secondary}
           >
             <Filter className="h-4 w-4" />
             Clear Filters
@@ -54,7 +53,7 @@ export function InventoryHeader({
           <button
             type="button"
             onClick={onRefresh}
-            className={`inline-flex items-center gap-2 rounded-2xl border ${colors.border} ${colors.surface} px-4 py-3 text-sm font-semibold ${colors.textPrimary} shadow-lg shadow-black/20 backdrop-blur-xl transition ${colors.surfaceHover}`}
+            className={buttons.secondary}
           >
             <RefreshCcw className="h-4 w-4" />
             Resync
@@ -64,8 +63,3 @@ export function InventoryHeader({
     </section>
   );
 }
-
-
-
-
-

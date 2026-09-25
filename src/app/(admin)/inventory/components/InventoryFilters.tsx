@@ -7,6 +7,7 @@ import type {
   SortDirection,
   SortKey,
 } from "../lib/inventoryTypes";
+import type { InventorySerializationFilter } from "../hooks/useInventoryFilters";
 
 import { FilterSelect } from "./fields/FilterSelect";
 import { SearchInput } from "./fields/SearchInput";
@@ -18,6 +19,9 @@ type InventoryFiltersProps = {
   statusFilter: "all" | InventoryStatus;
   lifecycleFilter: "all" | LifecycleStatus;
   alertFilter: AlertFilter;
+  locationFilter: string;
+  locationOptions: string[];
+  serializationFilter: InventorySerializationFilter;
 
   sortKey: SortKey;
   sortDirection: SortDirection;
@@ -36,6 +40,14 @@ type InventoryFiltersProps = {
     value: AlertFilter
   ) => void;
 
+  onLocationFilterChange: (
+    value: string
+  ) => void;
+
+  onSerializationFilterChange: (
+    value: InventorySerializationFilter
+  ) => void;
+
   onSortChange: (
     key: SortKey,
     direction: SortDirection
@@ -47,16 +59,21 @@ export function InventoryFilters({
   statusFilter,
   lifecycleFilter,
   alertFilter,
+  locationFilter,
+  locationOptions,
+  serializationFilter,
   sortKey,
   sortDirection,
   onSearchChange,
   onStatusFilterChange,
   onLifecycleFilterChange,
   onAlertFilterChange,
+  onLocationFilterChange,
+  onSerializationFilterChange,
   onSortChange,
 }: InventoryFiltersProps) {
   return (
-    <div className={`${spacing.gridResponsive} xl:grid-cols-5`}>
+    <div className={`${spacing.gridResponsive} xl:grid-cols-7`}>
       <SearchInput
         value={search}
         onChange={onSearchChange}
@@ -112,6 +129,31 @@ export function InventoryFilters({
           ["lowStock", "Low stock"],
           ["serviceDue", "Service due"],
           ["warrantyExpired", "Warranty expired"],
+        ]}
+      />
+
+      <FilterSelect
+        label="Filter by location"
+        value={locationFilter}
+        onChange={onLocationFilterChange}
+        options={[
+          ["all", "All locations"],
+          ...locationOptions.map((location) => [location, location] as [string, string]),
+        ]}
+      />
+
+      <FilterSelect
+        label="Filter by inventory type"
+        value={serializationFilter}
+        onChange={(value) =>
+          onSerializationFilterChange(
+            value as InventorySerializationFilter
+          )
+        }
+        options={[
+          ["all", "All inventory types"],
+          ["serialized", "Serialized"],
+          ["quantity", "Quantity"],
         ]}
       />
 

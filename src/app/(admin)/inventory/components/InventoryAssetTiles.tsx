@@ -4,7 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { ChevronDown, FileText, PackageCheck, UserRound } from "lucide-react";
 
-import { buttons, glass, spacing, tiles, typography } from "@/theme";
+  import { buttons, colors, glass, spacing, tiles, typography } from "@/theme";
 
 import { buildAssetTitleGroups } from "../lib/assetRecords";
 import type { InventoryItem } from "../lib/inventoryTypes";
@@ -64,7 +64,7 @@ export function InventoryAssetTiles({ items }: InventoryAssetTilesProps) {
 
               <ChevronDown
                 className={`h-4 w-4 shrink-0 transition-transform ${
-                  expanded ? "rotate-180 text-cyan-200" : typography.caption
+                  expanded ? "rotate-180 text-[#9aba7e]" : typography.caption
                 }`}
                 aria-hidden="true"
               />
@@ -89,7 +89,7 @@ export function InventoryAssetTiles({ items }: InventoryAssetTilesProps) {
       {expandedGroup ? (
         <div className={`${glass.insetPadded} mt-5`}>
           <div className="mb-4 flex min-w-0 items-center gap-3">
-            <UserRound className="h-4 w-4 shrink-0 text-cyan-200" />
+            <UserRound className={`h-4 w-4 shrink-0 ${colors.textInfo}`} />
             <div className="min-w-0">
               <h3 className={typography.cardTitle}>{expandedGroup.title}</h3>
               <p className={`${typography.bodyMuted} mt-1`}>

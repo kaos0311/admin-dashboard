@@ -173,7 +173,7 @@ function ToggleFilter({
       type="button"
       aria-pressed={active}
       onClick={onClick}
-      className={`rounded-2xl px-4 py-2 text-sm font-semibold shadow-inner shadow-black/20 backdrop-blur-xl transition ${active ? badges.active : badges.neutral}`}
+      className={`rounded-xl px-4 py-2 text-sm font-semibold transition border ${active ? badges.active : badges.neutral}`}
     >
       {label}
     </button>

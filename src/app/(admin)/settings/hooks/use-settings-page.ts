@@ -20,8 +20,10 @@ import {
 } from "firebase/firestore";
 
 import { auth, db } from "@/lib/firebase";
+
 import {
   createDashboardUser,
+  deleteUserAccount,
   resetUserPassword,
   updateUserRole as updateDashboardUserRole,
 } from "@/lib/adminUsers";
@@ -73,7 +75,6 @@ type UseSettingsPageResult = {
   resetSettings: () => void;
 
   createUserDraft: () => Promise<void>;
-
   resetEmployeePassword: () => Promise<void>;
 
   updateUserRole: (
@@ -85,6 +86,8 @@ type UseSettingsPageResult = {
     userId: string,
     status: UserStatus
   ) => Promise<void>;
+
+  deleteUser: (userId: string) => Promise<void>;
 };
 
 export function useSettingsPage(): UseSettingsPageResult {
@@ -127,10 +130,14 @@ export function useSettingsPage(): UseSettingsPageResult {
 
         setSettings(normalized);
         setSavedSettings(normalized);
-
         setLoading(false);
       },
-      () => {
+      (error) => {
+        console.error(
+          "[Settings] Unable to load settings",
+          error
+        );
+
         setSettings(DEFAULT_APP_SETTINGS);
         setSavedSettings(DEFAULT_APP_SETTINGS);
 
@@ -164,7 +171,12 @@ export function useSettingsPage(): UseSettingsPageResult {
 
         setUsers(normalizedUsers);
       },
-      () => {
+      (error) => {
+        console.error(
+          "[Settings] Unable to load users",
+          error
+        );
+
         setUsers([]);
 
         setMessage({
@@ -178,13 +190,22 @@ export function useSettingsPage(): UseSettingsPageResult {
   }, []);
 
   const saveSettings = useCallback(async () => {
+    if (saving) {
+      return;
+    }
+
     setSaving(true);
+    setMessage(null);
 
     try {
       const currentUser = auth.currentUser;
 
       await setDoc(
-        doc(db, SETTINGS_COLLECTION, SETTINGS_APP_DOC_ID),
+        doc(
+          db,
+          SETTINGS_COLLECTION,
+          SETTINGS_APP_DOC_ID
+        ),
         {
           ...settings,
           updatedAt: serverTimestamp(),
@@ -204,29 +225,56 @@ export function useSettingsPage(): UseSettingsPageResult {
         type: "success",
         text: "Settings saved successfully.",
       });
-    } catch {
+    } catch (error) {
+      console.error(
+        "[Settings] Failed to save settings",
+        error
+      );
+
       setMessage({
         type: "error",
-        text: "Failed to save settings.",
+        text:
+          error instanceof Error
+            ? error.message
+            : "Failed to save settings.",
       });
     } finally {
       setSaving(false);
     }
-  }, [settings]);
+  }, [saving, settings]);
 
   const resetSettings = useCallback(() => {
+    if (saving) {
+      return;
+    }
+
     setSettings(savedSettings);
 
     setMessage({
       type: "info",
       text: "Unsaved changes were reset.",
     });
-  }, [savedSettings]);
+  }, [savedSettings, saving]);
 
   const createUserDraft = useCallback(async () => {
+    if (saving) {
+      return;
+    }
+
     const email = userDraft.email.trim().toLowerCase();
     const displayName = userDraft.displayName.trim();
     const password = userDraft.password;
+
+    setMessage(null);
+
+    if (!displayName) {
+      setMessage({
+        type: "error",
+        text: "Enter the employee display name.",
+      });
+
+      return;
+    }
 
     if (!validateEmail(email)) {
       setMessage({
@@ -263,6 +311,11 @@ export function useSettingsPage(): UseSettingsPageResult {
         text: "Employee login created.",
       });
     } catch (error) {
+      console.error(
+        "[Settings] Unable to create employee login",
+        error
+      );
+
       setMessage({
         type: "error",
         text:
@@ -273,40 +326,127 @@ export function useSettingsPage(): UseSettingsPageResult {
     } finally {
       setSaving(false);
     }
-  }, [userDraft]);
+  }, [saving, userDraft]);
 
   const updateUserRole = useCallback(
     async (
       userId: string,
       role: UserRole
-    ) => {
-      await updateDashboardUserRole({
-        uid: userId,
-        role,
-      });
+    ): Promise<void> => {
+      if (saving) {
+        return;
+      }
+
+      const uid = userId.trim();
+
+      if (!uid) {
+        setMessage({
+          type: "error",
+          text: "Unable to identify the employee account.",
+        });
+
+        return;
+      }
+
+      setSaving(true);
+      setMessage(null);
+
+      try {
+        await updateDashboardUserRole({
+          uid,
+          role,
+        });
+
+        setMessage({
+          type: "success",
+          text: "Employee role updated.",
+        });
+      } catch (error) {
+        console.error(
+          "[Settings] Unable to update employee role",
+          error
+        );
+
+        setMessage({
+          type: "error",
+          text:
+            error instanceof Error
+              ? error.message
+              : "Unable to update employee role.",
+        });
+      } finally {
+        setSaving(false);
+      }
     },
-    []
+    [saving]
   );
 
   const updateUserStatus = useCallback(
     async (
       userId: string,
       status: UserStatus
-    ) => {
-      await updateDoc(
-        doc(db, USERS_COLLECTION, userId),
-        {
-          status,
-          updatedAt: serverTimestamp(),
-        }
-      );
+    ): Promise<void> => {
+      if (saving) {
+        return;
+      }
+
+      const uid = userId.trim();
+
+      if (!uid) {
+        setMessage({
+          type: "error",
+          text: "Unable to identify the employee account.",
+        });
+
+        return;
+      }
+
+      setSaving(true);
+      setMessage(null);
+
+      try {
+        await updateDoc(
+          doc(db, USERS_COLLECTION, uid),
+          {
+            status,
+            updatedAt: serverTimestamp(),
+          }
+        );
+
+        setMessage({
+          type: "success",
+          text: "Employee status updated.",
+        });
+      } catch (error) {
+        console.error(
+          "[Settings] Unable to update employee status",
+          error
+        );
+
+        setMessage({
+          type: "error",
+          text:
+            error instanceof Error
+              ? error.message
+              : "Unable to update employee status.",
+        });
+      } finally {
+        setSaving(false);
+      }
     },
-    []
+    [saving]
   );
 
   const resetEmployeePassword = useCallback(async () => {
+    if (saving) {
+      return;
+    }
+
     const uid = passwordResetForm.uid.trim();
-    const newPassword = passwordResetForm.newPassword;
+    const newPassword =
+      passwordResetForm.newPassword;
+
+    setMessage(null);
 
     if (!uid) {
       setMessage({
@@ -334,13 +474,20 @@ export function useSettingsPage(): UseSettingsPageResult {
         newPassword,
       });
 
-      setPasswordResetForm(initialPasswordResetForm);
+      setPasswordResetForm(
+        initialPasswordResetForm
+      );
 
       setMessage({
         type: "success",
         text: "Employee password was reset.",
       });
     } catch (error) {
+      console.error(
+        "[Settings] Unable to reset employee password",
+        error
+      );
+
       setMessage({
         type: "error",
         text:
@@ -351,7 +498,72 @@ export function useSettingsPage(): UseSettingsPageResult {
     } finally {
       setSaving(false);
     }
-  }, [passwordResetForm]);
+  }, [passwordResetForm, saving]);
+
+  const deleteUser = useCallback(
+    async (userId: string): Promise<void> => {
+      if (saving) {
+        return;
+      }
+
+      const uid = userId.trim();
+      const currentUser = auth.currentUser;
+
+      if (!uid) {
+        setMessage({
+          type: "error",
+          text: "Unable to identify the employee account.",
+        });
+
+        return;
+      }
+
+      if (currentUser?.uid === uid) {
+        setMessage({
+          type: "error",
+          text: "You cannot delete your own signed-in account.",
+        });
+
+        return;
+      }
+
+      setSaving(true);
+      setMessage(null);
+
+      try {
+        await deleteUserAccount({
+          uid,
+        });
+
+        setPasswordResetForm((current) =>
+          current.uid === uid
+            ? initialPasswordResetForm
+            : current
+        );
+
+        setMessage({
+          type: "success",
+          text: "Employee account deleted.",
+        });
+      } catch (error) {
+        console.error(
+          "[Settings] Unable to delete employee account",
+          error
+        );
+
+        setMessage({
+          type: "error",
+          text:
+            error instanceof Error
+              ? error.message
+              : "Unable to delete employee account.",
+        });
+      } finally {
+        setSaving(false);
+      }
+    },
+    [saving]
+  );
 
   return {
     settings,
@@ -379,7 +591,6 @@ export function useSettingsPage(): UseSettingsPageResult {
 
     updateUserRole,
     updateUserStatus,
+    deleteUser,
   };
 }
-
-

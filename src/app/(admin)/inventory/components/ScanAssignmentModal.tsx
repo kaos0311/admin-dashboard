@@ -60,7 +60,7 @@ export function ScanAssignmentModal({
 
   return (
     <div
-      className="fixed inset-0 z-[210] flex items-center justify-center p-4 backdrop-blur-xl bg-slate-950/60"
+      className={`fixed inset-0 z-[210] flex items-center justify-center p-4 ${colors.overlay}`}
       role="dialog"
       aria-modal="true"
       aria-labelledby="scan-assignment-title"
@@ -90,19 +90,19 @@ export function ScanAssignmentModal({
               <label
                 className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 ${
                   choice === "serial"
-                    ? `${colors.surfaceHover} border-white/20`
-                    : "border-white/10"
+                    ? `${colors.surfaceHover} border-[#4a4a4a]`
+                    : `border-[#3a3a3a]`
                 }`}
               >
                 <div>
-                  <p className="text-sm font-semibold text-slate-100">Serial</p>
-                  <p className={`${typography.smallMuted} text-xs`}>
+                  <p className={typography.bodyStrong}>Serial</p>
+                  <p className={`${typography.smallMuted}`}>
                     Attach this scan to the equipment serial.
                   </p>
                 </div>
                 <input
                   type="radio"
-                  className="h-4 w-4"
+                  className="h-4 w-4 focus:ring-2 focus:ring-[#7a9a5e]/40"
                   checked={choice === "serial"}
                   onChange={() => setChoice("serial")}
                 />
@@ -113,19 +113,19 @@ export function ScanAssignmentModal({
               <label
                 className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 ${
                   choice === "lotNumber"
-                    ? `${colors.surfaceHover} border-white/20`
-                    : "border-white/10"
+                    ? `${colors.surfaceHover} border-[#4a4a4a]`
+                    : `border-[#3a3a3a]`
                 }`}
               >
                 <div>
-                  <p className="text-sm font-semibold text-slate-100">Lot Number</p>
-                  <p className={`${typography.smallMuted} text-xs`}>
+                  <p className={typography.bodyStrong}>Lot Number</p>
+                  <p className={`${typography.smallMuted}`}>
                     Attach this scan to the lot number.
                   </p>
                 </div>
                 <input
                   type="radio"
-                  className="h-4 w-4"
+                  className="h-4 w-4 focus:ring-2 focus:ring-[#7a9a5e]/40"
                   checked={choice === "lotNumber"}
                   onChange={() => setChoice("lotNumber")}
                 />
@@ -134,19 +134,19 @@ export function ScanAssignmentModal({
               <label
                 className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 ${
                   choice === "barcodeSku"
-                    ? `${colors.surfaceHover} border-white/20`
-                    : "border-white/10"
+                    ? `${colors.surfaceHover} border-[#4a4a4a]`
+                    : `border-[#3a3a3a]`
                 }`}
               >
                 <div>
-                  <p className="text-sm font-semibold text-slate-100">SKU / Barcode</p>
-                  <p className={`${typography.smallMuted} text-xs`}>
+                  <p className={typography.bodyStrong}>SKU / Barcode</p>
+                  <p className={`${typography.smallMuted}`}>
                     Attach this scan to SKU or barcode.
                   </p>
                 </div>
                 <input
                   type="radio"
-                  className="h-4 w-4"
+                  className="h-4 w-4 focus:ring-2 focus:ring-[#7a9a5e]/40"
                   checked={choice === "barcodeSku"}
                   onChange={() => setChoice("barcodeSku")}
                 />
@@ -156,20 +156,20 @@ export function ScanAssignmentModal({
             <label
               className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 ${
                 choice === "next"
-                  ? `${colors.surfaceHover} border-white/20`
-                  : "border-white/10"
+                  ? `${colors.surfaceHover} border-[#4a4a4a]`
+                  : `border-[#3a3a3a]`
               }`}
               title="Keep scanning the same power of attorney for this equipment?"
             >
               <div>
-                <p className="text-sm font-semibold text-slate-100">Next equipment</p>
-                <p className={`${typography.smallMuted} text-xs`}>
+                <p className={typography.bodyStrong}>Next equipment</p>
+                <p className={`${typography.smallMuted}`}>
                   Skip this code and continue scanning the same equipment.
                 </p>
               </div>
-              <input
+                <input
                 type="radio"
-                className="h-4 w-4"
+                className="h-4 w-4 focus:ring-2 focus:ring-[#7a9a5e]/40"
                 checked={choice === "next"}
                 onChange={() => setChoice("next")}
               />
@@ -178,19 +178,19 @@ export function ScanAssignmentModal({
             <label
               className={`flex cursor-pointer items-center justify-between gap-3 rounded-2xl border px-3 py-2.5 ${
                 choice === "none"
-                  ? `${colors.surfaceHover} border-white/20`
-                  : "border-white/10"
+                  ? `${colors.surfaceHover} border-[#4a4a4a]`
+                  : `border-[#3a3a3a]`
               }`}
             >
               <div>
-                <p className="text-sm font-semibold text-slate-100">No Serial / No Barcode</p>
-                <p className={`${typography.smallMuted} text-xs`}>
+                <p className={typography.bodyStrong}>No Serial / No Barcode</p>
+                <p className={`${typography.smallMuted}`}>
                   Save without this scan so the form is not blocked.
                 </p>
               </div>
               <input
                 type="radio"
-                className="h-4 w-4"
+                className="h-4 w-4 focus:ring-2 focus:ring-[#7a9a5e]/40"
                 checked={choice === "none"}
                 onChange={() => setChoice("none")}
               />

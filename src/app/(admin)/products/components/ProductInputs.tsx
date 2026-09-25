@@ -165,7 +165,7 @@ export function CheckboxInput({
         checked={checked}
         aria-label={label}
         onChange={(event) => onChange(event.target.checked)}
-        className="h-4 w-4 shrink-0 accent-sky-400"
+        className="h-4 w-4 shrink-0"
       />
 
       <span className="min-w-0 break-words">{label}</span>

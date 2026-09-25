@@ -16,10 +16,10 @@ import {
   CheckCircle2,
   HeartPulse,
   Package,
-  Truck,
+  PauseCircle,
   Search,
   Stethoscope,
-  PauseCircle,
+  Truck,
   UserRound,
 } from "lucide-react";
 
@@ -32,9 +32,9 @@ import {
   buildSearchBlob,
   derivePatient,
   formatMoney,
+  getPatientServiceStatus,
   hasActivePatientService,
   hasNoActivePatientService,
-  getPatientServiceStatus,
   isPatientWithinArchiveWindow,
   normalizePatient,
   PATIENT_ARCHIVE_MONTHS,

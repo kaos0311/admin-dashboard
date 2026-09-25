@@ -16,10 +16,11 @@ import {
 } from "lucide-react";
 import { doc, serverTimestamp, updateDoc } from "firebase/firestore";
 
+import { patientLifecycleWorkflow } from "@/lib/domainWorkflows";
 import { auth, db } from "@/lib/firebase";
 import { colors, glass, typography } from "@/theme";
 
-import { addTimelineEntry, writeAuditLog } from "../lib/patientActions";
+import { addTimelineEntry } from "../lib/patientActions";
 import {
   PATIENTS_COLLECTION,
   type PatientTask,
@@ -368,24 +369,15 @@ export default function PatientDetailPage() {
     setMessage("");
 
     try {
-      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), {
-        status: "archived",
-        archivedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      await writeAuditLog({
-        action: "patient_archived",
-        patient,
-        previousStatus: patient.status,
-        newStatus: "archived",
-      });
-
-      await addTimelineEntry({
+      const result = await patientLifecycleWorkflow({
+        operationId: `patient-archive-${patient.id}`,
         patientId: patient.id,
-        type: "patient_archived",
-        title: "Patient archived",
+        action: "archive",
+        reason: "Archived from patient detail page.",
       });
+      if (result.status !== "success" && result.status !== "duplicate_operation") {
+        throw new Error(result.message || "Patient archive workflow failed.");
+      }
 
       setMessage(`${patient.fullName} moved to archived records.`);
     } catch (error) {
@@ -406,24 +398,15 @@ export default function PatientDetailPage() {
     setMessage("");
 
     try {
-      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), {
-        status: "active",
-        restoredAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      await writeAuditLog({
-        action: "patient_restored",
-        patient,
-        previousStatus: patient.status,
-        newStatus: "active",
-      });
-
-      await addTimelineEntry({
+      const result = await patientLifecycleWorkflow({
+        operationId: `patient-restore-${patient.id}`,
         patientId: patient.id,
-        type: "patient_restored",
-        title: "Patient restored",
+        action: "restore",
+        reason: "Restored from patient detail page.",
       });
+      if (result.status !== "success" && result.status !== "duplicate_operation") {
+        throw new Error(result.message || "Patient restore workflow failed.");
+      }
 
       setMessage(`${patient.fullName} restored to active records.`);
     } catch (error) {
@@ -454,24 +437,16 @@ export default function PatientDetailPage() {
     setMessage("");
 
     try {
-      await updateDoc(doc(db, PATIENTS_COLLECTION, patient.id), {
-        status: "destroyed",
-        destroyedAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      });
-
-      await writeAuditLog({
-        action: "patient_destroyed",
-        patient,
-        previousStatus: patient.status,
-        newStatus: "destroyed",
-      });
-
-      await addTimelineEntry({
+      const result = await patientLifecycleWorkflow({
+        operationId: `patient-destroy-${patient.id}`,
         patientId: patient.id,
-        type: "patient_destroyed",
-        title: "Patient marked destroyed",
+        action: "destroy",
+        reason: "Destroyed from patient detail page after retention confirmation.",
+        confirmationToken: `DESTROY-${patient.id}`,
       });
+      if (result.status !== "success" && result.status !== "duplicate_operation") {
+        throw new Error(result.message || "Patient destroy workflow failed.");
+      }
 
       setMessage(`${patient.fullName} marked as destroyed.`);
     } catch (error) {

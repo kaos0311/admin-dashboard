@@ -37,16 +37,30 @@ service firebase.storage {
         : "";
     }
 
-    function docRole() {
+    /*
+      AUTHORITATIVE POLICY:
+      The users/{uid} profile is the single source of truth for dashboard
+      authority in Storage rules, matching Firestore rules and callables.
+      A missing, disabled, deleted, or inactive profile MUST NOT grant
+      access even when a stale or elevated custom claim is present. The
+      custom claim is never an authority by itself.
+    */
+    function currentUserIsActive() {
       return currentUserExists() &&
+        (!("active" in currentUserData()) || currentUserData().active != false) &&
+        (!("disabled" in currentUserData()) || currentUserData().disabled != true) &&
+        (!("deleted" in currentUserData()) || currentUserData().deleted != true);
+    }
+
+    function docRole() {
+      return currentUserIsActive() &&
         currentUserData().role is string
         ? currentUserData().role
         : "";
     }
 
     function hasRole(role) {
-      return tokenRole() == role ||
-        docRole() == role;
+      return docRole() == role;
     }
 
     function isAdmin() {
@@ -66,12 +80,9 @@ service firebase.storage {
     }
 
     /*
-      IMPORTANT:
-      Do NOT require user.active checks inside Storage Rules.
-      Handle inactive-user blocking in frontend auth/session logic.
-
-      Firestore lookups during uploads can cause instability,
-      stalls, and intermittent failures.
+      NOTE: tokenRole() is intentionally retained only as documentation of
+      the legacy claim mirror. It is NOT used by hasRole(), so a stale
+      custom claim cannot elevate authority.
     */
     function canAccessDashboard() {
       return signedIn() &&
@@ -143,6 +154,12 @@ service firebase.storage {
       return hasIncomingFile() &&
         request.resource.size > 0 &&
         request.resource.size <= 25 * 1024 * 1024;
+    }
+
+    function isWorkflowImageSizeAllowed() {
+      return hasIncomingFile() &&
+        request.resource.size > 0 &&
+        request.resource.size <= 15 * 1024 * 1024;
     }
 
     /*
@@ -263,6 +280,46 @@ service firebase.storage {
 
       allow create, update:
         if canAccessDashboard();
+
+      allow delete:
+        if canAdminWrite();
+    }
+
+    /*
+    |--------------------------------------------------------------------------
+    | DOMAIN WORKFLOW PENDING UPLOADS
+    |--------------------------------------------------------------------------
+    */
+
+    match /workflow-pending/delivery/{ticketId}/signatures/{fileName} {
+
+      allow read:
+        if canAccessDashboard();
+
+      allow create:
+        if canAccessDashboard() &&
+        isImage() &&
+        isWorkflowImageSizeAllowed();
+
+      allow update:
+        if false;
+
+      allow delete:
+        if canAdminWrite();
+    }
+
+    match /workflow-pending/delivery/{ticketId}/damage-photos/{operationId}/{fileName} {
+
+      allow read:
+        if canAccessDashboard();
+
+      allow create:
+        if canAccessDashboard() &&
+        isImage() &&
+        isWorkflowImageSizeAllowed();
+
+      allow update:
+        if false;
 
       allow delete:
         if canAdminWrite();

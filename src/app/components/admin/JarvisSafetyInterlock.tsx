@@ -5,7 +5,6 @@ import Link from "next/link";
 import {
   DatabaseZap,
   FileWarning,
-  ShieldAlert,
   Wrench,
 } from "lucide-react";
 import {
@@ -19,7 +18,7 @@ import {
 import { db } from "@/lib/firebase";
 import { alerts, buttons, colors, surfaces, typography } from "@/theme";
 
-type SafetyIssueKind = "phi" | "compliance" | "import";
+type SafetyIssueKind = "compliance" | "import";
 
 type SafetyIssue = {
   id: string;
@@ -76,10 +75,6 @@ function writeDismissed(values: Set<string>) {
 }
 
 function issueIcon(kind: SafetyIssueKind) {
-  if (kind === "phi") {
-    return <ShieldAlert className="h-7 w-7" aria-hidden="true" />;
-  }
-
   if (kind === "import") {
     return <FileWarning className="h-7 w-7" aria-hidden="true" />;
   }
@@ -88,7 +83,6 @@ function issueIcon(kind: SafetyIssueKind) {
 }
 
 function issueRoute(kind: SafetyIssueKind): string {
-  if (kind === "phi") return "/command-center";
   if (kind === "import") return "/reports/upload";
   return "/command-center";
 }
@@ -102,62 +96,9 @@ function issueIntro(kind: SafetyIssueKind): string {
 }
 
 export function JarvisSafetyInterlock() {
-  const [phiIssues, setPhiIssues] = useState<SafetyIssue[]>([]);
   const [complianceIssues, setComplianceIssues] = useState<SafetyIssue[]>([]);
   const [importIssues, setImportIssues] = useState<SafetyIssue[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(() => readDismissed());
-
-  useEffect(() => {
-    const phiQuery = query(
-      collection(db, "phiAlerts"),
-      where("status", "==", "open"),
-      limit(10),
-    );
-
-    const unsubscribe = onSnapshot(
-      phiQuery,
-      (snapshot) => {
-        setPhiIssues(
-          snapshot.docs.map((doc) => {
-            const data = doc.data();
-            const sourceCollection = text(data.sourceCollection);
-            const sourceFieldPath = text(data.sourceFieldPath);
-            const detectedTypes = stringArray(data.detectedTypes);
-
-            return {
-              id: `phi:${doc.id}`,
-              kind: "phi",
-              title: "Potential PHI/HIPAA Exposure",
-              reason:
-                text(data.recommendation) ||
-                "Jarvis found patient-sensitive information in a field that may be too broad for safe operational use.",
-              severity: normalizeSeverity(data.severity),
-              sourceLabel: [sourceCollection, sourceFieldPath]
-                .filter(Boolean)
-                .join(" / ") || "PHI alert",
-              route: issueRoute("phi"),
-              correctiveMeasures:
-                stringArray(data.correctiveMeasures).length > 0
-                  ? stringArray(data.correctiveMeasures)
-                  : [
-                      "Review the flagged field before exporting or sharing reports.",
-                      "Move legitimate patient-specific detail into the protected patient chart or document record.",
-                      "Remove PHI from operational notes, raw text, search text, and summaries unless it is required.",
-                      detectedTypes.length
-                        ? `Detected type(s): ${detectedTypes.join(", ")}.`
-                        : "Run the PHI scan again after correcting the field.",
-                    ],
-            };
-          }),
-        );
-      },
-      (error) => {
-        console.error("JARVIS PHI INTERLOCK SNAPSHOT ERROR:", error);
-      },
-    );
-
-    return unsubscribe;
-  }, []);
 
   useEffect(() => {
     const complianceQuery = query(
@@ -253,10 +194,10 @@ export function JarvisSafetyInterlock() {
   }, []);
 
   const activeIssue = useMemo(() => {
-    return [...phiIssues, ...complianceIssues, ...importIssues]
+    return [...complianceIssues, ...importIssues]
       .filter((issue) => !dismissed.has(issue.id))
       .sort((a, b) => severityRank(b.severity) - severityRank(a.severity))[0];
-  }, [complianceIssues, dismissed, importIssues, phiIssues]);
+  }, [complianceIssues, dismissed, importIssues]);
 
   if (!activeIssue) return null;
 

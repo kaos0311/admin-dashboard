@@ -4,12 +4,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import {
   collection,
-  getDocs,
   limit,
   onSnapshot,
   orderBy,
   query,
-  writeBatch,
 } from "firebase/firestore";
 
 import toast from "react-hot-toast";
@@ -92,43 +90,8 @@ export function useAuditLogs({
   );
 
   const purgeCurrentAuditLogs = useCallback(async () => {
-    if (!enabled || purging) return;
-
-    const confirmed = window.confirm(
-      "Delete the currently loaded audit logs? This cannot be undone."
-    );
-
-    if (!confirmed) return;
-
-    setPurging(true);
-
-    try {
-      const snapshot = await getDocs(auditQuery());
-
-      if (snapshot.empty) {
-        toast("No audit logs to delete.");
-        return;
-      }
-
-      const batch = writeBatch(db);
-
-      snapshot.docs.forEach((docSnap) => {
-        batch.delete(docSnap.ref);
-      });
-
-      await batch.commit();
-
-      setLogs([]);
-      toast.success(`${snapshot.size} audit log(s) deleted.`);
-    } catch (error) {
-      console.error("AUDIT LOG PURGE ERROR:", error);
-      toast.error("Audit logs could not be deleted.");
-    } finally {
-      if (mountedRef.current) {
-        setPurging(false);
-      }
-    }
-  }, [auditQuery, enabled, purging]);
+    toast.error("Audit log purge must be handled server-side.");
+  }, []);
 
   useEffect(() => {
     mountedRef.current = true;

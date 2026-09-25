@@ -1,7 +1,7 @@
 "use client";
 
 
-import { colors, metricActionButtonClass, tiles, typography } from "@/theme";
+import { metricActionButtonClass, surfaces, tiles, typography } from "@/theme";
 import { AlertTriangle, Boxes } from "lucide-react";
 
 export type InventoryStatKey =
@@ -61,32 +61,36 @@ function StatCard({
   const isWarningTone = tone === "yellow" || tone === "red";
 
   return (
-    <button
+       <button
       type="button"
       onClick={onClick}
-      className={`${tiles.base} ${tiles.compact} ${tiles.hover} min-h-[10.75rem] min-w-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a9a5e]/40`}
+      className={`${tiles.base} ${tiles.compact} ${tiles.hover} min-h-[10.75rem] min-w-0 text-left ${surfaces.focus}`}
       aria-label={`Open ${label} inventory products`}
     >
-      <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-start gap-3">
-        <div className={["shrink-0 rounded-2xl p-3 shadow-inner shadow-black/30", colors.neutral].join(" ")}>
-          {isWarningTone ? (
-            <AlertTriangle className="h-5 w-5" />
-          ) : (
-            <Boxes className="h-5 w-5" />
-          )}
+      <div className="flex flex-col justify-between h-full min-w-0">
+        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] items-center gap-3">
+          <div className={tiles.icon}>
+            {isWarningTone ? (
+              <AlertTriangle className="h-5 w-5" />
+            ) : (
+              <Boxes className="h-5 w-5" />
+            )}
+          </div>
+
+          <div className="min-w-0">
+            <p className={["mt-1 break-words leading-tight", typography.metricCompact].join(" ")}>
+              {typeof value === "number" ? value.toLocaleString() : value}
+            </p>
+          </div>
         </div>
 
-        <div className="min-w-0">
-          <p className={tiles.metricLabel} title={label}>{label}</p>
-          <p className={["mt-1 break-words leading-tight", typography.metricCompact].join(" ")}>
-            {typeof value === "number" ? value.toLocaleString() : value}
-          </p>
+        <div className="flex flex-col items-center gap-2 mt-3">
+          <p className={[tiles.metricLabel, "text-center"].join(" ")} title={label}>{label}</p>
+          <span className={metricActionButtonClass(tone)}>
+            Open
+          </span>
         </div>
       </div>
-
-      <span className={metricActionButtonClass(tone)}>
-        Open
-      </span>
     </button>
   );
 }

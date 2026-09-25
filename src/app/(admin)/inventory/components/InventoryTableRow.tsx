@@ -10,6 +10,7 @@ import {
 
 import {
   buttons,
+  colors,
   typography,
 } from "@/theme";
 
@@ -66,7 +67,7 @@ export function InventoryTableRow({
   const effectiveReorderLevel = getEffectiveReorderLevel(item, thresholds);
 
   return (
-    <tr className="border-t border-white/10 align-top hover:bg-white/[0.04]">
+    <tr className={`border-t ${colors.borderMuted} align-top hover:bg-[#222222]/30`}>
       <td className="px-4 py-3">
         <input
           type="checkbox"

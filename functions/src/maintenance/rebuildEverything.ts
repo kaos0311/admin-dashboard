@@ -3,8 +3,8 @@ import { logger } from "firebase-functions";
 import {
   type DocumentReference,
   FieldValue,
-  Timestamp,
   getFirestore,
+  Timestamp,
 } from "firebase-admin/firestore";
 import { getStorage } from "firebase-admin/storage";
 
@@ -38,6 +38,8 @@ import {
   getImportRetentionMonthsForScope,
   IMPORT_RETENTION_MONTHS,
 } from "../importRetention.js";
+import { requireCallableAdmin } from "../auth/roles.js";
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 
 const db = getFirestore();
 const storage = getStorage();
@@ -129,22 +131,6 @@ type ImportStorageFile = {
   fileName: string;
   updatedAtMs: number;
 };
-
-function requireAdmin(request: CallableRequestLike): void {
-  if (!request.auth) {
-    throw new HttpsError("unauthenticated", "You must be signed in.");
-  }
-
-  if (
-    request.auth.token.role !== "admin" &&
-    request.auth.token.role !== "tank"
-  ) {
-    throw new HttpsError(
-      "permission-denied",
-      "Only admins can rebuild the database."
-    );
-  }
-}
 
 function getPayload(data: unknown): RebuildPayload {
   if (!data || typeof data !== "object") {
@@ -585,7 +571,11 @@ export const rebuildEverything = onCall(
     timeoutSeconds: 540,
   },
   async (request) => {
-    requireAdmin(request);
+    await enforceCallableRateLimit(request, "admin");
+    await requireCallableAdmin(
+      request.auth,
+      "Only admins can rebuild the database."
+    );
 
     const payload = getPayload(request.data);
 

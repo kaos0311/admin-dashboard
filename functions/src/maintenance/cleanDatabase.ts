@@ -12,6 +12,8 @@ import {
 } from "firebase-admin/firestore";
 
 import { getStorage } from "firebase-admin/storage";
+import { requireCallableAdmin } from "../auth/roles.js";
+import { enforceCallableRateLimit } from "../security/rateLimit.js";
 
 const db = getFirestore();
 const storage = getStorage();
@@ -86,25 +88,6 @@ type CallableRequestLike = {
     token: Record<string, unknown>;
   };
 };
-
-function requireAdmin(request: CallableRequestLike): void {
-  if (!request.auth) {
-    throw new HttpsError(
-      "unauthenticated",
-      "You must be signed in."
-    );
-  }
-
-  if (
-    request.auth.token.role !== "admin" &&
-    request.auth.token.role !== "tank"
-  ) {
-    throw new HttpsError(
-      "permission-denied",
-      "Only admins can clean the database."
-    );
-  }
-}
 
 function getPayload(data: unknown): CleanDatabasePayload {
   if (!data || typeof data !== "object") {
@@ -296,7 +279,11 @@ export const cleanDatabase = onCall(
   },
 
   async (request) => {
-    requireAdmin(request);
+    await enforceCallableRateLimit(request, "admin");
+    await requireCallableAdmin(
+      request.auth,
+      "Only admins can clean the database."
+    );
 
     const payload = getPayload(request.data);
 

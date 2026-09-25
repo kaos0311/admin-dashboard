@@ -40,11 +40,11 @@ export function RentalRecords({
   onMarkReturned,
 }: RentalRecordsProps) {
   return (
-    <GlassCard className="min-w-0 border-white/5 bg-white/[0.035] shadow-none">
+    <GlassCard className="min-w-0">
       <SectionHeader
         eyebrow="Live records"
         title="Rental Inventory Records"
-        description="Search, filter, return, edit, or delete rental records. Keep the asset trail clean unless you enjoy audit pain."
+        description="Search, filter, return, edit, or delete rental records."
       />
 
       <div className="mt-6 grid min-w-0 gap-3 lg:grid-cols-[minmax(0,1fr)_220px_auto]">
@@ -147,7 +147,7 @@ export function RentalRecords({
           />
         ) : (
           <>
-            <div className="hidden overflow-hidden rounded-2xl border border-white/5 lg:block">
+            <div className="hidden overflow-hidden border border-[#2a2a2a] lg:block">
               <div className={tables.scroll}>
                 <table className={`${tables.table} min-w-[1500px] border-collapse`}>
                   <thead className={tables.head}>

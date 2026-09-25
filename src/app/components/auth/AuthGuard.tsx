@@ -7,10 +7,22 @@ import { doc, getDoc } from "firebase/firestore";
 import { Loader2, ShieldAlert } from "lucide-react";
 
 import { auth, db } from "@/lib/firebase";
+import {
+  clearSessionCookie,
+  createSessionCookie,
+} from "@/lib/auth/session-client";
+import {
+  getRoleFromUserRecord,
+  isActiveUserRecord,
+  isAdminRole,
+  parseRole,
+  resolveUserRole,
+  type UserRole,
+} from "@/lib/permissions/roles";
 import { glass, typography } from "@/theme";
 
-type AllowedRole = "admin" | "staff" | "tank";
-type ResolvedRole = AllowedRole | null;
+type AllowedRole = UserRole;
+type ResolvedRole = UserRole | null;
 
 type AuthGuardProps = {
   children: ReactNode;
@@ -21,30 +33,10 @@ type AuthGuardProps = {
 
 type GuardState = "checking" | "authorized" | "signedOut" | "forbidden" | "error";
 
-function parseRole(value: unknown): ResolvedRole {
-  return value === "admin" || value === "staff" || value === "tank"
-    ? value
-    : null;
-}
-
-function getRoleFromUserRecord(data: Record<string, unknown>): ResolvedRole {
-  const dbRole = parseRole(data.role);
-  if (dbRole) return dbRole;
-
-  if (data.temporaryTankAccess === true) {
-    const prevRole = parseRole(data.previousRole);
-    if (prevRole === "admin" || prevRole === "tank") {
-      return "tank";
-    }
-  }
-
-  return null;
-}
-
 function roleIsAllowed(role: ResolvedRole, allowedRoles: AllowedRole[]): boolean {
   if (!role) return false;
   if (allowedRoles.includes(role)) return true;
-  return role === "tank" && allowedRoles.includes("admin");
+  return isAdminRole(role) && allowedRoles.includes("admin");
 }
 
 export default function AuthGuard({
@@ -71,6 +63,7 @@ export default function AuthGuard({
 
       try {
         if (!user) {
+          void clearSessionCookie();
           if (!cancelled) {
             setGuardState("signedOut");
             setMessage("Redirecting to sign in...");
@@ -89,18 +82,15 @@ export default function AuthGuard({
         let resolvedRole: ResolvedRole = null;
 
         const token = await user.getIdTokenResult(true);
-        resolvedRole = parseRole(token.claims.role);
+        const tokenRole = parseRole(token.claims.role);
 
         const userSnap = await getDoc(doc(db, "users", user.uid));
 
         if (userSnap.exists()) {
           const data = userSnap.data() as Record<string, unknown>;
 
-          if (
-            data.active === false ||
-            data.disabled === true ||
-            data.deleted === true
-          ) {
+          if (!isActiveUserRecord(data)) {
+            await clearSessionCookie();
             await auth.signOut();
 
             if (!cancelled) {
@@ -113,7 +103,17 @@ export default function AuthGuard({
           }
 
           const dbRole = getRoleFromUserRecord(data);
-          if (dbRole) resolvedRole = dbRole;
+          resolvedRole = resolveUserRole({
+            tokenRole,
+            dbRole,
+            hasUserRecord: true,
+          });
+        } else {
+          resolvedRole = resolveUserRole({
+            tokenRole,
+            dbRole: null,
+            hasUserRecord: false,
+          });
         }
 
         const allowedRoles = allowKey.split("|") as AllowedRole[];
@@ -130,6 +130,17 @@ export default function AuthGuard({
 
           return;
         }
+
+        // Keep the server-side session cookie in sync with the
+        // authenticated sign-in state.
+        void (async () => {
+          try {
+            const idToken = await user.getIdToken(true);
+            await createSessionCookie(idToken);
+          } catch (sessionError) {
+            console.error("SESSION COOKIE SYNC ERROR:", sessionError);
+          }
+        })();
 
         redirectedRef.current = false;
 
@@ -201,6 +212,3 @@ export default function AuthGuard({
 
   return <>{children}</>;
 }
-
-
-

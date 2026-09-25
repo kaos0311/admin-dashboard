@@ -3,17 +3,19 @@
 import { useEffect, useMemo, useState } from "react";
 
 import {
+  Loader2,
   PackageSearch,
-  ScanLine,
+  RefreshCcw,
   Search,
   ShieldAlert,
   ShieldCheck,
+  Trash2,
   X,
 } from "lucide-react";
 
 import toast from "react-hot-toast";
 
-import { alerts, colors, glass, typography } from "@/theme";
+import { alerts, buttons, colors, forms, glass, surfaces, typography } from "@/theme";
 
 import BarcodeScannerModal from "@/app/components/barcode-scanner/BarcodeScannerModal";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
@@ -24,7 +26,6 @@ import { normalizeBarcode } from "@/lib/barcode";
 import { ProductCatalog } from "./components/ProductCatalog";
 import { ProductFilters } from "./components/ProductFilters";
 import { ProductForm } from "./components/ProductForm";
-import { ProductHero } from "./components/ProductHero";
 import { ProductRecallWatch } from "./components/ProductRecallWatch";
 import {
   type ProductStatsAction,
@@ -78,7 +79,7 @@ export default function ProductsPage() {
     saveProduct,
     softDeleteProduct,
     batchSoftDeleteProducts,
-    purgeLoadedProducts,
+    purgeProducts,
   } = useProducts({
     canRead,
     canWrite,
@@ -491,20 +492,16 @@ export default function ProductsPage() {
                   Product Command Center
                 </h1>
 
-                <p className={`mt-3 max-w-3xl ${typography.body}`}>
-                  Operational product catalog management for inventory routing,
-                  HCPCS mapping, vendor tracking, pricing, warranty oversight,
-                  barcode intake, reorder monitoring, and lifecycle visibility.
-                  Because eventually somebody uploads 400 duplicate walkers and
-                  calls it “an import issue.”
+                <p className={`mt-1 max-w-2xl ${typography.bodyMuted}`}>
+                  Operational DME/HME catalog for inventory routing, HCPCS
+                  mapping, vendor tracking, pricing, warranty oversight, barcode
+                  intake, reorder monitoring, and lifecycle visibility.
                 </p>
               </div>
-            </div>
 
-            <div className={`${glass.card} max-w-sm p-4 sm:p-5`}>
-              <div className="flex items-center gap-4">
+              <div className="flex min-w-0 items-center gap-4">
                 <div className={glass.iconBox}>
-                  <PackageSearch className="h-6 w-6" />
+                  <PackageSearch className={`h-6 w-6 ${colors.textInfo}`} />
                 </div>
 
                 <div>
@@ -514,45 +511,54 @@ export default function ProductsPage() {
                     </p>
 
                     <span className={glass.chip}>
-                      <span className="h-2 w-2 animate-pulse rounded-full bg-[var(--color-accent)]" />
+                      <span className={`h-2 w-2 animate-pulse rounded-full ${colors.pulse}`} />
 
                       Online
                     </span>
                   </div>
 
-                  <p className={`mt-1 ${typography.smallMuted}`}>
+                  <p className={typography.caption}>
                     HCPCS + vendor intelligence active
                   </p>
                 </div>
               </div>
+            </div>
 
-              <div className={`mt-4 flex items-center gap-2 ${glass.insetPadded} ${typography.small}`}>
-                <ScanLine className="h-3.5 w-3.5 text-[var(--color-accent)]" />
+            <div className={`mt-2 flex shrink-0 flex-wrap gap-3 lg:mt-0 lg:justify-end`}>
+              <button
+                type="button"
+                onClick={() => void loadProducts("reset")}
+                disabled={loadingProducts}
+                aria-label="Refresh products"
+                className={buttons.secondary}
+              >
+                {loadingProducts ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                ) : (
+                  <RefreshCcw className="h-4 w-4 shrink-0" />
+                )}
 
-                Barcode intake system operational
-              </div>
+                <span>Refresh</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void purgeProducts()}
+                disabled={!isAdmin || purging}
+                aria-label="Purge products"
+                className={`inline-flex min-h-11 items-center justify-center gap-2 rounded-xl ${colors.danger} px-5 py-3 text-sm font-semibold ${surfaces.focus} disabled:cursor-not-allowed disabled:opacity-50`}
+              >
+                {purging ? (
+                  <Loader2 className="h-4 w-4 shrink-0 animate-spin" />
+                ) : (
+                  <Trash2 className="h-4 w-4 shrink-0" />
+                )}
+
+                <span>Purge Products</span>
+              </button>
             </div>
           </div>
         </section>
-
-        <ProductHero
-          loadingProducts={
-            loadingProducts
-          }
-          purging={purging}
-          productsCount={
-            products.length
-          }
-          isAdmin={isAdmin}
-          onRefresh={() =>
-            void loadProducts(
-              "reset"
-            )
-          }
-          onPurge={() =>
-            void purgeLoadedProducts()
-          }
-        />
 
         <ProductStatsGrid
           stats={stats}
@@ -686,7 +692,7 @@ export default function ProductsPage() {
                         })
                       )
                     }
-                    className={`${glass.input} py-3 pl-10 pr-10 xl:w-[420px]`}
+                    className={`${forms.inputIconBoth} xl:w-[420px]`}
                     placeholder="Search name, SKU, UPC, HCPCS..."
                     aria-label="Search products"
                   />
@@ -705,7 +711,7 @@ export default function ProductsPage() {
                           })
                         )
                       }
-                      className={`absolute right-3 top-3.5 transition ${typography.smallMuted} hover:${colors.textPrimary}`}
+                      className={`absolute right-3 top-3.5 transition ${typography.smallMuted} hover:text-[#e6e6e6]`}
                       aria-label="Clear search"
                     >
                       <X className="h-4 w-4" />

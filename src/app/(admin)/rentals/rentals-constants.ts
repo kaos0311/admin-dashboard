@@ -62,11 +62,13 @@ export const RENTAL_STATUSES: Array<{
   label: string;
   value: RentalStatus;
 }> = [
+  { label: "Draft", value: "draft" },
   { label: "Available", value: "available" },
   { label: "Checked Out", value: "checked_out" },
   { label: "Overdue", value: "overdue" },
   { label: "Maintenance", value: "maintenance" },
   { label: "Retired", value: "retired" },
+  { label: "Abandoned", value: "abandoned" },
 ];
 
 export const RENTAL_CONDITIONS: Array<{

@@ -11,6 +11,7 @@ import StaffOrAdmin from "@/app/components/auth/StaffOrAdmin";
 import MaintenanceGate from "@/app/components/MaintenanceGate";
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 import { auth } from "@/lib/firebase";
+import { clearSessionCookie } from "@/lib/auth/session-client";
 import { colors, spacing, surfaces, typography } from "@/theme";
 
 type AdminLayoutProps = {
@@ -38,6 +39,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
     setLoggingOut(true);
 
     try {
+      await clearSessionCookie();
       await signOut(auth);
       router.replace("/login");
       router.refresh();
@@ -65,7 +67,7 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
 
           <a
             href="#admin-main-content"
-            className={`sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:${colors.surface} focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:${colors.textInverse}`}
+            className={`sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-[100] focus:rounded-xl focus:bg-[#1c1c1c] focus:px-4 focus:py-2 focus:text-sm focus:font-semibold focus:text-[#121212]`}
           >
             Skip to main content
           </a>
@@ -95,11 +97,11 @@ export default function AdminLayout({ children }: AdminLayoutProps) {
                   </div>
 
                   <div className="min-w-0">
-                    <div className={`text-sm font-medium ${colors.textPrimary}`}>
+                    <div className={typography.subTitle}>
                       Welcome
                     </div>
 
-                    <div className={`truncate text-sm ${colors.textMuted}`}>
+                    <div className={`mt-0.5 truncate ${typography.bodyMuted}`}>
                       {user?.email ?? "Signed in"}
                     </div>
                   </div>

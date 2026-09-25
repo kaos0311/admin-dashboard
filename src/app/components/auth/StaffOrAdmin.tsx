@@ -3,6 +3,7 @@
 import type { ReactNode } from "react";
 
 import AuthGuard from "@/app/components/auth/AuthGuard";
+import { COMMAND_CENTER_ROLES } from "@/lib/permissions/roles";
 import { glass } from "@/theme";
 
 type StaffOrAdminProps = {
@@ -14,7 +15,7 @@ export default function StaffOrAdmin({
 }: StaffOrAdminProps) {
   return (
     <AuthGuard
-      allow={["staff", "admin", "tank"]}
+      allow={COMMAND_CENTER_ROLES}
       loadingMessage="Verifying staff access..."
       fallback={
         <div className={glass.pageCenter}>

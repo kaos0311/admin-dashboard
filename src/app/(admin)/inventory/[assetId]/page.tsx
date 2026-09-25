@@ -4,15 +4,6 @@ import { type ReactNode, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import {
-  collection,
-  doc,
-  getDocs,
-  limit,
-  onSnapshot,
-  query,
-  where,
-} from "firebase/firestore";
-import {
   ArrowLeft,
   CalendarClock,
   FileText,
@@ -22,13 +13,12 @@ import {
   UserRound,
 } from "lucide-react";
 
-import { db } from "@/lib/firebase";
+import { InventoryRepository } from "@/repositories/firestore/inventory.repository";
 import { badges, buttons, colors, glass, spacing, tables, typography } from "@/theme";
 
 import { normalizeRentalRecord } from "../../rentals/utils/normalize";
 import type { RentalRecord } from "../../rentals/rentals-types";
 import { formatCurrency, formatDate } from "../../rentals/utils/formatters";
-import { normalizeInventoryItem } from "../lib/inventoryNormalize";
 import type { InventoryItem } from "../lib/inventoryTypes";
 
 export default function InventoryAssetChartPage() {
@@ -45,21 +35,16 @@ export default function InventoryAssetChartPage() {
     setLoading(true);
     setMessage("");
 
-    const unsubscribe = onSnapshot(
-      doc(db, "inventory", assetId),
-      (snapshot) => {
-        if (!snapshot.exists()) {
+    const unsubscribe = InventoryRepository.subscribeToInventoryItem(
+      assetId,
+      (item) => {
+        if (item === null) {
           setAsset(null);
           setLoading(false);
           return;
         }
 
-        setAsset(
-          normalizeInventoryItem(
-            snapshot.id,
-            snapshot.data() as Record<string, unknown>
-          )
-        );
+        setAsset(item);
         setLoading(false);
       },
       (error) => {
@@ -83,46 +68,15 @@ export default function InventoryAssetChartPage() {
     const currentAsset = asset;
 
     async function loadRentalRows() {
+      const records = await InventoryRepository.getRentalRecordsForAsset(currentAsset);
+
       const rentalMap = new Map<string, RentalRecord>();
-      const serial = currentAsset.serial.trim();
-      const assetTag = (currentAsset.assetTag || currentAsset.assetNumber || "").trim();
 
-      const queries = [];
-
-      if (serial) {
-        queries.push(
-          query(collection(db, "rentals"), where("serialNumber", "==", serial), limit(100))
+      records.forEach(({ id, data }) => {
+        rentalMap.set(
+          id,
+          normalizeRentalRecord(id, data)
         );
-      }
-
-      if (assetTag && assetTag !== serial) {
-        queries.push(
-          query(collection(db, "rentals"), where("assetTag", "==", assetTag), limit(100))
-        );
-      }
-
-      if (currentAsset.salesOrderDetailId) {
-        queries.push(
-          query(
-            collection(db, "rentals"),
-            where("salesOrderDetailId", "==", currentAsset.salesOrderDetailId),
-            limit(100)
-          )
-        );
-      }
-
-      const snapshots = await Promise.all(queries.map((rentalQuery) => getDocs(rentalQuery)));
-
-      snapshots.forEach((snapshot) => {
-        snapshot.docs.forEach((rentalDoc) => {
-          rentalMap.set(
-            rentalDoc.id,
-            normalizeRentalRecord(
-              rentalDoc.id,
-              rentalDoc.data() as Record<string, unknown>
-            )
-          );
-        });
       });
 
       if (active) {
@@ -178,7 +132,7 @@ export default function InventoryAssetChartPage() {
           <button
             type="button"
             onClick={() => router.back()}
-            className={`mb-4 inline-flex items-center gap-2 text-sm ${typography.bodyMuted} transition hover:${colors.textPrimary}`}
+            className={`mb-4 inline-flex items-center gap-2 text-sm ${typography.bodyMuted} transition hover:text-[#e6e6e6]`}
           >
             <ArrowLeft className="h-4 w-4" />
             Back
@@ -256,10 +210,10 @@ export default function InventoryAssetChartPage() {
 
 function AssetHeader({ asset }: { asset: InventoryItem }) {
   return (
-    <header className={`${glass.panelPadded} rounded-[2rem] bg-gradient-to-br from-white/[0.12] via-white/[0.055] to-black/40 shadow-2xl shadow-black/30 backdrop-blur-2xl`}>
+    <header className={glass.panelPadded}>
       <Link
         href="/inventory"
-        className={`mb-5 inline-flex items-center gap-2 text-sm ${typography.bodyMuted} transition hover:${colors.textPrimary}`}
+        className={`mb-5 inline-flex items-center gap-2 text-sm ${typography.bodyMuted} transition hover:text-[#e6e6e6]`}
       >
         <ArrowLeft className="h-4 w-4" />
         Back to Inventory
@@ -272,7 +226,7 @@ function AssetHeader({ asset }: { asset: InventoryItem }) {
             Inventory asset chart
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className="mt-3 flex flex-wrap items-center gap-3">
             <h1 className={typography.pageTitle}>
               {asset.name || "Unnamed asset"}
             </h1>
@@ -281,7 +235,7 @@ function AssetHeader({ asset }: { asset: InventoryItem }) {
             {asset.patientName ? <Badge label="Patient assigned" /> : null}
           </div>
 
-          <p className={`mt-2 text-sm ${typography.bodyMuted}`}>
+          <p className={`mt-2 ${typography.bodyMuted}`}>
             Serial: {asset.serial || "-"} | Asset:{" "}
             {asset.assetTag || asset.assetNumber || "-"}
           </p>

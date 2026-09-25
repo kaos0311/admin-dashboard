@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { Building2, HeartHandshake, UsersRound } from "lucide-react";
 
-import { glass, tiles, typography } from "@/theme";
+import { buttons, colors, glass, tiles, typography } from "@/theme";
 
 import type { RentalFacilityTile } from "../lib/rentalProperty";
 
@@ -45,7 +45,7 @@ export function InventoryFacilityRentalTiles({
         {selectedTile ? (
           <button
             type="button"
-            className="shrink-0 rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm font-semibold text-slate-200 transition hover:border-cyan-300/35 hover:bg-white/[0.09]"
+            className={buttons.compactSecondary}
             onClick={onClear}
           >
             Close patient list
@@ -65,8 +65,8 @@ export function InventoryFacilityRentalTiles({
               onClick={() => onSelect(facilityTile.id)}
               className={[
                 glass.cardPadded,
-                "text-left transition duration-200 hover:-translate-y-0.5 hover:border-cyan-300/35 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-300/50",
-                selected ? "border-cyan-300/45 bg-cyan-300/[0.12]" : "",
+                "text-left transition duration-200 hover:-translate-y-0.5 hover:border-[#7a9a5e]/35 hover:bg-[#222222]/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7a9a5e]/40",
+                selected ? "border-[#7a9a5e]/45 bg-[#7a9a5e]/10" : "",
               ].join(" ")}
               aria-pressed={selected}
               aria-label={`Show rental patients for ${facilityTile.label}`}
@@ -105,7 +105,7 @@ export function InventoryFacilityRentalTiles({
       {selectedTile ? (
         <div className={glass.insetPadded}>
           <div className="mb-4 flex min-w-0 items-center gap-3">
-            <UsersRound className="h-4 w-4 shrink-0 text-cyan-200" />
+            <UsersRound className={`h-4 w-4 shrink-0 ${colors.textInfo}`} />
             <div className="min-w-0">
               <h3 className={typography.cardTitle}>
                 {selectedTile.label} Patients
@@ -157,7 +157,7 @@ export function InventoryFacilityRentalTiles({
                   <Link
                     key={patient.id}
                     href={`/reports/patients/${encodeURIComponent(patient.id)}`}
-                    className={`${glass.cardPadded} block transition hover:border-cyan-300/35 hover:bg-white/[0.07]`}
+                    className={`${glass.cardPadded} block transition hover:border-[#7a9a5e]/35 hover:bg-[#222222]/50`}
                   >
                     {content}
                   </Link>
@@ -172,7 +172,7 @@ export function InventoryFacilityRentalTiles({
         </div>
       ) : (
         <div className={`${glass.insetPadded} flex min-w-0 items-center gap-3`}>
-          <UsersRound className="h-4 w-4 shrink-0 text-cyan-200" />
+          <UsersRound className={`h-4 w-4 shrink-0 ${colors.textInfo}`} />
           <p className={typography.bodyMuted}>
             No insurance selected. Inventory records below remain controlled by
             the normal filters.

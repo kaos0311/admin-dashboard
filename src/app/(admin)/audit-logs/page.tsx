@@ -14,7 +14,7 @@ import {
   Shield,
 } from "lucide-react";
 
-import { badges, buttons, colors, glass, typography } from "@/theme";
+import { alerts, badges, buttons, colors, glass, typography } from "@/theme";
 
 import { useAuthRole } from "@/app/hooks/useAuthRole";
 
@@ -288,7 +288,7 @@ export default function AuditLogsPage() {
             <div className={colors.grid} />
 
             <div className={`relative flex items-center gap-3 p-6 ${typography.bodyMuted}`}>
-              <Loader2 className="h-5 w-5 animate-spin text-sky-200" />
+              <Loader2 className={`h-5 w-5 animate-spin ${colors.textInfo}`} />
 
               <span>
                 Loading audit
@@ -313,7 +313,7 @@ export default function AuditLogsPage() {
         <div className={colors.grid} />
 
         <div className="relative flex min-h-[60vh] items-center justify-center">
-          <div className="rounded-3xl border border-red-500/20 bg-red-500/10 px-6 py-5 text-sm text-red-300 shadow-[0_0_35px_rgba(239,68,68,0.18)]">
+          <div role="alert" className={alerts.danger}>
             Admin access required.
           </div>
         </div>
